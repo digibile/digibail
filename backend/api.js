@@ -24,6 +24,15 @@ function json(res, status, value) {
   res.writeHead(status, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" });
   res.end(JSON.stringify(value));
 }
+function authJson(res, status, token, value) {
+  const secure = process.env.NODE_ENV === "production" ? "; Secure" : "";
+  res.setHeader("Set-Cookie", "db_session=" + token + "; HttpOnly; SameSite=Lax; Path=/; Max-Age=28800" + secure);
+  return json(res, status, value);
+}
+export function verifySession(token) {
+  if (!token || JWT_SECRET.length < 32) return null;
+  try { return jwt.verify(token, JWT_SECRET, { issuer: "digibail" }); } catch { return null; }
+}
 async function body(req) {
   let raw = "";
   for await (const chunk of req) { raw += chunk; if (raw.length > 32768) throw Object.assign(new Error("درخواست بیش از حد بزرگ است."), { status: 413 }); }
@@ -91,7 +100,7 @@ export async function handleApi(req, res, url) {
         await audit(req, "auth.login.failed"); return json(res, 401, { message: "نام کاربری یا رمز عبور نادرست است." });
       }
       resetLimit("login:" + ip); const u = result.rows[0]; await audit(req, "auth.login.success", u.id);
-      return json(res, 200, { accessToken: tokenFor(u), user: { id: u.id, phone: u.phone, fullName: u.full_name, role: u.role } });
+      return authJson(res, 200, tokenFor(u), { accessToken: tokenFor(u), user: { id: u.id, phone: u.phone, fullName: u.full_name, role: u.role } });
     }
     if (req.method === "POST" && route === "/api/v1/security/otp/request") {
       const b = await body(req); const phone = String(b.phone || ""); const purpose = b.purpose === "register" ? "register" : "login";
@@ -154,7 +163,7 @@ export async function handleApi(req, res, url) {
       try {
         const created = await pool.query("INSERT INTO users(phone,full_name,national_code,email,password_hash) VALUES($1,$2,$3,$4,$5) RETURNING id,phone,full_name,role", [ticket.phone, fullName, nationalCode, email, passwordHash]);
         const u = created.rows[0]; await audit(req, "auth.register.success", u.id);
-        return json(res, 201, { accessToken: tokenFor(u), user: { id: u.id, phone: u.phone, fullName: u.full_name, role: u.role } });
+        return authJson(res, 201, tokenFor(u), { accessToken: tokenFor(u), user: { id: u.id, phone: u.phone, fullName: u.full_name, role: u.role } });
       } catch (error) {
         if (error.code === "23505") return json(res, 409, { message: "شماره موبایل یا کد ملی قبلاً ثبت شده است." });
         throw error;
