@@ -1,11 +1,12 @@
 FROM node:22-alpine
 ENV NODE_ENV=production PORT=1631 HOST=0.0.0.0
 WORKDIR /app
-COPY --chown=node:node package.json server.js server.test.js ./
+COPY package.json ./
+RUN npm install --omit=dev --no-audit --no-fund && npm cache clean --force
+COPY --chown=node:node server.js start.js migrate.js backend ./backend
 COPY --chown=node:node web ./web
 COPY --chown=node:node frontend ./frontend
-COPY --chown=node:node backend/core/panel.html ./backend/core/panel.html
 USER node
 EXPOSE 1631
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 CMD node -e "fetch('http://127.0.0.1:1631/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
-CMD ["node","server.js"]
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 CMD node -e "fetch('http://127.0.0.1:1631/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+CMD ["node","start.js"]
