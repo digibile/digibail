@@ -58,6 +58,7 @@ jobs:
           curl --fail --silent http://127.0.0.1:1631/login.html | grep -q '<html'
           curl --fail --silent http://127.0.0.1:1631/documents.html | grep -q '<html'
           test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:1631/unknown)" = "404"
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:1631/api/v1/security/login)" = "501"
           echo "HTTP smoke tests passed on port 1631"
       - name: Build Docker image
         run: docker build -t digibail-preview:${{ github.sha }} .
