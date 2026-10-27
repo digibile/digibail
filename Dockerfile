@@ -4,6 +4,7 @@ WORKDIR /app
 COPY package.json ./
 RUN npm install --omit=dev --no-audit --no-fund && npm cache clean --force
 COPY --chown=node:node server.js start.js migrate.js backend ./backend
+COPY --chown=node:node scripts/create-admin.js ./scripts/create-admin.js
 COPY --chown=node:node web ./web
 COPY --chown=node:node frontend ./frontend
 USER node
