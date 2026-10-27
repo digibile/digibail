@@ -2,7 +2,7 @@ import http from "node:http";
 import path from "node:path";
 import { readFile, stat } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
-import { dbHealth, handleApi } from "./backend/api.js";
+import { dbHealth, handleApi, verifySession } from "./backend/api.js";
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number.parseInt(process.env.PORT || "1631", 10);
@@ -50,6 +50,14 @@ const server = http.createServer(async (req, res) => {
     return send(res, 405, "application/json; charset=utf-8", JSON.stringify({ error: "method_not_allowed" }));
   }
   const relative = resolveRoute(url.pathname);
+  if (url.pathname === "/panel.html" || url.pathname === "/profile.html") {
+    const cookie = String(req.headers.cookie || "").split(";").map(v => v.trim()).find(v => v.startsWith("db_session="));
+    const session = cookie ? verifySession(decodeURIComponent(cookie.slice("db_session=".length))) : null;
+    if (!session) {
+      res.writeHead(302, { Location: "/login.html?next=%2Fpanel.html", "Cache-Control": "no-store" });
+      return res.end();
+    }
+  }
   if (!relative) return send(res, 404, "text/plain; charset=utf-8", req.method === "HEAD" ? "" : "Not found");
   const target = path.resolve(ROOT, relative);
   if (!target.startsWith(ROOT + path.sep)) return send(res, 400, "text/plain; charset=utf-8", "Bad request");
