@@ -1,0 +1,54 @@
+name: CI - Digibail port 1631
+on:
+  push:
+    branches:
+      - main
+      - setup/ci-port-1631
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test-and-build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Verify required source files
+        run: |
+          test -s web/template-v3.html
+          test -s frontend/login.html
+          test -s frontend/register.html
+          test -s web/documents.html
+          test -s web/contracts.html
+          test -s backend/core/panel.html
+      - name: Run route tests
+        run: npm test
+      - name: Start preview on port 1631 and smoke test
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT=1631 HOST=127.0.0.1 npm start > /tmp/digibail-preview.log 2>&1 &
+          echo $! > /tmp/digibail-preview.pid
+          trap 'kill "$(cat /tmp/digibail-preview.pid)" 2>/dev/null || true' EXIT
+          for i in {1..30}; do
+            if curl --fail --silent http://127.0.0.1:1631/healthz >/tmp/health.json; then break; fi
+            sleep 1
+          done
+          cat /tmp/health.json
+          grep -q '"status":"ok"' /tmp/health.json
+          curl --fail --silent http://127.0.0.1:1631/ | grep -q '<html'
+          curl --fail --silent http://127.0.0.1:1631/login.html | grep -q '<html'
+          curl --fail --silent http://127.0.0.1:1631/documents.html | grep -q '<html'
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:1631/unknown)" = "404"
+          echo "HTTP smoke tests passed on port 1631"
+      - name: Build Docker image
+        run: docker build -t digibail-preview:${{ github.sha }} .
