@@ -1,0 +1,14 @@
+{
+  "name": "digibail-preview",
+  "version": "1.0.0",
+  "private": true,
+  "description": "GitHub CI preview server for Digibail Pay frontend",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
