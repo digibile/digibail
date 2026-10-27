@@ -1,37 +1,24 @@
 import http from "node:http";
-import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
+import { readFile, stat } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
+import { dbHealth, handleApi } from "./backend/api.js";
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number.parseInt(process.env.PORT || "1631", 10);
 const HOST = process.env.HOST || "0.0.0.0";
 const ROUTES = new Map([
-  ["/", "web/template-v3.html"],
-  ["/index.html", "web/template-v3.html"],
-  ["/login.html", "frontend/login.html"],
-  ["/register.html", "frontend/register.html"],
-  ["/documents.html", "web/documents.html"],
-  ["/contracts.html", "web/contracts.html"],
-  ["/panel.html", "backend/core/panel.html"],
-  ["/healthz", null]
+  ["/", "web/template-v3.html"], ["/index.html", "web/template-v3.html"],
+  ["/login.html", "frontend/login.html"], ["/register.html", "frontend/register.html"],
+  ["/documents.html", "web/documents.html"], ["/contracts.html", "web/contracts.html"],
+  ["/panel.html", "backend/core/panel.html"], ["/profile.html", "backend/core/panel.html"]
 ]);
-const MIME = {
-  ".html": "text/html; charset=utf-8",
-  ".css": "text/css; charset=utf-8",
-  ".js": "text/javascript; charset=utf-8",
-  ".json": "application/json; charset=utf-8",
-  ".svg": "image/svg+xml",
-  ".png": "image/png",
-  ".jpg": "image/jpeg",
-  ".webp": "image/webp",
-  ".ico": "image/x-icon",
-  ".txt": "text/plain; charset=utf-8"
-};
+const MIME = { ".html": "text/html; charset=utf-8", ".css": "text/css; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".json": "application/json; charset=utf-8", ".svg": "image/svg+xml", ".png": "image/png", ".jpg": "image/jpeg", ".webp": "image/webp", ".ico": "image/x-icon", ".txt": "text/plain; charset=utf-8" };
 
-export function resolveRoute(urlPath) {
-  if (urlPath === "/healthz") return null;
-  return ROUTES.get(urlPath) ?? null;
+export function resolveRoute(urlPath) { return ROUTES.get(urlPath) ?? null; }
+function send(res, status, type, value) {
+  res.writeHead(status, { "Content-Type": type, "Cache-Control": "no-store" });
+  res.end(value);
 }
 
 const server = http.createServer(async (req, res) => {
@@ -39,50 +26,43 @@ const server = http.createServer(async (req, res) => {
   res.setHeader("X-Frame-Options", "SAMEORIGIN");
   res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
   res.setHeader("Cache-Control", "no-store");
-
   const url = new URL(req.url || "/", "http://localhost");
-  if (req.method !== "GET" && req.method !== "HEAD") {
-    res.writeHead(405, { "Content-Type": "application/json; charset=utf-8", Allow: "GET, HEAD" });
-    return res.end(JSON.stringify({ error: "method_not_allowed" }));
-  }
 
   if (url.pathname === "/healthz") {
-    res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
-    return res.end(req.method === "HEAD" ? undefined : JSON.stringify({ status: "ok", port: PORT }));
+    try {
+      await dbHealth();
+      return send(res, 200, "application/json; charset=utf-8", JSON.stringify({ status: "ok", database: "ok", port: PORT }));
+    } catch {
+      return send(res, 503, "application/json; charset=utf-8", JSON.stringify({ status: "degraded", database: "unavailable" }));
+    }
   }
-
-  // The GitHub preview deliberately does not pretend to implement the application's API.
   if (url.pathname === "/api" || url.pathname.startsWith("/api/")) {
-    res.writeHead(501, { "Content-Type": "application/json; charset=utf-8" });
-    return res.end(req.method === "HEAD" ? undefined : JSON.stringify({
-      error: "backend_not_included",
-      message: "The preview server serves frontend files only; the application backend is not bundled in this repository setup."
-    }));
+    if (req.method !== "GET" && req.method !== "POST") {
+      res.setHeader("Allow", "GET, POST");
+      return send(res, 405, "application/json; charset=utf-8", JSON.stringify({ message: "روش درخواست مجاز نیست." }));
+    }
+    const handled = await handleApi(req, res, url);
+    if (handled !== false) return;
+    return send(res, 404, "application/json; charset=utf-8", JSON.stringify({ message: "مسیر API پیدا نشد." }));
   }
-
+  if (req.method !== "GET" && req.method !== "HEAD") {
+    res.setHeader("Allow", "GET, HEAD");
+    return send(res, 405, "application/json; charset=utf-8", JSON.stringify({ error: "method_not_allowed" }));
+  }
   const relative = resolveRoute(url.pathname);
-  if (!relative) {
-    res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
-    return res.end(req.method === "HEAD" ? undefined : "Not found");
-  }
-
+  if (!relative) return send(res, 404, "text/plain; charset=utf-8", req.method === "HEAD" ? "" : "Not found");
   const target = path.resolve(ROOT, relative);
-  if (!target.startsWith(ROOT + path.sep)) {
-    res.writeHead(400);
-    return res.end(req.method === "HEAD" ? undefined : "Bad request");
-  }
-
+  if (!target.startsWith(ROOT + path.sep)) return send(res, 400, "text/plain; charset=utf-8", "Bad request");
   try {
     await stat(target);
-    const body = await readFile(target);
+    const content = await readFile(target);
     res.writeHead(200, { "Content-Type": MIME[path.extname(target)] || "application/octet-stream" });
-    return res.end(req.method === "HEAD" ? undefined : body);
+    return res.end(req.method === "HEAD" ? undefined : content);
   } catch {
-    res.writeHead(503, { "Content-Type": "text/plain; charset=utf-8" });
-    return res.end(req.method === "HEAD" ? undefined : "Configured page is missing");
+    return send(res, 503, "text/plain; charset=utf-8", "Configured page is missing");
   }
 });
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  server.listen(PORT, HOST, () => console.log(`Digibail preview listening on http://${HOST}:${PORT}`));
+  server.listen(PORT, HOST, () => console.log(`Digibail app listening on http://${HOST}:${PORT}`));
 }
