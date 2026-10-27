@@ -100,7 +100,8 @@ export async function handleApi(req, res, url) {
         await audit(req, "auth.login.failed"); return json(res, 401, { message: "نام کاربری یا رمز عبور نادرست است." });
       }
       resetLimit("login:" + ip); const u = result.rows[0]; await audit(req, "auth.login.success", u.id);
-      return authJson(res, 200, tokenFor(u), { accessToken: tokenFor(u), user: { id: u.id, phone: u.phone, fullName: u.full_name, role: u.role } });
+      const token = tokenFor(u);
+      return authJson(res, 200, token, { accessToken: token, user: { id: u.id, phone: u.phone, fullName: u.full_name, role: u.role } });
     }
     if (req.method === "POST" && route === "/api/v1/security/otp/request") {
       const b = await body(req); const phone = String(b.phone || ""); const purpose = b.purpose === "register" ? "register" : "login";
@@ -144,7 +145,8 @@ export async function handleApi(req, res, url) {
       const users = await pool.query("SELECT id,phone,full_name,role,is_active FROM users WHERE phone=$1", [phone]);
       if (!users.rowCount || !users.rows[0].is_active) return json(res, 404, { message: "حسابی با این شماره نیست." });
       const u = users.rows[0]; await audit(req, "auth.otp.login.success", u.id);
-      return json(res, 200, { accessToken: tokenFor(u), user: { id: u.id, phone: u.phone, fullName: u.full_name, role: u.role } });
+      const token = tokenFor(u);
+      return authJson(res, 200, token, { accessToken: token, user: { id: u.id, phone: u.phone, fullName: u.full_name, role: u.role } });
     }
     if (req.method === "POST" && route === "/api/v1/security/register") {
       const b = await body(req);
@@ -163,7 +165,8 @@ export async function handleApi(req, res, url) {
       try {
         const created = await pool.query("INSERT INTO users(phone,full_name,national_code,email,password_hash) VALUES($1,$2,$3,$4,$5) RETURNING id,phone,full_name,role", [ticket.phone, fullName, nationalCode, email, passwordHash]);
         const u = created.rows[0]; await audit(req, "auth.register.success", u.id);
-        return authJson(res, 201, tokenFor(u), { accessToken: tokenFor(u), user: { id: u.id, phone: u.phone, fullName: u.full_name, role: u.role } });
+        const token = tokenFor(u);
+        return authJson(res, 201, token, { accessToken: token, user: { id: u.id, phone: u.phone, fullName: u.full_name, role: u.role } });
       } catch (error) {
         if (error.code === "23505") return json(res, 409, { message: "شماره موبایل یا کد ملی قبلاً ثبت شده است." });
         throw error;
