@@ -30,6 +30,15 @@ jobs:
           test -s web/documents.html
           test -s web/contracts.html
           test -s backend/core/panel.html
+      - name: Validate shell installers and sample configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          while IFS= read -r -d '' file; do
+            echo "Checking $file"
+            bash -n "$file"
+          done < <(find . -type f -name '*.sh' -print0)
+          node -e "JSON.parse(require('node:fs').readFileSync('config/appsettings.sample.json','utf8')); console.log('Sample JSON is valid')"
       - name: Run route tests
         run: npm test
       - name: Start preview on port 1631 and smoke test
