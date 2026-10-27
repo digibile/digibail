@@ -45,12 +45,14 @@ curl -i http://127.0.0.1:1631/healthz
 پس از بالا آمدن دیتابیس، حساب مدیرکل را با اطلاعاتی که مالک سامانه انتخاب کرده ایجاد کنید. دستور زیر نمونه است؛ مقادیر را در همان محیط امن وارد کنید و رمز را در خط فرمان مشترک یا Git ننویسید:
 
 ```sh
-ADMIN_USERNAME=admin \
-ADMIN_PHONE=09XXXXXXXXX \
-ADMIN_FULL_NAME='نام مدیر' \
-ADMIN_NATIONAL_CODE=XXXXXXXXXX \
-ADMIN_PASSWORD='یک-رمز-تصادفی-حداقل-۱۶-نویسه' \
-docker compose exec -T app node scripts/create-admin.js
+read -r -p "نام کاربری مدیر: " ADMIN_USERNAME
+read -r -p "موبایل مدیر: " ADMIN_PHONE
+read -r -p "نام کامل مدیر: " ADMIN_FULL_NAME
+read -r -p "کد ملی مدیر: " ADMIN_NATIONAL_CODE
+read -r -s -p "رمز قوی مدیر (حداقل ۱۶ نویسه): " ADMIN_PASSWORD; echo
+export ADMIN_USERNAME ADMIN_PHONE ADMIN_FULL_NAME ADMIN_NATIONAL_CODE ADMIN_PASSWORD
+docker compose exec -T -e ADMIN_USERNAME -e ADMIN_PHONE -e ADMIN_FULL_NAME -e ADMIN_NATIONAL_CODE -e ADMIN_PASSWORD app node scripts/create-admin.js
+unset ADMIN_PASSWORD
 ```
 
 اسکریپت رمز را چاپ نمی‌کند و رمز عبور را با bcrypt هش می‌کند. اگر متغیرها به کانتینر منتقل نشده باشند، اجرای آن باید از محیطی انجام شود که `DATABASE_URL` و همین متغیرها را به‌صورت امن دارد.
@@ -64,4 +66,4 @@ GitHub Actions سرویس PostgreSQL موقت بالا می‌آورد، تست�
 - OCR مدارک هنوز به ارائه‌دهنده OCR نیاز دارد و عمداً `501` می‌دهد.
 - ارسال پیامک واقعی تا زمان تنظیم کلید و قالب کاوه‌نگار فعال نیست.
 - این شاخه روی GitHub آماده‌سازی و تست می‌شود؛ تا وقتی روی میزبان واقعی اجرا نشود، دیتابیس تولیدی و دامنه آنلاین ایجاد نشده‌اند.
-- توکن ورود فعلاً در فرانت‌اند در `localStorage` ذخیره می‌شود؛ برای استقرار حساس، بهتر است به کوکی امن `HttpOnly` مهاجرت شود.
+- توکن نشست در کوکی `HttpOnly` نیز تنظیم می‌شود و پنل از مسیر مستقیم بدون نشست معتبر باز نمی‌شود.
