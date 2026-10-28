@@ -279,7 +279,463 @@ export async function handleApi(req, res, url) {
         return json(res,200,{data:q.rows});
       }
       if (req.method === "POST" && route === "/api/v1/admin/loan-products/import-legacy") {
-        const q=await pool.query("SELECT source_table,legacy_id,payload FROM legacy_source_data WHERE source_table<>'__legacy_schema__' AND source_table ~* '(loan.?product|loan.?type|loan.?plan|loan.?definition|loan.?configuration|(^|[.])loans?$|وام)' ORDER BY source_table,legacy_id LIMIT 10000");
+        const preferred=await pool.query("SELECT source_table FROM legacy_source_data WHERE source_table ~* 'vamcity.*[.]dbo[.]Loans
+        const norm=(x)=>String(x||"").toLowerCase().replace(/[^a-z0-9\u0600-\u06ff]/g,"");
+        const pick=(p,keys)=>{const wanted=keys.map(norm);for(const k of Object.keys(p||{})){if(wanted.includes(norm(k))&&p[k]!==null&&p[k]!==undefined&&p[k]!=="")return p[k]}return null};
+        const num=(v)=>{if(v===null||v===undefined||v==="")return null;const n=Number(String(v).replace(/[۰-۹]/g,d=>"۰۱۲۳۴۵۶۷۸۹".indexOf(d)).replace(/[٠-٩]/g,d=>"٠١٢٣٤٥٦٧٨٩".indexOf(d)).replace(/[٬,\s]/g,"").replace(/٫/g,"."));return Number.isFinite(n)?n:null};
+        let imported=0,skipped=0;const candidateTables=new Set();
+        for(const row of q.rows){
+          const p=row.payload&&typeof row.payload==="object"?row.payload:{};
+          const rawName=pick(p,["Name","Title","LoanName","LoanTitle","ProductName","LoanTypeName","TitleFa","نام","عنوان","عنوان وام","نام وام"]);
+          const name=String(rawName||"").trim().slice(0,120);
+          const rawMin=num(pick(p,["MinAmount","MinimumAmount","MinLoanAmount","AmountFrom","FromAmount","MinimumLoanAmount","حداقل مبلغ"]));
+          const rawMax=num(pick(p,["MaxAmount","MaximumAmount","MaxLoanAmount","AmountTo","ToAmount","MaximumLoanAmount","حداکثر مبلغ"]));
+          const rawAmount=num(pick(p,["LoanAmount","Amount","AmountValue","مبلغ وام","مبلغ"]));
+          const rate=num(pick(p,["InterestPercent","InterestRate","MonthlyInterest","AnnualInterest","ProfitPercent","RatePercent","درصد بهره","درصد سود","نرخ سود"]));
+          const allowedRaw=pick(p,["AllowedInstallments","InstallmentOptions","RepaymentOptions"]);let allowedMonths=[];try{const av=typeof allowedRaw==="string"?JSON.parse(allowedRaw):allowedRaw;if(Array.isArray(av))allowedMonths=av.map(t=>num(typeof t==="object"?(t.value??t.months??t.Months??t.installments??t.Installments):t)).filter(n=>n!==null&&n>0&&n<=600).map(Math.trunc);else if(av!==null&&av!==undefined){const n=num(av);if(n>0&&n<=600)allowedMonths=[Math.trunc(n)]}}catch{if(typeof allowedRaw==="string")allowedMonths=allowedRaw.split(/[,;|\/\s]+/).map(num).filter(n=>n!==null&&n>0&&n<=600).map(Math.trunc)}const months=num(pick(p,["Months","InstallmentsCount","InstallmentCount","TermMonths","DurationMonths","MaxInstallments","تعداد اقساط","مدت ماه"]))??(allowedMonths.length?Math.max(...allowedMonths):null);
+          const methodRaw=String(pick(p,["InterestMethod","InterestType","ProfitType","LoanProfitType","CalculationMethod","نوع سود","نحوه محاسبه سود"])||"").toLowerCase();
+          const hasFinance=rawMin!==null||rawMax!==null||rawAmount!==null||rate!==null||months!==null||Boolean(pick(p,["TiersJson","InstallmentsJson","RepaymentOptions"]));
+          if(!name||!hasFinance){skipped++;continue}
+          candidateTables.add(row.source_table);
+          const min=rawMin??rawAmount??0,max=rawMax??rawAmount??rawMin??0;
+          const monthsInt=Math.max(0,Math.min(600,Math.trunc(months||0)));
+          const tierData=pick(p,["TiersJson","InstallmentsJson"])??allowedRaw;
+          let tiers=[];try{const parsed=typeof tierData==="string"?JSON.parse(tierData):tierData;if(Array.isArray(parsed))tiers=parsed.map(t=>({months:Number(typeof t==="object"?(t.months||t.Months||t.installments||t.Installments||t.value):t)||monthsInt,feePercent:Number(typeof t==="object"?(t.feePercent??t.FeePercent??t.fee??0):0)||0,downPaymentPercent:Number(typeof t==="object"?(t.downPaymentPercent??t.DownPaymentPercent??0):0)||0})).filter(t=>t.months>0&&t.months<=600)}catch{}
+          if(!tiers.length&&monthsInt>0)tiers=[{months:monthsInt,feePercent:0,downPaymentPercent:0}];
+          const method=/annual|year|سالانه|بانک/.test(methodRaw)?"Annual":/flat|once|یکجا/.test(methodRaw)?"Flat":"Monthly";
+          const stableSlug="legacy-"+crypto.createHash("sha256").update(row.source_table+"|"+row.legacy_id).digest("hex").slice(0,16);
+          const legacyLoanType=pick(p,["LoanProfitType"]);const complete=min>0&&max>=min&&monthsInt>0&&rate!==null&&Number(pick(p,["IntervalDays","InstallmentIntervalDays"]))>0;
+          const conditions={needsReview:!complete,legacySourceTable:row.source_table,legacyId:row.legacy_id,...(legacyLoanType!==null?{legacyLoanProfitType:legacyLoanType}:{}),...(allowedMonths.length?{legacyAllowedInstallments:allowedMonths}:{})};
+          const planTitle=String(pick(p,["PlanTitle","Title","LoanName"])||name).trim().slice(0,160);const description=String(pick(p,["PlanShortDescription","Description","ShortDescription","Summary","توضیحات"])||"").slice(0,500);const planHtml=String(pick(p,["PlanHtml","PlanHtmlContent"])||"").slice(0,20000).replace(/<\s*(script|style|iframe|object|embed|form|meta|link)[^>]*>[\s\S]*?<\/\s*\1\s*>/gi,"").replace(/\s+on[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi,"").replace(/(href|src)\s*=\s*(["'])\s*javascript:[\s\S]*?\2/gi,'$1="#"');let costs=[];try{const rawCosts=pick(p,["CostsJson","OperationalCostsJson","OperationalCosts"]);const parsedCosts=typeof rawCosts==="string"?JSON.parse(rawCosts):rawCosts;if(Array.isArray(parsedCosts))costs=parsedCosts.map(c=>({title:String(c.title??c.Title??c.name??c.Name??"هزینه").slice(0,100),percent:num(c.percent??c.Percent??c.value??c.Value??c.amount??c.Amount)??0,months:num(c.months??c.Months)??null}))}catch{}const ins=await pool.query("INSERT INTO loan_products(slug,name,title,description,badge,min_amount,max_amount,interval_days,tiers,conditions,documents,is_active,sort_order,interest_method,interest_percent,late_daily_coef,early_daily_coef,show_in_list,send_reminders,labels,full_description_html,operational_costs,legacy_source_table,legacy_id,legacy_payload,needs_review) VALUES($1,$2,$3,$4,'', $5,$6,$7,$8::jsonb,$9::jsonb,$10::jsonb,$11,$12,$13,$14,$15,$16,FALSE,FALSE,'[]'::jsonb,$17,$18::jsonb,$19,$20,$21::jsonb,$22) ON CONFLICT(legacy_source_table,legacy_id) WHERE legacy_source_table IS NOT NULL AND legacy_id IS NOT NULL DO NOTHING RETURNING id", [stableSlug,name,planTitle,description,min,max,Number(pick(p,["IntervalDays","InstallmentIntervalDays","فاصله اقساط"]))||0,JSON.stringify(tiers),JSON.stringify(conditions),JSON.stringify(Array.isArray(p.Documents)?p.Documents:[]),false,1000+imported,method,rate||0,num(pick(p,["LateDailyCoef","LatePenaltyDailyCoefficient","DelayPercent"]))||0,num(pick(p,["EarlyDailyCoef","EarlyPaymentDailyCoefficient","EarlyPercent"]))||0,planHtml,JSON.stringify(costs),row.source_table,row.legacy_id,JSON.stringify(p),!complete]);
+          if(ins.rowCount)imported++;else skipped++;
+        }
+        return json(res,200,{imported,skipped,candidateTables:[...candidateTables],message:imported?"تعریف‌های قابل شناسایی وارد شدند و همه غیرفعال‌اند تا قبل از انتشار بررسی شوند.":"تعریف قابل انتقالی در جدول‌های شناخته‌شده پیدا نشد؛ داده قدیمی تغییر نکرد."});
+      }
+      if (req.method === "GET" && route === "/api/v1/admin/loan-products") {
+        const q=await pool.query("SELECT * FROM loan_products ORDER BY sort_order,created_at DESC");
+        return json(res,200,q.rows.map(loanRow));
+      }
+      if (req.method === "POST" && route === "/api/v1/admin/loan-products") {
+        const b=cleanLoanInput(await body(req));
+        const q=await pool.query("INSERT INTO loan_products(slug,name,title,description,badge,min_amount,max_amount,interval_days,tiers,conditions,documents,is_active,sort_order,interest_method,interest_percent,late_daily_coef,early_daily_coef,show_in_list,send_reminders,labels,full_description_html,operational_costs) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10::jsonb,$11::jsonb,$12,$13,$14,$15,$16,$17,$18,$19,$20::jsonb,$21,$22::jsonb) RETURNING id", [b.slug,b.name,b.title,b.description,b.badge,b.minAmount,b.maxAmount,b.intervalDays,JSON.stringify(b.tiers),JSON.stringify(b.conditions),JSON.stringify(b.documents),b.isActive,b.sortOrder,b.interestMethod,b.interestPercent,b.lateDailyCoef,b.earlyDailyCoef,b.showInList,b.sendReminders,JSON.stringify(b.labels),b.fullDescriptionHtml,JSON.stringify(b.operationalCosts)]);
+        return json(res,201,{id:q.rows[0].id});
+      }
+      const loanToggle=route.match(/^\/api\/v1\/admin\/loan-products\/([0-9a-f-]{36})\/toggle$/i);
+      if(req.method==="POST"&&loanToggle){const q=await pool.query("UPDATE loan_products SET is_active=NOT is_active,updated_at=NOW() WHERE id=$1 RETURNING is_active",[loanToggle[1]]);return q.rowCount?json(res,200,{isActive:q.rows[0].is_active}):json(res,404,{message:"طرح وام پیدا نشد."})}
+      const loanEdit=route.match(/^\/api\/v1\/admin\/loan-products\/([0-9a-f-]{36})$/i);
+      if(req.method==="PUT"&&loanEdit){
+        const b=cleanLoanInput(await body(req));
+        const q=await pool.query("UPDATE loan_products SET slug=$1,name=$2,title=$3,description=$4,badge=$5,min_amount=$6,max_amount=$7,interval_days=$8,tiers=$9::jsonb,conditions=$10::jsonb,documents=$11::jsonb,is_active=$12,sort_order=$13,interest_method=$14,interest_percent=$15,late_daily_coef=$16,early_daily_coef=$17,show_in_list=$18,send_reminders=$19,labels=$20::jsonb,full_description_html=$21,operational_costs=$22::jsonb,needs_review=FALSE,updated_at=NOW() WHERE id=$23 RETURNING id", [b.slug,b.name,b.title,b.description,b.badge,b.minAmount,b.maxAmount,b.intervalDays,JSON.stringify(b.tiers),JSON.stringify(b.conditions),JSON.stringify(b.documents),b.isActive,b.sortOrder,b.interestMethod,b.interestPercent,b.lateDailyCoef,b.earlyDailyCoef,b.showInList,b.sendReminders,JSON.stringify(b.labels),b.fullDescriptionHtml,JSON.stringify(b.operationalCosts),loanEdit[1]]);
+        return q.rowCount?json(res,200,{id:q.rows[0].id}):json(res,404,{message:"طرح وام پیدا نشد."});
+      }
+
+      if (req.method === "GET" && route === "/api/v1/admin/sms/settings") {
+        const settings = await getKavenegarSettings();
+        return json(res, 200, { data: { provider: "kavenegar", sender: settings.sender, configured: Boolean(settings.apiKey), maskedKey: settings.apiKey ? "••••••••••••••••" : "" } });
+      }
+      if (req.method === "POST" && route === "/api/v1/admin/sms/settings") {
+        const b = await body(req); const apiKey = String(b.apiKey || "").trim(); const sender = String(b.sender || "").trim();
+        if (apiKey && (apiKey.length < 20 || apiKey.length > 256)) return json(res, 400, { message: "کلید API معتبر نیست." });
+        if (!/^\d{5,20}$/.test(sender)) return json(res, 400, { message: "شماره فرستنده باید فقط شامل ۵ تا ۲۰ رقم باشد." });
+        if (JWT_SECRET.length < 32) return json(res, 503, { message: "کلید رمزنگاری امن سرور تنظیم نشده است." });
+        const existing = await pool.query("SELECT api_key_encrypted FROM sms_provider_settings WHERE provider=$1 LIMIT 1", ["kavenegar"]);
+        const encrypted = apiKey ? encryptSetting(apiKey) : (existing.rows[0]?.api_key_encrypted || null);
+        if (!encrypted) return json(res, 400, { message: "کلید API کاوه‌نگار را وارد کنید." });
+        await pool.query("INSERT INTO sms_provider_settings(provider,api_key_encrypted,sender,updated_by,updated_at) VALUES($1,$2,$3,$4,NOW()) ON CONFLICT(provider) DO UPDATE SET api_key_encrypted=EXCLUDED.api_key_encrypted,sender=EXCLUDED.sender,updated_by=EXCLUDED.updated_by,updated_at=NOW()", ["kavenegar", encrypted, sender, Number(admin.sub) || null]);
+        await audit(req, "admin.sms_settings.updated", Number(admin.sub), { provider: "kavenegar", sender });
+        return json(res, 200, { ok: true, data: { provider: "kavenegar", sender, configured: true, maskedKey: "••••••••••••••••" } });
+      }
+      if (req.method === "POST" && route === "/api/v1/admin/sms/test") {
+        const b = await body(req); const phone = String(b.phone || "").trim(); const message = String(b.message || "").trim();
+        if (!/^09\d{9}$/.test(phone)) return json(res, 400, { message: "شماره مقصد باید با 09 شروع شود و ۱۱ رقم باشد." });
+        if (!message || message.length > 1000) return json(res, 400, { message: "متن آزمایشی باید بین ۱ تا ۱۰۰۰ نویسه باشد." });
+        if (limited("sms-test:" + String(admin.sub))) return json(res, 429, { message: "تعداد تست‌ها زیاد است؛ ۱۵ دقیقه بعد دوباره تلاش کنید." });
+        const messageId = await sendSmsText(phone, message);
+        await audit(req, "admin.sms_test.sent", Number(admin.sub), { provider: "kavenegar", phone: maskPhone(phone), messageId });
+        return json(res, 200, { ok: true, message: "کاوه‌نگار ارسال پیامک را پذیرفت.", messageId });
+      }
+      if (req.method === "GET" && route === "/api/v1/admin/summary") {
+        const q = await pool.query("SELECT (SELECT COUNT(*) FROM users) AS users,(SELECT COUNT(*) FROM users WHERE lower(role) IN ('admin','superadmin')) AS admins,(SELECT COUNT(*) FROM legacy_customers) AS legacy_customers,(SELECT COUNT(*) FROM sms_templates) AS sms_templates,(SELECT COUNT(*) FROM sms_logs) AS sms_logs");
+        const configured = Boolean(KAVENEGAR_API_KEY);
+        return json(res, 200, { data: { ...q.rows[0], smsConfigured: configured } });
+      }
+      if (req.method === "GET" && route === "/api/v1/admin/users") {
+        const q = await pool.query("SELECT id,username,phone,full_name,email,role,is_active,created_at,legacy_source FROM users ORDER BY created_at DESC,id DESC LIMIT 500");
+        return json(res, 200, { data: q.rows });
+      }
+      if (req.method === "GET" && route === "/api/v1/admin/legacy-customers") {
+        const q = await pool.query("SELECT legacy_id,name,mobile,email,customer_code,registered_at,expires_at,is_permanent,purchased,affiliate_code,parked_domain FROM legacy_customers ORDER BY registered_at DESC NULLS LAST");
+        return json(res, 200, { data: q.rows });
+      }
+      if (req.method === "GET" && route === "/api/v1/admin/legacy-source-tables") {
+        const q = await pool.query(
+          "SELECT s.payload->>'sourceTable' AS source_table,COALESCE(d.row_count,0)::int AS row_count FROM legacy_source_data s LEFT JOIN (SELECT source_table,COUNT(*)::int AS row_count FROM legacy_source_data WHERE source_table<>'__legacy_schema__' GROUP BY source_table) d ON d.source_table=s.payload->>'sourceTable' WHERE s.source_table='__legacy_schema__' ORDER BY s.payload->>'sourceTable'"
+        );
+        return json(res, 200, { data: q.rows });
+      }
+      if (req.method === "GET" && route === "/api/v1/admin/legacy-source-data") {
+        const sourceTable = String(url.searchParams.get("table") || "");
+        if (!/^[A-Za-z0-9_.]{1,120}$/.test(sourceTable)) {
+          return json(res, 400, { message: "نوع داده قدیمی معتبر نیست." });
+        }
+        const limit = Math.min(500, Math.max(1, Number.parseInt(url.searchParams.get("limit") || "500", 10) || 500));
+        const offset = Math.max(0, Number.parseInt(url.searchParams.get("offset") || "0", 10) || 0);
+        const q = await pool.query(
+          "SELECT legacy_id,payload,imported_at FROM legacy_source_data WHERE source_table=$1 ORDER BY imported_at DESC,legacy_id LIMIT $2 OFFSET $3",
+          [sourceTable, limit, offset]
+        );
+        return json(res, 200, { data: q.rows });
+      }
+      if (req.method === "GET" && route === "/api/v1/admin/beta-inquiries") {
+        const q = await pool.query("SELECT id,reference,user_id,national_code,status,status_note,created_at FROM beta_inquiries ORDER BY created_at DESC LIMIT 500");
+        return json(res,200,{data:q.rows});
+      }
+      if (req.method === "GET" && route === "/api/v1/admin/documents") {
+        const q = await pool.query("SELECT id,user_id,kind,status,created_on,updated_at,review_note,fields::text AS fields_json,file_name,mime_type FROM customer_documents ORDER BY created_on DESC LIMIT 500");
+        return json(res, 200, { data:q.rows });
+      }
+      if (req.method === "POST" && route === "/api/v1/admin/documents/review") {
+        const b = await body(req); const id = String(b.id || "");
+        const status = String(b.status || "");
+        const note = String(b.note || "").trim().slice(0,2000);
+        if (!/^[0-9a-f-]{36}$/i.test(id) || !["Verified","Rejected","Pending"].includes(status)) return json(res, 400, { message:"شناسه یا وضعیت مدرک معتبر نیست." });
+        const q = await pool.query("UPDATE customer_documents SET status=$1,review_note=$2,updated_at=NOW() WHERE id=$3 RETURNING id,user_id,status", [status,note||null,id]);
+        if (!q.rowCount) return json(res, 404, { message:"مدرک پیدا نشد." });
+        await audit(req,"admin.documents.reviewed",Number(admin.sub)||null,{documentId:id,status});
+        return json(res,200,{ok:true,data:q.rows[0]});
+      }
+      if (req.method === "GET" && route === "/api/v1/admin/contracts") {
+        const q = await pool.query("SELECT id,user_id,title,number,status,expires_at,created_on,signed_at,rejected_at,rejection_note FROM customer_contracts ORDER BY created_on DESC LIMIT 500");
+        return json(res,200,{data:q.rows});
+      }
+      if (req.method === "POST" && route === "/api/v1/admin/contracts/create") {
+        const b = await body(req);
+        const userId = Number(b.userId);
+        const title = String(b.title||"").trim().slice(0,240);
+        const number = String(b.number||"").trim().slice(0,120);
+        const bodyHtml = String(b.bodyHtml||"").trim();
+        const expiresAt = b.expiresAt ? new Date(b.expiresAt) : null;
+        if (!Number.isSafeInteger(userId)||userId<1||!title||!number||!bodyHtml||bodyHtml.length>200000||(expiresAt&&!Number.isFinite(expiresAt.getTime()))) return json(res,400,{message:"اطلاعات قرارداد معتبر نیست."});
+        const owner = await pool.query("SELECT id FROM users WHERE id=$1 AND is_active=TRUE",[userId]);
+        if(!owner.rowCount) return json(res,404,{message:"کاربر فعال پیدا نشد."});
+        const q=await pool.query("INSERT INTO customer_contracts(user_id,title,number,body_html,expires_at) VALUES($1,$2,$3,$4,$5) RETURNING id,title,number,status,created_on",[userId,title,number,bodyHtml,expiresAt?expiresAt.toISOString():null]);
+        await audit(req,"admin.contracts.created",Number(admin.sub)||null,{contractId:q.rows[0].id,userId});
+        return json(res,201,{ok:true,data:q.rows[0]});
+      }
+      if (req.method === "GET" && route === "/api/v1/admin/sms/templates") {
+        const q = await pool.query("SELECT id,legacy_id,title,body,is_system,status,category,provider_panel,is_pattern_base,pattern_base_code,reject_reason,updated_at FROM sms_templates ORDER BY id");
+        return json(res, 200, { data: { items: q.rows, configured: Boolean(KAVENEGAR_API_KEY) } });
+      }
+      if (req.method === "POST" && route === "/api/v1/admin/sms/templates/update") {
+        const b = await body(req); const id = Number(b.id); const title = String(b.title || "").trim(); const text = String(b.body || "").trim();
+        if (!Number.isSafeInteger(id) || id < 1 || !title || title.length > 200 || !text || text.length > 4000) return json(res, 400, { message: "عنوان و متن الگو معتبر نیست." });
+        const q = await pool.query("UPDATE sms_templates SET title=$1,body=$2,status=$3,pattern_base_code=$4,updated_at=NOW() WHERE id=$5 RETURNING id,title,body,status,pattern_base_code", [title,text,Number.isInteger(Number(b.status))?Number(b.status):0,String(b.patternBaseCode||"").slice(0,500)||null,id]);
+        if (!q.rowCount) return json(res, 404, { message: "الگوی پیامک پیدا نشد." });
+        await audit(req, "admin.sms_template.updated", Number(admin.sub), { templateId: id });
+        return json(res, 200, { data: q.rows[0] });
+      }
+      if (req.method === "POST" && route === "/api/v1/admin/sms/test") {
+        const b = await body(req); const phone = String(b.phone || ""); const text = String(b.message || "").trim();
+        if (!phoneOk(phone) || !text || text.length > 1000) return json(res, 400, { message: "شماره موبایل یا متن پیام معتبر نیست." });
+        try {
+          const messageId = await sendSmsText(phone, text);
+          await pool.query("INSERT INTO sms_logs(recipient_masked,status,provider_message_id,created_by) VALUES($1,'sent',$2,$3)", [maskPhone(phone),messageId,Number(admin.sub)||null]);
+          await audit(req, "admin.sms.test.sent", Number(admin.sub), { recipient: maskPhone(phone) });
+          return json(res, 200, { ok: true, message: "درخواست ارسال پیامک به سرویس‌دهنده تحویل شد." });
+        } catch (e) {
+          await pool.query("INSERT INTO sms_logs(recipient_masked,status,error_code,created_by) VALUES($1,'failed',$2,$3)", [maskPhone(phone),String(e.code||"sms_delivery_failed").slice(0,80),Number(admin.sub)||null]).catch(()=>{});
+          throw e;
+        }
+      }
+      if (req.method === "GET" && route === "/api/v1/admin/sms/logs") {
+        const q = await pool.query("SELECT id,template_id,recipient_masked,status,provider_message_id,error_code,created_at FROM sms_logs ORDER BY created_at DESC LIMIT 100");
+        return json(res, 200, { data: q.rows });
+      }
+      return json(res, 404, { message: "مسیر مدیریت پیدا نشد." });
+    }
+    if (req.method === "POST" && route === "/api/v1/beta/inquiry") {
+      const userId = authenticatedUserId(req);
+      if (!userId) return json(res, 401, { message: "برای استعلام ابتدا وارد حساب شوید." });
+      const b = await body(req);
+      const nationalCode = String(b.nationalCode || "").replace(/[۰-۹]/g,d=>"۰۱۲۳۴۵۶۷۸۹".indexOf(d)).replace(/[٠-٩]/g,d=>"٠١٢٣٤٥٦٧٨٩".indexOf(d));
+      if (b.consent !== true) return json(res, 400, { message: "رضایت استعلام بانکی باید تأیید شود." });
+      if (!nationalCodeOk(nationalCode)) return json(res, 400, { message: "کد ملی معتبر نیست." });
+      const user = await pool.query("SELECT national_code FROM users WHERE id=$1 AND is_active=TRUE", [userId]);
+      if (!user.rowCount) return json(res, 401, { message: "حساب کاربری فعال پیدا نشد." });
+      if (String(user.rows[0].national_code || "").trim() !== nationalCode) {
+        return json(res, 400, { message: "کد ملی واردشده با کد ملی ثبت‌شده در حساب یکسان نیست." });
+      }
+      const reference = "BETA-" + crypto.randomBytes(4).toString("hex").toUpperCase();
+      const statusNote = "درخواست و رضایت ثبت شد؛ اتصال API رسمی بانک رفاه تنظیم نشده و استعلام به بانک ارسال نشده است.";
+      const q = await pool.query(
+        "INSERT INTO beta_inquiries(reference,user_id,national_code,status,status_note) VALUES($1,$2,$3,'pending_provider',$4) RETURNING reference,status,status_note,created_at",
+        [reference,userId,nationalCode,statusNote]
+      );
+      await audit(req,"beta.inquiry.created",userId,{reference});
+      return json(res,202,{data:{ref:q.rows[0].reference,status:q.rows[0].status,message:q.rows[0].status_note,createdAt:q.rows[0].created_at}});
+    }
+    if (route.startsWith("/api/v1/me/documents")) {
+      const userId = authenticatedUserId(req);
+      if (!userId) return json(res, 401, { message: "برای مشاهده مدارک وارد حساب شوید." });
+      if (req.method === "GET" && route === "/api/v1/me/documents") {
+        const q = await pool.query(
+          "SELECT id,kind,status,created_on AS \"createdOn\",review_note AS \"reviewNote\",fields::text AS \"fieldsJson\",ocr_text AS \"ocrText\",file_name AS \"fileName\" FROM customer_documents WHERE user_id=$1 ORDER BY created_on DESC",
+          [userId]
+        );
+        return json(res, 200, { data: q.rows });
+      }
+      if (req.method === "POST" && route === "/api/v1/me/documents") {
+        const { fields, file } = await multipartBody(req);
+        const kind = String(fields.kind || "").trim();
+        if (!["کارت ملی","شناسنامه","فیش حقوقی","سایر"].includes(kind)) return json(res, 400, { message: "نوع مدرک معتبر نیست." });
+        if (!file || !file.data.length) return json(res, 400, { message: "فایل مدرک انتخاب نشده است." });
+        if (file.data.length > 6_000_000) return json(res, 413, { message: "حجم عکس حداکثر ۶ مگابایت است." });
+        if (!["image/jpeg","image/png","image/webp"].includes(file.mime)) return json(res, 415, { message: "فقط تصویر JPG، PNG یا WEBP پذیرفته می‌شود." });
+        const safeName = String(file.name || "document").replace(/[\\/\\r\\n\0]/g,"_").slice(0,255) || "document";
+        const q = await pool.query(
+          "INSERT INTO customer_documents(user_id,kind,file_name,mime_type,file_data,fields) VALUES($1,$2,$3,$4,$5,$6::jsonb) RETURNING id",
+          [userId,kind,safeName,file.mime,file.data,JSON.stringify({fields:{fullName:"",nationalCode:""}})]
+        );
+        await audit(req, "documents.uploaded", userId, { documentId:q.rows[0].id, kind, size:file.data.length });
+        return json(res, 201, { ok:true, ocr:false, id:q.rows[0].id });
+      }
+      const fileMatch = route.match(/^\/api\/v1\/me\/documents\/([0-9a-f-]+)\/file$/i);
+      if (req.method === "GET" && fileMatch) {
+        const q = await pool.query("SELECT mime_type,file_data FROM customer_documents WHERE id=$1 AND user_id=$2", [fileMatch[1],userId]);
+        if (!q.rowCount) return json(res, 404, { message: "فایل مدرک پیدا نشد." });
+        res.writeHead(200, { "Content-Type":q.rows[0].mime_type, "Cache-Control":"no-store", "X-Content-Type-Options":"nosniff" });
+        return res.end(q.rows[0].file_data);
+      }
+      const fieldsMatch = route.match(/^\/api\/v1\/me\/documents\/([0-9a-f-]+)\/fields$/i);
+      if (req.method === "PUT" && fieldsMatch) {
+        const b = await body(req);
+        if (!b.fields || typeof b.fields !== "object" || Array.isArray(b.fields)) return json(res, 400, { message: "اطلاعات مدرک معتبر نیست." });
+        const q = await pool.query("UPDATE customer_documents SET fields=$1::jsonb,updated_at=NOW() WHERE id=$2 AND user_id=$3 AND status<>'Verified' RETURNING id", [JSON.stringify(b.fields),fieldsMatch[1],userId]);
+        if (!q.rowCount) return json(res, 404, { message: "مدرک پیدا نشد یا تأیید نهایی شده است." });
+        await audit(req, "documents.fields_updated", userId, { documentId:fieldsMatch[1] });
+        return json(res, 200, { ok:true });
+      }
+      const idMatch = route.match(/^\/api\/v1\/me\/documents\/([0-9a-f-]+)$/i);
+      if (req.method === "DELETE" && idMatch) {
+        const q = await pool.query("DELETE FROM customer_documents WHERE id=$1 AND user_id=$2 AND status='Pending' RETURNING id", [idMatch[1],userId]);
+        if (!q.rowCount) return json(res, 404, { message: "مدرک پیدا نشد یا دیگر قابل حذف نیست." });
+        await audit(req, "documents.deleted", userId, { documentId:idMatch[1] });
+        return json(res, 200, { ok:true });
+      }
+      return json(res, 404, { message: "مسیر مدارک پیدا نشد." });
+    }
+    if (route.startsWith("/api/v1/me/contracts")) {
+      const userId = authenticatedUserId(req);
+      if (!userId) return json(res, 401, { message: "برای مشاهده قراردادها وارد حساب شوید." });
+      if (req.method === "GET" && route === "/api/v1/me/contracts") {
+        const q = await pool.query("SELECT id,title,number,status,expires_at AS \"expiresAt\",created_on AS \"createdOn\" FROM customer_contracts WHERE user_id=$1 ORDER BY created_on DESC", [userId]);
+        return json(res, 200, { data:q.rows });
+      }
+      const htmlMatch = route.match(/^\/api\/v1\/me\/contracts\/([0-9a-f-]+)\/html$/i);
+      if (req.method === "GET" && htmlMatch) {
+        const q = await pool.query("SELECT body_html FROM customer_contracts WHERE id=$1 AND user_id=$2", [htmlMatch[1],userId]);
+        if (!q.rowCount) return json(res, 404, { message: "قرارداد پیدا نشد." });
+        res.writeHead(200, { "Content-Type":"text/html; charset=utf-8", "Cache-Control":"no-store", "Content-Security-Policy":"default-src 'none'; style-src 'unsafe-inline'; img-src data:" });
+        return res.end(q.rows[0].body_html);
+      }
+      const contractMatch = route.match(/^\/api\/v1\/me\/contracts\/([0-9a-f-]+)\/(sign|reject)$/i);
+      if (contractMatch && req.method === "POST") {
+        const action = contractMatch[2].toLowerCase();
+        const b = await body(req);
+        const status = action === "sign" ? "Signed" : "Rejected";
+        const note = action === "reject" ? String(b.note || "").trim().slice(0,2000) : null;
+        const q = await pool.query(
+          "UPDATE customer_contracts SET status=$1,signed_at=CASE WHEN $1='Signed' THEN NOW() ELSE signed_at END,rejected_at=CASE WHEN $1='Rejected' THEN NOW() ELSE rejected_at END,rejection_note=$2,updated_at=NOW() WHERE id=$3 AND user_id=$4 AND status IN ('Presented','AwaitingSignature') AND (expires_at IS NULL OR expires_at>NOW()) RETURNING id",
+          [status,note,contractMatch[1],userId]
+        );
+        if (!q.rowCount) return json(res, 404, { message: "قرارداد پیدا نشد یا دیگر قابل امضا نیست." });
+        await audit(req, action === "sign" ? "contracts.signed" : "contracts.rejected", userId, { contractId:contractMatch[1] });
+        return json(res, 200, { ok:true });
+      }
+      return json(res, 404, { message: "مسیر قراردادها پیدا نشد." });
+    }
+    if (req.method === "POST" && route === "/api/v1/security/password-reset/request") {
+      const b = await body(req); const phone = String(b.phone || ""); const ip = clientIp(req) || "unknown";
+      if (limited("reset:" + ip)) return json(res, 429, { message: "تلاش‌های زیاد؛ کمی بعد دوباره امتحان کنید." });
+      if (!phoneOk(phone)) return json(res, 400, { message: "شماره موبایل معتبر نیست." });
+      if (!await consumeCaptcha(b.captchaId, b.captchaAnswer)) return json(res, 400, { message: "کد امنیتی نامعتبر یا منقضی شده است." });
+      if (OTP_PEPPER.length < 32) return json(res, 503, { message: "تنظیم امنیتی OTP موجود نیست." });
+      const user = await pool.query("SELECT id FROM users WHERE phone=$1 AND is_active=TRUE LIMIT 1", [phone]);
+      if (!user.rowCount) {
+        await audit(req, "auth.password_reset.requested_unknown");
+        resetLimit("reset:" + ip);
+        return json(res, 200, { ok: true, message: "اگر شماره به حساب فعال متصل باشد، کد بازیابی ارسال می‌شود.", expiresIn: 120, resendIn: 60 });
+      }
+      const previous = await pool.query("SELECT resend_at FROM otp_challenges WHERE phone=$1 AND purpose='password_reset' AND consumed_at IS NULL ORDER BY created_at DESC LIMIT 1", [phone]);
+      if (previous.rowCount && new Date(previous.rows[0].resend_at).getTime() > Date.now()) {
+        return json(res, 429, { message: "برای ارسال مجدد کمی صبر کنید.", resendIn: Math.ceil((new Date(previous.rows[0].resend_at).getTime()-Date.now())/1000) });
+      }
+      const code = String(crypto.randomInt(100000,1000000)); const id = crypto.randomUUID();
+      await sendOtp(phone, code);
+      await pool.query("INSERT INTO otp_challenges(id,phone,purpose,code_hash,expires_at,resend_at) VALUES($1,$2,'password_reset',$3,NOW()+INTERVAL '2 minutes',NOW()+INTERVAL '60 seconds')", [id,phone,hash(code,OTP_PEPPER)]);
+      await audit(req, "auth.password_reset.code_sent", user.rows[0].id);
+      resetLimit("reset:" + ip);
+      return json(res, 200, { ok:true, message:"کد بازیابی ارسال شد.", expiresIn:120, resendIn:60 });
+    }
+    if (req.method === "POST" && route === "/api/v1/security/password-reset/confirm") {
+      const b = await body(req); const phone = String(b.phone || ""); const code = String(b.code || ""); const password = String(b.password || "");
+      if (!phoneOk(phone) || !/^\d{6}$/.test(code)) return json(res, 400, { message: "شماره یا کد بازیابی معتبر نیست." });
+      if (password.length < 10 || password.length > 128) return json(res, 400, { message: "رمز جدید باید بین ۱۰ تا ۱۲۸ نویسه باشد." });
+      if (OTP_PEPPER.length < 32) return json(res, 503, { message: "تنظیم امنیتی OTP موجود نیست." });
+      const result = await pool.query("SELECT * FROM otp_challenges WHERE phone=$1 AND purpose='password_reset' AND consumed_at IS NULL AND expires_at>NOW() ORDER BY created_at DESC LIMIT 1", [phone]);
+      if (!result.rowCount) return json(res, 400, { message: "کد منقضی شده یا وجود ندارد." });
+      const challenge = result.rows[0];
+      if (challenge.attempts >= 5) return json(res, 429, { message: "تعداد تلاش مجاز تمام شده است." });
+      if (hash(code,OTP_PEPPER) !== challenge.code_hash) {
+        await pool.query("UPDATE otp_challenges SET attempts=attempts+1 WHERE id=$1", [challenge.id]);
+        return json(res, 400, { message: "کد بازیابی نادرست است." });
+      }
+      const user = await pool.query("SELECT id FROM users WHERE phone=$1 AND is_active=TRUE LIMIT 1", [phone]);
+      if (!user.rowCount) return json(res, 400, { message: "بازیابی برای این حساب ممکن نیست." });
+      const passwordHash = await bcrypt.hash(password,12);
+      await pool.query("BEGIN");
+      try {
+        await pool.query("UPDATE users SET password_hash=$1,updated_at=NOW() WHERE id=$2",[passwordHash,user.rows[0].id]);
+        await pool.query("UPDATE otp_challenges SET consumed_at=NOW() WHERE id=$1",[challenge.id]);
+        await audit(req,"auth.password_reset.completed",user.rows[0].id);
+        await pool.query("COMMIT");
+      } catch(e) { await pool.query("ROLLBACK"); throw e; }
+      return json(res,200,{ok:true,message:"رمز عبور تغییر کرد. اکنون وارد شوید."});
+    }
+    if (req.method === "GET" && route === "/api/v1/security/captcha") {
+      if (CAPTCHA_PEPPER.length < 32) return json(res, 503, { message: "تنظیم امنیتی کپچا موجود نیست." });
+      const value = String(crypto.randomInt(10000, 100000)); const id = crypto.randomUUID();
+      await pool.query("INSERT INTO captcha_challenges(id,answer_hash,expires_at) VALUES($1,$2,NOW()+INTERVAL '5 minutes')", [id, hash(value, CAPTCHA_PEPPER)]);
+      return json(res, 200, { id, image: "data:image/svg+xml;base64," + Buffer.from(captchaSvg(value)).toString("base64") });
+    }
+    if (req.method === "POST" && route === "/api/v1/security/login") {
+      const b = await body(req); const ip = clientIp(req) || "unknown";
+      if (limited("login:" + ip)) return json(res, 429, { message: "تلاش‌های ناموفق زیاد بود. کمی بعد دوباره امتحان کنید." });
+      if (!await consumeCaptcha(b.captchaId, b.captchaAnswer)) return json(res, 400, { message: "کد امنیتی نامعتبر یا منقضی شده است." });
+      const username = String(b.username || "").trim().slice(0, 80);
+      const password = String(b.password || "");
+      // Prefer the exact account name or phone. The legacy "admin" alias is only a fallback,
+      // otherwise it can accidentally select the bootstrap account instead of the real migrated admin.
+      let result = await pool.query(
+        "SELECT id,phone,full_name,username,password_hash,role,is_active FROM users WHERE phone=$1 OR lower(username)=lower($1) ORDER BY CASE WHEN lower(username)=lower($1) THEN 0 ELSE 1 END LIMIT 1",
+        [username]
+      );
+      if (!result.rowCount && username.toLowerCase() === "admin") {
+        result = await pool.query("SELECT id,phone,full_name,username,password_hash,role,is_active FROM users WHERE lower(username)='digibail-admin' LIMIT 1");
+      }
+      if (!result.rowCount || !result.rows[0].is_active) {
+        await audit(req, "auth.login.failed"); return json(res, 401, { message: "نام کاربری یا رمز عبور نادرست است." });
+      }
+      const u = result.rows[0];
+      let passwordValid = await verifyPassword(password, u.password_hash);
+      let verifiedLegacyHash = null;
+      if (!passwordValid) {
+        // If a legacy identity collided with an existing modern username, verify against
+        // the preserved ASP.NET Identity hash and upgrade only after a successful login.
+        const legacy = await pool.query(
+          "SELECT payload->>'PasswordHash' AS password_hash FROM legacy_source_data WHERE source_table LIKE '%AspNetUsers' AND (lower(COALESCE(payload->>'UserName',payload->>'username',''))=lower($1) OR COALESCE(payload->>'Mobile',payload->>'Phone',payload->>'mobile',payload->>'phone','')=$1) ORDER BY imported_at DESC LIMIT 1",
+          [username]
+        );
+        if (legacy.rowCount && legacy.rows[0].password_hash) {
+          verifiedLegacyHash = String(legacy.rows[0].password_hash);
+          passwordValid = await verifyPassword(password, "aspnet:" + verifiedLegacyHash);
+        }
+      }
+      if (!passwordValid) {
+        await audit(req, "auth.login.failed"); return json(res, 401, { message: "نام کاربری یا رمز عبور نادرست است." });
+      }
+      resetLimit("login:" + ip);
+      if (String(u.password_hash).startsWith("aspnet:") || verifiedLegacyHash) {
+        const upgraded = await bcrypt.hash(password, 12);
+        await pool.query("UPDATE users SET password_hash=$1,updated_at=NOW() WHERE id=$2", [upgraded, u.id]);
+      }
+      await audit(req, "auth.login.success", u.id);
+      const token = tokenFor(u);
+      return authJson(res, 200, token, { accessToken: token, user: { id: u.id, phone: u.phone, fullName: u.full_name, role: u.role } });
+    }
+    if (req.method === "POST" && route === "/api/v1/security/otp/request") {
+      const b = await body(req); const phone = String(b.phone || ""); const purpose = b.purpose === "register" ? "register" : "login";
+      if (!phoneOk(phone)) return json(res, 400, { message: "شماره موبایل معتبر نیست." });
+      if (!await consumeCaptcha(b.captchaId, b.captchaAnswer)) return json(res, 400, { message: "کد امنیتی نامعتبر یا منقضی شده است." });
+      const exists = await pool.query("SELECT id FROM users WHERE phone=$1", [phone]);
+      if (purpose === "register" && exists.rowCount) return json(res, 409, { message: "این شماره قبلاً ثبت شده است." });
+      if (purpose === "login" && !exists.rowCount) return json(res, 404, { message: "حسابی با این شماره پیدا نشد." });
+      const previous = await pool.query("SELECT resend_at FROM otp_challenges WHERE phone=$1 AND purpose=$2 AND consumed_at IS NULL ORDER BY created_at DESC LIMIT 1", [phone, purpose]);
+      if (previous.rowCount && new Date(previous.rows[0].resend_at).getTime() > Date.now()) {
+        const seconds = Math.ceil((new Date(previous.rows[0].resend_at).getTime() - Date.now()) / 1000);
+        return json(res, 429, { message: "برای ارسال مجدد کمی صبر کنید.", expiresIn: 120, resendIn: seconds });
+      }
+      if (OTP_PEPPER.length < 32) return json(res, 503, { message: "تنظیم امنیتی OTP موجود نیست." });
+      const code = String(crypto.randomInt(100000, 1000000)); const id = crypto.randomUUID();
+      await sendOtp(phone, code);
+      await pool.query("INSERT INTO otp_challenges(id,phone,purpose,code_hash,expires_at,resend_at) VALUES($1,$2,$3,$4,NOW()+INTERVAL '2 minutes',NOW()+INTERVAL '60 seconds')", [id, phone, purpose, hash(code, OTP_PEPPER)]);
+      await audit(req, "auth.otp.requested", exists.rows[0]?.id || null, { purpose });
+      return json(res, 200, { ok: true, message: "کد ارسال شد", expiresIn: 120, resendIn: 60 });
+    }
+    if (req.method === "GET" && route === "/api/v1/security/otp/status") {
+      const phone = String(url.searchParams.get("phone") || "");
+      const result = await pool.query("SELECT GREATEST(0,EXTRACT(EPOCH FROM (expires_at-NOW())))::int AS expires_in,GREATEST(0,EXTRACT(EPOCH FROM (resend_at-NOW())))::int AS resend_in FROM otp_challenges WHERE phone=$1 AND consumed_at IS NULL ORDER BY created_at DESC LIMIT 1", [phone]);
+      return json(res, 200, { expiresIn: result.rows[0]?.expires_in || 0, resendIn: result.rows[0]?.resend_in || 0 });
+    }
+    if (req.method === "POST" && route === "/api/v1/security/otp/verify") {
+      const b = await body(req); const phone = String(b.phone || ""); const purpose = b.purpose === "register" ? "register" : "login";
+      const result = await pool.query("SELECT * FROM otp_challenges WHERE phone=$1 AND purpose=$2 AND consumed_at IS NULL AND expires_at>NOW() ORDER BY created_at DESC LIMIT 1", [phone, purpose]);
+      if (!result.rowCount) return json(res, 400, { message: "کد منقضی شده یا وجود ندارد." });
+      const challenge = result.rows[0];
+      if (challenge.attempts >= 5) return json(res, 429, { message: "تعداد تلاش مجاز تمام شده است." });
+      if (OTP_PEPPER.length < 32 || hash(String(b.code || ""), OTP_PEPPER) !== challenge.code_hash) {
+        await pool.query("UPDATE otp_challenges SET attempts=attempts+1 WHERE id=$1", [challenge.id]);
+        return json(res, 400, { message: "کد تأیید نادرست است." });
+      }
+      await pool.query("UPDATE otp_challenges SET consumed_at=NOW() WHERE id=$1", [challenge.id]);
+      if (purpose === "register") {
+        if (JWT_SECRET.length < 32) return json(res, 503, { message: "تنظیم امنیتی توکن موجود نیست." });
+        return json(res, 200, { ticket: jwt.sign({ purpose: "register", phone }, JWT_SECRET, { expiresIn: "10m", issuer: "digibail" }) });
+      }
+      const users = await pool.query("SELECT id,phone,full_name,role,is_active FROM users WHERE phone=$1", [phone]);
+      if (!users.rowCount || !users.rows[0].is_active) return json(res, 404, { message: "حسابی با این شماره نیست." });
+      const u = users.rows[0]; await audit(req, "auth.otp.login.success", u.id);
+      const token = tokenFor(u);
+      return authJson(res, 200, token, { accessToken: token, user: { id: u.id, phone: u.phone, fullName: u.full_name, role: u.role } });
+    }
+    if (req.method === "POST" && route === "/api/v1/security/register") {
+      const b = await body(req);
+      if (JWT_SECRET.length < 32) return json(res, 503, { message: "تنظیم امنیتی توکن موجود نیست." });
+      let ticket;
+      try { ticket = jwt.verify(String(b.ticket || ""), JWT_SECRET, { issuer: "digibail" }); }
+      catch { return json(res, 400, { message: "تأیید شماره معتبر نیست؛ دوباره شماره را تأیید کنید." }); }
+      if (ticket.purpose !== "register" || !phoneOk(ticket.phone)) return json(res, 400, { message: "مجوز ثبت‌نام معتبر نیست." });
+      if (!await consumeCaptcha(b.captchaId, b.captchaAnswer)) return json(res, 400, { message: "کد امنیتی نامعتبر یا منقضی شده است." });
+      const fullName = String(b.fullName || "").trim().replace(/\s+/g, " "); const nationalCode = String(b.nationalCode || "");
+      const password = String(b.password || ""); const email = b.email ? String(b.email).trim().slice(0, 254) : null;
+      if (fullName.length < 5 || fullName.length > 160) return json(res, 400, { message: "نام و نام خانوادگی را کامل وارد کنید." });
+      if (!nationalCodeOk(nationalCode)) return json(res, 400, { message: "کد ملی معتبر نیست." });
+      if (password.length < 10 || password.length > 128) return json(res, 400, { message: "رمز عبور باید حداقل ۱۰ نویسه باشد." });
+      const passwordHash = await bcrypt.hash(password, 12);
+      try {
+        const created = await pool.query("INSERT INTO users(phone,full_name,national_code,email,password_hash) VALUES($1,$2,$3,$4,$5) RETURNING id,phone,full_name,role", [ticket.phone, fullName, nationalCode, email, passwordHash]);
+        const u = created.rows[0]; await audit(req, "auth.register.success", u.id);
+        const token = tokenFor(u);
+        return authJson(res, 201, token, { accessToken: token, user: { id: u.id, phone: u.phone, fullName: u.full_name, role: u.role } });
+      } catch (error) {
+        if (error.code === "23505") return json(res, 409, { message: "شماره موبایل یا کد ملی قبلاً ثبت شده است." });
+        throw error;
+      }
+    }
+    if (req.method === "POST" && route === "/api/v1/security/register/ocr") return json(res, 501, { message: "سرویس OCR تا زمان اتصال ارائه‌دهنده و تنظیم کلید محرمانه فعال نیست." });
+    if (route.startsWith("/api/")) return json(res, 404, { message: "مسیر API پیدا نشد." });
+    return false;
+  } catch (error) {
+    const status = error.status || 500;
+    if (status >= 500) console.error("api_error", { route, status, code: error.code || "internal_error" });
+    return json(res, status, { message: status === 500 ? "خطای داخلی سرور." : error.message, code: error.code || undefined });
+  }
+}
+export async function closePool() { await pool.end(); }
+ AND source_table !~* 'bluvamdb' GROUP BY source_table ORDER BY source_table DESC LIMIT 1");
+        const q=preferred.rowCount
+          ? await pool.query("SELECT source_table,legacy_id,payload FROM legacy_source_data WHERE source_table=$1 ORDER BY legacy_id LIMIT 10000",[preferred.rows[0].source_table])
+          : await pool.query("SELECT source_table,legacy_id,payload FROM legacy_source_data WHERE source_table<>'__legacy_schema__' AND source_table ~* '(loan.?product|loan.?type|loan.?plan|loan.?definition|loan.?configuration|(^|[.])loans?$|وام)' AND source_table !~* '(request|application|installment|payment|history|log)' ORDER BY source_table,legacy_id LIMIT 10000");
         const norm=(x)=>String(x||"").toLowerCase().replace(/[^a-z0-9\u0600-\u06ff]/g,"");
         const pick=(p,keys)=>{const wanted=keys.map(norm);for(const k of Object.keys(p||{})){if(wanted.includes(norm(k))&&p[k]!==null&&p[k]!==undefined&&p[k]!=="")return p[k]}return null};
         const num=(v)=>{if(v===null||v===undefined||v==="")return null;const n=Number(String(v).replace(/[۰-۹]/g,d=>"۰۱۲۳۴۵۶۷۸۹".indexOf(d)).replace(/[٠-٩]/g,d=>"٠١٢٣٤٥٦٧٨٩".indexOf(d)).replace(/[٬,\s]/g,"").replace(/٫/g,"."));return Number.isFinite(n)?n:null};
