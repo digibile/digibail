@@ -78,10 +78,6 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(302, { Location: "/login.html?next=%2Fprofile.html", "Cache-Control": "no-store" });
       return res.end();
     }
-    if (["admin","superadmin"].includes(String(session.role || "").toLowerCase())) {
-      res.writeHead(302, { Location: "/admin.html", "Cache-Control": "no-store" });
-      return res.end();
-    }
   }
   if (!relative) return send(res, 404, "text/plain; charset=utf-8", req.method === "HEAD" ? "" : "Not found");
   const target = path.resolve(ROOT, relative);
