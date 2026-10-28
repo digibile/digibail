@@ -169,7 +169,7 @@ export async function handleApi(req, res, url) {
       if (req.method === "POST" && route === "/api/v1/admin/sms/settings") {
         const b = await body(req); const apiKey = String(b.apiKey || "").trim(); const sender = String(b.sender || "").trim();
         if (apiKey && (apiKey.length < 20 || apiKey.length > 256)) return json(res, 400, { message: "کلید API معتبر نیست." });
-        if (!/^\\d{5,20}$/.test(sender)) return json(res, 400, { message: "شماره فرستنده باید فقط شامل ۵ تا ۲۰ رقم باشد." });
+        if (!/^\d{5,20}$/.test(sender)) return json(res, 400, { message: "شماره فرستنده باید فقط شامل ۵ تا ۲۰ رقم باشد." });
         if (JWT_SECRET.length < 32) return json(res, 503, { message: "کلید رمزنگاری امن سرور تنظیم نشده است." });
         const existing = await pool.query("SELECT api_key_encrypted FROM sms_provider_settings WHERE provider=$1 LIMIT 1", ["kavenegar"]);
         const encrypted = apiKey ? encryptSetting(apiKey) : (existing.rows[0]?.api_key_encrypted || null);
@@ -180,7 +180,7 @@ export async function handleApi(req, res, url) {
       }
       if (req.method === "POST" && route === "/api/v1/admin/sms/test") {
         const b = await body(req); const phone = String(b.phone || "").trim(); const message = String(b.message || "").trim();
-        if (!/^09\\d{9}$/.test(phone)) return json(res, 400, { message: "شماره مقصد باید با 09 شروع شود و ۱۱ رقم باشد." });
+        if (!/^09\d{9}$/.test(phone)) return json(res, 400, { message: "شماره مقصد باید با 09 شروع شود و ۱۱ رقم باشد." });
         if (!message || message.length > 1000) return json(res, 400, { message: "متن آزمایشی باید بین ۱ تا ۱۰۰۰ نویسه باشد." });
         if (limited("sms-test:" + String(admin.sub))) return json(res, 429, { message: "تعداد تست‌ها زیاد است؛ ۱۵ دقیقه بعد دوباره تلاش کنید." });
         const messageId = await sendSmsText(phone, message);
@@ -256,7 +256,7 @@ export async function handleApi(req, res, url) {
     }
     if (req.method === "POST" && route === "/api/v1/security/password-reset/confirm") {
       const b = await body(req); const phone = String(b.phone || ""); const code = String(b.code || ""); const password = String(b.password || "");
-      if (!phoneOk(phone) || !/^\\d{6}$/.test(code)) return json(res, 400, { message: "شماره یا کد بازیابی معتبر نیست." });
+      if (!phoneOk(phone) || !/^\d{6}$/.test(code)) return json(res, 400, { message: "شماره یا کد بازیابی معتبر نیست." });
       if (password.length < 10 || password.length > 128) return json(res, 400, { message: "رمز جدید باید بین ۱۰ تا ۱۲۸ نویسه باشد." });
       if (OTP_PEPPER.length < 32) return json(res, 503, { message: "تنظیم امنیتی OTP موجود نیست." });
       const result = await pool.query("SELECT * FROM otp_challenges WHERE phone=$1 AND purpose='password_reset' AND consumed_at IS NULL AND expires_at>NOW() ORDER BY created_at DESC LIMIT 1", [phone]);
