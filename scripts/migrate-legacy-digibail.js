@@ -71,7 +71,10 @@ try {
   let purchasePlansInserted = 0, loanStatusesInserted = 0;
   for (const [sourceTable, rows, counter] of [
     ["CustomerPurchasePlan", input.purchasePlans || [], "plans"],
-    ["LoanRequestStatuses", input.loanRequestStatuses || [], "statuses"]
+    ["LoanRequestStatuses", input.loanRequestStatuses || [], "statuses"],
+    ["AspNetRoles", input.identityRoles || [], "identity"],
+    ["AspNetUserRoles", input.identityUserRoles || [], "identity"],
+    ["AspNetUserClaims", input.identityClaims || [], "identity"]
   ]) {
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i];
@@ -82,7 +85,7 @@ try {
       );
       if (result.rowCount) {
         if (counter === "plans") purchasePlansInserted++;
-        else loanStatusesInserted++;
+        else if (counter === "statuses") loanStatusesInserted++;
       }
     }
   }
