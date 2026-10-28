@@ -109,7 +109,11 @@ function captchaSvg(value) {
   return `<svg xmlns="http://www.w3.org/2000/svg" width="170" height="56" viewBox="0 0 170 56"><rect width="170" height="56" rx="12" fill="#241047"/><path d="M0 12L170 42M10 50L150 5" stroke="#ffb629" stroke-opacity=".35" stroke-width="2"/><text x="85" y="38" text-anchor="middle" font-family="monospace" font-size="30" font-weight="700" letter-spacing="5" fill="#fff">${value}</text></svg>`;
 }
 async function sendOtp(phone, code) {
-  if (!KAVENEGAR_API_KEY || !KAVENEGAR_TEMPLATE) throw Object.assign(new Error("ارسال پیامک پیکربندی نشده است؛ کلید و قالب کاوه‌نگار را در متغیرهای محرمانه تنظیم کنید."), { status: 503, code: "sms_provider_not_configured" });
+  if (!KAVENEGAR_API_KEY) throw Object.assign(new Error("کلید کاوه‌نگار در تنظیمات محرمانه سرور ثبت نشده است."), { status: 503, code: "sms_provider_not_configured" });
+  if (!KAVENEGAR_TEMPLATE) {
+    await sendSmsText(phone, `${BRAND_NAME}: کد تأیید شما ${code} است. این کد را در اختیار دیگران قرار ندهید.`);
+    return;
+  }
   const url = `https://api.kavenegar.com/v1/${encodeURIComponent(KAVENEGAR_API_KEY)}/verify/lookup.json`;
   const form = new URLSearchParams({ receptor: phone, token: code, template: KAVENEGAR_TEMPLATE });
   const response = await fetch(url, { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: form, signal: AbortSignal.timeout(10000) });
@@ -176,6 +180,54 @@ export async function handleApi(req, res, url) {
         return json(res, 200, { data: q.rows });
       }
       return json(res, 404, { message: "مسیر مدیریت پیدا نشد." });
+    }
+    if (req.method === "POST" && route === "/api/v1/security/password-reset/request") {
+      const b = await body(req); const phone = String(b.phone || ""); const ip = clientIp(req) || "unknown";
+      if (limited("reset:" + ip)) return json(res, 429, { message: "تلاش‌های زیاد؛ کمی بعد دوباره امتحان کنید." });
+      if (!phoneOk(phone)) return json(res, 400, { message: "شماره موبایل معتبر نیست." });
+      if (!await consumeCaptcha(b.captchaId, b.captchaAnswer)) return json(res, 400, { message: "کد امنیتی نامعتبر یا منقضی شده است." });
+      if (OTP_PEPPER.length < 32) return json(res, 503, { message: "تنظیم امنیتی OTP موجود نیست." });
+      const user = await pool.query("SELECT id FROM users WHERE phone=$1 AND is_active=TRUE LIMIT 1", [phone]);
+      if (!user.rowCount) {
+        await audit(req, "auth.password_reset.requested_unknown");
+        resetLimit("reset:" + ip);
+        return json(res, 200, { ok: true, message: "اگر شماره به حساب فعال متصل باشد، کد بازیابی ارسال می‌شود.", expiresIn: 120, resendIn: 60 });
+      }
+      const previous = await pool.query("SELECT resend_at FROM otp_challenges WHERE phone=$1 AND purpose='password_reset' AND consumed_at IS NULL ORDER BY created_at DESC LIMIT 1", [phone]);
+      if (previous.rowCount && new Date(previous.rows[0].resend_at).getTime() > Date.now()) {
+        return json(res, 429, { message: "برای ارسال مجدد کمی صبر کنید.", resendIn: Math.ceil((new Date(previous.rows[0].resend_at).getTime()-Date.now())/1000) });
+      }
+      const code = String(crypto.randomInt(100000,1000000)); const id = crypto.randomUUID();
+      await sendOtp(phone, code);
+      await pool.query("INSERT INTO otp_challenges(id,phone,purpose,code_hash,expires_at,resend_at) VALUES($1,$2,'password_reset',$3,NOW()+INTERVAL '2 minutes',NOW()+INTERVAL '60 seconds')", [id,phone,hash(code,OTP_PEPPER)]);
+      await audit(req, "auth.password_reset.code_sent", user.rows[0].id);
+      resetLimit("reset:" + ip);
+      return json(res, 200, { ok:true, message:"کد بازیابی ارسال شد.", expiresIn:120, resendIn:60 });
+    }
+    if (req.method === "POST" && route === "/api/v1/security/password-reset/confirm") {
+      const b = await body(req); const phone = String(b.phone || ""); const code = String(b.code || ""); const password = String(b.password || "");
+      if (!phoneOk(phone) || !/^\\d{6}$/.test(code)) return json(res, 400, { message: "شماره یا کد بازیابی معتبر نیست." });
+      if (password.length < 10 || password.length > 128) return json(res, 400, { message: "رمز جدید باید بین ۱۰ تا ۱۲۸ نویسه باشد." });
+      if (OTP_PEPPER.length < 32) return json(res, 503, { message: "تنظیم امنیتی OTP موجود نیست." });
+      const result = await pool.query("SELECT * FROM otp_challenges WHERE phone=$1 AND purpose='password_reset' AND consumed_at IS NULL AND expires_at>NOW() ORDER BY created_at DESC LIMIT 1", [phone]);
+      if (!result.rowCount) return json(res, 400, { message: "کد منقضی شده یا وجود ندارد." });
+      const challenge = result.rows[0];
+      if (challenge.attempts >= 5) return json(res, 429, { message: "تعداد تلاش مجاز تمام شده است." });
+      if (hash(code,OTP_PEPPER) !== challenge.code_hash) {
+        await pool.query("UPDATE otp_challenges SET attempts=attempts+1 WHERE id=$1", [challenge.id]);
+        return json(res, 400, { message: "کد بازیابی نادرست است." });
+      }
+      const user = await pool.query("SELECT id FROM users WHERE phone=$1 AND is_active=TRUE LIMIT 1", [phone]);
+      if (!user.rowCount) return json(res, 400, { message: "بازیابی برای این حساب ممکن نیست." });
+      const passwordHash = await bcrypt.hash(password,12);
+      await pool.query("BEGIN");
+      try {
+        await pool.query("UPDATE users SET password_hash=$1,updated_at=NOW() WHERE id=$2",[passwordHash,user.rows[0].id]);
+        await pool.query("UPDATE otp_challenges SET consumed_at=NOW() WHERE id=$1",[challenge.id]);
+        await audit(req,"auth.password_reset.completed",user.rows[0].id);
+        await pool.query("COMMIT");
+      } catch(e) { await pool.query("ROLLBACK"); throw e; }
+      return json(res,200,{ok:true,message:"رمز عبور تغییر کرد. اکنون وارد شوید."});
     }
     if (req.method === "GET" && route === "/api/v1/security/captcha") {
       if (CAPTCHA_PEPPER.length < 32) return json(res, 503, { message: "تنظیم امنیتی کپچا موجود نیست." });
