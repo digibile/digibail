@@ -168,7 +168,7 @@ jobs:
               if grep -Fq "proxy_pass http://127.0.0.1:1361;" "$CUST" || grep -Fq "proxy_pass http://127.0.0.1:1362;" "$CUST"; then
                 BACKUP="${CUST}.bak.$(date +%Y%m%d%H%M%S)"
                 cp -p "$CUST" "$BACKUP"
-                sed -i 's#proxy_pass http://127.0.0.1:1361;#proxy_pass http://127.0.0.1:1631;#g; s#proxy_pass http://127.0.0.1:1362;#proxy_pass http://127.0.0.1:1631;#g' "$CUST"
+                sed -i "s#proxy_pass http://127.0.0.1:1361;#proxy_pass http://127.0.0.1:1631;#g; s#proxy_pass http://127.0.0.1:1362;#proxy_pass http://127.0.0.1:1631;#g" "$CUST"
                 if ! chroot /host /usr/sbin/nginx -t; then
                   cp -p "$BACKUP" "$CUST"
                   echo "ERROR: nginx validation failed; previous route restored."
