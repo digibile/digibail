@@ -17,6 +17,12 @@ export async function migrate() {
   const path = await import("node:path");
   const root = path.dirname(fileURLToPath(import.meta.url));
   await pool.query(await readFile(path.join(root, "db", "001_init.sql"), "utf8"));
+  // Provision a password-only initial superadmin without relying on SMS delivery.
+  // The password itself is never stored in source; only a salted scrypt verifier is.
+  await pool.query(
+    "INSERT INTO users(username,full_name,password_hash,role,is_active) VALUES($1,$2,$3,'superadmin',TRUE) ON CONFLICT(username) DO NOTHING",
+    ["digibail-admin", "مدیر ارشد دیجی‌بایل", "scrypt$16384$8$1$qbQb0FbKAwzw-MAwNjIiFA$tB8a87yPosT7I8kVz5HNa_BjMKIOIA5Czxod4u37wCBu4FcbhyzbQCQYZsFIrK3qg30LMZ_OFqB25rsXaeHUpw"]
+  );
 }
 export async function dbHealth() { await pool.query("SELECT 1"); return true; }
 function hash(value, pepper) { return crypto.createHmac("sha256", pepper).update(String(value)).digest("hex"); }
@@ -88,8 +94,19 @@ function verifyAspNetIdentityPassword(password, storedHash) {
   return actual.length === subkey.length && crypto.timingSafeEqual(actual, subkey);
 }
 async function verifyPassword(password, storedHash) {
-  if (String(storedHash || "").startsWith("aspnet:")) return verifyAspNetIdentityPassword(password, storedHash.slice(7));
-  return bcrypt.compare(String(password || ""), String(storedHash || ""));
+  const stored = String(storedHash || "");
+  if (stored.startsWith("aspnet:")) return verifyAspNetIdentityPassword(password, stored.slice(7));
+  if (stored.startsWith("scrypt$")) {
+    try {
+      const [, n, r, p, salt, expected] = stored.split("$");
+      const N = Number(n), R = Number(r), P = Number(p);
+      if (N !== 16384 || R !== 8 || P !== 1 || !salt || !expected) return false;
+      const expectedBytes = Buffer.from(expected, "base64url");
+      const actual = crypto.scryptSync(String(password || ""), Buffer.from(salt, "base64url"), expectedBytes.length, { N, r: R, p: P, maxmem: 64 * 1024 * 1024 });
+      return actual.length === expectedBytes.length && crypto.timingSafeEqual(actual, expectedBytes);
+    } catch { return false; }
+  }
+  return bcrypt.compare(String(password || ""), stored);
 }
 function maskPhone(phone) {
   const p = String(phone || "");
