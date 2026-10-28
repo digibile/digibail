@@ -55,6 +55,8 @@ jobs:
             SQLCMD="/opt/mssql-tools18/bin/sqlcmd"
             $DOCKER exec "$SQLC" test -x "$SQLCMD" || SQLCMD="/opt/mssql-tools/bin/sqlcmd"
             $DOCKER exec "$SQLC" test -x "$SQLCMD"
+            SA_PASS="$($DOCKER inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$SQLC" | sed -n -E 's/^(MSSQL_SA_PASSWORD|SA_PASSWORD)=(.*)$/\\2/p' | head -1)"
+            if [ -z "$SA_PASS" ]; then echo "BLOCKED: legacy SQL Server credential unavailable."; exit 22; fi
             TMP="$(mktemp -d /tmp/digibail-legacy-migration.XXXXXX)"; chmod 700 "$TMP"
             trap 'rm -rf "$TMP"; $DOCKER exec "$APP_ID" rm -f /tmp/legacy-migration.json >/dev/null 2>&1 || true' EXIT
             Q_USERS="SET NOCOUNT ON; SELECT CAST(u.Id AS nvarchar(40)) AS legacyId, NULLIF(LTRIM(RTRIM(u.UserName)),'') AS username, NULLIF(LTRIM(RTRIM(CONCAT(ISNULL(u.FirstName,''),' ',ISNULL(u.LastName,'')))),'') AS fullName, NULLIF(LTRIM(RTRIM(u.Email)),'') AS email, NULLIF(LTRIM(RTRIM(u.NationalCode)),'') AS nationalCode, NULLIF(LTRIM(RTRIM(u.PasswordHash)),'') AS passwordHash, CAST(u.IsActive AS bit) AS isActive, COALESCE(NULLIF(LTRIM(RTRIM(u.Mobile)),''),NULLIF(LTRIM(RTRIM(u.PhoneNumber)),''),NULLIF(LTRIM(RTRIM(u.Phone)),'')) AS phone, COALESCE((SELECT STRING_AGG(r.Name, ',') FROM AspNetUserRoles ur JOIN AspNetRoles r ON r.Id=ur.RoleId WHERE ur.UserId=u.Id),'') AS roles, u.RegDate AS createdAt FROM AspNetUsers u FOR JSON PATH;"
@@ -62,9 +64,9 @@ jobs:
             Q_SMS="SET NOCOUNT ON; SELECT CONVERT(nvarchar(36),Id) AS legacyId, Title AS title, Pattern AS pattern, IsSystem AS isSystem, Status AS status, Category AS category, SmsPatternPanel AS providerPanel, IsPatternBase AS isPatternBase, PatternBaseCode AS patternBaseCode, RejectReason AS rejectReason, CONVERT(nvarchar(36),CustomerId) AS legacyCustomerId FROM SmsPatterns FOR JSON PATH;"
             for item in "users|$Q_USERS" "customers|$Q_CUSTOMERS" "sms|$Q_SMS"; do
               name="${item%%|*}"; query="${item#*|}"
-              $DOCKER exec -e QUERY="$query" "$SQLC" sh -lc 'export SQLCMDPASSWORD="${MSSQL_SA_PASSWORD:-${SA_PASSWORD:-}}"; exec /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -C -b -h -1 -W -w 65535 -y 0 -d Digibail -Q "$QUERY"' 2>/dev/null | tr -d '\r' > "$TMP/$name.json" || {
-                $DOCKER exec -e QUERY="$query" "$SQLC" sh -lc 'export SQLCMDPASSWORD="${MSSQL_SA_PASSWORD:-${SA_PASSWORD:-}}"; exec /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -C -b -h -1 -W -w 65535 -y 0 -d Digibail -Q "$QUERY"' | tr -d '\r' > "$TMP/$name.json"
-              }
+              $DOCKER exec -e SQLCMDPASSWORD="$SA_PASS" "$SQLC" "$SQLCMD" -S localhost -U sa -C -b -h -1 -W -w 65535 -y 0 -d Digibail -Q "$query" > "$TMP/$name.raw"
+              tr -d '\r' < "$TMP/$name.raw" > "$TMP/$name.json"
+              test -s "$TMP/$name.json"
             done
             node - "$TMP" <<'NODE'
             const fs=require("node:fs"),p=require("node:path"),d=process.argv[2];
@@ -75,6 +77,8 @@ jobs:
             NODE
             chmod 600 "$TMP/input.json"
             $DOCKER cp "$TMP/input.json" "$APP_ID:/tmp/legacy-migration.json"
+            $DOCKER exec -u 0 "$APP_ID" chown node:node /tmp/legacy-migration.json
             $DOCKER exec "$APP_ID" node /app/scripts/migrate-legacy-digibail.js /tmp/legacy-migration.json
             $DOCKER compose exec -T db sh -lc 'export PGPASSWORD="$POSTGRES_PASSWORD"; psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Atc "SELECT '''legacy_admin_accounts''',COUNT(*) FROM users WHERE legacy_source='''aspnetusers''' UNION ALL SELECT '''legacy_customers''',COUNT(*) FROM legacy_customers UNION ALL SELECT '''sms_templates''',COUNT(*) FROM sms_templates;"'
             echo "LEGACY_MIGRATION_COMPLETED=1"
+            unset SA_PASS
