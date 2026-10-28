@@ -43,7 +43,16 @@ function importInput(appId, tempDir, input, label) {
   writeFileSync(path, JSON.stringify(input), { mode: 0o600 });
   docker(["cp", path, appId + ":/tmp/legacy-migration.json"]);
   docker(["exec", "-u", "0", appId, "chown", "node:node", "/tmp/legacy-migration.json"]);
-  const out = docker(["exec", appId, "node", "/app/scripts/migrate-legacy-digibail.js", "/tmp/legacy-migration.json"]);
+  let out;
+  try {
+    out = docker(["exec", appId, "node", "/app/scripts/migrate-legacy-digibail.js", "/tmp/legacy-migration.json"]);
+  } catch (error) {
+    const diagnostic = String(error?.stderr || "").split(/\r?\n/)
+      .filter(line => /Legacy migration failed; transaction rolled back\. Code:|Error code:/i.test(line))
+      .slice(-3).join(" ");
+    console.error("IMPORT_BATCH_FAILED=" + label + " " + diagnostic);
+    throw new Error("Import batch failed; diagnostic details filtered");
+  }
   const line = out.split("\n").filter(x => x.trim()).slice(-2).join(" ");
   console.log("IMPORT_BATCH=" + label + " " + line);
 }
