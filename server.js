@@ -2,7 +2,7 @@ import http from "node:http";
 import path from "node:path";
 import { readFile, stat } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
-import { dbHealth, handleApi, verifySession } from "./backend/api.js";
+import { dbHealth, handleApi, verifyAdminSession } from "./backend/api.js";
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number.parseInt(process.env.PORT || "1631", 10);
@@ -53,9 +53,8 @@ const server = http.createServer(async (req, res) => {
   }
   const relative = resolveRoute(url.pathname);
   if (url.pathname === "/panel.html" || url.pathname === "/profile.html" || url.pathname === "/admin" || url.pathname === "/admin.html" || url.pathname === "/sms-settings.html") {
-    const cookie = String(req.headers.cookie || "").split(";").map(v => v.trim()).find(v => v.startsWith("db_session="));
-    const session = cookie ? verifySession(cookie.slice("db_session=".length)) : null;
-    if (!session || !["admin", "superadmin"].includes(session.role)) {
+    const isAdmin = await verifyAdminSession(req);
+    if (!isAdmin) {
       res.writeHead(302, { Location: `/login.html?next=${encodeURIComponent(url.pathname)}`, "Cache-Control": "no-store" });
       return res.end();
     }
