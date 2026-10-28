@@ -1,0 +1,43 @@
+name: Import VamCity records into the main Digibail database
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/import-vamcity-real-data.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: import-vamcity-real-data
+  cancel-in-progress: false
+
+jobs:
+  import:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Wait for deployed importer and execute migration on the server
+        uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          command_timeout: 80m
+          script: |
+            set -eu
+            ROOT="/home/digibail/domains/digebail.ir"
+            cd "$ROOT"
+            if sudo -n docker info >/dev/null 2>&1; then D='sudo -n docker'; elif docker info >/dev/null 2>&1; then D='docker'; else echo "BLOCKED: Docker unavailable"; exit 20; fi
+            FOUND=0
+            for n in $(seq 1 90); do
+              if [ -s "$ROOT/scripts/import-vamcity-real-data.mjs" ] && [ -s "$ROOT/scripts/migrate-legacy-digibail.js" ]; then FOUND=1; break; fi
+              sleep 5
+            done
+            [ "$FOUND" -eq 1 ] || { echo "BLOCKED: importer files not deployed"; exit 21; }
+            echo "=== Importing verified Linux-restored source databases into PostgreSQL ==="
+            node "$ROOT/scripts/import-vamcity-real-data.mjs"
+            echo "=== Server-side migration process returned success ==="
