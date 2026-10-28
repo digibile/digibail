@@ -68,7 +68,8 @@ jobs:
                 case "$type" in
                   D) DN=$((DN+1)); if [ "$DN" -eq 1 ]; then EXT=mdf; else EXT=ndf; fi; DEST="/var/opt/mssql/data/"$TARGET_DB"_data_"$DN"."$EXT ;;
                   L) LN=$((LN+1)); DEST="/var/opt/mssql/data/"$TARGET_DB"_log_"$LN".ldf" ;;
-                  *) ON=$((ON+1)); DEST="/var/opt/mssql/data/"$TARGET_DB"_other_"$ON".ndf" ;;
+                  F) ON=$((ON+1)); DEST="/var/opt/mssql/data/"$TARGET_DB"_other_"$ON".ndf" ;;
+                  *) continue ;;
                 esac
                 LOGICAL_SQL="$(printf '%s' "$logical" | sed "s/'/''/g")"
                 MOVES="$MOVES MOVE N'"$LOGICAL_SQL"' TO N'"$DEST"',"
