@@ -50,7 +50,10 @@ function importInput(appId, tempDir, input, label) {
     let diagnostic = [error?.stdout, error?.stderr, error?.message].map(value => String(value || "")).join("\n");
     if (SA_PASS) diagnostic = diagnostic.split(SA_PASS).join("[REDACTED]");
     diagnostic = diagnostic.replace(/-P\\s+\\S+/g, "-P [REDACTED]").slice(-1200);
-    console.error("IMPORT_BATCH_FAILED=" + label + " " + diagnostic);
+    console.error("IMPORT_BATCH_FAILED=" + label + " exit=" + String(error?.status ?? "unknown") +
+      " signal=" + String(error?.signal ?? "none") + " code=" + String(error?.code ?? "none") +
+      " stdout_bytes=" + String(String(error?.stdout || "").length) +
+      " stderr_bytes=" + String(String(error?.stderr || "").length) + " " + diagnostic);
     throw new Error("Import batch failed; diagnostic details filtered");
   }
   const line = out.split("\n").filter(x => x.trim()).slice(-2).join(" ");
