@@ -104,7 +104,7 @@ jobs:
               echo "SECURE_ENV_CREATED=1 (secret values hidden)"
             fi
             for key in POSTGRES_DB POSTGRES_USER POSTGRES_PASSWORD DATABASE_URL JWT_SECRET OTP_PEPPER CAPTCHA_PEPPER; do
-              if ! grep -qE "^\${key}=.+" .env; then
+              if ! grep -qE "^${key}=.+" .env; then
                 echo "BLOCKED: missing or empty required setting: $key"
                 exit 22
               fi
