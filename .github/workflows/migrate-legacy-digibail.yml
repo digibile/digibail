@@ -11,6 +11,7 @@ permissions:
 
 jobs:
   migrate:
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - name: Validate SSH settings
@@ -40,7 +41,7 @@ jobs:
             READY=0
             for n in $(seq 1 90); do
               APP_ID="$($DOCKER compose ps -q app 2>/dev/null || true)"
-              if [ -n "$APP_ID" ] && $DOCKER exec "$APP_ID" test -f /app/web/admin.html 2>/dev/null && $DOCKER exec "$APP_ID" test -f /app/scripts/migrate-legacy-digibail.js 2>/dev/null; then
+              if [ -n "$APP_ID" ] && $DOCKER exec "$APP_ID" test -f /app/web/admin.html 2>/dev/null && $DOCKER exec "$APP_ID" test -f /app/scripts/migrate-legacy-digibail.js 2>/dev/null && $DOCKER exec "$APP_ID" grep -q "genericTables ||" /app/scripts/migrate-legacy-digibail.js 2>/dev/null; then
                 if $DOCKER compose exec -T db sh -lc 'export PGPASSWORD="$POSTGRES_PASSWORD"; psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Atc "SELECT to_regclass('\''public.sms_templates'\'') IS NOT NULL AND to_regclass('\''public.legacy_customers'\'') IS NOT NULL"' 2>/dev/null | grep -qx t; then READY=1; break; fi
               fi
               sleep 10
@@ -108,12 +109,48 @@ jobs:
             NODEJSON
               test -s "$TMP/$name.json"
             done
+            echo "=== Export all remaining legacy tables without changing their source schema ==="
+            $DOCKER exec -e SQLCMDPASSWORD="$DB_PASS" "$SQLC" "$SQLCMD" -S localhost -U "$DB_USER" -C -b -h -1 -W -w 65535 -d "$DB" -Q "SET NOCOUNT ON; SELECT s.name + '.' + t.name FROM sys.tables t JOIN sys.schemas s ON s.schema_id=t.schema_id WHERE t.is_ms_shipped=0 ORDER BY s.name,t.name" | tr -d '\r' | sed '/^[[:space:]]*$/d' > "$TMP/generic-table-list.txt"
+            : > "$TMP/generic-manifest.tsv"
+            GENERIC_INDEX=0
+            while IFS= read -r full_table; do
+              [ -n "$full_table" ] || continue
+              schema_name="${full_table%%.*}"
+              table_name="${full_table#*.}"
+              schema_quoted="$(printf '%s' "$schema_name" | sed 's/]/]]/g')"
+              table_quoted="$(printf '%s' "$table_name" | sed 's/]/]]/g')"
+              GENERIC_INDEX=$((GENERIC_INDEX + 1))
+              json_file="generic-$GENERIC_INDEX.json"
+              query="SET NOCOUNT ON; SELECT * FROM [$schema_quoted].[$table_quoted] FOR JSON PATH, INCLUDE_NULL_VALUES;"
+              echo "EXPORT_LEGACY_TABLE=$full_table"
+              if ! $DOCKER exec -e SQLCMDPASSWORD="$DB_PASS" "$SQLC" "$SQLCMD" -S localhost -U "$DB_USER" -C -b -w 65535 -y 0 -d "$DB" -Q "$query" > "$TMP/$json_file.raw" 2> "$TMP/$json_file.err"; then
+                echo "LEGACY_GENERIC_EXPORT_FAILED=$full_table"
+                sed -E 's/(password|pwd|token|secret)[^; ]*/[redacted]/Ig' "$TMP/$json_file.err" | tail -n 12
+                exit 24
+              fi
+              node - "$TMP/$json_file.raw" "$TMP/$json_file" <<'NODEJSON'
+              const fs=require("node:fs");
+              const raw=fs.readFileSync(process.argv[2],"utf8").replace(/\r/g,"");
+              const first=raw.indexOf("[");
+              const last=raw.lastIndexOf("]");
+              if(first<0||last<first) { if(raw.trim()===""){ fs.writeFileSync(process.argv[3],"[]",{mode:0o600}); process.exit(0); } console.error("SQLCMD output did not contain a JSON array"); process.exit(1); }
+              const value=raw.slice(first,last+1).replace(/[\r\n]/g,"");
+              JSON.parse(value);
+              fs.writeFileSync(process.argv[3],value,{mode:0o600});
+            NODEJSON
+              printf '%s\t%s\n' "$full_table" "$json_file" >> "$TMP/generic-manifest.tsv"
+            done < "$TMP/generic-table-list.txt"
             node - "$TMP" <<'NODE'
             const fs=require("node:fs"),p=require("node:path"),d=process.argv[2];
             const read=n=>JSON.parse(fs.readFileSync(p.join(d,n),"utf8").trim()||"[]");
-            const data={users:read("users.json"),customers:read("customers.json"),smsPatterns:read("sms.json"),purchasePlans:read("plans.json"),loanRequestStatuses:read("statuses.json"),identityRoles:read("roles.json"),identityUserRoles:read("userroles.json"),identityClaims:read("claims.json")};
+            const genericTables=[];
+            for(const line of fs.readFileSync(p.join(d,"generic-manifest.tsv"),"utf8").split(/\r?\n/).filter(Boolean)){
+              const [sourceTable,file]=line.split("\t");
+              genericTables.push({sourceTable,rows:read(file)});
+            }
+            const data={users:read("users.json"),customers:read("customers.json"),smsPatterns:read("sms.json"),purchasePlans:read("plans.json"),loanRequestStatuses:read("statuses.json"),identityRoles:read("roles.json"),identityUserRoles:read("userroles.json"),identityClaims:read("claims.json"),genericTables};
             fs.writeFileSync(p.join(d,"input.json"),JSON.stringify(data),{mode:0o600});
-            console.log("LEGACY_EXPORT_COUNTS="+JSON.stringify({users:data.users.length,customers:data.customers.length,smsPatterns:data.smsPatterns.length,purchasePlans:data.purchasePlans.length,loanRequestStatuses:data.loanRequestStatuses.length,identityRoles:data.identityRoles.length,identityUserRoles:data.identityUserRoles.length,identityClaims:data.identityClaims.length}));
+            console.log("LEGACY_EXPORT_COUNTS="+JSON.stringify({users:data.users.length,customers:data.customers.length,smsPatterns:data.smsPatterns.length,purchasePlans:data.purchasePlans.length,loanRequestStatuses:data.loanRequestStatuses.length,identityRoles:data.identityRoles.length,identityUserRoles:data.identityUserRoles.length,identityClaims:data.identityClaims.length,genericTableCount:genericTables.length,genericRowCount:genericTables.reduce((n,t)=>n+t.rows.length,0)}));
             NODE
             chmod 600 "$TMP/input.json"
             $DOCKER cp "$TMP/input.json" "$APP_ID:/tmp/legacy-migration.json"

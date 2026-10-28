@@ -260,14 +260,22 @@ export async function handleApi(req, res, url) {
         const q = await pool.query("SELECT legacy_id,name,mobile,email,customer_code,registered_at,expires_at,is_permanent,purchased,affiliate_code,parked_domain FROM legacy_customers ORDER BY registered_at DESC NULLS LAST");
         return json(res, 200, { data: q.rows });
       }
+      if (req.method === "GET" && route === "/api/v1/admin/legacy-source-tables") {
+        const q = await pool.query(
+          "SELECT source_table,COUNT(*)::int AS row_count FROM legacy_source_data GROUP BY source_table ORDER BY source_table"
+        );
+        return json(res, 200, { data: q.rows });
+      }
       if (req.method === "GET" && route === "/api/v1/admin/legacy-source-data") {
         const sourceTable = String(url.searchParams.get("table") || "");
-        if (!["CustomerPurchasePlan", "LoanRequestStatuses"].includes(sourceTable)) {
+        if (!/^[A-Za-z0-9_.]{1,120}$/.test(sourceTable)) {
           return json(res, 400, { message: "نوع داده قدیمی معتبر نیست." });
         }
+        const limit = Math.min(500, Math.max(1, Number.parseInt(url.searchParams.get("limit") || "500", 10) || 500));
+        const offset = Math.max(0, Number.parseInt(url.searchParams.get("offset") || "0", 10) || 0);
         const q = await pool.query(
-          "SELECT legacy_id,payload,imported_at FROM legacy_source_data WHERE source_table=$1 ORDER BY legacy_id",
-          [sourceTable]
+          "SELECT legacy_id,payload,imported_at FROM legacy_source_data WHERE source_table=$1 ORDER BY imported_at DESC,legacy_id LIMIT $2 OFFSET $3",
+          [sourceTable, limit, offset]
         );
         return json(res, 200, { data: q.rows });
       }
