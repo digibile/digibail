@@ -114,6 +114,6 @@ jobs:
             $DOCKER cp "$TMP/input.json" "$APP_ID:/tmp/legacy-migration.json"
             $DOCKER exec -u 0 "$APP_ID" chown node:node /tmp/legacy-migration.json
             $DOCKER exec "$APP_ID" node /app/scripts/migrate-legacy-digibail.js /tmp/legacy-migration.json
-            $DOCKER compose exec -T db sh -lc 'export PGPASSWORD="$POSTGRES_PASSWORD"; psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Atc "SELECT '''legacy_admin_accounts''',COUNT(*) FROM users WHERE legacy_source='''aspnetusers''' UNION ALL SELECT '''legacy_customers''',COUNT(*) FROM legacy_customers UNION ALL SELECT '''sms_templates''',COUNT(*) FROM sms_templates;"'
+            $DOCKER compose exec -T db sh -lc 'export PGPASSWORD="$POSTGRES_PASSWORD"; psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Atc "SELECT COUNT(*) FROM users; SELECT COUNT(*) FROM legacy_customers; SELECT COUNT(*) FROM sms_templates;"'
             echo "LEGACY_MIGRATION_COMPLETED=1"
             unset DB_PASS CONN CREDS
