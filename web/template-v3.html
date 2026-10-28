@@ -185,6 +185,30 @@ details{border-bottom:1px solid var(--line);padding:14px 2px}summary{cursor:poin
   @media(max-width:380px){.mbar{inset-inline:10px;bottom:calc(8px + env(safe-area-inset-bottom,0px));width:calc(100% - 20px);gap:5px;padding:6px;border-radius:16px}.mbar .btn{min-height:38px;padding:7px 9px;font-size:.74rem;border-radius:11px}.mbar .btn svg{width:15px;height:15px}}
   .cta2{grid-template-columns:1fr}
 }
+
+/* Final mobile overrides intentionally come after legacy responsive rules. */
+@media(max-width:860px){
+ body{padding-bottom:calc(92px + env(safe-area-inset-bottom,0px))}
+ .campaigns{margin:12px 0 2px}
+ .campaign-track{grid-auto-columns:100%;gap:10px}
+ .campaign{min-height:174px;border-radius:21px;padding:19px 17px}
+ .campaign-copy{max-width:72%}
+ .campaign h2{font-size:1.4rem}
+ .campaign p{font-size:.76rem;margin-bottom:9px}
+ .campaign-art{width:29%;inset-inline-start:2%}
+ .mobile-head-login{display:inline-flex;width:39px;height:39px;align-items:center;justify-content:center;border:1px solid var(--line);border-radius:12px;text-decoration:none;color:var(--brand);background:var(--surface);flex:none}
+ .hd-in{gap:9px}
+ .logo{font-size:1.35rem;gap:7px}
+ .logo i{width:31px;height:31px}
+ .burger{margin-inline-start:auto;padding-inline:11px;min-height:39px}
+ .mbar{display:grid!important;grid-template-columns:repeat(5,minmax(0,1fr));align-items:stretch;justify-content:stretch;gap:2px;position:fixed;inset-inline:10px;bottom:calc(7px + env(safe-area-inset-bottom,0px));z-index:55;width:auto;max-width:none;margin:0;padding:7px 5px;border:1px solid color-mix(in srgb,var(--line) 82%,var(--brand) 18%);border-radius:21px;background:color-mix(in srgb,var(--surface) 95%,transparent);box-shadow:0 10px 34px rgba(30,12,58,.18),0 2px 8px rgba(30,12,58,.06);backdrop-filter:blur(20px) saturate(1.4);-webkit-backdrop-filter:blur(20px) saturate(1.4)}
+ .mbar a{min-width:0;min-height:51px;padding:5px 1px;border:0!important;border-radius:14px!important;background:transparent!important;box-shadow:none!important;color:var(--muted)!important;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;text-decoration:none;font-size:.64rem;line-height:1.2;font-weight:700;white-space:nowrap;flex:none}
+ .mbar a svg{width:20px;height:20px;stroke:currentColor;flex:none}
+ .mbar a[aria-current=page]{color:var(--brand)!important;background:var(--surface2)!important}
+ .wrap{padding-bottom:12px}
+}
+@media(max-width:380px){.campaign{min-height:160px;padding:15px 13px}.campaign h2{font-size:1.24rem}.campaign p{font-size:.71rem}.campaign-art{width:27%}.mbar{inset-inline:6px!important;padding:5px 3px!important}.mbar a{font-size:.59rem!important}.mbar a svg{width:18px;height:18px}}
+
 @media (prefers-reduced-motion:reduce){.vcard,.pc{transition:none}}
 </style></head><body>
 
