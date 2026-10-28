@@ -1,4 +1,4 @@
-// IMPORT_LEGACY_LOAN_PRODUCTS_V2
+// IMPORT_LEGACY_LOAN_PRODUCTS_V2: idempotent retry after memory-safe batched import
 import jwt from "jsonwebtoken";
 import pg from "pg";
 
