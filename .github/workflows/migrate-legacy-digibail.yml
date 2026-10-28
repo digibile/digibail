@@ -55,8 +55,14 @@ jobs:
             SQLCMD="/opt/mssql-tools18/bin/sqlcmd"
             $DOCKER exec "$SQLC" test -x "$SQLCMD" || SQLCMD="/opt/mssql-tools/bin/sqlcmd"
             $DOCKER exec "$SQLC" test -x "$SQLCMD"
-            SA_PASS="$($DOCKER inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$SQLC" | sed -n -E 's/^(MSSQL_SA_PASSWORD|SA_PASSWORD)=(.*)$/\\2/p' | head -1)"
-            if [ -z "$SA_PASS" ]; then echo "BLOCKED: legacy SQL Server credential unavailable."; exit 22; fi
+            # Use the legacy application's configured database login, not an assumed SA password.
+            CONN="$($DOCKER inspect --format '{{range .Config.Env}}{{println .}}{{end}}' public_html-web-1 | sed -n 's/^ConnectionStrings__DefaultConnection=//p' | head -1)"
+            if [ -z "$CONN" ]; then echo "BLOCKED: legacy app connection string unavailable."; exit 22; fi
+            CREDS="$(CONN="$CONN" node -e 'const s=process.env.CONN;const o={};for(const p of s.split(";")){const i=p.indexOf("=");if(i>0)o[p.slice(0,i).trim().toLowerCase()]=p.slice(i+1).trim()}const pick=(...k)=>k.map(x=>o[x]).find(Boolean)||"";console.log(pick("initial catalog","database"));console.log(pick("user id","uid","user"));console.log(pick("password","pwd"));')"
+            DB="$(printf '%s\\n' "$CREDS" | sed -n '1p')"
+            DB_USER="$(printf '%s\\n' "$CREDS" | sed -n '2p')"
+            DB_PASS="$(printf '%s\\n' "$CREDS" | sed -n '3p')"
+            if [ -z "$DB" ] || [ -z "$DB_USER" ] || [ -z "$DB_PASS" ]; then echo "BLOCKED: legacy database credentials could not be parsed."; exit 22; fi
             TMP="$(mktemp -d /tmp/digibail-legacy-migration.XXXXXX)"; chmod 700 "$TMP"
             trap 'rm -rf "$TMP"; $DOCKER exec "$APP_ID" rm -f /tmp/legacy-migration.json >/dev/null 2>&1 || true' EXIT
             Q_USERS="SET NOCOUNT ON; SELECT CAST(u.Id AS nvarchar(40)) AS legacyId, NULLIF(LTRIM(RTRIM(u.UserName)),'') AS username, NULLIF(LTRIM(RTRIM(CONCAT(ISNULL(u.FirstName,''),' ',ISNULL(u.LastName,'')))),'') AS fullName, NULLIF(LTRIM(RTRIM(u.Email)),'') AS email, NULLIF(LTRIM(RTRIM(u.NationalCode)),'') AS nationalCode, NULLIF(LTRIM(RTRIM(u.PasswordHash)),'') AS passwordHash, CAST(u.IsActive AS bit) AS isActive, COALESCE(NULLIF(LTRIM(RTRIM(u.Mobile)),''),NULLIF(LTRIM(RTRIM(u.PhoneNumber)),''),NULLIF(LTRIM(RTRIM(u.Phone)),'')) AS phone, COALESCE((SELECT STRING_AGG(r.Name, ',') FROM AspNetUserRoles ur JOIN AspNetRoles r ON r.Id=ur.RoleId WHERE ur.UserId=u.Id),'') AS roles, u.RegDate AS createdAt FROM AspNetUsers u FOR JSON PATH;"
@@ -64,7 +70,7 @@ jobs:
             Q_SMS="SET NOCOUNT ON; SELECT CONVERT(nvarchar(36),Id) AS legacyId, Title AS title, Pattern AS pattern, IsSystem AS isSystem, Status AS status, Category AS category, SmsPatternPanel AS providerPanel, IsPatternBase AS isPatternBase, PatternBaseCode AS patternBaseCode, RejectReason AS rejectReason, CONVERT(nvarchar(36),CustomerId) AS legacyCustomerId FROM SmsPatterns FOR JSON PATH;"
             for item in "users|$Q_USERS" "customers|$Q_CUSTOMERS" "sms|$Q_SMS"; do
               name="${item%%|*}"; query="${item#*|}"
-              $DOCKER exec -e SQLCMDPASSWORD="$SA_PASS" "$SQLC" "$SQLCMD" -S localhost -U sa -C -b -w 65535 -y 0 -d Digibail -Q "$query" > "$TMP/$name.raw"
+              $DOCKER exec -e SQLCMDPASSWORD="$DB_PASS" "$SQLC" "$SQLCMD" -S localhost -U "$DB_USER" -C -b -w 65535 -y 0 -d "$DB" -Q "$query" > "$TMP/$name.raw"
               # sqlcmd cannot combine -h -1 or -W with -y 0; remove the header and separator before parsing JSON.
               tail -n +3 "$TMP/$name.raw" | tr -d '\r' > "$TMP/$name.json"
               test -s "$TMP/$name.json"
@@ -82,4 +88,4 @@ jobs:
             $DOCKER exec "$APP_ID" node /app/scripts/migrate-legacy-digibail.js /tmp/legacy-migration.json
             $DOCKER compose exec -T db sh -lc 'export PGPASSWORD="$POSTGRES_PASSWORD"; psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Atc "SELECT '''legacy_admin_accounts''',COUNT(*) FROM users WHERE legacy_source='''aspnetusers''' UNION ALL SELECT '''legacy_customers''',COUNT(*) FROM legacy_customers UNION ALL SELECT '''sms_templates''',COUNT(*) FROM sms_templates;"'
             echo "LEGACY_MIGRATION_COMPLETED=1"
-            unset SA_PASS
+            unset DB_PASS CONN CREDS
