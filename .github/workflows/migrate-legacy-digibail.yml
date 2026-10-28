@@ -84,7 +84,10 @@ jobs:
             Q_SMS="SET NOCOUNT ON; SELECT CONVERT(nvarchar(36),Id) AS legacyId, Title AS title, Pattern AS pattern, IsSystem AS isSystem, Status AS status, Category AS category, SmsPatternPanel AS providerPanel, IsPatternBase AS isPatternBase, PatternBaseCode AS patternBaseCode, RejectReason AS rejectReason, CONVERT(nvarchar(36),CustomerId) AS legacyCustomerId FROM SmsPatterns FOR JSON PATH;"
             Q_PLANS="SET NOCOUNT ON; SELECT ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) AS legacyRow, p.* FROM dbo.CustomerPurchasePlan p FOR JSON PATH;"
             Q_STATUSES="SET NOCOUNT ON; SELECT ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) AS legacyRow, s.* FROM dbo.LoanRequestStatuses s FOR JSON PATH;"
-            for item in "users|$Q_USERS" "customers|$Q_CUSTOMERS" "sms|$Q_SMS" "plans|$Q_PLANS" "statuses|$Q_STATUSES"; do
+            Q_ROLES="SET NOCOUNT ON; SELECT ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) AS legacyRow, r.* FROM dbo.AspNetRoles r FOR JSON PATH;"
+            Q_USER_ROLES="SET NOCOUNT ON; SELECT ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) AS legacyRow, ur.* FROM dbo.AspNetUserRoles ur FOR JSON PATH;"
+            Q_CLAIMS="SET NOCOUNT ON; SELECT ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) AS legacyRow, c.* FROM dbo.AspNetUserClaims c FOR JSON PATH;"
+            for item in "users|$Q_USERS" "customers|$Q_CUSTOMERS" "sms|$Q_SMS" "plans|$Q_PLANS" "statuses|$Q_STATUSES" "roles|$Q_ROLES" "userroles|$Q_USER_ROLES" "claims|$Q_CLAIMS"; do
               name="${item%%|*}"; query="${item#*|}"
               echo "EXPORT_TABLE=$name"
               if ! $DOCKER exec -e SQLCMDPASSWORD="$DB_PASS" "$SQLC" "$SQLCMD" -S localhost -U "$DB_USER" -C -b -w 65535 -y 0 -d "$DB" -Q "$query" > "$TMP/$name.raw" 2> "$TMP/$name.err"; then
@@ -108,9 +111,9 @@ jobs:
             node - "$TMP" <<'NODE'
             const fs=require("node:fs"),p=require("node:path"),d=process.argv[2];
             const read=n=>JSON.parse(fs.readFileSync(p.join(d,n),"utf8").trim()||"[]");
-            const data={users:read("users.json"),customers:read("customers.json"),smsPatterns:read("sms.json"),purchasePlans:read("plans.json"),loanRequestStatuses:read("statuses.json")};
+            const data={users:read("users.json"),customers:read("customers.json"),smsPatterns:read("sms.json"),purchasePlans:read("plans.json"),loanRequestStatuses:read("statuses.json"),identityRoles:read("roles.json"),identityUserRoles:read("userroles.json"),identityClaims:read("claims.json")};
             fs.writeFileSync(p.join(d,"input.json"),JSON.stringify(data),{mode:0o600});
-            console.log("LEGACY_EXPORT_COUNTS="+JSON.stringify({users:data.users.length,customers:data.customers.length,smsPatterns:data.smsPatterns.length,purchasePlans:data.purchasePlans.length,loanRequestStatuses:data.loanRequestStatuses.length}));
+            console.log("LEGACY_EXPORT_COUNTS="+JSON.stringify({users:data.users.length,customers:data.customers.length,smsPatterns:data.smsPatterns.length,purchasePlans:data.purchasePlans.length,loanRequestStatuses:data.loanRequestStatuses.length,identityRoles:data.identityRoles.length,identityUserRoles:data.identityUserRoles.length,identityClaims:data.identityClaims.length}));
             NODE
             chmod 600 "$TMP/input.json"
             $DOCKER cp "$TMP/input.json" "$APP_ID:/tmp/legacy-migration.json"
