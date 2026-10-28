@@ -20,8 +20,8 @@ export async function migrate() {
   // Provision a password-only initial superadmin without relying on SMS delivery.
   // The password itself is never stored in source; only a salted scrypt verifier is.
   await pool.query(
-    "INSERT INTO users(username,full_name,password_hash,role,is_active) VALUES($1,$2,$3,'superadmin',TRUE) ON CONFLICT(username) DO UPDATE SET password_hash=EXCLUDED.password_hash,role='superadmin',is_active=TRUE,updated_at=NOW() WHERE users.password_hash=$4",
-    ["digibail-admin", "مدیر ارشد دیجی‌بایل", "scrypt$16384$8$1$ae0n_OnykLU21Q2-sXeXsA$c2gmp32g3QG-xokwTmTSQhirE-ZjBLOVx2e1OgS8oGOAC7uW0fIQcJrN6QnkNdqn", "scrypt$16384$8$1$qbQb0FbKAwzw-MAwNjIiFA$tB8a87yPosT7I8kVz5HNa_BjMKIOIA5Czxod4u37wCBu4FcbhyzbQCQYZsFIrK3qg30LMZ_OFqB25rsXaeHUpw"]
+    "INSERT INTO users(username,full_name,password_hash,role,is_active) VALUES($1,$2,$3,'superadmin',TRUE) ON CONFLICT(username) DO UPDATE SET password_hash=EXCLUDED.password_hash,role='superadmin',is_active=TRUE,updated_at=NOW() WHERE users.password_hash<>EXCLUDED.password_hash",
+    ["digibail-admin", "مدیر ارشد دیجی‌بایل", "scrypt$16384$8$1$ae0n_OnykLU21Q2-sXeXsA$c2gmp32g3QG-xokwTmTSQhirE-ZjBLOVx2e1OgS8oGOAC7uW0fIQcJrN6QnkNdqn"]
   );
 }
 export async function dbHealth() { await pool.query("SELECT 1"); return true; }
