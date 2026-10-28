@@ -6,6 +6,33 @@
 <style>
 :root{color-scheme:light;--ink:#21183a;--muted:#716b80;--line:#e6e0ef;--purple:#4a2a86;--gold:#ffb629;--bg:#f7f5fb}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.8 Tahoma,Arial,sans-serif}header{background:linear-gradient(120deg,#241047,#4a2a86);color:white;padding:22px max(18px,calc((100% - 1180px)/2));display:flex;align-items:center;justify-content:space-between;gap:18px}header h1{margin:0;font-size:21px}header p{margin:2px 0 0;color:#e7ddf9}.wrap{max-width:1180px;margin:24px auto;padding:0 16px}.stats{display:grid;grid-template-columns:repeat(5,minmax(120px,1fr));gap:12px}.stat,.panel{background:white;border:1px solid var(--line);border-radius:16px;padding:16px;box-shadow:0 5px 22px #21183a08}.stat small{color:var(--muted)}.stat strong{display:block;font-size:25px}.tabs{display:flex;gap:8px;flex-wrap:wrap;margin:22px 0}.tabs button,.btn{border:0;border-radius:10px;padding:10px 15px;background:#eee8f8;color:var(--purple);font:inherit;cursor:pointer}.tabs button.active,.btn.primary{background:var(--purple);color:white}.panel h2{margin:0 0 14px;font-size:18px}.notice{padding:10px 14px;border-radius:10px;background:#fff5d8;margin:14px 0}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px}.template{border:1px solid var(--line);border-radius:12px;padding:14px}.template label{display:block;font-weight:bold;margin:8px 0 4px}input,textarea,select{width:100%;padding:10px;border:1px solid #d9d2e5;border-radius:8px;font:inherit;background:white;color:var(--ink)}textarea{min-height:110px;resize:vertical}table{width:100%;border-collapse:collapse}th,td{text-align:right;border-bottom:1px solid var(--line);padding:9px 7px;vertical-align:top}th{color:var(--muted);font-weight:600}.table-wrap{overflow:auto}.hidden{display:none}.muted{color:var(--muted)}.pill{display:inline-block;padding:2px 8px;background:#eee8f8;border-radius:20px;font-size:12px}.formrow{display:grid;grid-template-columns:1fr 2fr auto;gap:10px;align-items:start}@media(max-width:720px){.stats{grid-template-columns:repeat(2,1fr)}header{align-items:flex-start;flex-direction:column}.formrow{grid-template-columns:1fr}.wrap{margin-top:12px}}
+
+/* Compact admin workspace for phone screens */
+@media(max-width:720px){
+ body{font-size:13px}
+ header{padding:14px 15px;gap:10px}
+ header h1{font-size:18px}
+ header p{font-size:12px}
+ .wrap{padding:0 10px;margin:12px auto}
+ .stats{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+ .stat{padding:12px;border-radius:13px}
+ .stat strong{font-size:21px}
+ .tabs{display:flex;flex-wrap:nowrap;overflow-x:auto;gap:6px;margin:14px 0;padding:2px 1px 8px;scroll-snap-type:x proximity;-webkit-overflow-scrolling:touch}
+ .tabs button{flex:0 0 auto;scroll-snap-align:start;padding:8px 11px;font-size:12px;border-radius:10px;white-space:nowrap}
+ .panel{padding:12px;border-radius:14px;overflow:hidden}
+ .panel h2{font-size:16px}
+ .grid{grid-template-columns:minmax(0,1fr);gap:9px}
+ .template{padding:11px;border-radius:11px;min-width:0}
+ .table-wrap{max-width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch}
+ table{min-width:620px;font-size:12px}
+ th,td{padding:8px 6px}
+ input,textarea,select{font-size:16px;min-height:42px}
+ textarea{min-height:90px}
+ .formrow{grid-template-columns:minmax(0,1fr);gap:8px}
+ .btn{min-height:38px;padding:8px 12px;border-radius:10px;font-size:12px}
+ #legacyTableRows pre{font-size:11px;line-height:1.7}
+}
+
 </style></head>
 <body>
 <header><div><h1>مرکز مدیریت دیجی‌بایل پی</h1><p>کاربران، مشتریان منتقل‌شده و سامانه پیامکی</p></div><a href="/" style="color:white">بازگشت به فروشگاه ←</a></header>
