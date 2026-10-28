@@ -24,13 +24,13 @@ jobs:
       - name: Validate production SSH settings
         shell: bash
         env:
-          DEPLOY_HOST: \${{ secrets.DEPLOY_HOST }}
-          DEPLOY_USER: \${{ secrets.DEPLOY_USER }}
-          DEPLOY_SSH_KEY: \${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
         run: |
           set -euo pipefail
           for name in DEPLOY_HOST DEPLOY_USER DEPLOY_SSH_KEY; do
-            if [[ -z "\${!name}" ]]; then
+            if [[ -z "${!name}" ]]; then
               echo "::error::Missing repository secret: $name"
               exit 1
             fi
@@ -38,9 +38,9 @@ jobs:
       - name: Wait for the validated application version and import real loan definitions
         uses: appleboy/ssh-action@v1.2.2
         with:
-          host: \${{ secrets.DEPLOY_HOST }}
-          username: \${{ secrets.DEPLOY_USER }}
-          key: \${{ secrets.DEPLOY_SSH_KEY }}
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
           command_timeout: 28m
           script: |
             set -eu
