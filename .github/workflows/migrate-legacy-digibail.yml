@@ -99,7 +99,7 @@ jobs:
               const first=raw.indexOf("[");
               const last=raw.lastIndexOf("]");
               if(first<0||last<first) { console.error("SQLCMD output did not contain a JSON array"); process.exit(1); }
-              const value=raw.slice(first,last+1);
+              const value=raw.slice(first,last+1).replace(/[\\r\\n]/g,"");
               JSON.parse(value);
               fs.writeFileSync(process.argv[3],value);
             NODEJSON
