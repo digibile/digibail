@@ -158,6 +158,9 @@ jobs:
             console.log("LEGACY_EXPORT_COUNTS="+JSON.stringify({users:data.users.length,customers:data.customers.length,smsPatterns:data.smsPatterns.length,purchasePlans:data.purchasePlans.length,loanRequestStatuses:data.loanRequestStatuses.length,identityRoles:data.identityRoles.length,identityUserRoles:data.identityUserRoles.length,identityClaims:data.identityClaims.length,genericTableCount:genericTables.length,genericRowCount:genericTables.reduce((n,t)=>n+t.rows.length,0),schemaDefinitions:data.schemaDefinitions.length}));
             NODE
             chmod 600 "$TMP/input.json"
+            # Deployment may replace the app container while the old SQL Server is being exported; always resolve the current container immediately before import.
+            APP_ID="$($DOCKER compose ps -q app 2>/dev/null || true)"
+            if [ -z "$APP_ID" ] || ! $DOCKER exec "$APP_ID" test -f /app/scripts/migrate-legacy-digibail.js; then echo "BLOCKED: current app container is not ready for migration"; exit 26; fi
             $DOCKER cp "$TMP/input.json" "$APP_ID:/tmp/legacy-migration.json"
             $DOCKER exec -u 0 "$APP_ID" chown node:node /tmp/legacy-migration.json
             $DOCKER exec "$APP_ID" node /app/scripts/migrate-legacy-digibail.js /tmp/legacy-migration.json
