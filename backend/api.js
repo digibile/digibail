@@ -59,6 +59,52 @@ function nationalCodeOk(value) {
   const sum = n.slice(0, 9).split("").reduce((s, digit, i) => s + Number(digit) * (10 - i), 0) % 11;
   return sum < 2 ? check === sum : check === 11 - sum;
 }
+function sessionFor(req) {
+  const auth = String(req.headers.authorization || "");
+  const bearer = auth.match(/^Bearer\s+(.+)$/i)?.[1];
+  const cookie = String(req.headers.cookie || "").split(";").map(v => v.trim()).find(v => v.startsWith("db_session="));
+  return verifySession(bearer || (cookie ? cookie.slice("db_session=".length) : ""));
+}
+function adminFor(req) {
+  const session = sessionFor(req);
+  return session && ["admin", "superadmin"].includes(session.role) ? session : null;
+}
+function verifyAspNetIdentityPassword(password, storedHash) {
+  let data;
+  try { data = Buffer.from(String(storedHash || ""), "base64"); } catch { return false; }
+  if (data.length < 2) return false;
+  let salt, subkey, iterations, digest;
+  if (data[0] === 0x00 && data.length >= 49) {
+    salt = data.subarray(1, 17); subkey = data.subarray(17); iterations = 1000; digest = "sha1";
+  } else if (data[0] === 0x01 && data.length >= 14) {
+    const prf = data.readUInt32BE(1); iterations = data.readUInt32BE(5);
+    const saltLength = data.readUInt32BE(9);
+    if (iterations < 1 || iterations > 2000000 || saltLength < 8 || saltLength > 1024 || data.length <= 13 + saltLength) return false;
+    digest = ({ 0: "sha1", 1: "sha256", 2: "sha512" })[prf];
+    if (!digest) return false;
+    salt = data.subarray(13, 13 + saltLength); subkey = data.subarray(13 + saltLength);
+  } else return false;
+  const actual = crypto.pbkdf2Sync(String(password), salt, iterations, subkey.length, digest);
+  return actual.length === subkey.length && crypto.timingSafeEqual(actual, subkey);
+}
+async function verifyPassword(password, storedHash) {
+  if (String(storedHash || "").startsWith("aspnet:")) return verifyAspNetIdentityPassword(password, storedHash.slice(7));
+  return bcrypt.compare(String(password || ""), String(storedHash || ""));
+}
+function maskPhone(phone) {
+  const p = String(phone || "");
+  return p.length >= 7 ? p.slice(0, 4) + "****" + p.slice(-3) : "***";
+}
+async function sendSmsText(phone, message) {
+  if (!KAVENEGAR_API_KEY) throw Object.assign(new Error("کلید کاوه‌نگار در تنظیمات محرمانه سرور ثبت نشده است."), { status: 503, code: "sms_provider_not_configured" });
+  const form = new URLSearchParams({ receptor: phone, message });
+  if (process.env.KAVENEGAR_SENDER) form.set("sender", process.env.KAVENEGAR_SENDER);
+  const url = `https://api.kavenegar.com/v1/${encodeURIComponent(KAVENEGAR_API_KEY)}/sms/send.json`;
+  const response = await fetch(url, { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: form, signal: AbortSignal.timeout(10000) });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok || result?.return?.status !== 200) throw Object.assign(new Error("سرویس‌دهنده ارسال پیامک را تأیید نکرد."), { status: 502, code: "sms_delivery_failed" });
+  return String(result?.entries?.[0]?.messageid || "");
+}
 function captchaSvg(value) {
   return `<svg xmlns="http://www.w3.org/2000/svg" width="170" height="56" viewBox="0 0 170 56"><rect width="170" height="56" rx="12" fill="#241047"/><path d="M0 12L170 42M10 50L150 5" stroke="#ffb629" stroke-opacity=".35" stroke-width="2"/><text x="85" y="38" text-anchor="middle" font-family="monospace" font-size="30" font-weight="700" letter-spacing="5" fill="#fff">${value}</text></svg>`;
 }
@@ -84,6 +130,53 @@ export async function handleApi(req, res, url) {
     if (req.method === "GET" && route === "/api/v1/tenant/config") {
       return json(res, 200, { data: { name: BRAND_NAME, brand: { logoText: BRAND_NAME.slice(0, 1), primary: "#4a2a86", accent: "#ffb629" } } });
     }
+    if (route.startsWith("/api/v1/admin/")) {
+      const admin = adminFor(req);
+      if (!admin) return json(res, 403, { message: "دسترسی مدیر لازم است." });
+      if (req.method === "GET" && route === "/api/v1/admin/summary") {
+        const q = await pool.query("SELECT (SELECT COUNT(*) FROM users) AS users,(SELECT COUNT(*) FROM users WHERE role IN ('admin','superadmin')) AS admins,(SELECT COUNT(*) FROM legacy_customers) AS legacy_customers,(SELECT COUNT(*) FROM sms_templates) AS sms_templates,(SELECT COUNT(*) FROM sms_logs) AS sms_logs");
+        const configured = Boolean(KAVENEGAR_API_KEY);
+        return json(res, 200, { data: { ...q.rows[0], smsConfigured: configured } });
+      }
+      if (req.method === "GET" && route === "/api/v1/admin/users") {
+        const q = await pool.query("SELECT id,username,phone,full_name,email,role,is_active,created_at,legacy_source FROM users ORDER BY created_at DESC,id DESC LIMIT 500");
+        return json(res, 200, { data: q.rows });
+      }
+      if (req.method === "GET" && route === "/api/v1/admin/legacy-customers") {
+        const q = await pool.query("SELECT legacy_id,name,mobile,email,customer_code,registered_at,expires_at,is_permanent,purchased,affiliate_code,parked_domain FROM legacy_customers ORDER BY registered_at DESC NULLS LAST");
+        return json(res, 200, { data: q.rows });
+      }
+      if (req.method === "GET" && route === "/api/v1/admin/sms/templates") {
+        const q = await pool.query("SELECT id,legacy_id,title,body,is_system,status,category,provider_panel,is_pattern_base,pattern_base_code,reject_reason,updated_at FROM sms_templates ORDER BY id");
+        return json(res, 200, { data: q.rows, configured: Boolean(KAVENEGAR_API_KEY) });
+      }
+      if (req.method === "POST" && route === "/api/v1/admin/sms/templates/update") {
+        const b = await body(req); const id = Number(b.id); const title = String(b.title || "").trim(); const text = String(b.body || "").trim();
+        if (!Number.isSafeInteger(id) || id < 1 || !title || title.length > 200 || !text || text.length > 4000) return json(res, 400, { message: "عنوان و متن الگو معتبر نیست." });
+        const q = await pool.query("UPDATE sms_templates SET title=$1,body=$2,status=$3,pattern_base_code=$4,updated_at=NOW() WHERE id=$5 RETURNING id,title,body,status,pattern_base_code", [title,text,Number.isInteger(Number(b.status))?Number(b.status):0,String(b.patternBaseCode||"").slice(0,500)||null,id]);
+        if (!q.rowCount) return json(res, 404, { message: "الگوی پیامک پیدا نشد." });
+        await audit(req, "admin.sms_template.updated", Number(admin.sub), { templateId: id });
+        return json(res, 200, { data: q.rows[0] });
+      }
+      if (req.method === "POST" && route === "/api/v1/admin/sms/test") {
+        const b = await body(req); const phone = String(b.phone || ""); const text = String(b.message || "").trim();
+        if (!phoneOk(phone) || !text || text.length > 1000) return json(res, 400, { message: "شماره موبایل یا متن پیام معتبر نیست." });
+        try {
+          const messageId = await sendSmsText(phone, text);
+          await pool.query("INSERT INTO sms_logs(recipient_masked,status,provider_message_id,created_by) VALUES($1,'sent',$2,$3)", [maskPhone(phone),messageId,Number(admin.sub)||null]);
+          await audit(req, "admin.sms.test.sent", Number(admin.sub), { recipient: maskPhone(phone) });
+          return json(res, 200, { ok: true, message: "درخواست ارسال پیامک به سرویس‌دهنده تحویل شد." });
+        } catch (e) {
+          await pool.query("INSERT INTO sms_logs(recipient_masked,status,error_code,created_by) VALUES($1,'failed',$2,$3)", [maskPhone(phone),String(e.code||"sms_delivery_failed").slice(0,80),Number(admin.sub)||null]).catch(()=>{});
+          throw e;
+        }
+      }
+      if (req.method === "GET" && route === "/api/v1/admin/sms/logs") {
+        const q = await pool.query("SELECT id,template_id,recipient_masked,status,provider_message_id,error_code,created_at FROM sms_logs ORDER BY created_at DESC LIMIT 100");
+        return json(res, 200, { data: q.rows });
+      }
+      return json(res, 404, { message: "مسیر مدیریت پیدا نشد." });
+    }
     if (req.method === "GET" && route === "/api/v1/security/captcha") {
       if (CAPTCHA_PEPPER.length < 32) return json(res, 503, { message: "تنظیم امنیتی کپچا موجود نیست." });
       const value = String(crypto.randomInt(10000, 100000)); const id = crypto.randomUUID();
@@ -96,10 +189,15 @@ export async function handleApi(req, res, url) {
       if (!await consumeCaptcha(b.captchaId, b.captchaAnswer)) return json(res, 400, { message: "کد امنیتی نامعتبر یا منقضی شده است." });
       const username = String(b.username || "").trim().slice(0, 80);
       const result = await pool.query("SELECT id,phone,full_name,password_hash,role,is_active FROM users WHERE (phone=$1 OR username=$1) LIMIT 1", [username]);
-      if (!result.rowCount || !result.rows[0].is_active || !await bcrypt.compare(String(b.password || ""), result.rows[0].password_hash)) {
+      if (!result.rowCount || !result.rows[0].is_active || !await verifyPassword(String(b.password || ""), result.rows[0].password_hash)) {
         await audit(req, "auth.login.failed"); return json(res, 401, { message: "نام کاربری یا رمز عبور نادرست است." });
       }
-      resetLimit("login:" + ip); const u = result.rows[0]; await audit(req, "auth.login.success", u.id);
+      resetLimit("login:" + ip); const u = result.rows[0];
+      if (String(u.password_hash).startsWith("aspnet:")) {
+        const upgraded = await bcrypt.hash(String(b.password || ""), 12);
+        await pool.query("UPDATE users SET password_hash=$1,updated_at=NOW() WHERE id=$2 AND password_hash=$3", [upgraded, u.id, u.password_hash]);
+      }
+      await audit(req, "auth.login.success", u.id);
       const token = tokenFor(u);
       return authJson(res, 200, token, { accessToken: token, user: { id: u.id, phone: u.phone, fullName: u.full_name, role: u.role } });
     }
