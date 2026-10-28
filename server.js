@@ -14,7 +14,7 @@ const ROUTES = new Map([
   ["/loan-definition.html", "web/loan-definition.html"],
   ["/terms.html", "web/terms.html"], ["/privacy.html", "web/privacy.html"],
   ["/profile.html", "web/customer-panel.html"],
-  ["/admin.html", "web/admin.html"], ["/management-panel.html", "backend/core/panel.html"],
+  ["/admin.html", "backend/core/panel.html"], ["/management-panel.html", "backend/core/panel.html"],
   ["/sms-settings.html", "web/sms-settings.html"]
 ]);
 const MIME = { ".html": "text/html; charset=utf-8", ".css": "text/css; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".json": "application/json; charset=utf-8", ".svg": "image/svg+xml", ".png": "image/png", ".jpg": "image/jpeg", ".webp": "image/webp", ".ico": "image/x-icon", ".txt": "text/plain; charset=utf-8" };
