@@ -83,6 +83,22 @@ jobs:
                 docker exec -e SQLCMDPASSWORD="$PASS" "$SQLC" "$SQLCMD" -S localhost -U sa -C -W -s '|' -Q "SET NOCOUNT ON; SELECT '$db' AS database_name,(SELECT COUNT(*) FROM [$db].sys.tables WHERE is_ms_shipped=0) AS table_count,(SELECT COALESCE(SUM(p.rows),0) FROM [$db].sys.partitions p JOIN [$db].sys.tables t ON t.object_id=p.object_id WHERE t.is_ms_shipped=0 AND p.index_id IN (0,1)) AS row_count" 2>&1 | tail -n 4 || true
                 docker exec -e SQLCMDPASSWORD="$PASS" "$SQLC" "$SQLCMD" -S localhost -U sa -C -W -s '|' -Q "SET NOCOUNT ON; SELECT TOP 12 t.name AS table_name,SUM(p.rows) AS row_count FROM [$db].sys.tables t JOIN [$db].sys.partitions p ON p.object_id=t.object_id WHERE t.is_ms_shipped=0 AND p.index_id IN (0,1) GROUP BY t.name ORDER BY SUM(p.rows) DESC" 2>&1 | tail -n 16 || true
               done
+              echo "=== STAGE VS REAL DATABASE SCHEMA DIFFERENCES ==="
+              docker exec -e SQLCMDPASSWORD="$PASS" "$SQLC" "$SQLCMD" -S localhost -U sa -C -W -s '|' -Q "SET NOCOUNT ON;
+              SELECT TOP 100 'STAGE_ONLY' AS diff,s.TABLE_SCHEMA,s.TABLE_NAME,s.COLUMN_NAME,s.DATA_TYPE
+              FROM [vamcity_stage].INFORMATION_SCHEMA.COLUMNS s
+              WHERE NOT EXISTS (SELECT 1 FROM [vamcityc_vamcity_import_20261028].INFORMATION_SCHEMA.COLUMNS l WHERE l.TABLE_SCHEMA=s.TABLE_SCHEMA AND l.TABLE_NAME=s.TABLE_NAME AND l.COLUMN_NAME=s.COLUMN_NAME AND l.DATA_TYPE=s.DATA_TYPE)
+              UNION ALL
+              SELECT TOP 100 'REAL_ONLY' AS diff,l.TABLE_SCHEMA,l.TABLE_NAME,l.COLUMN_NAME,l.DATA_TYPE
+              FROM [vamcityc_vamcity_import_20261028].INFORMATION_SCHEMA.COLUMNS l
+              WHERE NOT EXISTS (SELECT 1 FROM [vamcity_stage].INFORMATION_SCHEMA.COLUMNS s WHERE s.TABLE_SCHEMA=l.TABLE_SCHEMA AND s.TABLE_NAME=l.TABLE_NAME AND s.COLUMN_NAME=l.COLUMN_NAME AND s.DATA_TYPE=l.DATA_TYPE);" 2>&1 | head -n 110 || true
+              echo "=== AUTH / CUSTOMER / LOAN / PAYMENT TABLE COUNTS IN STAGE AND IMPORT ==="
+              for db in vamcity_stage vamcityc_vamcity_import_20261028; do
+                echo "-- IMPORTANT_TABLES=$db --"
+                docker exec -e SQLCMDPASSWORD="$PASS" "$SQLC" "$SQLCMD" -S localhost -U sa -C -W -s '|' -Q "SET NOCOUNT ON; SELECT t.name AS table_name,SUM(p.rows) AS row_count FROM [$db].sys.tables t JOIN [$db].sys.partitions p ON p.object_id=t.object_id WHERE t.is_ms_shipped=0 AND p.index_id IN (0,1) AND (t.name LIKE '%User%' OR t.name LIKE '%Role%' OR t.name LIKE '%Loan%' OR t.name LIKE '%Request%' OR t.name LIKE '%Customer%' OR t.name LIKE '%Payment%' OR t.name LIKE '%Login%' OR t.name LIKE '%Identity%' OR t.name LIKE '%Admin%') GROUP BY t.name ORDER BY t.name" 2>&1 | tail -n 90 || true
+              done
+              echo "=== APPLICATION AUTH/DB ERRORS (LAST 120 LINES FILTERED) ==="
+              docker logs --tail 120 vamcity-stage-app 2>&1 | grep -Ei 'exception|error|login|authentication|identity|sql|database|failed|denied' | tail -n 50 | sed -E 's/(Password|Pwd|Token|Secret)=([^; ]+)/\\1=[REDACTED]/Ig' || true
               echo "=== APP CONNECTION DATABASE REFERENCES (PASSWORDS REDACTED) ==="
               docker inspect vamcity-stage-app --format '{{range .Config.Env}}{{println .}}{{end}}' 2>/dev/null | sed -E 's/(Password|Pwd|Token|Secret)=([^; ]+)/\\1=[REDACTED]/Ig' | grep -Ei 'ConnectionStrings|Database=|Initial Catalog|SQLSERVER|MSSQL|DB_NAME|DATABASE_URL' | head -n 30 || true
               docker exec vamcity-stage-app sh -lc 'grep -RhoE "(Database|Initial Catalog)=[^;\\\"]+" /app/appsettings*.json /app/*.json 2>/dev/null | sort -u | head -n 20' 2>/dev/null || true
