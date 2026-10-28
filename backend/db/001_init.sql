@@ -86,3 +86,14 @@ CREATE INDEX IF NOT EXISTS sms_logs_created_at_idx ON sms_logs(created_at DESC);
 
 ALTER TABLE otp_challenges DROP CONSTRAINT IF EXISTS otp_challenges_purpose_check;
 ALTER TABLE otp_challenges ADD CONSTRAINT otp_challenges_purpose_check CHECK (purpose IN ('login','register','password_reset'));
+
+-- Preserve legacy operational records whose schema varies between old releases.
+CREATE TABLE IF NOT EXISTS legacy_source_data (
+  source_table VARCHAR(120) NOT NULL,
+  legacy_id VARCHAR(160) NOT NULL,
+  payload JSONB NOT NULL,
+  imported_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (source_table, legacy_id)
+);
+CREATE INDEX IF NOT EXISTS legacy_source_data_table_idx
+  ON legacy_source_data(source_table, imported_at DESC);
