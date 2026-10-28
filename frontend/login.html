@@ -87,7 +87,7 @@ $('#fP').onsubmit=async e=>{e.preventDefault();msg('');const u=$('#pu').value.tr
  if(!u){hint($('#pu'),'نام کاربری یا شماره موبایل را وارد کنید');bad=true}else hint($('#pu'),'');if(!p){hint($('#pp'),'رمز عبور را وارد کنید');bad=true}else hint($('#pp'),'');if(c.length!==5){hint($('#cp'),'کد امنیتی ۵ رقمی را وارد کنید');bad=true}else hint($('#cp'),'');if(bad)return;
  $('#bP').disabled=true;try{const r=await call('POST',API.login,{username:okM(u)?toEn(u):u,password:p,captchaId:cap.P,captchaAnswer:c});
   if(r.ok){done(r.j)}else{msg(r.status===429?'تلاش‌های ناموفق زیاد بود. کمی بعد دوباره امتحان کنید.':(r.j&&r.j.message)||'نام کاربری یا رمز عبور نادرست است.');loadCap('P')}}catch(_){msg('اتصال برقرار نشد.')}$('#bP').disabled=false};
-function done(j){if(MOCK){msg('ورود موفق (پیش‌نمایش)','ok');return}const t=(j.data&&(j.data.accessToken||j.data.token))||j.accessToken||j.token;if(t){try{localStorage.setItem('token',t)}catch(_){}}location.href=(j.user&&['admin','superadmin'].includes(j.user.role))?API.after:(API.after==='/panel.html'?'/':API.after)}
+function done(j){if(MOCK){msg('ورود موفق (پیش‌نمایش)','ok');return}const t=(j.data&&(j.data.accessToken||j.data.token))||j.accessToken||j.token;if(t){try{localStorage.setItem('token',t)}catch(_){}}location.href=(j.user&&['admin','superadmin'].includes(j.user.role))?'/admin.html':(API.after==='/panel.html'?'/profile.html':API.after)}
 /* OTP: timers use the monotonic clock plus server-reported remaining seconds, so changing the browser clock or refreshing cannot bypass them */
 let tmr=null,phone='';
 function runTimer(exp,res){clearInterval(tmr);const t0=performance.now();const tick=()=>{const dt=(performance.now()-t0)/1000,e=Math.max(0,Math.ceil(exp-dt)),r=Math.max(0,Math.ceil(res-dt));
