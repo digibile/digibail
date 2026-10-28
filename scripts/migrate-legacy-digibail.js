@@ -52,10 +52,11 @@ try {
     );
     if (r.rowCount) usersInserted++; else {
       usersSkipped++;
-      // Reconcile only a previously imported legacy identity; preserve credentials and customer data.
+      // Reconcile the trusted legacy identity even when a previous import created the modern row first.
+      // Match by the exact legacy username or normalized phone; never overwrite passwords or contact details.
       await pool.query(
-        "UPDATE users SET role=$1,is_active=$2,updated_at=NOW() WHERE legacy_source='aspnetusers' AND legacy_id=$3",
-        [role(u.roles),u.isActive !== false && u.isActive !== 0,String(u.legacyId)]
+        "UPDATE users SET role=$1,is_active=$2,legacy_source=COALESCE(legacy_source,'aspnetusers'),legacy_id=COALESCE(legacy_id,$3),updated_at=NOW() WHERE (legacy_source='aspnetusers' AND legacy_id=$3) OR lower(username)=lower($4) OR ($5::text IS NOT NULL AND phone=$5)",
+        [role(u.roles),u.isActive !== false && u.isActive !== 0,String(u.legacyId),username,userPhone]
       );
     }
   }
