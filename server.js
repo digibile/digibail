@@ -2,7 +2,7 @@ import http from "node:http";
 import path from "node:path";
 import { readFile, stat } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
-import { dbHealth, handleApi, verifyAdminSession } from "./backend/api.js";
+import { dbHealth, handleApi, verifyAdminSession, verifySession } from "./backend/api.js";
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number.parseInt(process.env.PORT || "1631", 10);
@@ -11,8 +11,8 @@ const ROUTES = new Map([
   ["/", "web/template-v3.html"], ["/index.html", "web/template-v3.html"],
   ["/login.html", "backend/security/login-v2.html"], ["/register.html", "backend/security/register-v2.html"],
   ["/documents.html", "web/documents.html"], ["/contracts.html", "web/contracts.html"],
-  ["/panel.html", "backend/core/panel.html"], ["/profile.html", "backend/core/panel.html"],
-  ["/admin", "web/admin.html"], ["/admin.html", "web/admin.html"],
+  ["/profile.html", "web/customer-panel.html"],
+  ["/admin.html", "web/admin.html"],
   ["/sms-settings.html", "web/sms-settings.html"]
 ]);
 const MIME = { ".html": "text/html; charset=utf-8", ".css": "text/css; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".json": "application/json; charset=utf-8", ".svg": "image/svg+xml", ".png": "image/png", ".jpg": "image/jpeg", ".webp": "image/webp", ".ico": "image/x-icon", ".txt": "text/plain; charset=utf-8" };
@@ -39,8 +39,8 @@ const server = http.createServer(async (req, res) => {
     }
   }
   if (url.pathname === "/api" || url.pathname.startsWith("/api/")) {
-    if (req.method !== "GET" && req.method !== "POST") {
-      res.setHeader("Allow", "GET, POST");
+    if (!["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"].includes(req.method)) {
+      res.setHeader("Allow", "GET, POST, PUT, PATCH, DELETE, OPTIONS");
       return send(res, 405, "application/json; charset=utf-8", JSON.stringify({ message: "روش درخواست مجاز نیست." }));
     }
     const handled = await handleApi(req, res, url);
@@ -52,10 +52,34 @@ const server = http.createServer(async (req, res) => {
     return send(res, 405, "application/json; charset=utf-8", JSON.stringify({ error: "method_not_allowed" }));
   }
   const relative = resolveRoute(url.pathname);
-  if (url.pathname === "/panel.html" || url.pathname === "/profile.html" || url.pathname === "/admin" || url.pathname === "/admin.html" || url.pathname === "/sms-settings.html") {
+  if (url.pathname === "/admin") {
+    res.writeHead(302, { Location: "/admin.html", "Cache-Control": "no-store" });
+    return res.end();
+  }
+  if (url.pathname === "/panel.html") {
+    const isAdmin = await verifyAdminSession(req);
+    if (!isAdmin) {
+      res.writeHead(302, { Location: "/login.html?next=%2Fadmin.html", "Cache-Control": "no-store" });
+      return res.end();
+    }
+    res.writeHead(302, { Location: "/admin.html", "Cache-Control": "no-store" });
+    return res.end();
+  }
+  if (url.pathname === "/admin.html" || url.pathname === "/sms-settings.html") {
     const isAdmin = await verifyAdminSession(req);
     if (!isAdmin) {
       res.writeHead(302, { Location: `/login.html?next=${encodeURIComponent(url.pathname)}`, "Cache-Control": "no-store" });
+      return res.end();
+    }
+  }
+  if (url.pathname === "/profile.html") {
+    const session = verifySession(String(req.headers.cookie || "").split(";").map(v=>v.trim()).find(v=>v.startsWith("db_session="))?.slice("db_session=".length) || "");
+    if (!session) {
+      res.writeHead(302, { Location: "/login.html?next=%2Fprofile.html", "Cache-Control": "no-store" });
+      return res.end();
+    }
+    if (["admin","superadmin"].includes(String(session.role || "").toLowerCase())) {
+      res.writeHead(302, { Location: "/admin.html", "Cache-Control": "no-store" });
       return res.end();
     }
   }
