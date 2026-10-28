@@ -4,6 +4,11 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
+    paths-ignore:
+      - '.github/workflows/inspect-*.yml'
+      - '.github/workflows/identify-vamcity-production.yml'
+      - '.github/workflows/deep-inspect-vamcity.yml'
+      - '.github/workflows/probe-vamcity-runtime.yml'
 
 permissions:
   contents: read
