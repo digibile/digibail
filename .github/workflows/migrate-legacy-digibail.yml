@@ -114,8 +114,8 @@ jobs:
             GENERIC_INDEX=0
             while IFS= read -r full_table; do
               [ -n "$full_table" ] || continue
-              schema_name="\${full_table%%.*}"
-              table_name="\${full_table#*.}"
+              schema_name="${full_table%%.*}"
+              table_name="${full_table#*.}"
               schema_quoted="$(printf '%s' "$schema_name" | sed 's/]/]]/g')"
               table_quoted="$(printf '%s' "$table_name" | sed 's/]/]]/g')"
               GENERIC_INDEX=$((GENERIC_INDEX + 1))
