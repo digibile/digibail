@@ -262,7 +262,7 @@ export async function handleApi(req, res, url) {
       }
       if (req.method === "GET" && route === "/api/v1/admin/legacy-source-tables") {
         const q = await pool.query(
-          "SELECT source_table,COUNT(*)::int AS row_count FROM legacy_source_data GROUP BY source_table ORDER BY source_table"
+          "SELECT s.payload->>'sourceTable' AS source_table,COALESCE(d.row_count,0)::int AS row_count FROM legacy_source_data s LEFT JOIN (SELECT source_table,COUNT(*)::int AS row_count FROM legacy_source_data WHERE source_table<>'__legacy_schema__' GROUP BY source_table) d ON d.source_table=s.payload->>'sourceTable' WHERE s.source_table='__legacy_schema__' ORDER BY s.payload->>'sourceTable'"
         );
         return json(res, 200, { data: q.rows });
       }
