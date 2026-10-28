@@ -55,7 +55,28 @@ jobs:
             SQLCMD="/opt/mssql-tools18/bin/sqlcmd"
             $DOCKER exec "$SQLC" test -x "$SQLCMD" || SQLCMD="/opt/mssql-tools/bin/sqlcmd"
             $DOCKER exec "$SQLC" test -x "$SQLCMD"
-            # Use the legacy application's configured database login, not an assumed SA password.
+            # Authenticate with the SQL Server container's configured SA password first; fall back to app login.
+            SA_PASS="$($DOCKER inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$SQLC" | sed -n -e 's/^MSSQL_SA_PASSWORD=//p' -e 's/^SA_PASSWORD=//p' | head -1)"
+            CONN="$($DOCKER inspect --format '{{range .Config.Env}}{{println .}}{{end}}' public_html-web-1 | sed -n 's/^ConnectionStrings__DefaultConnection=//p' | head -1)"
+            CREDS=""
+            if [ -n "$CONN" ]; then
+              CREDS="$(CONN="$CONN" node -e 'const s=process.env.CONN;const o={};for(const p of s.split(";")){const i=p.indexOf("=");if(i>0)o[p.slice(0,i).trim().toLowerCase()]=p.slice(i+1).trim()}const pick=(...k)=>k.map(x=>o[x]).find(Boolean)||"";console.log(pick("initial catalog","database"));console.log(pick("user id","uid","user"));console.log(pick("password","pwd"));')"
+            fi
+            DB="$(printf '%s\n' "$CREDS" | sed -n '1p')"
+            APP_USER="$(printf '%s\n' "$CREDS" | sed -n '2p')"
+            APP_PASS="$(printf '%s\n' "$CREDS" | sed -n '3p')"
+            if [ -z "$DB" ]; then echo "BLOCKED: legacy database name could not be parsed."; exit 22; fi
+            DB_USER=""; DB_PASS=""
+            if [ -n "$SA_PASS" ] && $DOCKER exec -e SQLCMDPASSWORD="$SA_PASS" "$SQLC" "$SQLCMD" -S localhost -U sa -C -b -d "$DB" -Q "SET NOCOUNT ON; SELECT 1" >/dev/null 2>&1; then
+              DB_USER="sa"; DB_PASS="$SA_PASS"; echo "LEGACY_SQL_AUTH=container_sa"
+            elif [ -n "$APP_USER" ] && [ -n "$APP_PASS" ] && $DOCKER exec -e SQLCMDPASSWORD="$APP_PASS" "$SQLC" "$SQLCMD" -S localhost -U "$APP_USER" -C -b -d "$DB" -Q "SET NOCOUNT ON; SELECT 1" >/dev/null 2>&1; then
+              DB_USER="$APP_USER"; DB_PASS="$APP_PASS"; echo "LEGACY_SQL_AUTH=application_login"
+            else
+              unset SA_PASS APP_PASS
+              echo "BLOCKED: SQL Server rejected available credentials; no legacy rows were imported."
+              exit 22
+            fi
+            unset APP_PASS SA_PASS
             CONN="$($DOCKER inspect --format '{{range .Config.Env}}{{println .}}{{end}}' public_html-web-1 | sed -n 's/^ConnectionStrings__DefaultConnection=//p' | head -1)"
             if [ -z "$CONN" ]; then echo "BLOCKED: legacy app connection string unavailable."; exit 22; fi
             CREDS="$(CONN="$CONN" node -e 'const s=process.env.CONN;const o={};for(const p of s.split(";")){const i=p.indexOf("=");if(i>0)o[p.slice(0,i).trim().toLowerCase()]=p.slice(i+1).trim()}const pick=(...k)=>k.map(x=>o[x]).find(Boolean)||"";console.log(pick("initial catalog","database"));console.log(pick("user id","uid","user"));console.log(pick("password","pwd"));')"
