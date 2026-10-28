@@ -67,8 +67,29 @@ jobs:
             test -f start.js
             echo "=== production environment (values hidden) ==="
             if [ ! -f .env ]; then
-              echo "BLOCKED: missing $ROOT/.env; refusing to create fake credentials or touch live routing."
-              exit 20
+              echo "=== .env absent; checking for an existing database before generating credentials ==="
+              if docker volume ls --format '{{.Name}}' | grep -E '(^|_)digibail_pgdata$' >/dev/null || docker ps -a --format '{{.Names}}' | grep -E '(^|[-_])db([-_]|$)' >/dev/null; then
+                echo "BLOCKED: database volume/container already exists but .env is missing; preserving data and refusing to rotate credentials blindly."
+                exit 20
+              fi
+              umask 077
+              DB_PASS="$(openssl rand -hex 32)"
+              JWT="$(openssl rand -hex 48)"
+              OTP="$(openssl rand -hex 32)"
+              CAPTCHA="$(openssl rand -hex 32)"
+              {
+                printf 'POSTGRES_DB=digibail_prod\\n'
+                printf 'POSTGRES_USER=digibail_app\\n'
+                printf 'POSTGRES_PASSWORD=%s\\n' "$DB_PASS"
+                printf 'DATABASE_URL=postgresql://digibail_app:%s@db:5432/digibail_prod\\n' "$DB_PASS"
+                printf 'PORT=1631\\nHOST=0.0.0.0\\n'
+                printf 'JWT_SECRET=%s\\nOTP_PEPPER=%s\\nCAPTCHA_PEPPER=%s\\n' "$JWT" "$OTP" "$CAPTCHA"
+                printf 'BRAND_NAME=دیجی‌بایل پی\\n'
+                printf 'KAVENEGAR_API_KEY=\\nKAVENEGAR_TEMPLATE=\\n'
+              } > .env
+              chmod 600 .env
+              unset DB_PASS JWT OTP CAPTCHA
+              echo "SECURE_ENV_CREATED=1 (secret values hidden)"
             fi
             for key in POSTGRES_DB POSTGRES_USER POSTGRES_PASSWORD DATABASE_URL JWT_SECRET OTP_PEPPER CAPTCHA_PEPPER; do
               if ! grep -qE "^\${key}=.+" .env; then
