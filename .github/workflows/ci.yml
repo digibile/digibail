@@ -49,7 +49,7 @@ jobs:
           test -s frontend/register.html
           test -s web/documents.html
           test -s web/contracts.html
-      test -s web/loan-definition.html
+          test -s web/loan-definition.html
           test -s backend/core/panel.html
           test -s backend/db/001_init.sql
       - name: Validate inline JavaScript in live pages
