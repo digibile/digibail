@@ -111,31 +111,7 @@ jobs:
             done
             echo "=== Export all remaining legacy tables without changing their source schema ==="
             $DOCKER exec -e SQLCMDPASSWORD="$DB_PASS" "$SQLC" "$SQLCMD" -S localhost -U "$DB_USER" -C -b -h -1 -W -w 65535 -d "$DB" -Q "SET NOCOUNT ON; SELECT s.name + '.' + t.name FROM sys.tables t JOIN sys.schemas s ON s.schema_id=t.schema_id WHERE t.is_ms_shipped=0 ORDER BY s.name,t.name" | tr -d '\r' | sed '/^[[:space:]]*$/d' > "$TMP/generic-table-list.txt"
-            schema_query="SET NOCOUNT ON; SELECT s.name + '.' + t.name AS sourceTable, COALESCE((SELECT SUM(p.rows) FROM sys.partitions p WHERE p.object_id=t.object_id AND p.index_id IN (0,1)),0) AS legacyRowCount, c.name AS columnName, TYPE_NAME(c.user_type_id) AS dataType, c.max_length AS maxLength, c.is_nullable AS isNullable FROM sys.tables t JOIN sys.schemas s ON s.schema_id=t.schema_id JOIN sys.columns c ON c.object_id=t.object_id WHERE t.is_ms_shipped=0 ORDER BY s.name,t.name,c.column_id FOR JSON PATH, INCLUDE_NULL_VALUES;"
-            if ! $DOCKER exec -e SQLCMDPASSWORD="$DB_PASS" "$SQLC" "$SQLCMD" -S localhost -U "$DB_USER" -C -b -w 65535 -y 0 -d "$DB" -Q "$schema_query" > "$TMP/schema.raw" 2> "$TMP/schema.err"; then
-              echo "LEGACY_SCHEMA_EXPORT_FAILED=1"
-              sed -E 's/(password|pwd|token|secret)[^; ]*/[redacted]/Ig' "$TMP/schema.err" | tail -n 12
-              echo "LEGACY_SCHEMA_ERROR_OUTPUT_BEGIN"
-              sed -E 's/(password|pwd|token|secret)[^; ]*/[redacted]/Ig' "$TMP/schema.raw" | head -n 20
-              echo "LEGACY_SCHEMA_ERROR_OUTPUT_END"
-              exit 25
-            fi
-            node - "$TMP/schema.raw" "$TMP/schema.json" <<'NODEJSON'
-            const fs=require("node:fs");
-            const raw=fs.readFileSync(process.argv[2],"utf8").replace(/\r/g,"");
-            const first=raw.indexOf("[");
-            const last=raw.lastIndexOf("]");
-            if(first<0||last<first) { console.error("Legacy schema export did not contain JSON"); process.exit(1); }
-            const value=raw.slice(first,last+1).replace(/[\r\n]/g,"");
-            const rows=JSON.parse(value);
-            const definitions=new Map();
-            for(const row of rows){
-              let item=definitions.get(row.sourceTable);
-              if(!item){item={sourceTable:row.sourceTable,rowCount:Number(row.legacyRowCount)||0,columns:[]};definitions.set(row.sourceTable,item);}
-              item.columns.push({name:row.columnName,dataType:row.dataType,maxLength:row.maxLength,isNullable:row.isNullable});
-            }
-            fs.writeFileSync(process.argv[3],JSON.stringify([...definitions.values()]),{mode:0o600});
-            NODEJSON
+            # Schema inventory is derived from the exported rows below, avoiding SQL Server-version-specific metadata query failures.
             : > "$TMP/generic-manifest.tsv"
             GENERIC_INDEX=0
             while IFS= read -r full_table; do
@@ -173,7 +149,8 @@ jobs:
               const [sourceTable,file]=line.split("\t");
               genericTables.push({sourceTable,rows:read(file)});
             }
-            const data={users:read("users.json"),customers:read("customers.json"),smsPatterns:read("sms.json"),purchasePlans:read("plans.json"),loanRequestStatuses:read("statuses.json"),identityRoles:read("roles.json"),identityUserRoles:read("userroles.json"),identityClaims:read("claims.json"),genericTables,schemaDefinitions:read("schema.json")};
+            const schemaDefinitions=genericTables.map(t=>({sourceTable:t.sourceTable,rowCount:t.rows.length,columns:[...new Set(t.rows.flatMap(r=>Object.keys(r)))]}));
+            const data={users:read("users.json"),customers:read("customers.json"),smsPatterns:read("sms.json"),purchasePlans:read("plans.json"),loanRequestStatuses:read("statuses.json"),identityRoles:read("roles.json"),identityUserRoles:read("userroles.json"),identityClaims:read("claims.json"),genericTables,schemaDefinitions};
             fs.writeFileSync(p.join(d,"input.json"),JSON.stringify(data),{mode:0o600});
             console.log("LEGACY_EXPORT_COUNTS="+JSON.stringify({users:data.users.length,customers:data.customers.length,smsPatterns:data.smsPatterns.length,purchasePlans:data.purchasePlans.length,loanRequestStatuses:data.loanRequestStatuses.length,identityRoles:data.identityRoles.length,identityUserRoles:data.identityUserRoles.length,identityClaims:data.identityClaims.length,genericTableCount:genericTables.length,genericRowCount:genericTables.reduce((n,t)=>n+t.rows.length,0),schemaDefinitions:schemaDefinitions.length}));
             NODE
