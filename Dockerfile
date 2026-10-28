@@ -8,6 +8,7 @@ COPY --chown=node:node backend ./backend
 COPY --chown=node:node scripts/create-admin.js ./scripts/create-admin.js
 COPY --chown=node:node scripts/migrate-legacy-digibail.js ./scripts/migrate-legacy-digibail.js
 COPY --chown=node:node scripts/provision-recovery-admin.js ./scripts/provision-recovery-admin.js
+COPY --chown=node:node scripts/import-legacy-loan-products.mjs ./scripts/import-legacy-loan-products.mjs
 COPY --chown=node:node web ./web
 COPY --chown=node:node frontend ./frontend
 USER node
