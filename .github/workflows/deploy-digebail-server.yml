@@ -145,7 +145,24 @@ jobs:
                 grep -nE 'location /|proxy_pass|root |server_name|include.*cust_nginx' "$f" || true
               fi
             done
+            echo "=== route production domain to verified app ==="
+            CUST="/usr/local/directadmin/data/users/digibail/domains/digebail.ir.cust_nginx"
+            if [ -f "$CUST" ] && grep -q 'proxy_pass http://127.0.0.1:1361;' "$CUST"; then
+              cp -p "$CUST" "${CUST}.bak.$(date +%Y%m%d%H%M%S)"
+              sed -i 's#proxy_pass http://127.0.0.1:1361;#proxy_pass http://127.0.0.1:1631;#g' "$CUST"
+              if sudo -n nginx -t; then
+                sudo -n systemctl reload nginx
+                echo "DOMAIN_PROXY_UPDATED=1"
+              else
+                echo "ERROR: nginx validation failed; restoring previous route."
+                cp -p "$(ls -1t "${CUST}".bak.* | head -n 1)" "$CUST"
+                exit 25
+              fi
+            else
+              echo "ROUTE_NOT_MATCHED: custom nginx config absent or target differs; no routing file changed."
+            fi
             echo "=== current public_html index ==="
             ls -l "$ROOT/public_html/index.html" 2>/dev/null || true
+            echo "=== production domain response ==="
+            curl -sS -o /dev/null -w 'LOCAL_HTTP_STATUS=%{http_code}\n' -H 'Host: digebail.ir' http://127.0.0.1/ || true
             echo "APP_STARTED=1"
-            echo "ROUTING_NOT_CHANGED=1"
