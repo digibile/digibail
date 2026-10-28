@@ -1,0 +1,42 @@
+name: Probe VamCity runtime configuration
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - .github/workflows/probe-vamcity-runtime.yml
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Read runtime config without exposing credentials
+        uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          command_timeout: 3m
+          script: |
+            set -eu
+            echo "=== COMPOSE LABELS ==="
+            docker inspect vamcity-stage-app --format 'COMPOSE_DIR={{index .Config.Labels "com.docker.compose.project.working_dir"}} COMPOSE_FILES={{index .Config.Labels "com.docker.compose.project.config_files"}} IMAGE={{.Config.Image}} NETWORKS={{json .NetworkSettings.Networks}}'
+            echo "=== CONFIG FILES ==="
+            for p in /opt/vamcity-github-stage /opt /home/roofixo/domains/roofixo.ir; do
+              [ -d "$p" ] || continue
+              find "$p" -maxdepth 3 -type f \( -name '*compose*.yml' -o -name '*compose*.yaml' -o -name 'docker-compose.*' -o -name 'appsettings*.json' \) -printf '%p\n' 2>/dev/null | head -n 60
+            done
+            echo "=== APP ENV DB NAME ONLY ==="
+            docker inspect vamcity-stage-app --format '{{range .Config.Env}}{{println .}}{{end}}' | grep -E '^ConnectionStrings__DefaultConnection=' | sed -E 's/(Server=[^;]+;Database=)[^;]+/\\1[DB_NAME]/; s/(Password|Pwd|Token|Secret)=([^; ]+)/\\1=[REDACTED]/Ig' || true
+            echo "=== HTTP CHECKS ==="
+            if command -v curl >/dev/null 2>&1; then
+              timeout 5 curl --max-time 4 -sS -o /dev/null -w 'ROOT_HTTP=%{http_code}\n' http://127.0.0.1:5187/ || true
+              timeout 5 curl --max-time 4 -sS -o /dev/null -w 'ADMIN_HTTP=%{http_code}\n' http://127.0.0.1:5187/admin || true
+              timeout 5 curl --max-time 4 -sS -o /dev/null -w 'LOGIN_HTTP=%{http_code}\n' http://127.0.0.1:5187/api/v1/security/captcha || true
+            fi
+            echo "=== APP PROCESS ==="
+            docker top vamcity-stage-app -eo pid,comm,args 2>/dev/null | head -n 15 || true
+            echo "PROBE_COMPLETE=1"
