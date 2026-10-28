@@ -1,0 +1,73 @@
+name: Identify VamCity backup payloads and SQL Server headers
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - .github/workflows/inspect-vamcity-backup-payloads.yml
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Inspect extracted backup formats and SQL Server metadata
+        uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          command_timeout: 15m
+          script: |
+            set -eu
+            ROOT="/home/digibail/domains/digebail.ir"
+            TMP="$(mktemp -d /tmp/vamcity-backup-inspect.XXXXXX)"
+            chmod 700 "$TMP"
+            trap 'rm -rf "$TMP"; docker exec vamcity-stage-sql rm -f /var/opt/mssql/data/vamcity-inspect-1.bak /var/opt/mssql/data/vamcity-inspect-2.bak /var/opt/mssql/data/vamcity-inspect-3.bak >/dev/null 2>&1 || true' EXIT
+            SQLC="vamcity-stage-sql"
+            PASS=""
+            SQLCMD=""
+            echo "=== TARGET SQL SERVER / DATABASE NAMES ==="
+            if docker inspect "$SQLC" >/dev/null 2>&1; then
+              PASS="$(docker inspect "$SQLC" --format '{{range .Config.Env}}{{println .}}{{end}}' | sed -n 's/^MSSQL_SA_PASSWORD=//p;s/^SA_PASSWORD=//p' | head -n 1)"
+              SQLCMD="$(docker exec "$SQLC" sh -lc 'command -v sqlcmd || test ! -x /opt/mssql-tools18/bin/sqlcmd || echo /opt/mssql-tools18/bin/sqlcmd' 2>/dev/null | head -n 1)"
+              [ -n "$SQLCMD" ] || SQLCMD="/opt/mssql-tools18/bin/sqlcmd"
+              if [ -n "$PASS" ]; then
+                docker exec -e SQLCMDPASSWORD="$PASS" "$SQLC" "$SQLCMD" -S localhost -U sa -C -W -s '|' -Q "SET NOCOUNT ON; SELECT name,state_desc,recovery_model_desc FROM sys.databases ORDER BY name" 2>&1 || true
+              else
+                echo "SQL_SA_PASSWORD_NOT_FOUND_IN_CONTAINER_ENV"
+              fi
+            else
+              echo "TARGET_SQL_CONTAINER_NOT_FOUND"
+            fi
+            i=0
+            for spec in \
+              "vamcityc_bluvamdb_2026-10-29_19-19-45.zip|vamcity-inspect-1.bak" \
+              "vamcityc_transferDb_2026-10-29_19-19-51.zip|vamcity-inspect-2.bak" \
+              "vamcityc_vamcity_2026-10-29_19-20-04.zip|vamcity-inspect-3.bak"; do
+              archive="${spec%%|*}"
+              target="${spec#*|}"
+              f="$ROOT/$archive"
+              i=$((i+1))
+              echo "=== PAYLOAD $i: $archive ==="
+              if [ ! -f "$f" ]; then echo "MISSING=$f"; continue; fi
+              member="$(unzip -Z1 "$f" | head -n 1)"
+              unzip -p "$f" "$member" > "$TMP/payload-$i"
+              chmod 600 "$TMP/payload-$i"
+              stat -c 'PAYLOAD_SIZE=%s' "$TMP/payload-$i"
+              sha256sum "$TMP/payload-$i"
+              file "$TMP/payload-$i" || true
+              printf 'MAGIC_HEX='
+              od -An -tx1 -N32 "$TMP/payload-$i" | tr -s ' ' | tr '\n' ' '
+              echo
+              echo "-- NON-SENSITIVE FORMAT MARKERS --"
+              strings -a "$TMP/payload-$i" | grep -Eim 12 'Microsoft SQL Server|SQL Server|BACKUP DATABASE|DatabaseName|vamcityc_vamcity|vamcityc_bluvamdb|vamcityc_transferDb|7-Zip|Zstandard|WZ' || true
+              if [ -n "$PASS" ] && [ -n "$SQLCMD" ] && docker inspect "$SQLC" >/dev/null 2>&1; then
+                docker cp "$TMP/payload-$i" "$SQLC:/var/opt/mssql/data/$target" >/dev/null
+                echo "-- RESTORE HEADERONLY (READ ONLY) --"
+                docker exec -e SQLCMDPASSWORD="$PASS" "$SQLC" "$SQLCMD" -S localhost -U sa -C -W -s '|' -Q "RESTORE HEADERONLY FROM DISK=N'/var/opt/mssql/data/$target'" 2>&1 | head -n 35 || echo "RESTORE_HEADERONLY_NOT_AVAILABLE_FOR_PAYLOAD_$i"
+              fi
+            done
+            echo "PAYLOAD_INSPECTION_COMPLETE=1"
