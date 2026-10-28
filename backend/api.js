@@ -259,7 +259,7 @@ export async function handleApi(req, res, url) {
       const loanRow = (p) => ({ id:p.id,shape:loanShape(p),isActive:p.is_active,sortOrder:p.sort_order,showInList:p.show_in_list,sendReminders:p.send_reminders,legacySourceTable:p.legacy_source_table,legacyId:p.legacy_id,needsReview:Boolean(p.needs_review) });
       const cleanLoanInput = (b) => {
         const name=String(b.name||"").trim(), slug=String(b.slug||"").trim();
-        const num=(v)=>{const s=String(v??"").replace(/[۰-۹]/g,d=>"۰۱۲۳۴۵۶۷۸۹".indexOf(d)).replace(/[٠-٩]/g,d=>"٠١٢٣٤٥٦٧٨٩".indexOf(d)).replace(/[٬,\s]/g,"").replace(/٫/g,".");return s===""?NaN:Number(s)};
+        const num=(v)=>{if(v===null||v===undefined||v==="")return null;const n=Number(String(v).replace(/[۰-۹]/g,d=>"۰۱۲۳۴۵۶۷۸۹".indexOf(d)).replace(/[٠-٩]/g,d=>"٠١٢٣٤٥٦٧٨٩".indexOf(d)).replace(/[٬,\s]/g,"").replace(/٫/g,"."));return Number.isFinite(n)?n:null};
         const minAmount=num(b.minAmount),maxAmount=num(b.maxAmount),intervalDays=num(b.intervalDays),interestPercent=num(b.interestPercent??0),lateDailyCoef=num(b.lateDailyCoef??0),earlyDailyCoef=num(b.earlyDailyCoef??0);
         const interestMethod=String(b.interestMethod||"Monthly");
         const tiers=Array.isArray(b.tiers)?b.tiers:[],conditions=b.conditions&&typeof b.conditions==="object"&&!Array.isArray(b.conditions)?b.conditions:{},documents=Array.isArray(b.documents)?b.documents:[],labels=Array.isArray(b.labels)?b.labels:[],operationalCosts=Array.isArray(b.operationalCosts)?b.operationalCosts:[];
@@ -284,11 +284,11 @@ export async function handleApi(req, res, url) {
         const sourceTable=source.rows[0]?.source_table;
         if(!sourceTable)return json(res,200,{imported:0,skipped:0,candidateTables:[],message:"جدول واقعی تعریف وام در داده‌های منتقل‌شده پیدا نشد."});
         const q=await pool.query("SELECT source_table,legacy_id,payload FROM legacy_source_data WHERE source_table=$1 ORDER BY legacy_id LIMIT 10000",[sourceTable]);
-        const norm=(x)=>String(x||"").toLowerCase().replace(/[^a-z0-9\\u0600-\\u06ff]/g,"");
+        const norm=(x)=>String(x||"").toLowerCase().replace(/[^a-z0-9\u0600-\u06ff]/g,"");
         const pick=(p,keys)=>{const entries=Object.keys(p||{});for(const key of keys){const wanted=norm(key),k=entries.find(x=>norm(x)===wanted);if(k&&p[k]!==null&&p[k]!==undefined&&p[k]!=="")return p[k]}return null};
         const num=(v)=>{if(v===null||v===undefined||v==="")return null;const n=Number(String(v).replace(/[۰-۹]/g,d=>"۰۱۲۳۴۵۶۷۸۹".indexOf(d)).replace(/[٠-٩]/g,d=>"٠١٢٣٤٥٦٧٨٩".indexOf(d)).replace(/[٬,\\s]/g,"").replace(/٫/g,"."));return Number.isFinite(n)?n:null};
         const bool=(v)=>v===true||v===1||String(v).toLowerCase()==="true"||String(v)==="1";
-        const safeHtml=(v)=>String(v||"").slice(0,50000).replace(/<\\s*(script|style|iframe|object|embed|form|meta|link)[^>]*>[\\s\\S]*?<\\/\\s*\\1\\s*>/gi,"").replace(/<\\s*(script|style|iframe|object|embed|form|meta|link)[^>]*\\/?\\s*>/gi,"").replace(/\\s+on[a-z]+\\s*=\\s*("[^"]*"|'[^']*'|[^\\s>]+)/gi,"").replace(/(href|src)\\s*=\\s*(['"])\\s*javascript:[\\s\\S]*?\\2/gi,"$1=\\"#\\"");
+        const safeHtml=(v)=>String(v||"").slice(0,50000).replace(/<\s*(script|style|iframe|object|embed|form|meta|link)[^>]*>[\s\S]*?<\/\s*\1\s*>/gi,"").replace(/<\s*(script|style|iframe|object|embed|form|meta|link)[^>]*\/?\s*>/gi,"").replace(/\s+on[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi,"").replace(/(href|src)\s*=\s*(['"])\s*javascript:[\s\S]*?\2/gi,"$1=\"#\"");
         let imported=0,skipped=0;
         for(const row of q.rows){
           const p=row.payload&&typeof row.payload==="object"?row.payload:{};
