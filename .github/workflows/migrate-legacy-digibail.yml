@@ -115,6 +115,9 @@ jobs:
             if ! $DOCKER exec -e SQLCMDPASSWORD="$DB_PASS" "$SQLC" "$SQLCMD" -S localhost -U "$DB_USER" -C -b -h -1 -W -w 65535 -y 0 -d "$DB" -Q "$schema_query" > "$TMP/schema.raw" 2> "$TMP/schema.err"; then
               echo "LEGACY_SCHEMA_EXPORT_FAILED=1"
               sed -E 's/(password|pwd|token|secret)[^; ]*/[redacted]/Ig' "$TMP/schema.err" | tail -n 12
+              echo "LEGACY_SCHEMA_ERROR_OUTPUT_BEGIN"
+              sed -E 's/(password|pwd|token|secret)[^; ]*/[redacted]/Ig' "$TMP/schema.raw" | head -n 20
+              echo "LEGACY_SCHEMA_ERROR_OUTPUT_END"
               exit 25
             fi
             node - "$TMP/schema.raw" "$TMP/schema.json" <<'NODEJSON'
