@@ -100,7 +100,7 @@ jobs:
               const value=raw.slice(first,last+1);
               JSON.parse(value);
               fs.writeFileSync(process.argv[3],value);
-              NODEJSON
+            NODEJSON
               test -s "$TMP/$name.json"
             done
             node - "$TMP" <<'NODE'
