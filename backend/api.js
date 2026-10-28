@@ -148,7 +148,7 @@ export async function handleApi(req, res, url) {
       }
       if (req.method === "GET" && route === "/api/v1/admin/sms/templates") {
         const q = await pool.query("SELECT id,legacy_id,title,body,is_system,status,category,provider_panel,is_pattern_base,pattern_base_code,reject_reason,updated_at FROM sms_templates ORDER BY id");
-        return json(res, 200, { data: q.rows, configured: Boolean(KAVENEGAR_API_KEY) });
+        return json(res, 200, { data: { items: q.rows, configured: Boolean(KAVENEGAR_API_KEY) } });
       }
       if (req.method === "POST" && route === "/api/v1/admin/sms/templates/update") {
         const b = await body(req); const id = Number(b.id); const title = String(b.title || "").trim(); const text = String(b.body || "").trim();
