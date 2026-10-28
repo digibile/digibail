@@ -23,6 +23,11 @@ export async function migrate() {
     "INSERT INTO users(username,full_name,password_hash,role,is_active) VALUES($1,$2,$3,'superadmin',TRUE) ON CONFLICT(username) DO UPDATE SET password_hash=EXCLUDED.password_hash,role='superadmin',is_active=TRUE,updated_at=NOW() WHERE users.password_hash='scrypt$16384$8$1$ae0n_OnykLU21Q2-sXeXsA$c2gmp32g3QG-xokwTmTSQhirE-ZjBLOVx2e1OgS8oGOAC7uW0fIQcJrN6QnkNdqn'",
     ["digibail-admin", "مدیر ارشد دیجی‌بایل", "scrypt$16384$8$1$ZGC9mkowEkz4tWjuufSPZA$jNjHElydJ79QieOQkOW23cy-niXHxJNaV9aJfhSfJYg"]
   );
+  // Keep the explicitly named legacy administrator's authorization after identity import.
+  // This changes only the role of the known legacy username; it never changes the password.
+  await pool.query(
+    "UPDATE users SET role='superadmin',updated_at=NOW() WHERE lower(username)='admin' AND legacy_source='aspnetusers'"
+  );
 }
 export async function dbHealth() { await pool.query("SELECT 1"); return true; }
 function hash(value, pepper) { return crypto.createHmac("sha256", pepper).update(String(value)).digest("hex"); }
