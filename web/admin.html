@@ -28,7 +28,8 @@ async function api(path,body){const r=await fetch(path,{method:body?"POST":"GET"
 const fmt=d=>d?new Date(d).toLocaleDateString("fa-IR"):"-";
 async function load(){
 try{
-const [sum,users,customers,templateResult,logs,purchasePlans,loanStatuses]=await Promise.all([api("/api/v1/admin/summary"),api("/api/v1/admin/users"),api("/api/v1/admin/legacy-customers"),api("/api/v1/admin/sms/templates"),api("/api/v1/admin/sms/logs"),api("/api/v1/admin/legacy-source-data?table=CustomerPurchasePlan"),api("/api/v1/admin/legacy-source-data?table=LoanRequestStatuses")]);\nconst templates=templateResult.items||[];
+const [sum,users,customers,templateResult,logs,purchasePlans,loanStatuses]=await Promise.all([api("/api/v1/admin/summary"),api("/api/v1/admin/users"),api("/api/v1/admin/legacy-customers"),api("/api/v1/admin/sms/templates"),api("/api/v1/admin/sms/logs"),api("/api/v1/admin/legacy-source-data?table=CustomerPurchasePlan"),api("/api/v1/admin/legacy-source-data?table=LoanRequestStatuses")]);
+const templates=templateResult.items||[];
 $("#stats").innerHTML=[["همه حساب‌ها",sum.users],["مدیران",sum.admins],["مشتریان قدیمی",sum.legacy_customers],["الگوهای پیامک",sum.sms_templates],["گزارش ارسال",sum.sms_logs]].map(x=>'<div class="stat"><small>'+esc(x[0])+'</small><strong>'+esc(x[1])+'</strong></div>').join("");
 $("#usersRows").innerHTML=users.map(u=>'<tr><td>'+esc(u.full_name)+'</td><td>'+esc(u.username||"-")+'</td><td>'+esc(u.phone||"ثبت نشده")+'</td><td><span class="pill">'+esc(u.role)+'</span></td><td>'+ (u.is_active?"فعال":"غیرفعال")+'</td><td>'+fmt(u.created_at)+'</td></tr>').join("")||'<tr><td colspan="6">حسابی ثبت نشده است.</td></tr>';
 $("#customerRows").innerHTML=customers.map(u=>'<tr><td>'+esc(u.name||"-")+'</td><td>'+esc(u.mobile||"ثبت نشده")+'</td><td>'+esc(u.email||"-")+'</td><td>'+esc(u.customer_code??"-")+'</td><td>'+ (u.purchased?"خرید داشته":"-")+'</td><td>'+fmt(u.expires_at)+'</td></tr>').join("")||'<tr><td colspan="6">رکوردی نیست.</td></tr>';
