@@ -41,8 +41,8 @@ async function load(){try{
  const [docs,contracts]=await Promise.all([api("/api/v1/me/documents"),api("/api/v1/me/contracts")]);
  $("#docCount").textContent="تعداد مدارک ثبت‌شده: "+docs.length;
  $("#contractCount").textContent="تعداد قراردادها: "+contracts.length;
- $("#documents").innerHTML=rows(docs,[x=>esc(x.kind||"مدرک"),x=>esc(x.file_name||"—"),x=>esc(x.status||"—"),x=>date(x.created_on)],"مدرکی ثبت نشده است.");
- $("#contracts").innerHTML=rows(contracts,[x=>esc(x.title||"—"),x=>esc(x.number||"—"),x=>esc(x.status||"—"),x=>date(x.created_on)],"قراردادی ثبت نشده است.");
+ $("#documents").innerHTML=rows(docs,[x=>esc(x.kind||"مدرک"),x=>esc(x.fileName||x.file_name||"—"),x=>esc(x.status||"—"),x=>date((x.createdOn||x.created_on))],"مدرکی ثبت نشده است.");
+ $("#contracts").innerHTML=rows(contracts,[x=>esc(x.title||"—"),x=>esc(x.number||"—"),x=>esc(x.status||"—"),x=>date((x.createdOn||x.created_on))],"قراردادی ثبت نشده است.");
  }catch(e){$("#notice").hidden=false;$("#notice").textContent=e.message||"خطا در بارگذاری پنل کاربری."}}
 $("#logout").addEventListener("click",()=>{for(const k of ["token","accessToken","jwt"]){try{localStorage.removeItem(k)}catch{}}document.cookie="db_session=; Max-Age=0; Path=/; SameSite=Lax";location.replace("/login.html")});
 load();
