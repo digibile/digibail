@@ -5,6 +5,7 @@ on:
   push:
     paths:
       - .github/workflows/migrate-legacy-digibail.yml
+      - scripts/migrate-legacy-digibail.js
 
 permissions:
   contents: read
