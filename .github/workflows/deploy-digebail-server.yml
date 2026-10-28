@@ -1,10 +1,9 @@
-name: Deploy GitHub files to digebail.ir server path
+name: Deploy digebail.ir production site
 
 on:
   workflow_dispatch:
   push:
-    branches:
-      - main
+    branches: [main]
 
 permissions:
   contents: read
@@ -37,12 +36,75 @@ jobs:
             fi
           done
 
-      - name: Deploy repository files without deleting server files
+      - name: Transfer application without deleting production files
         uses: burnett01/rsync-deployments@7.0.2
         with:
-          switches: -avzr --exclude=.git/ --exclude=.github/ --exclude=.htpasswd/ --exclude=logs/ --exclude=stats/ --exclude=public_ftp/ --exclude=public_html/ --exclude=private_html
+          switches: -avzr --exclude=.git/ --exclude=.github/ --exclude=.htpasswd/ --exclude=logs/ --exclude=stats/ --exclude=public_ftp/ --exclude=public_html/ --exclude=private_html --exclude=.env
           path: ./
           remote_path: /home/digibail/domains/digebail.ir/
           remote_host: ${{ secrets.DEPLOY_HOST }}
           remote_user: ${{ secrets.DEPLOY_USER }}
           remote_key: ${{ secrets.DEPLOY_SSH_KEY }}
+
+      - name: Validate environment and inspect live web routing
+        uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          script_stop: true
+          script: |
+            set -eu
+            ROOT="/home/digibail/domains/digebail.ir"
+            cd "$ROOT"
+            echo "=== deployment identity ==="
+            whoami
+            pwd
+            echo "=== required app files ==="
+            test -f docker-compose.yml
+            test -f Dockerfile
+            test -f server.js
+            test -f start.js
+            echo "=== production environment (values hidden) ==="
+            if [ ! -f .env ]; then
+              echo "BLOCKED: missing $ROOT/.env; refusing to create fake credentials or touch live routing."
+              exit 20
+            fi
+            for key in POSTGRES_DB POSTGRES_USER POSTGRES_PASSWORD DATABASE_URL JWT_SECRET OTP_PEPPER CAPTCHA_PEPPER; do
+              if ! grep -qE "^\${key}=.+" .env; then
+                echo "BLOCKED: missing or empty required setting: $key"
+                exit 21
+              fi
+            done
+            if grep -Eq 'REPLACE_WITH|URL_ENCODED_PASSWORD' .env; then
+              echo "BLOCKED: .env still contains example placeholders."
+              exit 22
+            fi
+            echo "=== docker compose validation ==="
+            docker compose config -q
+            echo "=== build and start application ==="
+            docker compose up -d --build
+            echo "=== wait for application health ==="
+            for n in $(seq 1 30); do
+              if curl -fsS http://127.0.0.1:1631/healthz >/dev/null; then
+                echo "APP_HEALTH=healthy"
+                break
+              fi
+              if [ "$n" -eq 30 ]; then
+                docker compose ps
+                docker compose logs --tail=100 app db
+                exit 23
+              fi
+              sleep 5
+            done
+            echo "=== live routing config (no secrets) ==="
+            for f in /usr/local/directadmin/data/users/digibail/domains/digebail.ir.cust_nginx /usr/local/directadmin/data/users/digibail/nginx.conf /etc/nginx/nginx.conf; do
+              if [ -f "$f" ]; then
+                echo "--- $f"
+                grep -nE 'location /|proxy_pass|root |server_name|include.*cust_nginx' "$f" || true
+              fi
+            done
+            echo "=== current public_html index ==="
+            ls -l "$ROOT/public_html/index.html" 2>/dev/null || true
+            echo "APP_STARTED=1"
+            echo "ROUTING_NOT_CHANGED=1"
