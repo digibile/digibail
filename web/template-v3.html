@@ -273,6 +273,45 @@ details{border-bottom:1px solid var(--line);padding:14px 2px}summary{cursor:poin
  .logo{font-size:1.02rem}
 }
 
+
+/* Final mobile home polish: one compact action row, lighter sticky nav, tighter hierarchy. */
+@media(max-width:860px){
+  .hd{padding-inline:12px!important}
+  .hd-in{display:flex;align-items:center;gap:7px;min-height:42px}
+  .hd .logo{font-size:1rem;gap:7px;white-space:nowrap}
+  .hd .logo i{width:28px;height:28px;flex:0 0 28px}
+  .mobile-head-login{width:33px;height:33px;flex:0 0 33px;border-radius:10px}
+  .burger{min-height:33px;padding:5px 9px;font-size:.72rem;border-radius:10px}
+  .hero{padding:16px 0 20px!important;gap:15px!important}
+  .hero h1{font-size:clamp(1.45rem,6vw,1.9rem);line-height:1.55;letter-spacing:-.035em;margin:0 0 8px}
+  .hero .lead{font-size:.85rem;line-height:1.9;margin:0 0 12px}
+  .calc{padding:13px!important;border-radius:17px!important}
+  .cta2{display:grid!important;grid-template-columns:1fr 1fr!important;gap:7px!important;margin-top:10px!important}
+  .cta2 .btn,.cta2 .btn.lg{min-height:38px!important;padding:7px 8px!important;border-radius:11px!important;font-size:.74rem!important;line-height:1.4!important;font-weight:800;box-shadow:none}
+  .cta2 .btn.solid{box-shadow:0 4px 12px color-mix(in srgb,var(--brand) 16%,transparent)}
+  .mbar{display:grid!important;grid-template-columns:repeat(5,minmax(0,1fr))!important;gap:2px!important;inset-inline:10px!important;bottom:calc(6px + env(safe-area-inset-bottom,0px))!important;max-width:420px!important;margin-inline:auto!important;padding:4px!important;border-radius:15px!important;background:color-mix(in srgb,var(--surface) 96%,transparent)!important;box-shadow:0 7px 22px rgba(30,12,58,.12)!important}
+  .mbar a{display:flex!important;min-width:0;min-height:42px!important;flex-direction:column!important;align-items:center!important;justify-content:center!important;gap:1px!important;padding:3px 1px!important;border-radius:10px!important;font-size:.59rem!important;line-height:1.25!important;font-weight:700;white-space:nowrap}
+  .mbar a svg{width:16px!important;height:16px!important;stroke-width:1.8!important}
+  .mbar a[aria-current=page]{color:var(--brand)!important;background:color-mix(in srgb,var(--brand) 8%,var(--surface))!important}
+  .mbar a:active{transform:scale(.97)}
+  body{padding-bottom:calc(63px + env(safe-area-inset-bottom,0px))!important}
+  .campaign{min-height:138px!important;padding:14px!important;border-radius:17px!important}
+  .campaign h2{font-size:1.18rem!important;line-height:1.55!important}
+  .campaign p{font-size:.72rem!important;line-height:1.75!important}
+  .campaign .btn{min-height:36px!important;padding:7px 10px!important;font-size:.72rem!important;border-radius:10px!important}
+  .ft{padding-bottom:calc(82px + env(safe-area-inset-bottom,0px))!important}
+}
+@media(max-width:390px){
+  .hd{padding-inline:8px!important}
+  .hd-in{gap:5px}
+  .hd .logo{font-size:.92rem}
+  .burger{padding-inline:7px}
+  .cta2 .btn,.cta2 .btn.lg{font-size:.69rem!important;padding-inline:5px!important}
+  .mbar{inset-inline:7px!important}
+  .mbar a{font-size:.55rem!important}
+}
+@media(prefers-reduced-motion:reduce){.mbar a,.cta2 .btn{transition:none!important}}
+
 </style></head><body>
 
 <div class="hd" id="hd"><div class="hd-in">
