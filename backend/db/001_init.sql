@@ -11,7 +11,7 @@ CREATE TABLE IF NOT EXISTS captcha_challenges (
 );
 CREATE INDEX IF NOT EXISTS captcha_expiry_idx ON captcha_challenges(expires_at);
 CREATE TABLE IF NOT EXISTS otp_challenges (
-  id UUID PRIMARY KEY, phone VARCHAR(16) NOT NULL, purpose VARCHAR(16) NOT NULL CHECK (purpose IN ('login','register')),
+  id UUID PRIMARY KEY, phone VARCHAR(16) NOT NULL, purpose VARCHAR(16) NOT NULL CHECK (purpose IN ('login','register','password_reset')),
   code_hash TEXT NOT NULL, expires_at TIMESTAMPTZ NOT NULL, resend_at TIMESTAMPTZ NOT NULL,
   attempts SMALLINT NOT NULL DEFAULT 0, consumed_at TIMESTAMPTZ, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -76,3 +76,6 @@ CREATE TABLE IF NOT EXISTS sms_logs (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS sms_logs_created_at_idx ON sms_logs(created_at DESC);
+
+ALTER TABLE otp_challenges DROP CONSTRAINT IF EXISTS otp_challenges_purpose_check;
+ALTER TABLE otp_challenges ADD CONSTRAINT otp_challenges_purpose_check CHECK (purpose IN ('login','register','password_reset'));
