@@ -54,6 +54,8 @@ jobs:
                 $D exec "$SQLC" "$SQLCMD" -S localhost -U sa -P "$SA_PASS" -C -W -s '|' -Q "SET NOCOUNT ON; SELECT name,state_desc FROM sys.databases WHERE name LIKE 'vamcityc_%' OR name='vamcity_stage' ORDER BY name;" 2>&1 | tail -n 35
                 echo "=== LOAN PRODUCT SOURCE SCHEMA (column names only; no customer data) ==="
                 $D exec "$SQLC" "$SQLCMD" -S localhost -U sa -P "$SA_PASS" -C -W -s '|' -d "vamcityc_vamcity_import_20261028" -Q "SET NOCOUNT ON; SELECT t.name AS table_name,c.column_id,c.name AS column_name,TYPE_NAME(c.user_type_id) AS data_type FROM sys.tables t JOIN sys.columns c ON c.object_id=t.object_id WHERE t.name IN ('Loans','AgentLoans','CustomerPurchasePlan','UserLoanRequests','UserLoans','UserLoanRequestStatuses','LoanRequestStatuses') ORDER BY t.name,c.column_id;" 2>&1 | head -n 240
+                echo "=== LEGACY LOAN TERMS SAMPLE (no customer identifiers) ==="
+                $D exec "$SQLC" "$SQLCMD" -S localhost -U sa -P "$SA_PASS" -C -W -s '|' -d "vamcityc_vamcity_import_20261028" -Q "SET NOCOUNT ON; SELECT TOP 5 Title,Code,DelayPercent,EarlyPercent,ProfitPercent,MaxAmount,MaxMonthGap,AllowedInstallments,CostsJson,Disable,IncludePlan,PlanTitle,PlanShortDescription,HasSponsore,DefaultSponsoreCheckoutDays,LoanProfitType FROM dbo.Loans ORDER BY Code;" 2>&1 | head -n 20
               else
                 echo "SOURCE_SQL_ACCESS_UNAVAILABLE"
               fi
