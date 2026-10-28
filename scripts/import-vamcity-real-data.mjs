@@ -47,9 +47,9 @@ function importInput(appId, tempDir, input, label) {
   try {
     out = docker(["exec", appId, "node", "/app/scripts/migrate-legacy-digibail.js", "/tmp/legacy-migration.json"]);
   } catch (error) {
-    const diagnostic = [error?.stdout, error?.stderr].map(value => String(value || "")).join("\n").split(/\r?\n/)
-      .filter(line => /Legacy migration failed; transaction rolled back\. Code:|Error code:/i.test(line))
-      .slice(-3).join(" ");
+    let diagnostic = [error?.stdout, error?.stderr, error?.message].map(value => String(value || "")).join("\n");
+    if (SA_PASS) diagnostic = diagnostic.split(SA_PASS).join("[REDACTED]");
+    diagnostic = diagnostic.replace(/-P\\s+\\S+/g, "-P [REDACTED]").slice(-1200);
     console.error("IMPORT_BATCH_FAILED=" + label + " " + diagnostic);
     throw new Error("Import batch failed; diagnostic details filtered");
   }
