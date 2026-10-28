@@ -68,6 +68,19 @@ jobs:
                 unzip -p "$f" "$inner" | head -c 16 | od -An -tx1
               else echo "MISSING_BACKUP=$f"; fi
             done
+            echo "=== SOURCE TABLE COLUMN DEFINITIONS (no customer values) ==="
+            if $D inspect "vamcity-stage-sql" >/dev/null 2>&1; then
+              SQLC="vamcity-stage-sql"
+              SQLCMD="$($D exec "$SQLC" sh -lc 'command -v /opt/mssql-tools18/bin/sqlcmd || command -v /opt/mssql-tools/bin/sqlcmd || command -v sqlcmd' 2>/dev/null | head -n 1)"
+              SA_PASS="$($D exec "$SQLC" printenv MSSQL_SA_PASSWORD 2>/dev/null || true)"
+              if [ -n "$SQLCMD" ] && [ -n "$SA_PASS" ]; then
+                for DBNAME in vamcityc_vamcity_import_20261028 vamcityc_bluvamdb_import_20261028 vamcityc_transferDb_import_20261028; do
+                  echo "=== CORE_COLUMNS_DATABASE=$DBNAME ==="
+                  $D exec "$SQLC" "$SQLCMD" -S localhost -U sa -P "$SA_PASS" -C -h -1 -W -s '|' -d "$DBNAME" -Q "SET NOCOUNT ON; SELECT t.name,c.name,TYPE_NAME(c.user_type_id),c.is_nullable FROM sys.tables t JOIN sys.columns c ON c.object_id=t.object_id WHERE t.name IN ('AspNetUsers','Customers','SmsPatterns') ORDER BY t.name,c.column_id;" 2>&1 | tail -n 180
+                done
+              fi
+              unset SA_PASS
+            fi
             echo "=== SERVER APP SETTINGS PATHS ==="
             find /home/roofixo/domains/roofixo.ir/vamcity-app/releases -maxdepth 3 -type f \( -iname 'appsettings*.json' -o -iname '*.config' \) -printf '%p\n' 2>/dev/null | head -n 60
             echo "PRODUCTION_MAPPING_INSPECTION_COMPLETE=1"
