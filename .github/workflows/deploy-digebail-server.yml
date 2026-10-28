@@ -161,6 +161,27 @@ jobs:
               exit 30
             fi
             printf '%s\n' "$RECOVERY_PASSWORD" | $DOCKER compose exec -T app sh -c 'IFS= read -r RECOVERY_PASSWORD; export RECOVERY_PASSWORD; exec node /app/scripts/provision-recovery-admin.js'
+            export RECOVERY_PASSWORD
+            node --input-type=module <<'NODE'
+            const base = "http://127.0.0.1:1631";
+            const password = process.env.RECOVERY_PASSWORD || "";
+            const c = await fetch(base + "/api/v1/security/captcha");
+            if (!c.ok) throw new Error("Captcha endpoint failed: " + c.status);
+            const challenge = await c.json();
+            const encoded = String(challenge.image || "").split(",")[1] || "";
+            const svg = Buffer.from(encoded, "base64").toString("utf8");
+            const match = svg.match(/<text[^>]*>([0-9]{5})<\\/text>/);
+            if (!challenge.id || !match) throw new Error("Could not read generated captcha for smoke test");
+            const login = await fetch(base + "/api/v1/security/login", {
+              method: "POST", headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ username: "digibail-recovery", password, captchaId: challenge.id, captchaAnswer: match[1] })
+            });
+            const cookie = String(login.headers.get("set-cookie") || "").split(";")[0];
+            if (!login.ok || !cookie.startsWith("db_session=")) throw new Error("Recovery login failed: " + login.status);
+            const admin = await fetch(base + "/api/v1/admin/summary", { headers: { Cookie: cookie } });
+            if (!admin.ok) throw new Error("Admin authorization failed: " + admin.status);
+            console.log("ADMIN_LOGIN_AND_DASHBOARD_API_SMOKE=PASS");
+            NODE
             unset RECOVERY_PASSWORD
             echo "ADMIN_RECOVERY_FILE=/root/digibail-admin-recovery.txt (root-only, mode 600; secret not logged)"
             echo "=== live routing config (no secrets) ==="
