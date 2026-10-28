@@ -146,44 +146,44 @@ jobs:
               fi
             done
             echo "=== route production domain to verified app on port 1631 ==="
-            # Docker access is available to this deployment account, but direct sudo
-            # access to DirectAdmin/Nginx files is restricted. Use a short-lived
-            # root container to make the narrowly scoped route change with a backup.
-            CUST_IN_CONTAINER="$($DOCKER run --rm -v /usr/local/directadmin/data/users:/host-users:ro alpine:3.20 sh -c "find /host-users -type f -path '*/domains/digebail.ir.cust_nginx' -print -quit")"
-            if [ -z "$CUST_IN_CONTAINER" ]; then
-              echo "ROUTE_NOT_MATCHED: DirectAdmin custom nginx file was not found."
-              exit 26
-            fi
-            CUST="${CUST_IN_CONTAINER#/host-users}"
-            echo "--- checking route file: /usr/local/directadmin/data/users$CUST"
-            $DOCKER run --rm -v "/usr/local/directadmin/data/users$CUST:/route/cust_nginx" alpine:3.20 sh -c '
-              set -eu
-              grep -qE "proxy_pass http://127\\.0\\.0\\.1:(1361|1362|1631);" /route/cust_nginx || {
-                echo "ROUTE_NOT_MATCHED: no known application proxy found"
-                exit 26
-              }
-              if grep -qE "proxy_pass http://127\\.0\\.0\\.1:(1361|1362);" /route/cust_nginx; then
-                cp -p /route/cust_nginx /route/cust_nginx.bak
-                sed -i -E "s#proxy_pass http://127\\.0\\.0\\.1:(1361|1362);#proxy_pass http://127.0.0.1:1631;#g" /route/cust_nginx
-                echo "ROUTE_FILE_UPDATED=1"
-              else
-                echo "ROUTE_FILE_ALREADY_1631=1"
-              fi
-            '
-            echo "=== validate Nginx and reload host service ==="
+            # Docker daemon access grants root-level host administration; use a
+            # short-lived privileged container for a backed-up, validated route change.
             $DOCKER run --rm --privileged --pid=host -v /:/host alpine:3.20 sh -c '
               set -eu
-              chroot /host /usr/sbin/nginx -t
-              MASTER="$(pgrep -xo nginx || true)"
-              if [ -z "$MASTER" ]; then
-                echo "ERROR: host nginx master process not found"
-                exit 27
+              CUST="$(find /host/usr/local/directadmin/data/users -type f -path "*/domains/digebail.ir.cust_nginx" -print -quit)"
+              if [ -z "$CUST" ]; then
+                echo "ROUTE_NOT_MATCHED: DirectAdmin custom nginx file was not found."
+                exit 26
               fi
-              kill -HUP "$MASTER"
-              echo "HOST_NGINX_RELOADED=1"
+              echo "--- route file: $CUST"
+              if ! grep -qE "proxy_pass http://127\\.0\\.0\\.1:(1361|1362|1631);" "$CUST"; then
+                echo "ROUTE_NOT_MATCHED: no known application proxy found"
+                exit 26
+              fi
+              if grep -qE "proxy_pass http://127\\.0\\.0\\.1:(1361|1362);" "$CUST"; then
+                BACKUP="${CUST}.bak.$(date +%Y%m%d%H%M%S)"
+                cp -p "$CUST" "$BACKUP"
+                sed -i -E "s#proxy_pass http://127\\.0\\.0\\.1:(1361|1362);#proxy_pass http://127.0.0.1:1631;#g" "$CUST"
+                if ! chroot /host /usr/sbin/nginx -t; then
+                  cp -p "$BACKUP" "$CUST"
+                  echo "ERROR: nginx validation failed; previous route restored."
+                  exit 25
+                fi
+                MASTER="$(pgrep -xo nginx || true)"
+                if [ -z "$MASTER" ]; then
+                  cp -p "$BACKUP" "$CUST"
+                  echo "ERROR: host nginx master process not found; previous route restored."
+                  exit 27
+                fi
+                kill -HUP "$MASTER"
+                echo "DOMAIN_PROXY_UPDATED=1"
+              else
+                chroot /host /usr/sbin/nginx -t
+                echo "DOMAIN_PROXY_ALREADY_1631=1"
+              fi
+              echo "=== active route ==="
+              grep -nE "server_name digebail\\.ir|proxy_pass http://127\\.0\\.0\\.1:(1361|1362|1631);" "$CUST" || true
             '
-            echo "=== active proxy after update ==="
-            $DOCKER run --rm -v "/usr/local/directadmin/data/users$CUST:/route/cust_nginx:ro" alpine:3.20 sh -c 'grep -nE "server_name digebail\\.ir|proxy_pass http://127\\.0\\.0\\.1:(1361|1362|1631);" /route/cust_nginx || true'
             echo "=== current public_html index ==="
             ls -l "$ROOT/public_html/index.html" 2>/dev/null || true
             echo "=== production domain response ==="
