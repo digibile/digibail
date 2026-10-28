@@ -139,6 +139,8 @@ jobs:
               JSON.parse(value);
               fs.writeFileSync(process.argv[3],value,{mode:0o600});
             NODEJSON
+              ROW_COUNT="$(node -e 'const fs=require("node:fs"); console.log(JSON.parse(fs.readFileSync(process.argv[1],"utf8")).length)' "$TMP/$json_file")"
+              echo "LEGACY_TABLE_ROW_COUNT=$full_table:$ROW_COUNT"
               printf '%s\t%s\n' "$full_table" "$json_file" >> "$TMP/generic-manifest.tsv"
             done < "$TMP/generic-table-list.txt"
             node - "$TMP" <<'NODE'
