@@ -79,8 +79,13 @@ jobs:
             if [ -n "$PASS" ] && [ -n "$SQLCMD" ]; then
               echo "=== CURRENT DATABASE TABLE AND ROW COUNTS ==="
               for db in vamcityc_vamcity vamcityc_vamcity_import_20261028 vamcityc_bluvamdb vamcityc_bluvamdb_import_20261028 vamcityc_transferDb vamcityc_transferDb_import_20261028 vamcity_stage; do
-                docker exec -e SQLCMDPASSWORD="$PASS" "$SQLC" "$SQLCMD" -S localhost -U sa -C -W -s '|' -Q "SET NOCOUNT ON; USE [$db]; SELECT '$db' AS database_name,(SELECT COUNT(*) FROM sys.tables WHERE is_ms_shipped=0) AS table_count,(SELECT COALESCE(SUM(p.rows),0) FROM sys.partitions p JOIN sys.tables t ON t.object_id=p.object_id WHERE p.is_ms_shipped=0 AND p.index_id IN (0,1)) AS row_count" 2>&1 | tail -n 3 || true
+                echo "-- DB_COUNT=$db --"
+                docker exec -e SQLCMDPASSWORD="$PASS" "$SQLC" "$SQLCMD" -S localhost -U sa -C -W -s '|' -Q "SET NOCOUNT ON; SELECT '$db' AS database_name,(SELECT COUNT(*) FROM [$db].sys.tables WHERE is_ms_shipped=0) AS table_count,(SELECT COALESCE(SUM(p.rows),0) FROM [$db].sys.partitions p JOIN [$db].sys.tables t ON t.object_id=p.object_id WHERE t.is_ms_shipped=0 AND p.index_id IN (0,1)) AS row_count" 2>&1 | tail -n 4 || true
+                docker exec -e SQLCMDPASSWORD="$PASS" "$SQLC" "$SQLCMD" -S localhost -U sa -C -W -s '|' -Q "SET NOCOUNT ON; SELECT TOP 12 t.name AS table_name,SUM(p.rows) AS row_count FROM [$db].sys.tables t JOIN [$db].sys.partitions p ON p.object_id=t.object_id WHERE t.is_ms_shipped=0 AND p.index_id IN (0,1) GROUP BY t.name ORDER BY SUM(p.rows) DESC" 2>&1 | tail -n 16 || true
               done
+              echo "=== APP CONNECTION DATABASE REFERENCES (PASSWORDS REDACTED) ==="
+              docker inspect vamcity-stage-app --format '{{range .Config.Env}}{{println .}}{{end}}' 2>/dev/null | sed -E 's/(Password|Pwd|Token|Secret)=([^; ]+)/\\1=[REDACTED]/Ig' | grep -Ei 'ConnectionStrings|Database=|Initial Catalog|SQLSERVER|MSSQL|DB_NAME|DATABASE_URL' | head -n 30 || true
+              docker exec vamcity-stage-app sh -lc 'grep -RhoE "(Database|Initial Catalog)=[^;\\\"]+" /app/appsettings*.json /app/*.json 2>/dev/null | sort -u | head -n 20' 2>/dev/null || true
               echo "=== RESTORE HISTORY ==="
               docker exec -e SQLCMDPASSWORD="$PASS" "$SQLC" "$SQLCMD" -S localhost -U sa -C -W -s '|' -Q "SET NOCOUNT ON; SELECT TOP 20 destination_database_name,restore_date,restore_type,recovery,replace FROM msdb.dbo.restorehistory ORDER BY restore_date DESC" 2>&1 | tail -n 25 || true
             fi
