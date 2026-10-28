@@ -5,6 +5,13 @@ CREATE TABLE IF NOT EXISTS users (
   is_active BOOLEAN NOT NULL DEFAULT TRUE, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS users_created_at_idx ON users(created_at DESC);
+CREATE TABLE IF NOT EXISTS sms_provider_settings (
+  provider VARCHAR(40) PRIMARY KEY,
+  api_key_encrypted TEXT NOT NULL,
+  sender VARCHAR(32) NOT NULL,
+  updated_by BIGINT REFERENCES users(id) ON DELETE SET NULL,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
 CREATE TABLE IF NOT EXISTS captcha_challenges (
   id UUID PRIMARY KEY, answer_hash TEXT NOT NULL, expires_at TIMESTAMPTZ NOT NULL,
   consumed_at TIMESTAMPTZ, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
