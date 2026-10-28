@@ -362,11 +362,26 @@ details{border-bottom:1px solid var(--line);padding:14px 2px}summary{cursor:poin
 }
 @media(prefers-reduced-motion:reduce){.btn,.mbar a,.pc{transition:none!important}}
 
+
+/* Final mobile polish: compact navigation and action buttons. */
+@media(max-width:860px){
+ .hd-in{gap:9px;padding-block:8px}.logo{font-size:1.34rem;gap:7px}.logo i{width:30px;height:30px;border-radius:9px;font-size:1.05rem}
+ .burger{min-height:32px!important;padding:5px 9px!important;font-size:.72rem!important;border-radius:10px!important}
+ .mbar{display:grid!important;grid-template-columns:repeat(5,minmax(0,1fr))!important;gap:3px!important;inset-inline:10px!important;bottom:calc(6px + env(safe-area-inset-bottom,0px))!important;max-width:430px!important;margin-inline:auto!important;padding:5px!important;border-radius:16px!important;background:color-mix(in srgb,var(--surface) 97%,transparent)!important;border:1px solid var(--line)!important;box-shadow:0 7px 24px rgba(28,18,48,.13)!important}
+ .mbar a{min-width:0!important;min-height:43px!important;padding:4px 1px!important;gap:3px!important;border-radius:11px!important;font-size:.61rem!important;letter-spacing:-.025em}
+ .mbar a svg{width:17px!important;height:17px!important}.mbar a[data-mobile-nav="calculator"]{background:var(--brand)!important;color:#fff!important;box-shadow:0 3px 10px color-mix(in srgb,var(--brand) 22%,transparent)!important}
+ .mbar a[data-mobile-nav="account"]{font-size:.58rem!important}
+ .cta2{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:7px!important;margin-top:11px!important}
+ .cta2 .btn,.cta2 .btn.lg{min-width:0!important;width:100%!important;min-height:38px!important;padding:7px 8px!important;border-radius:11px!important;font-size:.73rem!important;line-height:1.35!important;white-space:normal!important}
+ .calc{padding:13px!important;border-radius:17px!important}body{padding-bottom:calc(61px + env(safe-area-inset-bottom,0px))!important}.ft{padding-bottom:calc(78px + env(safe-area-inset-bottom,0px))!important}
+}
+@media(max-width:390px){.mbar{inset-inline:8px!important;padding:4px!important;gap:2px!important}.mbar a{min-height:41px!important;font-size:.57rem!important}.mbar a svg{width:16px!important;height:16px!important}.mbar a[data-mobile-nav="account"]{font-size:.54rem!important}.cta2 .btn,.cta2 .btn.lg{font-size:.69rem!important;padding-inline:5px!important}}
+
 </style></head><body>
 
 <div class="hd" id="hd"><div class="hd-in">
   <a class="logo" href="#home"><i>د</i>دیجی‌بایل پی</a>
-  <a class="mobile-head-login" href="/login.html" aria-label="ورود به حساب"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg></a><button class="btn burger" id="burger" aria-expanded="false" aria-controls="nv">منو</button>
+  <button class="btn burger" id="burger" aria-expanded="false" aria-controls="nv">منو</button>
   <nav class="nv" id="nv" aria-label="منوی اصلی">
     <div class="pm"><button class="l" id="pmBtn" aria-expanded="false" aria-haspopup="true">طرح‌های اقساط ▾</button><div class="pm-pop" id="pmPop" hidden></div></div>
     <a href="#how">مراحل خرید</a><a href="#trust">امنیت</a><a href="#faq">پرسش‌ها</a>
@@ -387,12 +402,12 @@ details{border-bottom:1px solid var(--line);padding:14px 2px}summary{cursor:poin
     <div class="ft-bot"><span>تمامی حقوق برای دیجی‌بایل پی محفوظ است.</span><span id="ftHost"></span></div>
   </footer>
 </div>
-<nav class="mbar" aria-label="منوی پایین موبایل">
- <a href="#home" data-mobile-nav="home" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m3 10 9-7 9 7"/><path d="M5 9v11h14V9M9 20v-7h6v7"/></svg><span>خانه</span></a>
- <a href="#plans" data-mobile-nav="plans"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M7 8h10M7 12h6M7 16h4"/></svg><span>طرح‌ها</span></a>
- <a href="/profile.html" data-mobile-nav="requests"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3h8l4 4v14H7z"/><path d="M15 3v5h4M10 12h6M10 16h6"/></svg><span>درخواست‌ها</span></a>
- <a href="#how" data-mobile-nav="help"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.6 9a2.5 2.5 0 1 1 4.4 1.6c-1.2 1.1-2 1.4-2 3M12 17h.01"/></svg><span>راهنما</span></a>
- <a href="/profile.html" data-mobile-nav="account"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg><span>حساب من</span></a>
+<nav class="mbar" aria-label="میانبرهای موبایل">
+<a href="#home" data-mobile-nav="home" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m3 10 9-7 9 7M5 9v11h14V9M9 20v-7h6v7"/></svg><span>خانه</span></a>
+<a href="#plans" data-mobile-nav="plans"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M7 8h10M7 12h6M7 16h4"/></svg><span>طرح‌ها</span></a>
+<a href="#calc" data-mobile-nav="calculator"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="2.5" width="16" height="19" rx="3"/><path d="M8 6h8M8 11h.01M12 11h.01M16 11h.01M8 15h.01M12 15h.01M16 15h.01M8 19h.01M12 19h.01M16 19h.01"/></svg><span>محاسبه</span></a>
+<a href="/profile.html" data-mobile-nav="requests"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M7 3h8l4 4v14H7zM15 3v5h4M10 12h6M10 16h6"/></svg><span>درخواست‌ها</span></a>
+<a href="/login.html" data-mobile-nav="account"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg><span>ورود / عضویت</span></a>
 </nav>
 <div id="modal" hidden></div><div class="toast" id="toast" hidden></div>
 
