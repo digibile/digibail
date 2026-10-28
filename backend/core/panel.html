@@ -357,9 +357,31 @@ const NAV=[
  ['مالی و پرداخت',[['collect','اقساط و وصول'],['wallet','کیف پول و تراکنش‌ها'],['gate','درگاه و پرداخت'],['settle','تسویه']]],
  ['ارتباطات و پشتیبانی',[['comm','پیامک، اعلان و گزارش ارسال'],['smsLegacy','الگوهای پیامک'],['tickets','پشتیبانی']]],
  ['اتصال‌ها و مستندات',[['hub','مرکز اتصال‌ها'],['docs','مستندات']]],
+ ['پیوندهای پروژه',[['projectLinks','مرکز لینک‌های پروژه']]],
  ['ابزارهای ساخت',[['forms','فرم‌ساز'],['pages','صفحه‌ساز'],['stories','استوری‌ساز'],['repb','گزارش‌ساز']]],
  ['مدیریت سامانه',[['reports','گزارش‌ها'],['users','کاربران و نقش‌ها'],['audit','گزارش فعالیت‌ها و حسابرسی'],['legacyData','داده‌های منتقل‌شده و طرح‌های قدیمی'],['settings','تنظیمات']]]
 ];
+const PROJECT_LINKS=[
+ {g:'سایت و پنل',n:'سایت اصلی دیجی‌بایل',u:'https://digebail.ir/',d:'صفحه عمومی سایت',k:'public'},
+ {g:'سایت و پنل',n:'ورود کاربران',u:'https://digebail.ir/login.html',d:'ورود و عضویت',k:'auth'},
+ {g:'سایت و پنل',n:'ثبت‌نام پذیرنده',u:'https://digebail.ir/register.html?type=merchant',d:'فرم همکاری فروشگاه‌ها',k:'merchant'},
+ {g:'سایت و پنل',n:'ثبت‌نام نماینده',u:'https://digebail.ir/register.html?type=agent',d:'فرم همکاری نمایندگان',k:'agent'},
+ {g:'سایت و پنل',n:'ثبت‌نام سازمان',u:'https://digebail.ir/register.html?type=organization',d:'فرم سازمانی',k:'org'},
+ {g:'سایت و پنل',n:'حساب و پیگیری درخواست‌ها',u:'https://digebail.ir/profile.html',d:'حساب مشتری و وضعیت پرونده',k:'profile'},
+ {g:'سایت و پنل',n:'مدارک',u:'https://digebail.ir/documents.html',d:'صفحه مدارک',k:'documents'},
+ {g:'سایت و پنل',n:'قراردادها',u:'https://digebail.ir/contracts.html',d:'صفحه قراردادها',k:'contracts'},
+ {g:'سایت و پنل',n:'قوانین و مقررات',u:'https://digebail.ir/terms.html',d:'متن قوانین',k:'terms'},
+ {g:'سایت و پنل',n:'حریم خصوصی',u:'https://digebail.ir/privacy.html',d:'سیاست حریم خصوصی',k:'privacy'},
+ {g:'مدیریت',n:'پنل مدیریت',u:'https://digebail.ir/admin.html',d:'ورود به پنل مدیران',k:'admin'},
+ {g:'مدیریت',n:'مدیریت قالب‌ها',u:'https://digebail.ir/admin.html',d:'بخش مدیریت قالب داخل پنل مدیریت',k:'templates'},
+ {g:'توسعه و استقرار',n:'مخزن GitHub',u:'https://github.com/digibile/digibail',d:'کد و تغییرات پروژه',k:'repo'},
+ {g:'توسعه و استقرار',n:'آخرین تغییر لینک‌ها',u:'https://github.com/digibile/digibail/commit/18546ac7d034491c7cc18be29a0ed43fd73e41a8',d:'ثبت تغییرات منو و فوتر',k:'commit'},
+ {g:'توسعه و استقرار',n:'وضعیت استقرار سرور',u:'https://github.com/digibile/digibail/actions',d:'بررسی اجرا و نتیجه انتشار',k:'deploy'}
+];
+V.projectLinks=()=>head('مرکز لینک‌های پروژه','دسترسی یک‌جا به صفحات سایت، پنل مدیریت و ابزارهای توسعه؛ هر لینک باز و قابل کپی است.')+
+`<div class="panel"><div class="bar"><input id="projectLinkSearch" type="search" placeholder="جست‌وجوی لینک، صفحه یا بخش..." aria-label="جست‌وجوی لینک‌ها"><span class="pill a">${fa(PROJECT_LINKS.length)} لینک</span></div><p class="sub">لینک‌ها از تنظیمات و مسیرهای شناخته‌شده پروژه جمع شده‌اند. لینک‌های مدیریتی برای باز شدن به نشست و دسترسی معتبر نیاز دارند.</p></div>`+
+PROJECT_LINKS.reduce((html,item)=>{const prev=PROJECT_LINKS.slice(0,PROJECT_LINKS.indexOf(item)).some(x=>x.g===item.g);return html+(prev?'':`<div class="panel project-link-group" data-project-group="${esc(item.g)}"><h3>${esc(item.g)}</h3><div class="cards">`)+`<div class="card project-link-card" data-project-search="${esc((item.n+' '+item.d+' '+item.u).toLowerCase())}"><h3>${esc(item.n)}</h3><p class="sub">${esc(item.d)}</p><p><code style="overflow-wrap:anywhere">${esc(item.u)}</code></p><div class="bar"><a class="btn solid" href="${esc(item.u)}" target="_blank" rel="noopener noreferrer">باز کردن ↗</a><button class="btn" data-project-copy="${esc(item.u)}">کپی لینک</button></div></div>`+(PROJECT_LINKS[PROJECT_LINKS.indexOf(item)+1]?.g!==item.g?'</div></div>':'')},'')+
+`<div class="panel"><h3>دسترسی سریع</h3><div class="bar"><button class="btn" data-project-copy="https://digebail.ir/">کپی آدرس سایت</button><button class="btn" data-project-copy="https://github.com/digibile/digibail">کپی آدرس مخزن</button><button class="btn" data-project-copy="https://github.com/digibile/digibail/actions">کپی آدرس استقرارها</button></div><p class="sub">این بخش لینک‌ها را مدیریت و باز می‌کند؛ عملیات مالی، تغییر وضعیت پرونده یا انتشار نسخه همچنان از صفحه و مجوز اصلی خودش انجام می‌شود، نه با یک دکمه جادویی که امنیت را به تعطیلات بفرستد.</p></div>`;
 const BADGE={loans:()=>loans.filter(l=>l.st==='pending').length,kyc:()=>custs.filter(c=>c.kyc==='pending').length,fraud:()=>fraud.filter(f=>f[4]==='review').length,merchants:()=>merchants.filter(m=>m.st==='pending').length};
 function render(){
  $('#nav').innerHTML='<div class="brand">دیجی‌بایل پی<button class="btn nvx" data-nvclose="1" aria-label="بستن منو">×</button><button class="btn dcol" data-ncoll="1" style="float:left;min-height:30px;padding:0 10px" aria-label="جمع کردن منو" title="جمع/باز کردن منو">⇔</button></div>'+NAV.map(g=>`<div class="grp">${g[0]}</div>`+g[1].map(i=>`<button data-v="${i[0]}" aria-current="${state.view===i[0]}">${i[1]}${BADGE[i[0]]&&BADGE[i[0]]()?`<span class="cnt">${fa(BADGE[i[0]]())}</span>`:''}</button>`).join('')).join('');
@@ -379,6 +401,7 @@ function render(){
 document.addEventListener('click',e=>{if(e.target.closest('#retryView'))render()});
 $('#nav').onclick=e=>{if(e.target.closest('[data-nvclose]')){setNav(0);return}if(e.target.closest('[data-ncoll]')){const a=document.querySelector('.app');a.classList.toggle('coll');try{localStorage.setItem('gcoll',a.classList.contains('coll')?1:0)}catch(_){}return}const b=e.target.closest('[data-v]');if(b){setNav(0);state.view=b.dataset.v;$('#drawer').hidden=true;render();window.scrollTo(0,0)}};
 $('#main').addEventListener('input',e=>{
+ if(e.target.id==='projectLinkSearch'){const q=e.target.value.trim().toLowerCase();document.querySelectorAll('.project-link-card').forEach(card=>{card.hidden=!!q&&!card.dataset.projectSearch.includes(q)});document.querySelectorAll('.project-link-group').forEach(group=>{group.hidden=!group.querySelector('.project-link-card:not([hidden])')});return}
  if(e.target.id==='q'){const q=e.target.value.trim();document.querySelectorAll('#main tbody tr').forEach(tr=>tr.hidden=q&&!tr.textContent.includes(q));return}
  if(e.target.id==='inc'){state.sim.inc=+e.target.value;render();$('#inc').focus();return}
  if(e.target.id==='age'){state.sim.age=+e.target.value;render();$('#age').focus()}});
@@ -389,6 +412,8 @@ $('#main').addEventListener('change',e=>{const t=e.target;
  if(t.dataset.sc){scoring[+t.dataset.sc][2]=t.checked?1:0;return}
  if(t.dataset.pm){const[p,r]=t.dataset.pm.split(':').map(Number);perms[p][1][r]=t.checked?1:0;toast('دسترسی به‌روز شد')}});
 function act(e){const t=e.target,c=s=>t.closest(s);let x;
+ if(x=c('[data-project-copy]')){const u=x.dataset.projectCopy;try{navigator.clipboard.writeText(u).then(()=>toast('لینک کپی شد'),()=>toast(u))}catch(_){toast(u)}return}
+
  if(c('[data-open]')&&!c('button')){const[k,i]=c('[data-open]').dataset.open.split(':');({loan:openLoan,cust:openCust,merch:openMerch,tk:openTk}[k])(+i);return}
  if(x=c('[data-lf]')){state.lf=x.dataset.lf;render();return}
  if(x=c('[data-ls]')){const[k,i]=x.dataset.ls.split(':');const l=loans[+i];if(k==='issued'&&l.ct!=='signed'){toast('قبل از صدور وام، قرارداد باید امضا شود');return}if(k==='approved'&&l.docs.some(d=>d[1]!=='ok')){toast('همه‌ی مدارک باید تأیید شوند');return}l.st=k;l.tl.push([stDef('LoanApplication',k)[1],'همین الان']);
