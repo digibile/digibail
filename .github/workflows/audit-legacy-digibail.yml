@@ -1,0 +1,84 @@
+name: Audit legacy Digibail data for safe migration
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - .github/workflows/audit-legacy-digibail.yml
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate SSH settings
+        shell: bash
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          for name in DEPLOY_HOST DEPLOY_USER DEPLOY_SSH_KEY; do
+            if [[ -z "${!name}" ]]; then
+              echo "::error::Missing repository secret: $name"
+              exit 1
+            fi
+          done
+      - name: Inspect old and new databases without changing data
+        uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          script: |
+            set -eu
+            ROOT="/home/digibail/domains/digebail.ir"
+            OLD="$ROOT/public_html"
+            cd "$ROOT"
+            if sudo -n docker info >/dev/null 2>&1; then DOCKER="sudo -n docker"; elif docker info >/dev/null 2>&1; then DOCKER="docker"; else echo "DOCKER_ACCESS=UNAVAILABLE"; exit 20; fi
+            echo "=== containers (names/status only) ==="
+            $DOCKER ps -a --format '{{.Names}} {{.Status}}' | grep -Ei 'digibail|public_html|mssql|sqlserver|postgres' || true
+            echo "=== old application files ==="
+            for f in "$OLD/appsettings.json" "$OLD/appsettings.Production.json" "$OLD/LoanSystemAvizhe.Site.runtimeconfig.json"; do
+              if [ -f "$f" ]; then echo "FOUND_FILE=$f"; fi
+            done
+            echo "=== old app setting key names only (values hidden) ==="
+            find "$OLD" -type f \( -iname 'appsettings*.json' -o -iname 'web.config' \) -size -2M -print0 2>/dev/null | xargs -0 -r grep -Eho '"[^"]*(Sms|Kavenegar|ApiKey|Template|OTP|Otp|Phone|ConnectionString|Admin|User)[^"]*"[[:space:]]*:' 2>/dev/null | sort -fu | head -100 || true
+            echo "=== candidate SQL Server containers ==="
+            SQLC=""
+            for c in public_html-db-1 public_html-db digibail-sql digibail-db-legacy; do
+              if $DOCKER inspect "$c" >/dev/null 2>&1; then SQLC="$c"; break; fi
+            done
+            if [ -z "$SQLC" ]; then
+              SQLC="$($DOCKER ps -a --format '{{.Names}}' | grep -Ei 'public_html-db|mssql|sqlserver' | head -1 || true)"
+            fi
+            if [ -n "$SQLC" ]; then
+              echo "LEGACY_SQL_CONTAINER=$SQLC"
+              SQLCMD=""
+              for p in /opt/mssql-tools18/bin/sqlcmd /opt/mssql-tools/bin/sqlcmd; do
+                if $DOCKER exec "$SQLC" test -x "$p" >/dev/null 2>&1; then SQLCMD="$p"; break; fi
+              done
+              SA_PASS="$($DOCKER inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$SQLC" | sed -n -E 's/^(MSSQL_SA_PASSWORD|SA_PASSWORD)=(.*)$/\2/p' | head -1)"
+              if [ -n "$SQLCMD" ] && [ -n "$SA_PASS" ]; then
+                echo "=== SQL Server database names (no credentials) ==="
+                $DOCKER exec -e SQLCMDPASSWORD="$SA_PASS" "$SQLC" "$SQLCMD" -S localhost -U sa -C -b -h -1 -W -Q "SET NOCOUNT ON; SELECT name FROM sys.databases WHERE database_id > 4 ORDER BY name" | tr -d '\r'
+                echo "=== SQL Server table names and row counts ==="
+                SQL="SET NOCOUNT ON; DECLARE @db sysname; DECLARE c CURSOR LOCAL FAST_FORWARD FOR SELECT name FROM sys.databases WHERE database_id > 4; OPEN c; FETCH NEXT FROM c INTO @db; WHILE @@FETCH_STATUS=0 BEGIN EXEC(N'USE '+QUOTENAME(@db)+N'; SELECT DB_NAME() AS db_name, s.name AS schema_name, t.name AS table_name, SUM(p.rows) AS row_count FROM sys.tables t JOIN sys.schemas s ON s.schema_id=t.schema_id JOIN sys.partitions p ON p.object_id=t.object_id AND p.index_id IN (0,1) GROUP BY s.name,t.name ORDER BY t.name'); FETCH NEXT FROM c INTO @db; END; CLOSE c; DEALLOCATE c;"
+                $DOCKER exec -e SQLCMDPASSWORD="$SA_PASS" "$SQLC" "$SQLCMD" -S localhost -U sa -C -b -W -Q "$SQL" | tr -d '\r' | head -250
+                unset SA_PASS
+              else
+                echo "SQL_SERVER_INSPECTION=BLOCKED (sqlcmd or local container password unavailable; no secrets printed)"
+              fi
+            else
+              echo "LEGACY_SQL_CONTAINER=NOT_FOUND"
+            fi
+            echo "=== target PostgreSQL schema ==="
+            if [ -f docker-compose.yml ] && $DOCKER compose ps --services 2>/dev/null | grep -qx db; then
+              $DOCKER compose exec -T db sh -lc 'PGPASSWORD="$POSTGRES_PASSWORD" psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Atc "SELECT table_name || chr(9) || string_agg(column_name || \' : \' || data_type, \, \' ORDER BY ordinal_position) FROM information_schema.columns WHERE table_schema=\'public\' GROUP BY table_name ORDER BY table_name;"' 2>/dev/null || echo "TARGET_SCHEMA_QUERY=FAILED"
+            else
+              echo "TARGET_POSTGRES_SERVICE=NOT_FOUND"
+            fi
+            echo "=== audit complete; no data modified ==="
