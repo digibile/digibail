@@ -46,9 +46,27 @@ jobs:
                 SA_PASS="$($D exec "$SQLC" printenv MSSQL_SA_PASSWORD 2>/dev/null || true)"
                 if [ -n "$SQLCMD" ] && [ -n "$SA_PASS" ]; then
                   $D exec "$SQLC" "$SQLCMD" -S localhost -U sa -P "$SA_PASS" -C -W -s '|' -Q "SET NOCOUNT ON; SELECT name,state_desc FROM sys.databases ORDER BY name;" 2>&1 | tail -n 40
+                  echo "=== RESTORE HISTORY (database names and timestamps only) ==="
+                  $D exec "$SQLC" "$SQLCMD" -S localhost -U sa -P "$SA_PASS" -C -W -s '|' -Q "SET NOCOUNT ON; SELECT TOP 30 rh.destination_database_name, rh.restore_date, bs.database_name AS backup_source_database, bs.backup_finish_date, bs.type AS backup_type FROM msdb.dbo.restorehistory rh LEFT JOIN msdb.dbo.backupset bs ON bs.backup_set_id=rh.backup_set_id ORDER BY rh.restore_date DESC;" 2>&1 | tail -n 35
+                  if [ "$SQLC" = "vamcity-stage-sql" ]; then
+                    for DBNAME in vamcityc_vamcity vamcityc_bluvamdb vamcityc_transferDb; do
+                      echo "=== TABLE ROW COUNTS: $DBNAME ==="
+                      $D exec "$SQLC" "$SQLCMD" -S localhost -U sa -P "$SA_PASS" -C -W -s '|' -d "$DBNAME" -Q "SET NOCOUNT ON; SELECT s.name+'.'+t.name AS table_name, SUM(p.rows) AS row_count FROM sys.tables t JOIN sys.schemas s ON s.schema_id=t.schema_id JOIN sys.partitions p ON p.object_id=t.object_id AND p.index_id IN (0,1) GROUP BY s.name,t.name ORDER BY s.name,t.name;" 2>&1 | tail -n 120
+                    done
+                  fi
                 else echo "SQL_ACCESS_UNAVAILABLE"; fi
                 unset SA_PASS
               fi
+            done
+            echo "=== SOURCE ZIP CHECKSUMS AND BACKUP FILE IDENTIFICATION ==="
+            ROOT="/home/digibail/domains/digebail.ir"
+            for f in "$ROOT"/vamcityc_bluvamdb_2026-10-29_19-19-45.zip "$ROOT"/vamcityc_transferDb_2026-10-29_19-19-51.zip "$ROOT"/vamcityc_vamcity_2026-10-29_19-20-04.zip; do
+              if [ -f "$f" ]; then
+                sha256sum "$f"
+                unzip -Z1 "$f" | head -n 5
+                inner="$(unzip -Z1 "$f" | head -n 1)"
+                unzip -p "$f" "$inner" | head -c 16 | od -An -tx1
+              else echo "MISSING_BACKUP=$f"; fi
             done
             echo "=== SERVER APP SETTINGS PATHS ==="
             find /home/roofixo/domains/roofixo.ir/vamcity-app/releases -maxdepth 3 -type f \( -iname 'appsettings*.json' -o -iname '*.config' \) -printf '%p\n' 2>/dev/null | head -n 60
