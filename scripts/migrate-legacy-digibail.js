@@ -37,6 +37,7 @@ function dateOrNull(value) {
 }
 
 let usersInserted = 0, usersSkipped = 0, customersInserted = 0, templatesInserted = 0;
+let inaccessibleFallbackHash = null;
 try {
   await pool.query("BEGIN");
   for (const u of input.users || []) {
@@ -45,7 +46,12 @@ try {
     const username = String(u.username || u.email || ("legacy_" + u.legacyId)).trim().slice(0,80);
     const fullName = String(u.fullName || "").trim().replace(/\s+/g," ").slice(0,160) || username;
     const rawHash = String(u.passwordHash || "").trim();
-    const passwordHash = rawHash ? "aspnet:" + rawHash : await bcrypt.hash(crypto.randomBytes(32).toString("hex"),12);
+    // Missing legacy passwords must never become usable credentials. Generate one
+    // random, undisclosed hash per batch instead of running bcrypt once per account.
+    if (!rawHash && !inaccessibleFallbackHash) {
+      inaccessibleFallbackHash = await bcrypt.hash(crypto.randomBytes(48).toString("hex"), 12);
+    }
+    const passwordHash = rawHash ? "aspnet:" + rawHash : inaccessibleFallbackHash;
     const r = await pool.query(
       "INSERT INTO users(username,phone,full_name,national_code,email,password_hash,role,is_active,created_at,legacy_source,legacy_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8,COALESCE($9::timestamptz,NOW()),'aspnetusers',$10) ON CONFLICT DO NOTHING",
       [username,userPhone,fullName,nationalCode(u.nationalCode),u.email ? String(u.email).trim().slice(0,254) : null,passwordHash,role(u.roles),u.isActive !== false && u.isActive !== 0,dateOrNull(u.createdAt),String(u.legacyId)]
