@@ -170,7 +170,7 @@ jobs:
             const challenge = await c.json();
             const encoded = String(challenge.image || "").split(",")[1] || "";
             const svg = Buffer.from(encoded, "base64").toString("utf8");
-            const match = svg.match(/<text[^>]*>([0-9]{5})<\\/text>/);
+            const match = svg.match(/<text[^>]*>([0-9]{5})<[/]text>/);
             if (!challenge.id || !match) throw new Error("Could not read generated captcha for smoke test");
             const login = await fetch(base + "/api/v1/security/login", {
               method: "POST", headers: { "Content-Type": "application/json" },
