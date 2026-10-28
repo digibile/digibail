@@ -335,8 +335,10 @@ async function detectRole(){let t=null;try{for(let i=0;i<localStorage.length;i++
 
 
 
-(async()=>{if(!CFG.mock){try{const r=await fetch(CFG.endpoints.plans);if(r.ok){const j=await r.json();const L=j.data||j;if(Array.isArray(L)&&L.length)PLANS=L.map(normPlan).filter(Boolean)}}catch(e){}}
- await detectRole();plansMenu();renderAuth();route();try{$('#ftHost').textContent=location.hostname}catch(e){}})();
+/* Render the storefront before waiting on APIs. A slow backend must never leave the customer staring at an empty page. */
+try{plansMenu();renderAuth();route();$('#ftHost').textContent=location.hostname}catch(e){console.error('Initial storefront render failed',e)}
+(async()=>{if(!CFG.mock){const ctl=new AbortController();const timer=setTimeout(()=>ctl.abort(),4000);try{const r=await fetch(CFG.endpoints.plans,{signal:ctl.signal,cache:'no-store'});if(r.ok){const j=await r.json();const L=j.data||j;if(Array.isArray(L)&&L.length){const next=L.map(normPlan).filter(Boolean);if(next.length){PLANS=next;plansMenu();route()}}}}catch(e){console.warn('Loan plans API unavailable; using built-in display plans',e)}finally{clearTimeout(timer)}}
+ await detectRole();renderAuth();})();
 function normPlan(x){/* map API loan product to page plan; adjust field names to your API */
  if(!x||x.isActive===false)return null;return{id:String(x.id||x.code),name:x.name||x.title,blurb:x.description||'',badge:'',min:(x.minAmount||1000000)/1e6,max:(x.maxAmount||20000000)/1e6,iv:x.intervalDays||30,tiers:(x.tiers||[{m:x.months||6,fee:x.feePercent||2.5,down:x.downPaymentPercent||0}]).map(t=>({m:t.months||t.m,fee:t.feePercent||t.fee,down:t.downPaymentPercent||t.down||0})),cond:x.conditions||{minAge:18,maxAge:70,minIncome:0,kyc:1,minScore:0,maxActive:3},docs:(x.documents||[]).map(d=>[d.name||d,d.required===false?0:1]),on:1,kind:(x.conditions&&x.conditions.kind)||x.kind||'',steps:x.steps||[],iv:x.intervalDays||30}}
 
