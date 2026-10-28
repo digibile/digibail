@@ -118,6 +118,7 @@ try {
     }
   }
   await pool.query("COMMIT");
+  console.log("LEGACY_TABLE_ROW_COUNTS="+JSON.stringify((input.genericTables||[]).map(t=>({table:t.sourceTable,rows:t.rows.length}))));
   console.log(JSON.stringify({status:"ok",usersInserted,usersSkipped,legacyCustomersInserted:customersInserted,smsTemplatesInserted:templatesInserted,purchasePlansInserted,loanStatusesInserted,genericTablesImported:(input.genericTables||[]).length,genericRowsInserted:genericTablesInserted,schemaDefinitionsInserted}));
 } catch (error) {
   await pool.query("ROLLBACK").catch(()=>{});
