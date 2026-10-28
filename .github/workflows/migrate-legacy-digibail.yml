@@ -90,8 +90,17 @@ jobs:
                 sed -E 's/(password|pwd|token|secret)[^; ]*/[redacted]/Ig' "$TMP/$name.err" | tail -n 12
                 exit 23
               fi
-              # sqlcmd cannot combine -h -1 or -W with -y 0; remove the header and separator before parsing JSON.
-              tail -n +3 "$TMP/$name.raw" | tr -d '\r' > "$TMP/$name.json"
+              # Extract the JSON array independently of sqlcmd's version-specific headers and separators.
+              node - "$TMP/$name.raw" "$TMP/$name.json" <<'NODEJSON'
+              const fs=require("node:fs");
+              const raw=fs.readFileSync(process.argv[2],"utf8").replace(/\\r/g,"");
+              const first=raw.indexOf("[");
+              const last=raw.lastIndexOf("]");
+              if(first<0||last<first) { console.error("SQLCMD output did not contain a JSON array"); process.exit(1); }
+              const value=raw.slice(first,last+1);
+              JSON.parse(value);
+              fs.writeFileSync(process.argv[3],value);
+NODEJSON
               test -s "$TMP/$name.json"
             done
             node - "$TMP" <<'NODE'
