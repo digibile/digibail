@@ -1,0 +1,53 @@
+name: Identify actual VamCity production login container and database
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/identify-vamcity-production.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Identify old app and database mapping without changing data
+        uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          command_timeout: 10m
+          script: |
+            set -eu
+            if sudo -n docker info >/dev/null 2>&1; then D='sudo -n docker'; else D='docker'; fi
+            echo "=== ALL CONTAINERS ==="
+            $D ps -a --format 'table {{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}'
+            for APP in public_html-web-1 vamcity-stage-app; do
+              if $D inspect "$APP" >/dev/null 2>&1; then
+                echo "=== APP=$APP ==="
+                $D inspect "$APP" --format 'IMAGE={{.Config.Image}} WORKDIR={{.Config.WorkingDir}} ENTRYPOINT={{json .Config.Entrypoint}} CMD={{json .Config.Cmd}} MOUNTS={{json .Mounts}}'
+                echo "ENV_NAMES:"
+                $D inspect "$APP" --format '{{range .Config.Env}}{{println .}}{{end}}' | cut -d= -f1 | sort -u | head -n 100
+                echo "RECENT_LOGS:"
+                ($D logs --tail 50 "$APP" 2>&1 || true) | sed -E 's/((PASSWORD|PASS|TOKEN|SECRET|KEY|CONNECTIONSTRING)[^= :]*[=:])[[:space:]]*[^[:space:]]+/\1[REDACTED]/Ig' | tail -n 35
+              fi
+            done
+            for SQLC in public_html-db-1 vamcity-stage-sql; do
+              if $D inspect "$SQLC" >/dev/null 2>&1; then
+                echo "=== SQL=$SQLC DATABASES ==="
+                SQLCMD="$($D exec "$SQLC" sh -lc 'command -v /opt/mssql-tools18/bin/sqlcmd || command -v /opt/mssql-tools/bin/sqlcmd || command -v sqlcmd' 2>/dev/null | head -n 1)"
+                SA_PASS="$($D exec "$SQLC" printenv MSSQL_SA_PASSWORD 2>/dev/null || true)"
+                if [ -n "$SQLCMD" ] && [ -n "$SA_PASS" ]; then
+                  $D exec "$SQLC" "$SQLCMD" -S localhost -U sa -P "$SA_PASS" -C -W -s '|' -Q "SET NOCOUNT ON; SELECT name,state_desc FROM sys.databases ORDER BY name;" 2>&1 | tail -n 40
+                else echo "SQL_ACCESS_UNAVAILABLE"; fi
+                unset SA_PASS
+              fi
+            done
+            echo "=== SERVER APP SETTINGS PATHS ==="
+            find /home/roofixo/domains/roofixo.ir/vamcity-app/releases -maxdepth 3 -type f \( -iname 'appsettings*.json' -o -iname '*.config' \) -printf '%p\n' 2>/dev/null | head -n 60
+            echo "PRODUCTION_MAPPING_INSPECTION_COMPLETE=1"
