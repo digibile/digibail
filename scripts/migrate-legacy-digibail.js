@@ -89,6 +89,16 @@ try {
       }
     }
   }
+  let schemaDefinitionsInserted = 0;
+  for (const definition of input.schemaDefinitions || []) {
+    const sourceTable = String(definition.sourceTable || "").slice(0,120);
+    if (!sourceTable) continue;
+    const result = await pool.query(
+      "INSERT INTO legacy_source_data(source_table,legacy_id,payload) VALUES('__legacy_schema__',$1,$2::jsonb) ON CONFLICT(source_table,legacy_id) DO NOTHING",
+      [sourceTable, JSON.stringify(definition)]
+    );
+    schemaDefinitionsInserted += result.rowCount;
+  }
   let genericTablesInserted = 0;
   for (const table of input.genericTables || []) {
     const sourceTable = String(table.sourceTable || "").slice(0,120);
@@ -108,7 +118,7 @@ try {
     }
   }
   await pool.query("COMMIT");
-  console.log(JSON.stringify({status:"ok",usersInserted,usersSkipped,legacyCustomersInserted:customersInserted,smsTemplatesInserted:templatesInserted,purchasePlansInserted,loanStatusesInserted,genericTablesImported:(input.genericTables||[]).length,genericRowsInserted:genericTablesInserted}));
+  console.log(JSON.stringify({status:"ok",usersInserted,usersSkipped,legacyCustomersInserted:customersInserted,smsTemplatesInserted:templatesInserted,purchasePlansInserted,loanStatusesInserted,genericTablesImported:(input.genericTables||[]).length,genericRowsInserted:genericTablesInserted,schemaDefinitionsInserted}));
 } catch (error) {
   await pool.query("ROLLBACK").catch(()=>{});
   console.error("Legacy migration failed; transaction rolled back. Code:", error.code || "unknown");
