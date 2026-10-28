@@ -1,0 +1,80 @@
+name: Migrate legacy Digibail accounts and SMS patterns
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - .github/workflows/migrate-legacy-digibail.yml
+
+permissions:
+  contents: read
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate SSH settings
+        shell: bash
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          for name in DEPLOY_HOST DEPLOY_USER DEPLOY_SSH_KEY; do
+            if [[ -z "${!name}" ]]; then echo "::error::Missing repository secret: $name"; exit 1; fi
+          done
+      - name: Back up and migrate legacy records
+        uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          command_timeout: 15m
+          script: |
+            set -eu
+            ROOT="/home/digibail/domains/digebail.ir"
+            cd "$ROOT"
+            if sudo -n docker info >/dev/null 2>&1; then DOCKER="sudo -n docker"; elif docker info >/dev/null 2>&1; then DOCKER="docker"; else echo "DOCKER_ACCESS=UNAVAILABLE"; exit 20; fi
+            echo "=== wait for updated app and schema ==="
+            READY=0
+            for n in $(seq 1 90); do
+              APP_ID="$($DOCKER compose ps -q app 2>/dev/null || true)"
+              if [ -n "$APP_ID" ] && $DOCKER exec "$APP_ID" test -f /app/web/admin.html 2>/dev/null && $DOCKER exec "$APP_ID" test -f /app/scripts/migrate-legacy-digibail.js 2>/dev/null; then
+                if $DOCKER compose exec -T db sh -lc 'export PGPASSWORD="$POSTGRES_PASSWORD"; psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Atc "SELECT to_regclass('\''public.sms_templates'\'') IS NOT NULL AND to_regclass('\''public.legacy_customers'\'') IS NOT NULL"' 2>/dev/null | grep -qx t; then READY=1; break; fi
+              fi
+              sleep 10
+            done
+            if [ "$READY" -ne 1 ]; then echo "BLOCKED: updated app/schema not active; no data changed."; exit 21; fi
+            echo "TARGET_RELEASE_READY=1"
+            BACKUP_DIR="$ROOT/.migration-backups"; mkdir -p "$BACKUP_DIR"; chmod 700 "$BACKUP_DIR"
+            BACKUP="$BACKUP_DIR/digibail-before-legacy-$(date +%Y%m%d%H%M%S).sql.gz"
+            $DOCKER compose exec -T db sh -lc 'export PGPASSWORD="$POSTGRES_PASSWORD"; pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB"' | gzip > "$BACKUP"
+            chmod 600 "$BACKUP"; test -s "$BACKUP"; echo "TARGET_BACKUP_CREATED=1"
+            SQLC="public_html-db-1"; $DOCKER inspect "$SQLC" >/dev/null
+            SQLCMD="/opt/mssql-tools18/bin/sqlcmd"
+            $DOCKER exec "$SQLC" test -x "$SQLCMD" || SQLCMD="/opt/mssql-tools/bin/sqlcmd"
+            $DOCKER exec "$SQLC" test -x "$SQLCMD"
+            TMP="$(mktemp -d /tmp/digibail-legacy-migration.XXXXXX)"; chmod 700 "$TMP"
+            trap 'rm -rf "$TMP"; $DOCKER exec "$APP_ID" rm -f /tmp/legacy-migration.json >/dev/null 2>&1 || true' EXIT
+            Q_USERS="SET NOCOUNT ON; SELECT CAST(u.Id AS nvarchar(40)) AS legacyId, NULLIF(LTRIM(RTRIM(u.UserName)),'') AS username, NULLIF(LTRIM(RTRIM(CONCAT(ISNULL(u.FirstName,''),' ',ISNULL(u.LastName,'')))),'') AS fullName, NULLIF(LTRIM(RTRIM(u.Email)),'') AS email, NULLIF(LTRIM(RTRIM(u.NationalCode)),'') AS nationalCode, NULLIF(LTRIM(RTRIM(u.PasswordHash)),'') AS passwordHash, CAST(u.IsActive AS bit) AS isActive, COALESCE(NULLIF(LTRIM(RTRIM(u.Mobile)),''),NULLIF(LTRIM(RTRIM(u.PhoneNumber)),''),NULLIF(LTRIM(RTRIM(u.Phone)),'')) AS phone, COALESCE((SELECT STRING_AGG(r.Name, ',') FROM AspNetUserRoles ur JOIN AspNetRoles r ON r.Id=ur.RoleId WHERE ur.UserId=u.Id),'') AS roles, u.RegDate AS createdAt FROM AspNetUsers u FOR JSON PATH;"
+            Q_CUSTOMERS="SET NOCOUNT ON; SELECT CONVERT(nvarchar(36),Id) AS legacyId, Name AS name, Mobile AS mobile, Email AS email, Code AS code, RegDate AS createdAt, ExpireDate AS expiresAt, Permanent AS permanent, Purchased AS purchased, AffCode AS affiliateCode, ParkDomain AS parkedDomain FROM Customers FOR JSON PATH;"
+            Q_SMS="SET NOCOUNT ON; SELECT CONVERT(nvarchar(36),Id) AS legacyId, Title AS title, Pattern AS pattern, IsSystem AS isSystem, Status AS status, Category AS category, SmsPatternPanel AS providerPanel, IsPatternBase AS isPatternBase, PatternBaseCode AS patternBaseCode, RejectReason AS rejectReason, CONVERT(nvarchar(36),CustomerId) AS legacyCustomerId FROM SmsPatterns FOR JSON PATH;"
+            for item in "users|$Q_USERS" "customers|$Q_CUSTOMERS" "sms|$Q_SMS"; do
+              name="${item%%|*}"; query="${item#*|}"
+              $DOCKER exec -e QUERY="$query" "$SQLC" sh -lc 'export SQLCMDPASSWORD="${MSSQL_SA_PASSWORD:-${SA_PASSWORD:-}}"; exec /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -C -b -h -1 -W -w 65535 -y 0 -d Digibail -Q "$QUERY"' 2>/dev/null | tr -d '\r' > "$TMP/$name.json" || {
+                $DOCKER exec -e QUERY="$query" "$SQLC" sh -lc 'export SQLCMDPASSWORD="${MSSQL_SA_PASSWORD:-${SA_PASSWORD:-}}"; exec /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -C -b -h -1 -W -w 65535 -y 0 -d Digibail -Q "$QUERY"' | tr -d '\r' > "$TMP/$name.json"
+              }
+            done
+            node - "$TMP" <<'NODE'
+            const fs=require("node:fs"),p=require("node:path"),d=process.argv[2];
+            const read=n=>JSON.parse(fs.readFileSync(p.join(d,n),"utf8").trim()||"[]");
+            const data={users:read("users.json"),customers:read("customers.json"),smsPatterns:read("sms.json")};
+            fs.writeFileSync(p.join(d,"input.json"),JSON.stringify(data),{mode:0o600});
+            console.log("LEGACY_EXPORT_COUNTS="+JSON.stringify({users:data.users.length,customers:data.customers.length,smsPatterns:data.smsPatterns.length}));
+            NODE
+            chmod 600 "$TMP/input.json"
+            $DOCKER cp "$TMP/input.json" "$APP_ID:/tmp/legacy-migration.json"
+            $DOCKER exec "$APP_ID" node /app/scripts/migrate-legacy-digibail.js /tmp/legacy-migration.json
+            $DOCKER compose exec -T db sh -lc 'export PGPASSWORD="$POSTGRES_PASSWORD"; psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Atc "SELECT '''legacy_admin_accounts''',COUNT(*) FROM users WHERE legacy_source='''aspnetusers''' UNION ALL SELECT '''legacy_customers''',COUNT(*) FROM legacy_customers UNION ALL SELECT '''sms_templates''',COUNT(*) FROM sms_templates;"'
+            echo "LEGACY_MIGRATION_COMPLETED=1"
