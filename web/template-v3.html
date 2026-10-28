@@ -209,6 +209,35 @@ details{border-bottom:1px solid var(--line);padding:14px 2px}summary{cursor:poin
 }
 @media(max-width:380px){.campaign{min-height:160px;padding:15px 13px}.campaign h2{font-size:1.24rem}.campaign p{font-size:.71rem}.campaign-art{width:27%}.mbar{inset-inline:6px!important;padding:5px 3px!important}.mbar a{font-size:.59rem!important}.mbar a svg{width:18px;height:18px}}
 
+/* Final footer refinement: stable grid, better spacing and no collision with mobile navigation. */
+.ft{position:relative;clear:both;isolation:isolate;margin-top:clamp(36px,6vw,72px);padding:clamp(24px,4vw,42px) 0 calc(18px + env(safe-area-inset-bottom,0px));border-top:1px solid var(--line);background:linear-gradient(180deg,color-mix(in srgb,var(--surface) 82%,transparent),var(--bg) 72%)}
+.ft-top{align-items:start;grid-template-columns:minmax(210px,1.55fr) repeat(4,minmax(0,1fr));gap:clamp(14px,2.2vw,30px)}
+.ft-brand{min-width:0}.ft-brand .logo{display:inline-flex;margin-bottom:7px}.ft-brand p{max-width:34ch;line-height:1.9}
+.ft-top>div:not(.ft-brand){min-width:0;padding-inline-start:10px;border-inline-start:1px solid var(--line)}
+.ft b{font-size:.88rem;margin-bottom:11px}.ft a,.ft span{line-height:1.95;overflow-wrap:anywhere}
+.ft a{transition:color .16s ease}.ft a:focus-visible{outline:2px solid var(--brand);outline-offset:3px;border-radius:5px}
+.soc{gap:6px}.soc a{padding:3px 10px;font-size:.78rem;border-color:color-mix(in srgb,var(--line) 70%,var(--brand) 30%);background:var(--surface)}
+.ft-badges{gap:10px}.badge-box{flex:0 1 auto;min-width:0;padding:10px 14px;background:var(--surface);border-style:solid;border-color:var(--line);border-radius:14px}
+.ft-bot{align-items:center;line-height:1.8}.ft-bot span{max-width:100%}
+@media(max-width:860px){
+ .ft{margin-top:34px;padding:24px 0 calc(110px + env(safe-area-inset-bottom,0px))}
+ .ft-top{grid-template-columns:repeat(2,minmax(0,1fr));gap:18px 12px}
+ .ft-brand{grid-column:1/-1;padding:0 0 15px;border-bottom:1px solid var(--line)}
+ .ft-top>div:not(.ft-brand){padding:0 12px 0 0;border-inline-start:0;border-inline-end:2px solid color-mix(in srgb,var(--brand) 20%,var(--line))}
+ .ft-top>div:last-child{grid-column:1/-1;padding-top:13px;border-top:1px solid var(--line);border-inline-end:0}
+ .ft-brand p{max-width:42ch}
+ .ft-badges{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:16px}
+ .badge-box{text-align:center;padding:10px 8px;font-size:.72rem;border-radius:12px}
+ .ft-bot{display:grid;grid-template-columns:1fr;gap:5px;text-align:center;font-size:.75rem}
+ .ft-bot span{overflow-wrap:anywhere}
+}
+@media(max-width:380px){
+ .ft-top{gap:15px 8px}.ft-top>div:not(.ft-brand){padding-right:8px}
+ .ft-top>div:not(.ft-brand) a,.ft-top>div:not(.ft-brand) span{font-size:.77rem}
+ .ft-brand .logo{font-size:1.2rem}
+ .soc a{font-size:.72rem;padding:3px 8px}
+}
+
 @media (prefers-reduced-motion:reduce){.vcard,.pc{transition:none}}
 </style></head><body>
 
@@ -432,8 +461,7 @@ function openApply(p){const t=p.tiers[S.ti],c=calc(p,S.amt,t);modal(`<button cla
  <p class="note">مدارک لازم: ${p.docs.filter(d=>d[1]).map(d=>d[0]).join('، ')}. بعد از ثبت، عکس مدارک را در حساب من بارگذاری می‌کنید. با تأیید وام، کارت مجازی شما صادر می‌شود.</p>
  <button class="btn solid lg" style="width:100%;margin-top:10px" id="ap2">ثبت درخواست</button>`);$('#ap2').onclick=()=>{closeM();toast('درخواست ثبت شد. مرحله‌ی بعد: بارگذاری مدارک')}}
 /* ---------- boot ---------- */
-async function detectRole(){let t=null;try{for(let i=0;i<localStorage.length;i++){const v=localStorage.getItem(localStorage.key(i));if(v&&/^eyJ[\w-]+\.[\w-]+\.[\w-]+$/.test(v)){t=v;break}}}catch(e){}
- if(!t)return;try{const r=await fetch(CFG.endpoints.me,{headers:{Authorization:'Bearer '+t}});if(!r.ok)return;const j=await r.json(),d=j.data||j;const rs=[].concat(d.roles||d.role||[]).map(x=>String(x).toLowerCase());user=d.fullName||null;role=rs.some(x=>/admin|manager/.test(x))?'admin':'customer'}catch(e){}}
+async function detectRole(){try{const r=await fetch('/api/v1/security/me',{credentials:'same-origin',cache:'no-store'});if(!r.ok)return;const j=await r.json(),d=j.data||j;const rs=[].concat(d.roles||d.role||[]).map(x=>String(x).toLowerCase());user=d.fullName||null;role=rs.some(x=>/admin|manager/.test(x))?'admin':'customer'}catch(e){}}
 
 
 
