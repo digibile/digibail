@@ -77,13 +77,6 @@ jobs:
               exit 22
             fi
             unset APP_PASS SA_PASS
-            CONN="$($DOCKER inspect --format '{{range .Config.Env}}{{println .}}{{end}}' public_html-web-1 | sed -n 's/^ConnectionStrings__DefaultConnection=//p' | head -1)"
-            if [ -z "$CONN" ]; then echo "BLOCKED: legacy app connection string unavailable."; exit 22; fi
-            CREDS="$(CONN="$CONN" node -e 'const s=process.env.CONN;const o={};for(const p of s.split(";")){const i=p.indexOf("=");if(i>0)o[p.slice(0,i).trim().toLowerCase()]=p.slice(i+1).trim()}const pick=(...k)=>k.map(x=>o[x]).find(Boolean)||"";console.log(pick("initial catalog","database"));console.log(pick("user id","uid","user"));console.log(pick("password","pwd"));')"
-            DB="$(printf '%s\\n' "$CREDS" | sed -n '1p')"
-            DB_USER="$(printf '%s\\n' "$CREDS" | sed -n '2p')"
-            DB_PASS="$(printf '%s\\n' "$CREDS" | sed -n '3p')"
-            if [ -z "$DB" ] || [ -z "$DB_USER" ] || [ -z "$DB_PASS" ]; then echo "BLOCKED: legacy database credentials could not be parsed."; exit 22; fi
             TMP="$(mktemp -d /tmp/digibail-legacy-migration.XXXXXX)"; chmod 700 "$TMP"
             trap 'rm -rf "$TMP"; $DOCKER exec "$APP_ID" rm -f /tmp/legacy-migration.json >/dev/null 2>&1 || true' EXIT
             Q_USERS="SET NOCOUNT ON; SELECT CAST(u.Id AS nvarchar(40)) AS legacyId, NULLIF(LTRIM(RTRIM(u.UserName)),'') AS username, NULLIF(LTRIM(RTRIM(CONCAT(ISNULL(u.FirstName,''),' ',ISNULL(u.LastName,'')))),'') AS fullName, NULLIF(LTRIM(RTRIM(u.Email)),'') AS email, NULLIF(LTRIM(RTRIM(u.NationalCode)),'') AS nationalCode, NULLIF(LTRIM(RTRIM(u.PasswordHash)),'') AS passwordHash, CAST(u.IsActive AS bit) AS isActive, COALESCE(NULLIF(LTRIM(RTRIM(u.Mobile)),''),NULLIF(LTRIM(RTRIM(u.PhoneNumber)),''),NULLIF(LTRIM(RTRIM(u.Phone)),'')) AS phone, COALESCE((SELECT STRING_AGG(r.Name, ',') FROM AspNetUserRoles ur JOIN AspNetRoles r ON r.Id=ur.RoleId WHERE ur.UserId=u.Id),'') AS roles, u.RegDate AS createdAt FROM AspNetUsers u FOR JSON PATH;"
