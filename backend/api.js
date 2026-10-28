@@ -279,37 +279,42 @@ export async function handleApi(req, res, url) {
         return json(res,200,{data:q.rows});
       }
       if (req.method === "POST" && route === "/api/v1/admin/loan-products/import-legacy") {
-        const preferred=await pool.query("SELECT source_table FROM legacy_source_data WHERE source_table ~* 'vamcity.*[.]dbo[.]Loans
-        const norm=(x)=>String(x||"").toLowerCase().replace(/[^a-z0-9\u0600-\u06ff]/g,"");
+        // Import only the latest VamCity loan-definition table, never mix in the separate BluVam database.
+        const source=await pool.query("SELECT source_table FROM legacy_source_data WHERE source_table ~* '^vamcityc_vamcity_import_[0-9]{8}[.]dbo[.]Loans$' GROUP BY source_table ORDER BY source_table DESC LIMIT 1");
+        const sourceTable=source.rows[0]?.source_table;
+        if(!sourceTable)return json(res,200,{imported:0,skipped:0,candidateTables:[],message:"جدول واقعی تعریف وام در داده‌های منتقل‌شده پیدا نشد."});
+        const q=await pool.query("SELECT source_table,legacy_id,payload FROM legacy_source_data WHERE source_table=$1 ORDER BY legacy_id LIMIT 10000",[sourceTable]);
+        const norm=(x)=>String(x||"").toLowerCase().replace(/[^a-z0-9\\u0600-\\u06ff]/g,"");
         const pick=(p,keys)=>{const wanted=keys.map(norm);for(const k of Object.keys(p||{})){if(wanted.includes(norm(k))&&p[k]!==null&&p[k]!==undefined&&p[k]!=="")return p[k]}return null};
-        const num=(v)=>{if(v===null||v===undefined||v==="")return null;const n=Number(String(v).replace(/[۰-۹]/g,d=>"۰۱۲۳۴۵۶۷۸۹".indexOf(d)).replace(/[٠-٩]/g,d=>"٠١٢٣٤٥٦٧٨٩".indexOf(d)).replace(/[٬,\s]/g,"").replace(/٫/g,"."));return Number.isFinite(n)?n:null};
-        let imported=0,skipped=0;const candidateTables=new Set();
+        const num=(v)=>{if(v===null||v===undefined||v==="")return null;const n=Number(String(v).replace(/[۰-۹]/g,d=>"۰۱۲۳۴۵۶۷۸۹".indexOf(d)).replace(/[٠-٩]/g,d=>"٠١٢٣٤٥٦٧٨٩".indexOf(d)).replace(/[٬,\\s]/g,"").replace(/٫/g,"."));return Number.isFinite(n)?n:null};
+        const bool=(v)=>v===true||v===1||String(v).toLowerCase()==="true"||String(v)==="1";
+        const safeHtml=(v)=>String(v||"").slice(0,50000).replace(/<\\s*(script|style|iframe|object|embed|form|meta|link)[^>]*>[\\s\\S]*?<\\/\\s*\\1\\s*>/gi,"").replace(/<\\s*(script|style|iframe|object|embed|form|meta|link)[^>]*\\/?\\s*>/gi,"").replace(/\\s+on[a-z]+\\s*=\\s*("[^"]*"|'[^']*'|[^\\s>]+)/gi,"").replace(/(href|src)\\s*=\\s*(['"])\\s*javascript:[\\s\\S]*?\\2/gi,"$1=\\"#\\"");
+        let imported=0,skipped=0;
         for(const row of q.rows){
           const p=row.payload&&typeof row.payload==="object"?row.payload:{};
-          const rawName=pick(p,["Name","Title","LoanName","LoanTitle","ProductName","LoanTypeName","TitleFa","نام","عنوان","عنوان وام","نام وام"]);
-          const name=String(rawName||"").trim().slice(0,120);
-          const rawMin=num(pick(p,["MinAmount","MinimumAmount","MinLoanAmount","AmountFrom","FromAmount","MinimumLoanAmount","حداقل مبلغ"]));
-          const rawMax=num(pick(p,["MaxAmount","MaximumAmount","MaxLoanAmount","AmountTo","ToAmount","MaximumLoanAmount","حداکثر مبلغ"]));
+          const name=String(pick(p,["Title","Name","LoanName","LoanTitle","نام وام","عنوان وام"])||"").trim().slice(0,120);
+          const title=String(pick(p,["PlanTitle","Title","Name","عنوان طرح","عنوان"])||name).trim().slice(0,160);
+          if(!name){skipped++;continue}
+          const rawMin=num(pick(p,["MinAmount","MinimumAmount","MinLoanAmount","AmountFrom","FromAmount","حداقل مبلغ"]));
+          const rawMax=num(pick(p,["MaxAmount","MaximumAmount","MaxLoanAmount","AmountTo","ToAmount","حداکثر مبلغ"]));
           const rawAmount=num(pick(p,["LoanAmount","Amount","AmountValue","مبلغ وام","مبلغ"]));
-          const rate=num(pick(p,["InterestPercent","InterestRate","MonthlyInterest","AnnualInterest","ProfitPercent","RatePercent","درصد بهره","درصد سود","نرخ سود"]));
-          const allowedRaw=pick(p,["AllowedInstallments","InstallmentOptions","RepaymentOptions"]);let allowedMonths=[];try{const av=typeof allowedRaw==="string"?JSON.parse(allowedRaw):allowedRaw;if(Array.isArray(av))allowedMonths=av.map(t=>num(typeof t==="object"?(t.value??t.months??t.Months??t.installments??t.Installments):t)).filter(n=>n!==null&&n>0&&n<=600).map(Math.trunc);else if(av!==null&&av!==undefined){const n=num(av);if(n>0&&n<=600)allowedMonths=[Math.trunc(n)]}}catch{if(typeof allowedRaw==="string")allowedMonths=allowedRaw.split(/[,;|\/\s]+/).map(num).filter(n=>n!==null&&n>0&&n<=600).map(Math.trunc)}const months=num(pick(p,["Months","InstallmentsCount","InstallmentCount","TermMonths","DurationMonths","MaxInstallments","تعداد اقساط","مدت ماه"]))??(allowedMonths.length?Math.max(...allowedMonths):null);
-          const methodRaw=String(pick(p,["InterestMethod","InterestType","ProfitType","LoanProfitType","CalculationMethod","نوع سود","نحوه محاسبه سود"])||"").toLowerCase();
-          const hasFinance=rawMin!==null||rawMax!==null||rawAmount!==null||rate!==null||months!==null||Boolean(pick(p,["TiersJson","InstallmentsJson","RepaymentOptions"]));
-          if(!name||!hasFinance){skipped++;continue}
-          candidateTables.add(row.source_table);
           const min=rawMin??rawAmount??0,max=rawMax??rawAmount??rawMin??0;
-          const monthsInt=Math.max(0,Math.min(600,Math.trunc(months||0)));
-          const tierData=pick(p,["TiersJson","InstallmentsJson"])??allowedRaw;
-          let tiers=[];try{const parsed=typeof tierData==="string"?JSON.parse(tierData):tierData;if(Array.isArray(parsed))tiers=parsed.map(t=>({months:Number(typeof t==="object"?(t.months||t.Months||t.installments||t.Installments||t.value):t)||monthsInt,feePercent:Number(typeof t==="object"?(t.feePercent??t.FeePercent??t.fee??0):0)||0,downPaymentPercent:Number(typeof t==="object"?(t.downPaymentPercent??t.DownPaymentPercent??0):0)||0})).filter(t=>t.months>0&&t.months<=600)}catch{}
-          if(!tiers.length&&monthsInt>0)tiers=[{months:monthsInt,feePercent:0,downPaymentPercent:0}];
-          const method=/annual|year|سالانه|بانک/.test(methodRaw)?"Annual":/flat|once|یکجا/.test(methodRaw)?"Flat":"Monthly";
-          const stableSlug="legacy-"+crypto.createHash("sha256").update(row.source_table+"|"+row.legacy_id).digest("hex").slice(0,16);
-          const legacyLoanType=pick(p,["LoanProfitType"]);const complete=min>0&&max>=min&&monthsInt>0&&rate!==null&&Number(pick(p,["IntervalDays","InstallmentIntervalDays"]))>0;
-          const conditions={needsReview:!complete,legacySourceTable:row.source_table,legacyId:row.legacy_id,...(legacyLoanType!==null?{legacyLoanProfitType:legacyLoanType}:{}),...(allowedMonths.length?{legacyAllowedInstallments:allowedMonths}:{})};
-          const planTitle=String(pick(p,["PlanTitle","Title","LoanName"])||name).trim().slice(0,160);const description=String(pick(p,["PlanShortDescription","Description","ShortDescription","Summary","توضیحات"])||"").slice(0,500);const planHtml=String(pick(p,["PlanHtml","PlanHtmlContent"])||"").slice(0,20000).replace(/<\s*(script|style|iframe|object|embed|form|meta|link)[^>]*>[\s\S]*?<\/\s*\1\s*>/gi,"").replace(/\s+on[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi,"").replace(/(href|src)\s*=\s*(["'])\s*javascript:[\s\S]*?\2/gi,'$1="#"');let costs=[];try{const rawCosts=pick(p,["CostsJson","OperationalCostsJson","OperationalCosts"]);const parsedCosts=typeof rawCosts==="string"?JSON.parse(rawCosts):rawCosts;if(Array.isArray(parsedCosts))costs=parsedCosts.map(c=>({title:String(c.title??c.Title??c.name??c.Name??"هزینه").slice(0,100),percent:num(c.percent??c.Percent??c.value??c.Value??c.amount??c.Amount)??0,months:num(c.months??c.Months)??null}))}catch{}const ins=await pool.query("INSERT INTO loan_products(slug,name,title,description,badge,min_amount,max_amount,interval_days,tiers,conditions,documents,is_active,sort_order,interest_method,interest_percent,late_daily_coef,early_daily_coef,show_in_list,send_reminders,labels,full_description_html,operational_costs,legacy_source_table,legacy_id,legacy_payload,needs_review) VALUES($1,$2,$3,$4,'', $5,$6,$7,$8::jsonb,$9::jsonb,$10::jsonb,$11,$12,$13,$14,$15,$16,FALSE,FALSE,'[]'::jsonb,$17,$18::jsonb,$19,$20,$21::jsonb,$22) ON CONFLICT(legacy_source_table,legacy_id) WHERE legacy_source_table IS NOT NULL AND legacy_id IS NOT NULL DO NOTHING RETURNING id", [stableSlug,name,planTitle,description,min,max,Number(pick(p,["IntervalDays","InstallmentIntervalDays","فاصله اقساط"]))||0,JSON.stringify(tiers),JSON.stringify(conditions),JSON.stringify(Array.isArray(p.Documents)?p.Documents:[]),false,1000+imported,method,rate||0,num(pick(p,["LateDailyCoef","LatePenaltyDailyCoefficient","DelayPercent"]))||0,num(pick(p,["EarlyDailyCoef","EarlyPaymentDailyCoefficient","EarlyPercent"]))||0,planHtml,JSON.stringify(costs),row.source_table,row.legacy_id,JSON.stringify(p),!complete]);
+          const rate=num(pick(p,["ProfitPercent","InterestPercent","InterestRate","MonthlyInterest","AnnualInterest","RatePercent","درصد بهره","درصد سود","نرخ سود"]));
+          const profitType=pick(p,["LoanProfitType","InterestMethod","InterestType","ProfitType","CalculationMethod","نوع سود","نحوه محاسبه سود"]);
+          const methodText=String(profitType??"").toLowerCase();
+          const method=/annual|year|سالانه|بانک/.test(methodText)||methodText==="1"?"Annual":/flat|once|یکجا/.test(methodText)?"Flat":"Monthly";
+          const allowedRaw=pick(p,["AllowedInstallments","InstallmentOptions","RepaymentOptions"]);
+          let allowed=[];try{const av=typeof allowedRaw==="string"?JSON.parse(allowedRaw):allowedRaw;if(Array.isArray(av))allowed=av.map(t=>num(typeof t==="object"?(t.value??t.months??t.Months??t.installments??t.Installments):t)).filter(n=>n!==null&&n>0&&n<=600).map(Math.trunc);else if(av!==null&&av!==undefined){const n=num(av);if(n>0&&n<=600)allowed=[Math.trunc(n)]}}catch{if(typeof allowedRaw==="string")allowed=allowedRaw.split(/[,;|/\\s]+/).map(num).filter(n=>n!==null&&n>0&&n<=600).map(Math.trunc)}
+          const months=num(pick(p,["Months","InstallmentsCount","InstallmentCount","TermMonths","DurationMonths","MaxInstallments","تعداد اقساط","مدت ماه"]))??(allowed.length?Math.max(...allowed):null);
+          let tiers=[];try{const av=typeof allowedRaw==="string"?JSON.parse(allowedRaw):allowedRaw;if(Array.isArray(av))tiers=av.map(t=>({months:num(typeof t==="object"?(t.value??t.months??t.Months??t.installments??t.Installments):t),feePercent:0,downPaymentPercent:0})).filter(t=>t.months!==null&&t.months>0&&t.months<=600)}catch{}
+          if(!tiers.length&&months&&months>0)tiers=[{months:Math.trunc(months),feePercent:0,downPaymentPercent:0}];
+          const stableSlug="legacy-"+crypto.createHash("sha256").update(sourceTable+"|"+row.legacy_id).digest("hex").slice(0,16);
+          const description=String(pick(p,["PlanShortDescription","ShortDescription","Description","Summary","توضیحات"])||"").slice(0,500);
+          const conditions={};
+          const ins=await pool.query("INSERT INTO loan_products(slug,name,title,description,badge,min_amount,max_amount,interval_days,tiers,conditions,documents,is_active,sort_order,interest_method,interest_percent,late_daily_coef,early_daily_coef,show_in_list,send_reminders,labels,full_description_html,operational_costs,legacy_source_table,legacy_id,legacy_payload,needs_review) VALUES($1,$2,$3,$4,'',$5,$6,30,$7::jsonb,$8::jsonb,'[]'::jsonb,FALSE,$9,$10,$11,0,0,FALSE,FALSE,'[]'::jsonb,$12,'[]'::jsonb,$13,$14,$15::jsonb,TRUE) ON CONFLICT DO NOTHING RETURNING id",[stableSlug,name,title,description,min,max,JSON.stringify(tiers),JSON.stringify(conditions),1000+imported,method,rate??0,safeHtml(pick(p,["PlanHtml","FullDescriptionHtml"])),sourceTable,row.legacy_id,JSON.stringify(p)]);
           if(ins.rowCount)imported++;else skipped++;
         }
-        return json(res,200,{imported,skipped,candidateTables:[...candidateTables],message:imported?"تعریف‌های قابل شناسایی وارد شدند و همه غیرفعال‌اند تا قبل از انتشار بررسی شوند.":"تعریف قابل انتقالی در جدول‌های شناخته‌شده پیدا نشد؛ داده قدیمی تغییر نکرد."});
+        return json(res,200,{imported,skipped,candidateTables:[sourceTable],message:imported?"تعریف‌های واقعی از جدول قدیمی وارد شدند؛ همه غیرفعال و نیازمند بررسی‌اند و در سایت عمومی نمایش داده نمی‌شوند.":"طرح جدیدی برای انتقال پیدا نشد؛ رکوردهای قبلی دست‌نخورده ماندند."});
       }
       if (req.method === "GET" && route === "/api/v1/admin/loan-products") {
         const q=await pool.query("SELECT * FROM loan_products ORDER BY sort_order,created_at DESC");
