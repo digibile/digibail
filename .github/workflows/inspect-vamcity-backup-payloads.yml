@@ -97,6 +97,19 @@ jobs:
                 echo "-- IMPORTANT_TABLES=$db --"
                 docker exec -e SQLCMDPASSWORD="$PASS" "$SQLC" "$SQLCMD" -S localhost -U sa -C -W -s '|' -Q "SET NOCOUNT ON; SELECT t.name AS table_name,SUM(p.rows) AS row_count FROM [$db].sys.tables t JOIN [$db].sys.partitions p ON p.object_id=t.object_id WHERE t.is_ms_shipped=0 AND p.index_id IN (0,1) AND (t.name LIKE '%User%' OR t.name LIKE '%Role%' OR t.name LIKE '%Loan%' OR t.name LIKE '%Request%' OR t.name LIKE '%Customer%' OR t.name LIKE '%Payment%' OR t.name LIKE '%Login%' OR t.name LIKE '%Identity%' OR t.name LIKE '%Admin%') GROUP BY t.name ORDER BY t.name" 2>&1 | tail -n 90 || true
               done
+              echo "=== MIGRATION HISTORY ==="
+              for db in vamcity_stage vamcityc_vamcity_import_20261028; do
+                echo "-- MIGRATIONS=$db --"
+                docker exec -e SQLCMDPASSWORD="$PASS" "$SQLC" "$SQLCMD" -S localhost -U sa -C -W -s '|' -Q "SET NOCOUNT ON; SELECT TABLE_NAME FROM [$db].INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME LIKE '%Migration%' OR TABLE_NAME LIKE '%History%' ORDER BY TABLE_NAME" 2>&1 | tail -n 20 || true
+                docker exec -e SQLCMDPASSWORD="$PASS" "$SQLC" "$SQLCMD" -S localhost -U sa -C -W -s '|' -Q "SET NOCOUNT ON; IF OBJECT_ID('[$db].dbo.__EFMigrationsHistory') IS NOT NULL SELECT MigrationId,ProductVersion FROM [$db].dbo.__EFMigrationsHistory ORDER BY MigrationId" 2>&1 | tail -n 25 || true
+                echo "-- ROLES=$db --"
+                docker exec -e SQLCMDPASSWORD="$PASS" "$SQLC" "$SQLCMD" -S localhost -U sa -C -W -s '|' -Q "SET NOCOUNT ON; SELECT r.Name,COUNT(ur.UserId) AS assigned_users FROM [$db].dbo.AspNetRoles r LEFT JOIN [$db].dbo.AspNetUserRoles ur ON ur.RoleId=r.Id GROUP BY r.Name ORDER BY r.Name" 2>&1 | tail -n 20 || true
+              done
+              echo "=== NEW STAGE COLUMN RELATIONSHIP ==="
+              docker exec -e SQLCMDPASSWORD="$PASS" "$SQLC" "$SQLCMD" -S localhost -U sa -C -W -s '|' -Q "SET NOCOUNT ON; SELECT fk.name AS fk_name,OBJECT_NAME(fkc.parent_object_id) AS parent_table,COL_NAME(fkc.parent_object_id,fkc.parent_column_id) AS parent_column,OBJECT_NAME(fkc.referenced_object_id) AS referenced_table,COL_NAME(fkc.referenced_object_id,fkc.referenced_column_id) AS referenced_column FROM [vamcity_stage].sys.foreign_key_columns fkc JOIN [vamcity_stage].sys.foreign_keys fk ON fk.object_id=fkc.constraint_object_id WHERE COL_NAME(fkc.parent_object_id,fkc.parent_column_id)='ThirdPersonAssuranceAuthorizationItemId' OR COL_NAME(fkc.referenced_object_id,fkc.referenced_column_id)='ThirdPersonAssuranceAuthorizationItemId'" 2>&1 | tail -n 12 || true
+              echo "=== APP COMPOSE LOCATION / HEALTH ==="
+              docker inspect vamcity-stage-app --format 'COMPOSE_DIR={{index .Config.Labels "com.docker.compose.project.working_dir"}} COMPOSE_FILES={{index .Config.Labels "com.docker.compose.project.config_files"}} HEALTH={{if .State.Health}}{{.State.Health.Status}}{{else}}NO_HEALTHCHECK{{end}}'
+              docker exec vamcity-stage-app sh -lc 'curl -sS -o /dev/null -w "LOCAL_ROOT_HTTP=%{http_code}\\n" http://127.0.0.1:8080/; curl -sS -o /dev/null -w "LOCAL_CSS_HTTP=%{http_code}\\n" http://127.0.0.1:8080/admin' 2>&1 || true
               echo "=== APPLICATION AUTH/DB ERRORS (LAST 120 LINES FILTERED) ==="
               docker logs --tail 120 vamcity-stage-app 2>&1 | grep -Ei 'exception|error|login|authentication|identity|sql|database|failed|denied' | tail -n 50 | sed -E 's/(Password|Pwd|Token|Secret)=([^; ]+)/\\1=[REDACTED]/Ig' || true
               echo "=== APP CONNECTION DATABASE REFERENCES (PASSWORDS REDACTED) ==="
