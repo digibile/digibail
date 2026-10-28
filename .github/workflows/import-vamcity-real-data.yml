@@ -38,6 +38,17 @@ jobs:
               sleep 5
             done
             [ "$FOUND" -eq 1 ] || { echo "BLOCKED: importer files not deployed"; exit 21; }
+            echo "=== Wait for production deploy to finish before starting database writes ==="
+            sleep 120
+            STABLE=0
+            PREV=""
+            for n in $(seq 1 6); do
+              CURRENT="$($D compose ps -q app 2>/dev/null || true)"
+              if [ -n "$CURRENT" ] && [ "$CURRENT" = "$PREV" ] && curl -fsS http://127.0.0.1:1631/healthz >/dev/null 2>&1; then STABLE=$((STABLE+1)); else STABLE=0; fi
+              PREV="$CURRENT"
+              sleep 10
+            done
+            [ "$STABLE" -ge 3 ] || { echo "BLOCKED: app container did not stabilize after deploy"; exit 22; }
             echo "=== Importing verified Linux-restored source databases into PostgreSQL ==="
             node "$ROOT/scripts/import-vamcity-real-data.mjs"
             echo "=== Server-side migration process returned success ==="
