@@ -39,9 +39,10 @@ jobs:
               "vamcityc_bluvamdb_2026-10-29_19-19-45.zip:bluvamdb" \
               "vamcityc_transferDb_2026-10-29_19-19-51.zip:transferDb" \
               "vamcityc_vamcity_2026-10-29_19-20-04.zip:vamcity"; do
-              ZIP="${spec%%:*}"; LABEL="${spec#*:}"
+              ZIP="${spec%%:*}"; LABEL="${spec#*:}"; ENTRY="${ZIP%.zip}"
               echo "=== BACKUP_HEADER=$LABEL ==="
-              unzip -p "$ROOT/$ZIP" "$ZIP" > "$TMP/$LABEL.bak"
+              unzip -p "$ROOT/$ZIP" "$ENTRY" > "$TMP/$LABEL.bak"
+              test -s "$TMP/$LABEL.bak" || { echo "EMPTY_BACKUP_FILE=$LABEL"; exit 5; }
               $D cp "$TMP/$LABEL.bak" "$SQLC:/var/opt/mssql/data/vamcity_inspect_$LABEL.bak"
               $D exec "$SQLC" "$SQLCMD" -S localhost -U sa -P "$SA_PASS" -C -W -s '|' -Q "RESTORE HEADERONLY FROM DISK=N'/var/opt/mssql/data/vamcity_inspect_$LABEL.bak';" 2>&1 | tail -n 8
               $D exec "$SQLC" "$SQLCMD" -S localhost -U sa -P "$SA_PASS" -C -W -s '|' -Q "RESTORE FILELISTONLY FROM DISK=N'/var/opt/mssql/data/vamcity_inspect_$LABEL.bak';" 2>&1 | tail -n 8
