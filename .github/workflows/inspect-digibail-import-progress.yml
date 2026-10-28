@@ -1,0 +1,58 @@
+name: Inspect Digibail migration and admin access
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/inspect-digibail-import-progress.yml
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Inspect migration progress and dashboard routing without changing data
+        uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          command_timeout: 8m
+          script: |
+            set -eu
+            ROOT="/home/digibail/domains/digebail.ir"
+            cd "$ROOT"
+            if sudo -n docker info >/dev/null 2>&1; then D='sudo -n docker'; else D='docker'; fi
+            echo "=== APPLICATION AND DATABASE CONTAINERS ==="
+            $D compose ps
+            echo "=== APP HEALTH AND LOGIN PAGE ==="
+            for path in /healthz /login.html /admin.html; do
+              code="$(curl -sS -o /tmp/digibail-check-body -w '%{http_code}' --max-time 10 "http://127.0.0.1:1631$path" || true)"
+              echo "PATH=$path HTTP=$code BYTES=$(wc -c </tmp/digibail-check-body 2>/dev/null || echo 0)"
+            done
+            rm -f /tmp/digibail-check-body
+            echo "=== IMPORT PROCESS ==="
+            ps -eo pid,etime,pcpu,pmem,args | grep -E '[i]mport-vamcity-real-data|[m]igrate-legacy-digibail' | head -n 30 || true
+            echo "=== TARGET POSTGRES COUNTS ==="
+            $D compose exec -T db sh -lc 'export PGPASSWORD="$POSTGRES_PASSWORD"; psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1 -Atc "SELECT ''users=''||COUNT(*) FROM users; SELECT ''legacy_customers=''||COUNT(*) FROM legacy_customers; SELECT ''sms_templates=''||COUNT(*) FROM sms_templates; SELECT ''vamcity_preserved_rows=''||COUNT(*) FROM legacy_source_data WHERE source_table LIKE ''vamcityc_%''; SELECT source_table||''|''||COUNT(*) FROM legacy_source_data WHERE source_table LIKE ''vamcityc_%'' GROUP BY source_table ORDER BY source_table;"'
+            echo "=== SOURCE DATABASE STATUS ==="
+            SQLC="vamcity-stage-sql"
+            if $D inspect "$SQLC" >/dev/null 2>&1; then
+              SQLCMD="$($D exec "$SQLC" sh -lc 'command -v /opt/mssql-tools18/bin/sqlcmd || command -v /opt/mssql-tools/bin/sqlcmd || command -v sqlcmd' 2>/dev/null | head -n 1)"
+              SA_PASS="$($D exec "$SQLC" printenv MSSQL_SA_PASSWORD 2>/dev/null || true)"
+              if [ -n "$SQLCMD" ] && [ -n "$SA_PASS" ]; then
+                $D exec "$SQLC" "$SQLCMD" -S localhost -U sa -P "$SA_PASS" -C -W -s '|' -Q "SET NOCOUNT ON; SELECT name,state_desc FROM sys.databases WHERE name LIKE 'vamcityc_%' OR name='vamcity_stage' ORDER BY name;" 2>&1 | tail -n 35
+              else
+                echo "SOURCE_SQL_ACCESS_UNAVAILABLE"
+              fi
+              unset SA_PASS
+            else
+              echo "SOURCE_SQL_CONTAINER_NOT_FOUND"
+            fi
+            echo "=== ADMIN RECOVERY FILE STATUS (NO SECRET CONTENT) ==="
+            if [ -s /root/digibail-admin-recovery.txt ]; then stat -c 'RECOVERY_FILE_PRESENT=1 MODE=%a OWNER=%U:%G SIZE=%s' /root/digibail-admin-recovery.txt; else echo "RECOVERY_FILE_PRESENT=0"; fi
+            echo "MIGRATION_PROGRESS_INSPECTION_COMPLETE=1"
