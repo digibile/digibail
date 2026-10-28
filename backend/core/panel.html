@@ -351,7 +351,7 @@ function openCust(i){const c=custs[i];const d=$('#drawer');d.hidden=false;
 /* ---------- shell ---------- */
 const NAV=[
  ['نمای کلی',[['dash','داشبورد']]],
- ['وام و اعتبار',[['loans','درخواست‌های وام'],['products','محصولات و طرح‌های اعتباری'],['scoring','موتور اعتبارسنجی'],['fraud','ریسک و تقلب'],['contracts','قالب‌ها و قراردادها'],['legacyContracts','قراردادهای صادرشده'],['beta','طرح بتا (بانک رفاه)'],['betaRequests','استعلام‌های بتا و سوابق درخواست']]],
+ ['وام و اعتبار',[['loans','درخواست‌های وام'],['loanDefinition','تعریف وام‌ها'],['products','محصولات و طرح‌های اعتباری'],['scoring','موتور اعتبارسنجی'],['fraud','ریسک و تقلب'],['contracts','قالب‌ها و قراردادها'],['legacyContracts','قراردادهای صادرشده'],['beta','طرح بتا (بانک رفاه)'],['betaRequests','استعلام‌های بتا و سوابق درخواست']]],
  ['مشتریان و مدارک',[['customers','مشتریان'],['legacyCustomers','مشتریان قدیمی و سوابق خرید'],['kyc','احراز هویت'],['binder','مدارک و زونکن دیجیتال']]],
  ['شبکه فروش',[['merchants','پذیرندگان'],['agents','نمایندگان'],['orgs','سازمان‌ها']]],
  ['مالی و پرداخت',[['collect','اقساط و وصول'],['wallet','کیف پول و تراکنش‌ها'],['gate','درگاه و پرداخت'],['settle','تسویه']]],
@@ -1530,7 +1530,8 @@ V.loans=view('real-loan-requests',async()=>{
  const note='<div class="panel"><h3>جدول‌های مبنا</h3><div class="frow">'+related.map(t=>'<span class="pill b">'+esc(t.source_table)+' · '+nf2(t.row_count)+' رکورد</span>').join(' ')+'</div><p class="sub">فقط ۱۰۰ رکورد اول هر جدول در این نما خوانده می‌شود. مقادیر وضعیت از منبع قدیمی نمایش داده می‌شوند و هنوز به گردش‌کار عملیاتی جدید نگاشت نشده‌اند؛ تأیید، رد یا ویرایش عمداً فعال نیست.</p></div>';
  return intro+tiles([['جدول‌های مرتبط',nf2(related.length)],['رکوردهای نمایش‌داده‌شده',nf2(records.length)],['نوع دسترسی','فقط خواندنی']])+note+'<div class="panel">'+tbl(cols,records)+'</div>';
 });
-const LIVEV=new Set(['loans','dash','products','cards','binder','tenants','deposits','counter','marketers','appset','inquiries','orders','backup','audit','ledger','contracts','tplx','legacyData','legacyCustomers','smsLegacy','betaRequests','legacyContracts','projectLinks']);
+V.loanDefinition=()=>head('تعریف وام‌ها','فرم اصلی تعریف وام به فایل ارسالی متصل است. اطلاعات وام‌ها از API واقعی خوانده و در پایگاه داده ذخیره می‌شوند؛ این صفحه وام نمونه نمی‌سازد.')+'<div class="panel" style="padding:0;overflow:hidden"><iframe src="/loan-definition.html" title="تعریف وام‌ها" loading="lazy" style="display:block;width:100%;height:calc(100vh - 190px);min-height:720px;border:0;background:transparent"></iframe></div>';
+const LIVEV=new Set(['loans','dash','products','cards','binder','tenants','deposits','counter','marketers','appset','inquiries','orders','backup','audit','ledger','contracts','tplx','legacyData','legacyCustomers','smsLegacy','betaRequests','legacyContracts','projectLinks','loanDefinition']);
 V.tplx=()=>head('قالب صفحه اصلی','انتخاب نسخه‌ی صفحه‌ی اصلی سایت')+'<div class="panel"><p>انتخاب قالب صفحه‌ی اصلی (نسخه‌ی اول، دوم و ...) در صفحه‌ی قبلی مدیریت انجام می‌شود و دست‌نخورده مانده است.</p><p><a class=\"btn solid\" href=\"/admin.html\" style=\"text-decoration:none\">باز کردن مدیریت قالب (admin.html)</a></p></div>';
 const sy=NAV.find(g=>g[0]==='سیستم');if(sy&&!sy[1].some(x=>x[0]==='tplx'))sy[1].unshift(['tplx','قالب صفحه اصلی']);
 Object.keys(V).forEach(k=>{if(LIVEV.has(k))return;const f=V[k];V[k]=(...a)=>`<div class="panel" style="border-color:var(--warn)"><b>نمونه</b> <span class="sub">این بخش هنوز به API واقعی وصل نیست؛ اعداد و فهرست‌ها نمونه‌اند و چیزی ذخیره نمی‌شود.</span></div>`+f(...a)});
