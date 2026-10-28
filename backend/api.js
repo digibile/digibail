@@ -243,9 +243,92 @@ export async function handleApi(req, res, url) {
     if (req.method === "GET" && route === "/api/v1/tenant/config") {
       return json(res, 200, { data: { name: BRAND_NAME, brand: { logoText: BRAND_NAME.slice(0, 1), primary: "#4a2a86", accent: "#ffb629" } } });
     }
+    if (req.method === "GET" && (route === "/api/v1/loan-products" || /^\/api\/v1\/loan-products\/[^/]+$/.test(route))) {
+      const slug = route === "/api/v1/loan-products" ? null : decodeURIComponent(route.slice("/api/v1/loan-products/".length));
+      const q = slug
+        ? await pool.query("SELECT * FROM loan_products WHERE slug=$1 AND is_active=TRUE AND show_in_list=TRUE LIMIT 1", [slug])
+        : await pool.query("SELECT * FROM loan_products WHERE is_active=TRUE AND show_in_list=TRUE ORDER BY sort_order,created_at DESC");
+      const shape = (p) => ({ id:p.slug,name:p.name,description:p.description,badge:p.badge,isActive:p.is_active,minAmount:Number(p.min_amount),maxAmount:Number(p.max_amount),intervalDays:p.interval_days,tiers:p.tiers,conditions:p.conditions,documents:p.documents,title:p.title||p.name,imageUrl:p.image_url,fullDescriptionHtml:p.full_description_html,labels:p.labels,operationalCosts:p.operational_costs,interestMethod:p.interest_method,interestPercent:Number(p.interest_percent),lateDailyCoef:Number(p.late_daily_coef),earlyDailyCoef:Number(p.early_daily_coef),showInList:p.show_in_list,sendReminders:p.send_reminders });
+      if (slug) return q.rowCount ? json(res,200,shape(q.rows[0])) : json(res,404,{message:"طرح وام پیدا نشد."});
+      return json(res,200,q.rows.map(shape));
+    }
     if (route.startsWith("/api/v1/admin/")) {
       const admin = await adminFor(req);
       if (!admin) return json(res, 403, { message: "دسترسی مدیر لازم است." });
+      const loanShape = (p) => ({ id:p.slug,name:p.name,description:p.description,badge:p.badge,isActive:p.is_active,minAmount:Number(p.min_amount),maxAmount:Number(p.max_amount),intervalDays:p.interval_days,tiers:p.tiers,conditions:p.conditions,documents:p.documents,title:p.title||p.name,imageUrl:p.image_url,fullDescriptionHtml:p.full_description_html,labels:p.labels,operationalCosts:p.operational_costs,interestMethod:p.interest_method,interestPercent:Number(p.interest_percent),lateDailyCoef:Number(p.late_daily_coef),earlyDailyCoef:Number(p.early_daily_coef),showInList:p.show_in_list,sendReminders:p.send_reminders });
+      const loanRow = (p) => ({ id:p.id,shape:loanShape(p),isActive:p.is_active,sortOrder:p.sort_order,showInList:p.show_in_list,sendReminders:p.send_reminders,legacySourceTable:p.legacy_source_table,legacyId:p.legacy_id,needsReview:Boolean(p.needs_review) });
+      const cleanLoanInput = (b) => {
+        const name=String(b.name||"").trim(), slug=String(b.slug||"").trim();
+        const num=(v)=>{const s=String(v??"").replace(/[۰-۹]/g,d=>"۰۱۲۳۴۵۶۷۸۹".indexOf(d)).replace(/[٠-٩]/g,d=>"٠١٢٣٤٥٦٧٨٩".indexOf(d)).replace(/[٬,\s]/g,"").replace(/٫/g,".");return s===""?NaN:Number(s)};
+        const minAmount=num(b.minAmount),maxAmount=num(b.maxAmount),intervalDays=num(b.intervalDays),interestPercent=num(b.interestPercent??0),lateDailyCoef=num(b.lateDailyCoef??0),earlyDailyCoef=num(b.earlyDailyCoef??0);
+        const interestMethod=String(b.interestMethod||"Monthly");
+        const tiers=Array.isArray(b.tiers)?b.tiers:[],conditions=b.conditions&&typeof b.conditions==="object"&&!Array.isArray(b.conditions)?b.conditions:{},documents=Array.isArray(b.documents)?b.documents:[],labels=Array.isArray(b.labels)?b.labels:[],operationalCosts=Array.isArray(b.operationalCosts)?b.operationalCosts:[];
+        if(!name||name.length>120||!/^[a-z0-9-]{2,40}$/.test(slug))throw Object.assign(new Error("نام و شناسه انگلیسی معتبر لازم است."),{status:400});
+        if(!Number.isFinite(minAmount)||!Number.isFinite(maxAmount)||minAmount<=0||maxAmount<minAmount)throw Object.assign(new Error("بازه مبلغ وام نامعتبر است."),{status:400});
+        if(!Number.isInteger(intervalDays)||intervalDays<1||intervalDays>365)throw Object.assign(new Error("فاصله اقساط باید بین ۱ تا ۳۶۵ روز باشد."),{status:400});
+        if(!["Monthly","Annual","Flat"].includes(interestMethod)||!Number.isFinite(interestPercent)||interestPercent<0||interestPercent>100)throw Object.assign(new Error("نوع یا نرخ بهره نامعتبر است."),{status:400});
+        if(!Number.isFinite(lateDailyCoef)||!Number.isFinite(earlyDailyCoef)||lateDailyCoef<0||lateDailyCoef>1||earlyDailyCoef<0||earlyDailyCoef>1)throw Object.assign(new Error("ضریب روزانه باید بین صفر و یک باشد."),{status:400});
+        if(!tiers.length||tiers.some(t=>!Number.isInteger(Number(t.months))||Number(t.months)<1||!Number.isFinite(Number(t.feePercent??0))||Number(t.feePercent??0)<0||Number(t.feePercent??0)>100||Number(t.downPaymentPercent??0)<0||Number(t.downPaymentPercent??0)>100))throw Object.assign(new Error("حداقل یک گزینه اقساط معتبر لازم است."),{status:400});
+        if(labels.length>10||labels.some(x=>typeof x!=="string"||!x.trim()||x.length>30))throw Object.assign(new Error("حداکثر ۱۰ برچسب، هرکدام تا ۳۰ نویسه."),{status:400});
+        if(operationalCosts.length>10||operationalCosts.some(x=>!String(x.title||"").trim()||Number(x.percent)<0||Number(x.percent)>100))throw Object.assign(new Error("هزینه عملیاتی نامعتبر است."),{status:400});
+        const cleanHtml=String(b.fullDescriptionHtml||"").replace(/<\s*(script|style|iframe|object|embed|form|meta|link)[^>]*>[\s\S]*?<\/\s*\1\s*>/gi,"").replace(/\s+on[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi,"").replace(/(href|src)\s*=\s*(['"])\s*javascript:[\s\S]*?\2/gi,"$1=\"#\"");
+        return {name,slug,description:String(b.description||"").slice(0,500),badge:String(b.badge||"").slice(0,40),minAmount,maxAmount,intervalDays,tiers,conditions,documents,isActive:b.isActive!==false,sortOrder:Number.isFinite(num(b.sortOrder))?Math.trunc(num(b.sortOrder)):0,title:String(b.title||name).slice(0,160),interestMethod,interestPercent,lateDailyCoef,earlyDailyCoef,showInList:b.showInList!==false,sendReminders:b.sendReminders!==false,fullDescriptionHtml:cleanHtml,labels,operationalCosts};
+      };
+      if (req.method === "GET" && route === "/api/v1/admin/loan-products/legacy-candidates") {
+        const q=await pool.query("SELECT source_table,COUNT(*)::int AS row_count FROM legacy_source_data WHERE source_table<>'__legacy_schema__' AND source_table ~* '(loan.?product|loan.?type|loan.?plan|loan.?definition|loan.?configuration|وام)' GROUP BY source_table ORDER BY source_table");
+        return json(res,200,{data:q.rows});
+      }
+      if (req.method === "POST" && route === "/api/v1/admin/loan-products/import-legacy") {
+        const q=await pool.query("SELECT source_table,legacy_id,payload FROM legacy_source_data WHERE source_table<>'__legacy_schema__' AND source_table ~* '(loan.?product|loan.?type|loan.?plan|loan.?definition|loan.?configuration|وام)' ORDER BY source_table,legacy_id LIMIT 10000");
+        const norm=(x)=>String(x||"").toLowerCase().replace(/[^a-z0-9\u0600-\u06ff]/g,"");
+        const pick=(p,keys)=>{const wanted=keys.map(norm);for(const k of Object.keys(p||{})){if(wanted.includes(norm(k))&&p[k]!==null&&p[k]!==undefined&&p[k]!=="")return p[k]}return null};
+        const num=(v)=>{if(v===null||v===undefined||v==="")return null;const n=Number(String(v).replace(/[۰-۹]/g,d=>"۰۱۲۳۴۵۶۷۸۹".indexOf(d)).replace(/[٠-٩]/g,d=>"٠١٢٣٤٥٦٧٨٩".indexOf(d)).replace(/[٬,\s]/g,"").replace(/٫/g,"."));return Number.isFinite(n)?n:null};
+        let imported=0,skipped=0;const candidateTables=new Set();
+        for(const row of q.rows){
+          const p=row.payload&&typeof row.payload==="object"?row.payload:{};
+          const rawName=pick(p,["Name","Title","LoanName","LoanTitle","ProductName","LoanTypeName","TitleFa","نام","عنوان","عنوان وام","نام وام"]);
+          const name=String(rawName||"").trim().slice(0,120);
+          const rawMin=num(pick(p,["MinAmount","MinimumAmount","MinLoanAmount","AmountFrom","FromAmount","MinimumLoanAmount","حداقل مبلغ"]));
+          const rawMax=num(pick(p,["MaxAmount","MaximumAmount","MaxLoanAmount","AmountTo","ToAmount","MaximumLoanAmount","حداکثر مبلغ"]));
+          const rawAmount=num(pick(p,["LoanAmount","Amount","AmountValue","مبلغ وام","مبلغ"]));
+          const rate=num(pick(p,["InterestPercent","InterestRate","MonthlyInterest","AnnualInterest","ProfitPercent","RatePercent","درصد بهره","درصد سود","نرخ سود"]));
+          const months=num(pick(p,["Months","InstallmentsCount","InstallmentCount","TermMonths","DurationMonths","MaxInstallments","تعداد اقساط","مدت ماه"]));
+          const methodRaw=String(pick(p,["InterestMethod","InterestType","ProfitType","CalculationMethod","نوع سود","نحوه محاسبه سود"])||"").toLowerCase();
+          const hasFinance=rawMin!==null||rawMax!==null||rawAmount!==null||rate!==null||months!==null||Boolean(pick(p,["TiersJson","InstallmentsJson","RepaymentOptions"]));
+          if(!name||!hasFinance){skipped++;continue}
+          candidateTables.add(row.source_table);
+          const min=rawMin??rawAmount??0,max=rawMax??rawAmount??rawMin??0;
+          const monthsInt=Math.max(0,Math.min(600,Math.trunc(months||0)));
+          const tierData=pick(p,["TiersJson","InstallmentsJson","RepaymentOptions"]);
+          let tiers=[];try{const parsed=typeof tierData==="string"?JSON.parse(tierData):tierData;if(Array.isArray(parsed))tiers=parsed.map(t=>({months:Number(t.months||t.Months||t.installments||t.Installments)||monthsInt,feePercent:Number(t.feePercent??t.FeePercent??t.fee??0)||0,downPaymentPercent:Number(t.downPaymentPercent??t.DownPaymentPercent??0)||0})).filter(t=>t.months>0)}catch{}
+          if(!tiers.length&&monthsInt>0)tiers=[{months:monthsInt,feePercent:0,downPaymentPercent:0}];
+          const method=/annual|year|سالانه|بانک/.test(methodRaw)?"Annual":/flat|once|یکجا/.test(methodRaw)?"Flat":"Monthly";
+          const stableSlug="legacy-"+crypto.createHash("sha256").update(row.source_table+"|"+row.legacy_id).digest("hex").slice(0,16);
+          const complete=min>0&&max>=min&&monthsInt>0&&rate!==null;
+          const conditions={needsReview:!complete,legacySourceTable:row.source_table,legacyId:row.legacy_id,legacyPayload:p};
+          const ins=await pool.query("INSERT INTO loan_products(slug,name,title,description,badge,min_amount,max_amount,interval_days,tiers,conditions,documents,is_active,sort_order,interest_method,interest_percent,late_daily_coef,early_daily_coef,show_in_list,send_reminders,labels,full_description_html,operational_costs,legacy_source_table,legacy_id,legacy_payload,needs_review) VALUES($1,$2,$2,$3,'', $4,$5,$6,$7::jsonb,$8::jsonb,$9::jsonb,$10,$11,$12,$13,$14,$15,FALSE,FALSE,'[]'::jsonb,'','[]'::jsonb,$16,$17,$18::jsonb,$19) ON CONFLICT(legacy_source_table,legacy_id) DO NOTHING RETURNING id", [stableSlug,name,name,String(pick(p,["Description","ShortDescription","Summary","توضیحات"])||"").slice(0,500),min,max,Number(pick(p,["IntervalDays","InstallmentIntervalDays","فاصله اقساط"]))||0,JSON.stringify(tiers),JSON.stringify(conditions),JSON.stringify(Array.isArray(p.Documents)?p.Documents:[]),false,1000+imported,method,rate||0,num(pick(p,["LateDailyCoef","LatePenaltyDailyCoefficient"]))||0,num(pick(p,["EarlyDailyCoef","EarlyPaymentDailyCoefficient"]))||0,row.source_table,row.legacy_id,JSON.stringify(p),!complete]);
+          if(ins.rowCount)imported++;else skipped++;
+        }
+        return json(res,200,{imported,skipped,candidateTables:[...candidateTables],message:imported?"تعریف‌های قابل شناسایی وارد شدند و همه غیرفعال‌اند تا قبل از انتشار بررسی شوند.":"تعریف قابل انتقالی در جدول‌های شناخته‌شده پیدا نشد؛ داده قدیمی تغییر نکرد."});
+      }
+      if (req.method === "GET" && route === "/api/v1/admin/loan-products") {
+        const q=await pool.query("SELECT * FROM loan_products ORDER BY sort_order,created_at DESC");
+        return json(res,200,{data:q.rows.map(loanRow)});
+      }
+      if (req.method === "POST" && route === "/api/v1/admin/loan-products") {
+        const b=cleanLoanInput(await body(req));
+        const q=await pool.query("INSERT INTO loan_products(slug,name,title,description,badge,min_amount,max_amount,interval_days,tiers,conditions,documents,is_active,sort_order,interest_method,interest_percent,late_daily_coef,early_daily_coef,show_in_list,send_reminders,labels,full_description_html,operational_costs) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10::jsonb,$11::jsonb,$12,$13,$14,$15,$16,$17,$18,$19,$20::jsonb,$21,$22::jsonb) RETURNING id", [b.slug,b.name,b.title,b.description,b.badge,b.minAmount,b.maxAmount,b.intervalDays,JSON.stringify(b.tiers),JSON.stringify(b.conditions),JSON.stringify(b.documents),b.isActive,b.sortOrder,b.interestMethod,b.interestPercent,b.lateDailyCoef,b.earlyDailyCoef,b.showInList,b.sendReminders,JSON.stringify(b.labels),b.fullDescriptionHtml,JSON.stringify(b.operationalCosts)]);
+        return json(res,201,{id:q.rows[0].id});
+      }
+      const loanToggle=route.match(/^\/api\/v1\/admin\/loan-products\/([0-9a-f-]{36})\/toggle$/i);
+      if(req.method==="POST"&&loanToggle){const q=await pool.query("UPDATE loan_products SET is_active=NOT is_active,updated_at=NOW() WHERE id=$1 RETURNING is_active",[loanToggle[1]]);return q.rowCount?json(res,200,{isActive:q.rows[0].is_active}):json(res,404,{message:"طرح وام پیدا نشد."})}
+      const loanEdit=route.match(/^\/api\/v1\/admin\/loan-products\/([0-9a-f-]{36})$/i);
+      if(req.method==="PUT"&&loanEdit){
+        const b=cleanLoanInput(await body(req));
+        const q=await pool.query("UPDATE loan_products SET slug=$1,name=$2,title=$3,description=$4,badge=$5,min_amount=$6,max_amount=$7,interval_days=$8,tiers=$9::jsonb,conditions=$10::jsonb,documents=$11::jsonb,is_active=$12,sort_order=$13,interest_method=$14,interest_percent=$15,late_daily_coef=$16,early_daily_coef=$17,show_in_list=$18,send_reminders=$19,labels=$20::jsonb,full_description_html=$21,operational_costs=$22::jsonb,needs_review=FALSE,updated_at=NOW() WHERE id=$23 RETURNING id", [b.slug,b.name,b.title,b.description,b.badge,b.minAmount,b.maxAmount,b.intervalDays,JSON.stringify(b.tiers),JSON.stringify(b.conditions),JSON.stringify(b.documents),b.isActive,b.sortOrder,b.interestMethod,b.interestPercent,b.lateDailyCoef,b.earlyDailyCoef,b.showInList,b.sendReminders,JSON.stringify(b.labels),b.fullDescriptionHtml,JSON.stringify(b.operationalCosts),loanEdit[1]]);
+        return q.rowCount?json(res,200,{id:q.rows[0].id}):json(res,404,{message:"طرح وام پیدا نشد."});
+      }
+
       if (req.method === "GET" && route === "/api/v1/admin/sms/settings") {
         const settings = await getKavenegarSettings();
         return json(res, 200, { data: { provider: "kavenegar", sender: settings.sender, configured: Boolean(settings.apiKey), maskedKey: settings.apiKey ? "••••••••••••••••" : "" } });
