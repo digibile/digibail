@@ -12,7 +12,7 @@ const ROUTES = new Map([
   ["/login.html", "backend/security/login-v2.html"], ["/register.html", "backend/security/register-v2.html"],
   ["/documents.html", "web/documents.html"], ["/contracts.html", "web/contracts.html"],
   ["/profile.html", "web/customer-panel.html"],
-  ["/admin.html", "web/admin.html"],
+  ["/admin.html", "backend/core/panel.html"],
   ["/sms-settings.html", "web/sms-settings.html"]
 ]);
 const MIME = { ".html": "text/html; charset=utf-8", ".css": "text/css; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".json": "application/json; charset=utf-8", ".svg": "image/svg+xml", ".png": "image/png", ".jpg": "image/jpeg", ".webp": "image/webp", ".ico": "image/x-icon", ".txt": "text/plain; charset=utf-8" };
