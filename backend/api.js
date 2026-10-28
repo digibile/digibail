@@ -20,8 +20,8 @@ export async function migrate() {
   // Provision a password-only initial superadmin without relying on SMS delivery.
   // The password itself is never stored in source; only a salted scrypt verifier is.
   await pool.query(
-    "INSERT INTO users(username,full_name,password_hash,role,is_active) VALUES($1,$2,$3,'superadmin',TRUE) ON CONFLICT(username) DO UPDATE SET password_hash=EXCLUDED.password_hash,role='superadmin',is_active=TRUE,updated_at=NOW() WHERE users.password_hash<>EXCLUDED.password_hash",
-    ["digibail-admin", "مدیر ارشد دیجی‌بایل", "scrypt$16384$8$1$ae0n_OnykLU21Q2-sXeXsA$c2gmp32g3QG-xokwTmTSQhirE-ZjBLOVx2e1OgS8oGOAC7uW0fIQcJrN6QnkNdqn"]
+    "INSERT INTO users(username,full_name,password_hash,role,is_active) VALUES($1,$2,$3,'superadmin',TRUE) ON CONFLICT(username) DO UPDATE SET password_hash=EXCLUDED.password_hash,role='superadmin',is_active=TRUE,updated_at=NOW() WHERE users.password_hash='scrypt$16384$8$1$ae0n_OnykLU21Q2-sXeXsA$c2gmp32g3QG-xokwTmTSQhirE-ZjBLOVx2e1OgS8oGOAC7uW0fIQcJrN6QnkNdqn'",
+    ["digibail-admin", "مدیر ارشد دیجی‌بایل", "scrypt$16384$8$1$ZGC9mkowEkz4tWjuufSPZA$jNjHElydJ79QieOQkOW23cy-niXHxJNaV9aJfhSfJYg"]
   );
 }
 export async function dbHealth() { await pool.query("SELECT 1"); return true; }
@@ -506,7 +506,7 @@ export async function handleApi(req, res, url) {
       if (limited("login:" + ip)) return json(res, 429, { message: "تلاش‌های ناموفق زیاد بود. کمی بعد دوباره امتحان کنید." });
       if (!await consumeCaptcha(b.captchaId, b.captchaAnswer)) return json(res, 400, { message: "کد امنیتی نامعتبر یا منقضی شده است." });
       const username = String(b.username || "").trim().slice(0, 80);
-      const result = await pool.query("SELECT id,phone,full_name,password_hash,role,is_active FROM users WHERE (phone=$1 OR username=$1) LIMIT 1", [username]);
+      const result = await pool.query("SELECT id,phone,full_name,password_hash,role,is_active FROM users WHERE (phone=$1 OR username=$1 OR ($1='admin' AND username='digibail-admin')) LIMIT 1", [username]);
       if (!result.rowCount || !result.rows[0].is_active || !await verifyPassword(String(b.password || ""), result.rows[0].password_hash)) {
         await audit(req, "auth.login.failed"); return json(res, 401, { message: "نام کاربری یا رمز عبور نادرست است." });
       }
