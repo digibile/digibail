@@ -1,0 +1,79 @@
+import { readFile } from "node:fs/promises";
+import crypto from "node:crypto";
+import bcrypt from "bcryptjs";
+import { Pool } from "pg";
+
+const file = process.argv[2] || "/tmp/legacy-migration.json";
+const input = JSON.parse(await readFile(file, "utf8"));
+const pool = new Pool({ connectionString: process.env.DATABASE_URL, max: 2 });
+
+function digits(value) {
+  return String(value || "").replace(/[۰-۹]/g, d => String("۰۱۲۳۴۵۶۷۸۹".indexOf(d)))
+    .replace(/[٠-٩]/g, d => String("٠١٢٣٤٥٦٧٨٩".indexOf(d))).replace(/\D/g, "");
+}
+function phone(value) {
+  let n = digits(value);
+  if (n.startsWith("0098")) n = "0" + n.slice(4);
+  else if (n.startsWith("98") && n.length === 12) n = "0" + n.slice(2);
+  else if (n.length === 10 && n.startsWith("9")) n = "0" + n;
+  return /^09\d{9}$/.test(n) ? n : null;
+}
+function nationalCode(value) {
+  const n = digits(value);
+  if (!/^\d{10}$/.test(n) || /^(\d)\1{9}$/.test(n)) return null;
+  const sum = n.slice(0,9).split("").reduce((a,d,i)=>a+Number(d)*(10-i),0)%11;
+  return (sum < 2 ? Number(n[9]) === sum : Number(n[9]) === 11-sum) ? n : null;
+}
+function role(value) {
+  const r = String(value || "").toLowerCase();
+  if (r.includes("superadmin") || r.includes("super admin")) return "superadmin";
+  if (r.split(",").some(x => x.trim() === "admin")) return "admin";
+  return "customer";
+}
+function dateOrNull(value) {
+  if (!value) return null;
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? null : d.toISOString();
+}
+
+let usersInserted = 0, usersSkipped = 0, customersInserted = 0, templatesInserted = 0;
+try {
+  await pool.query("BEGIN");
+  for (const u of input.users || []) {
+    if (!u.legacyId) { usersSkipped++; continue; }
+    const userPhone = phone(u.phone);
+    const username = String(u.username || u.email || ("legacy_" + u.legacyId)).trim().slice(0,80);
+    const fullName = String(u.fullName || "").trim().replace(/\s+/g," ").slice(0,160) || username;
+    const rawHash = String(u.passwordHash || "").trim();
+    const passwordHash = rawHash ? "aspnet:" + rawHash : await bcrypt.hash(crypto.randomBytes(32).toString("hex"),12);
+    const r = await pool.query(
+      "INSERT INTO users(username,phone,full_name,national_code,email,password_hash,role,is_active,created_at,legacy_source,legacy_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8,COALESCE($9::timestamptz,NOW()),'aspnetusers',$10) ON CONFLICT DO NOTHING",
+      [username,userPhone,fullName,nationalCode(u.nationalCode),u.email ? String(u.email).trim().slice(0,254) : null,passwordHash,role(u.roles),u.isActive !== false && u.isActive !== 0,dateOrNull(u.createdAt),String(u.legacyId)]
+    );
+    if (r.rowCount) usersInserted++; else usersSkipped++;
+  }
+  for (const x of input.customers || []) {
+    if (!x.legacyId) continue;
+    const r = await pool.query(
+      "INSERT INTO legacy_customers(legacy_id,name,mobile,email,customer_code,registered_at,expires_at,is_permanent,purchased,affiliate_code,parked_domain) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) ON CONFLICT(legacy_id) DO NOTHING",
+      [x.legacyId,x.name||null,phone(x.mobile),x.email||null,Number.isInteger(Number(x.code))?Number(x.code):null,dateOrNull(x.createdAt),dateOrNull(x.expiresAt),x.permanent ?? null,x.purchased ?? null,x.affiliateCode||null,x.parkedDomain||null]
+    );
+    if (r.rowCount) customersInserted++;
+  }
+  for (const x of input.smsPatterns || []) {
+    if (!x.legacyId || !String(x.title||"").trim() || typeof x.pattern !== "string") continue;
+    const r = await pool.query(
+      "INSERT INTO sms_templates(legacy_id,title,body,is_system,status,category,provider_panel,is_pattern_base,pattern_base_code,reject_reason,legacy_customer_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) ON CONFLICT(legacy_id) DO NOTHING",
+      [x.legacyId,String(x.title).slice(0,200),x.pattern,Boolean(x.isSystem),Number(x.status)||0,Number(x.category)||0,Number(x.providerPanel)||0,Boolean(x.isPatternBase),x.patternBaseCode||null,x.rejectReason||null,x.legacyCustomerId||null]
+    );
+    if (r.rowCount) templatesInserted++;
+  }
+  await pool.query("COMMIT");
+  console.log(JSON.stringify({status:"ok",usersInserted,usersSkipped,legacyCustomersInserted:customersInserted,smsTemplatesInserted:templatesInserted}));
+} catch (error) {
+  await pool.query("ROLLBACK").catch(()=>{});
+  console.error("Legacy migration failed; transaction rolled back. Code:", error.code || "unknown");
+  process.exitCode = 1;
+} finally {
+  await pool.end();
+}
