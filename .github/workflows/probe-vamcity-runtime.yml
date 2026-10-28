@@ -42,6 +42,10 @@ jobs:
             if [ -f "$RELEASE/LoanSystemAvizhe.Site.dll" ]; then
               strings -a "$RELEASE/LoanSystemAvizhe.Site.dll" | grep -E '20260411123705_Add_ThirdPersonAssuranceAuthorization|20260917120000_Change_ThirdPersonAssurance_To_Many|Migrate\\(' | sort -u | head -n 20 || true
             fi
+            echo "=== APP DIRECTORY DLLS AND CONFIG ==="
+            docker exec vamcity-stage-app sh -lc 'ls -1 /app 2>/dev/null | grep -E "\\.dll$|appsettings|runtimeconfig|\\.deps\\.json$" | head -n 80' || true
+            echo "=== MIGRATION IDS IN DEPLOYED ASSEMBLIES ==="
+            docker exec vamcity-stage-app sh -lc 'for f in /app/*.dll; do strings "$f" 2>/dev/null | grep -E "20260411123705_Add_ThirdPersonAssuranceAuthorization|20260917120000_Change_ThirdPersonAssurance_To_Many" | sed "s#^#$(basename "$f")|#" ; done | head -n 20' || true
             echo "=== APP ENV DB NAME ONLY ==="
             docker inspect vamcity-stage-app --format '{{range .Config.Env}}{{println .}}{{end}}' | grep -E '^ConnectionStrings__DefaultConnection=' | sed -E 's/(Server=[^;]+;Database=)[^;]+/\\1[DB_NAME]/; s/(Password|Pwd|Token|Secret)=([^; ]+)/\\1=[REDACTED]/Ig' || true
             echo "=== APPSETTINGS CONNECTION STRINGS (NAMES AND DB NAMES ONLY) ==="
