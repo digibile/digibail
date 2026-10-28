@@ -64,8 +64,8 @@ jobs:
             Q_SMS="SET NOCOUNT ON; SELECT CONVERT(nvarchar(36),Id) AS legacyId, Title AS title, Pattern AS pattern, IsSystem AS isSystem, Status AS status, Category AS category, SmsPatternPanel AS providerPanel, IsPatternBase AS isPatternBase, PatternBaseCode AS patternBaseCode, RejectReason AS rejectReason, CONVERT(nvarchar(36),CustomerId) AS legacyCustomerId FROM SmsPatterns FOR JSON PATH;"
             for item in "users|$Q_USERS" "customers|$Q_CUSTOMERS" "sms|$Q_SMS"; do
               name="${item%%|*}"; query="${item#*|}"
-              $DOCKER exec -e SQLCMDPASSWORD="$SA_PASS" "$SQLC" "$SQLCMD" -S localhost -U sa -C -b -W -w 65535 -y 0 -d Digibail -Q "$query" > "$TMP/$name.raw"
-              # sqlcmd cannot combine -h -1 with -y 0; remove the header and separator before parsing JSON.
+              $DOCKER exec -e SQLCMDPASSWORD="$SA_PASS" "$SQLC" "$SQLCMD" -S localhost -U sa -C -b -w 65535 -y 0 -d Digibail -Q "$query" > "$TMP/$name.raw"
+              # sqlcmd cannot combine -h -1 or -W with -y 0; remove the header and separator before parsing JSON.
               tail -n +3 "$TMP/$name.raw" | tr -d '\r' > "$TMP/$name.json"
               test -s "$TMP/$name.json"
             done
