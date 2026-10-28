@@ -56,7 +56,7 @@ const server = http.createServer(async (req, res) => {
     const cookie = String(req.headers.cookie || "").split(";").map(v => v.trim()).find(v => v.startsWith("db_session="));
     const session = cookie ? verifySession(cookie.slice("db_session=".length)) : null;
     if (!session || !["admin", "superadmin"].includes(session.role)) {
-      res.writeHead(302, { Location: "/login.html?next=%2Fpanel.html", "Cache-Control": "no-store" });
+      res.writeHead(302, { Location: `/login.html?next=${encodeURIComponent(url.pathname)}`, "Cache-Control": "no-store" });
       return res.end();
     }
   }
