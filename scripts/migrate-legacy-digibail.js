@@ -68,8 +68,26 @@ try {
     );
     if (r.rowCount) templatesInserted++;
   }
+  let purchasePlansInserted = 0, loanStatusesInserted = 0;
+  for (const [sourceTable, rows, counter] of [
+    ["CustomerPurchasePlan", input.purchasePlans || [], "plans"],
+    ["LoanRequestStatuses", input.loanRequestStatuses || [], "statuses"]
+  ]) {
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      const legacyId = String(row.legacyRow ?? row.Id ?? row.id ?? (i + 1));
+      const result = await pool.query(
+        "INSERT INTO legacy_source_data(source_table,legacy_id,payload) VALUES($1,$2,$3::jsonb) ON CONFLICT(source_table,legacy_id) DO NOTHING",
+        [sourceTable, legacyId, JSON.stringify(row)]
+      );
+      if (result.rowCount) {
+        if (counter === "plans") purchasePlansInserted++;
+        else loanStatusesInserted++;
+      }
+    }
+  }
   await pool.query("COMMIT");
-  console.log(JSON.stringify({status:"ok",usersInserted,usersSkipped,legacyCustomersInserted:customersInserted,smsTemplatesInserted:templatesInserted}));
+  console.log(JSON.stringify({status:"ok",usersInserted,usersSkipped,legacyCustomersInserted:customersInserted,smsTemplatesInserted:templatesInserted,purchasePlansInserted,loanStatusesInserted}));
 } catch (error) {
   await pool.query("ROLLBACK").catch(()=>{});
   console.error("Legacy migration failed; transaction rolled back. Code:", error.code || "unknown");
