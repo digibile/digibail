@@ -146,21 +146,31 @@ jobs:
               fi
             done
             echo "=== route production domain to verified app ==="
-            CUST="/usr/local/directadmin/data/users/digibail/domains/digebail.ir.cust_nginx"
-            if [ -f "$CUST" ] && grep -q 'proxy_pass http://127.0.0.1:1361;' "$CUST"; then
-              cp -p "$CUST" "${CUST}.bak.$(date +%Y%m%d%H%M%S)"
-              sed -i 's#proxy_pass http://127.0.0.1:1361;#proxy_pass http://127.0.0.1:1631;#g' "$CUST"
-              if sudo -n nginx -t; then
-                sudo -n systemctl reload nginx
-                echo "DOMAIN_PROXY_UPDATED=1"
-              else
-                echo "ERROR: nginx validation failed; restoring previous route."
-                cp -p "$(ls -1t "${CUST}".bak.* | head -n 1)" "$CUST"
-                exit 25
+            CUSTS=(/usr/local/directadmin/data/users/*/domains/digebail.ir.cust_nginx)
+            ROUTE_UPDATED=0
+            for CUST in "${CUSTS[@]}"; do
+              [ -f "$CUST" ] || continue
+              echo "--- checking route file: $CUST"
+              if grep -qE 'proxy_pass http://127\.0\.0\.1:(1361|1362);' "$CUST"; then
+                cp -p "$CUST" "${CUST}.bak.$(date +%Y%m%d%H%M%S)"
+                sed -i -E 's#proxy_pass http://127\.0\.0\.1:(1361|1362);#proxy_pass http://127.0.0.1:1631;#g' "$CUST"
+                if sudo -n nginx -t; then
+                  sudo -n systemctl reload nginx
+                  echo "DOMAIN_PROXY_UPDATED=1"
+                  ROUTE_UPDATED=1
+                else
+                  echo "ERROR: nginx validation failed; restoring previous route."
+                  cp -p "$(ls -1t "${CUST}".bak.* | head -n 1)" "$CUST"
+                  exit 25
+                fi
               fi
-            else
-              echo "ROUTE_NOT_MATCHED: custom nginx config absent or target differs; no routing file changed."
+            done
+            if [ "$ROUTE_UPDATED" -eq 0 ]; then
+              echo "ROUTE_NOT_MATCHED: no DirectAdmin custom route file with the expected old proxy was found."
+              exit 26
             fi
+            echo "=== active domain proxy after update ==="
+            grep -nE 'server_name digebail\.ir|proxy_pass http://127\.0\.0\.1:(1361|1362|1631);' /usr/local/directadmin/data/users/*/domains/digebail.ir.cust_nginx || true
             echo "=== current public_html index ==="
             ls -l "$ROOT/public_html/index.html" 2>/dev/null || true
             echo "=== production domain response ==="
