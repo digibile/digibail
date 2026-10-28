@@ -129,8 +129,9 @@ async function adminFor(req) {
   if (!session) return null;
   // Read the current role from PostgreSQL so role corrections take effect without waiting for an old JWT to expire.
   const current = await pool.query("SELECT id,role,is_active,phone,full_name,username FROM users WHERE id=$1 LIMIT 1", [Number(session.sub)]);
-  if (!current.rowCount || !current.rows[0].is_active || !["admin", "superadmin"].includes(current.rows[0].role)) return null;
-  return { ...session, role: current.rows[0].role, fullName: current.rows[0].full_name, phone: current.rows[0].phone, username: current.rows[0].username };
+  const role = String(current.rows[0]?.role || "").trim().toLowerCase();
+  if (!current.rowCount || !current.rows[0].is_active || !["admin", "superadmin"].includes(role)) return null;
+  return { ...session, role, fullName: current.rows[0].full_name, phone: current.rows[0].phone, username: current.rows[0].username };
 }
 export async function verifyAdminSession(req) { return Boolean(await adminFor(req)); }
 function verifyAspNetIdentityPassword(password, storedHash) {
@@ -271,7 +272,7 @@ export async function handleApi(req, res, url) {
         return json(res, 200, { ok: true, message: "کاوه‌نگار ارسال پیامک را پذیرفت.", messageId });
       }
       if (req.method === "GET" && route === "/api/v1/admin/summary") {
-        const q = await pool.query("SELECT (SELECT COUNT(*) FROM users) AS users,(SELECT COUNT(*) FROM users WHERE role IN ('admin','superadmin')) AS admins,(SELECT COUNT(*) FROM legacy_customers) AS legacy_customers,(SELECT COUNT(*) FROM sms_templates) AS sms_templates,(SELECT COUNT(*) FROM sms_logs) AS sms_logs");
+        const q = await pool.query("SELECT (SELECT COUNT(*) FROM users) AS users,(SELECT COUNT(*) FROM users WHERE lower(role) IN ('admin','superadmin')) AS admins,(SELECT COUNT(*) FROM legacy_customers) AS legacy_customers,(SELECT COUNT(*) FROM sms_templates) AS sms_templates,(SELECT COUNT(*) FROM sms_logs) AS sms_logs");
         const configured = Boolean(KAVENEGAR_API_KEY);
         return json(res, 200, { data: { ...q.rows[0], smsConfigured: configured } });
       }
