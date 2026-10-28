@@ -169,11 +169,25 @@ jobs:
                 BACKUP="${CUST}.bak.$(date +%Y%m%d%H%M%S)"
                 cp -p "$CUST" "$BACKUP"
                 sed -i "s#proxy_pass http://127.0.0.1:1361;#proxy_pass http://127.0.0.1:1631;#g; s#proxy_pass http://127.0.0.1:1362;#proxy_pass http://127.0.0.1:1631;#g" "$CUST"
+                if [ ! -x /host/usr/local/directadmin/custombuild/build ]; then
+                  cp -p "$BACKUP" "$CUST"
+                  echo "ERROR: DirectAdmin CustomBuild not found; previous route restored."
+                  exit 25
+                fi
+                if ! chroot /host /usr/local/directadmin/custombuild/build rewrite_confs; then
+                  cp -p "$BACKUP" "$CUST"
+                  chroot /host /usr/local/directadmin/custombuild/build rewrite_confs || true
+                  echo "ERROR: DirectAdmin config regeneration failed; previous route restored."
+                  exit 25
+                fi
                 if ! chroot /host /usr/sbin/nginx -t; then
                   cp -p "$BACKUP" "$CUST"
+                  chroot /host /usr/local/directadmin/custombuild/build rewrite_confs || true
                   echo "ERROR: nginx validation failed; previous route restored."
                   exit 25
                 fi
+                echo "=== regenerated live domain config ==="
+                grep -nE "server_name digebail.ir|proxy_pass http://127.0.0.1:(1361|1362|1631);" /host/usr/local/directadmin/data/users/*/nginx.conf || true
                 MASTER="$(pgrep -xo nginx || true)"
                 if [ -z "$MASTER" ]; then
                   cp -p "$BACKUP" "$CUST"
