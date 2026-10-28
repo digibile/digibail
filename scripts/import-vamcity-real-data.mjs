@@ -120,7 +120,6 @@ try {
     console.log("END_SOURCE_DATABASE=" + db + " TABLES=" + tables.length);
   }
 
-  const verify = docker(["exec", "unused"]);
   console.log("TOTAL_SOURCE_TABLES_IMPORTED=" + totalTables);
   console.log("TOTAL_SOURCE_ROWS_EXPORTED=" + totalSourceRows);
   console.log("IMPORT_SCRIPT_FINISHED=1");
