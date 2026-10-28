@@ -384,6 +384,14 @@ details{border-bottom:1px solid var(--line);padding:14px 2px}summary{cursor:poin
   <button class="btn burger" id="burger" aria-expanded="false" aria-controls="nv">منو</button>
   <nav class="nv" id="nv" aria-label="منوی اصلی">
     <div class="pm"><button class="l" id="pmBtn" aria-expanded="false" aria-haspopup="true">طرح‌های اقساط ▾</button><div class="pm-pop" id="pmPop" hidden></div></div>
+    <div class="pm"><button class="l" id="coopBtn" aria-expanded="false" aria-haspopup="true">خدمات و همکاری ▾</button><div class="pm-pop" id="coopPop" hidden>
+      <a href="/register.html?type=merchant"><span>ثبت‌نام پذیرنده</span><small>فروشگاه‌ها و کسب‌وکارها</small></a>
+      <a href="/register.html?type=agent"><span>ثبت‌نام نماینده</span><small>همکاری و معرفی مشتری</small></a>
+      <a href="/register.html?type=organization"><span>ثبت‌نام سازمان</span><small>خدمات سازمانی</small></a>
+      <a href="/profile.html"><span>حساب کاربری و درخواست‌ها</span><small>پیگیری پرونده‌ها</small></a>
+      <a href="/documents.html"><span>مدارک</span><small>مدیریت مدارک</small></a>
+      <a href="/contracts.html"><span>قراردادها</span><small>مشاهده قراردادها</small></a>
+    </div></div>
     <a href="#how">مراحل خرید</a><a href="#trust">امنیت</a><a href="#faq">پرسش‌ها</a>
   </nav>
   <div class="ac deskonly" id="auth"></div>
@@ -395,7 +403,7 @@ details{border-bottom:1px solid var(--line);padding:14px 2px}summary{cursor:poin
       <div class="ft-brand"><a class="logo" href="#home"><i>د</i>دیجی‌بایل پی</a><p>پلتفرم خرید اقساطی. اعتبار، قرارداد و کارت مجازی در یک حساب.</p><div class="soc" aria-label="شبکه‌های اجتماعی"><span>پیوند شبکه‌های اجتماعی پس از ثبت نشانی رسمی فعال می‌شود.</span></div></div>
       <div><b>طرح‌ها</b><span id="ftPlans"></span></div>
       <div><b>همکاری</b><a href="/register.html?type=merchant">پذیرنده شوید</a><a href="/register.html?type=agent">نماینده شوید</a><a href="/register.html?type=organization">سازمان‌ها</a></div>
-      <div><b>پشتیبانی</b><a href="/profile.html">حساب کاربری و پیگیری درخواست‌ها</a><a href="/terms.html">قوانین و مقررات</a><a href="/privacy.html">حریم خصوصی</a></div>
+      <div><b>حساب و پشتیبانی</b><a href="/login.html">ورود / عضویت</a><a href="/profile.html">حساب کاربری و پیگیری درخواست‌ها</a><a href="/documents.html">مدارک</a><a href="/contracts.html">قراردادها</a><a href="/terms.html">قوانین و مقررات</a><a href="/privacy.html">حریم خصوصی</a></div>
       <div><b>تماس با ما</b><span class="ph">نشانی، تلفن و ایمیل از تنظیمات سایت خوانده می‌شود</span><span>ساعت کاری: شنبه تا چهارشنبه، ۹ تا ۱۸</span></div>
     </div>
     <div class="ft-badges"><div class="badge-box">محل نماد اعتماد الکترونیکی</div><div class="badge-box">محل نماد ساماندهی</div></div>
@@ -445,8 +453,9 @@ document.addEventListener('click',e=>{const g=e.target.closest('[data-go]');if(!
 /* ---------- header menu ---------- */
 const hd=$('#hd');$('#burger').onclick=()=>{const o=hd.classList.toggle('open');$('#burger').setAttribute('aria-expanded',o)};
 function plansMenu(){$('#pmPop').innerHTML=act().map(p=>`<a href="#plan-${p.id}"><span>${p.name}</span><small>${p.kind==='beta'?'استعلام از بانک':'از '+fa(Math.min(...p.tiers.map(t=>t.fee)))+'٪ در ماه'}</small></a>`).join('');$('#ftPlans').innerHTML=act().map(p=>`<a href="#plan-${p.id}">${p.name}</a>`).join('')}
-$('#pmBtn').onclick=e=>{e.stopPropagation();const o=$('#pmPop').hidden;$('#pmPop').hidden=!o;$('#pmBtn').setAttribute('aria-expanded',o)};
-document.addEventListener('click',e=>{if(!e.target.closest('.pm'))$('#pmPop').hidden=true;if(e.target.closest('.nv a')){hd.classList.remove('open');$('#burger').setAttribute('aria-expanded',false)}});
+$('#pmBtn').onclick=e=>{e.stopPropagation();const o=$('#pmPop').hidden;$('#pmPop').hidden=!o;$('#pmBtn').setAttribute('aria-expanded',o);$('#coopPop').hidden=true;$('#coopBtn').setAttribute('aria-expanded','false')};
+$('#coopBtn').onclick=e=>{e.stopPropagation();const o=$('#coopPop').hidden;$('#coopPop').hidden=!o;$('#coopBtn').setAttribute('aria-expanded',o);$('#pmPop').hidden=true;$('#pmBtn').setAttribute('aria-expanded','false')};
+document.addEventListener('click',e=>{if(!e.target.closest('.pm')){ $('#pmPop').hidden=true;$('#pmBtn').setAttribute('aria-expanded','false');$('#coopPop').hidden=true;$('#coopBtn').setAttribute('aria-expanded','false') }if(e.target.closest('.nv a')){hd.classList.remove('open');$('#burger').setAttribute('aria-expanded',false)}});
 /* ---------- calculator ---------- */
 const S={plan:'p6',amt:15000000,ti:1};
 function cardHtml(){return `<div class="vcard" id="vcard"><div class="t"><span>دیجی‌بایل پی</span><span class="vchip"></span></div><div class="vnum">۹۱۰۱ ۴۸۲۰ ۷۳۱۵ ۰۶۴۴</div><div class="vb"><div><small>سقف کارت</small><span class="vlim" id="vlim"></span></div><div><small>انقضا</small><b>۱۴۰۸/۰۸</b></div></div></div>`}
