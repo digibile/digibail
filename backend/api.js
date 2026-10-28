@@ -520,14 +520,22 @@ export async function handleApi(req, res, url) {
       if (!await consumeCaptcha(b.captchaId, b.captchaAnswer)) return json(res, 400, { message: "کد امنیتی نامعتبر یا منقضی شده است." });
       const username = String(b.username || "").trim().slice(0, 80);
       const password = String(b.password || "");
-      const result = await pool.query("SELECT id,phone,full_name,username,password_hash,role,is_active FROM users WHERE (phone=$1 OR username=$1 OR ($1='admin' AND username='digibail-admin')) LIMIT 1", [username]);
+      // Prefer the exact account name or phone. The legacy "admin" alias is only a fallback,
+      // otherwise it can accidentally select the bootstrap account instead of the real migrated admin.
+      let result = await pool.query(
+        "SELECT id,phone,full_name,username,password_hash,role,is_active FROM users WHERE phone=$1 OR lower(username)=lower($1) ORDER BY CASE WHEN lower(username)=lower($1) THEN 0 ELSE 1 END LIMIT 1",
+        [username]
+      );
+      if (!result.rowCount && username.toLowerCase() === "admin") {
+        result = await pool.query("SELECT id,phone,full_name,username,password_hash,role,is_active FROM users WHERE lower(username)='digibail-admin' LIMIT 1");
+      }
       if (!result.rowCount || !result.rows[0].is_active) {
         await audit(req, "auth.login.failed"); return json(res, 401, { message: "نام کاربری یا رمز عبور نادرست است." });
       }
       const u = result.rows[0];
       let passwordValid = await verifyPassword(password, u.password_hash);
       let verifiedLegacyHash = null;
-      if (!passwordValid && username !== "admin") {
+      if (!passwordValid) {
         // If a legacy identity collided with an existing modern username, verify against
         // the preserved ASP.NET Identity hash and upgrade only after a successful login.
         const legacy = await pool.query(
