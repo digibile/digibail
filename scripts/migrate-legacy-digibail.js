@@ -27,7 +27,7 @@ function nationalCode(value) {
 function role(value) {
   const r = String(value || "").toLowerCase();
   if (r.includes("superadmin") || r.includes("super admin")) return "superadmin";
-  if (r.split(",").some(x => x.trim() === "admin")) return "admin";
+  if (r.split(",").some(x => x.trim() === "admin") || r.includes("admin")) return "admin";
   return "customer";
 }
 function dateOrNull(value) {
@@ -50,7 +50,14 @@ try {
       "INSERT INTO users(username,phone,full_name,national_code,email,password_hash,role,is_active,created_at,legacy_source,legacy_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8,COALESCE($9::timestamptz,NOW()),'aspnetusers',$10) ON CONFLICT DO NOTHING",
       [username,userPhone,fullName,nationalCode(u.nationalCode),u.email ? String(u.email).trim().slice(0,254) : null,passwordHash,role(u.roles),u.isActive !== false && u.isActive !== 0,dateOrNull(u.createdAt),String(u.legacyId)]
     );
-    if (r.rowCount) usersInserted++; else usersSkipped++;
+    if (r.rowCount) usersInserted++; else {
+      usersSkipped++;
+      // Reconcile only a previously imported legacy identity; preserve credentials and customer data.
+      await pool.query(
+        "UPDATE users SET role=$1,is_active=$2,updated_at=NOW() WHERE legacy_source='aspnetusers' AND legacy_id=$3",
+        [role(u.roles),u.isActive !== false && u.isActive !== 0,String(u.legacyId)]
+      );
+    }
   }
   for (const x of input.customers || []) {
     if (!x.legacyId) continue;
