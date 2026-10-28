@@ -11,6 +11,7 @@ const ROUTES = new Map([
   ["/", "web/template-v3.html"], ["/index.html", "web/template-v3.html"],
   ["/login.html", "backend/security/login-v2.html"], ["/register.html", "backend/security/register-v2.html"],
   ["/documents.html", "web/documents.html"], ["/contracts.html", "web/contracts.html"],
+  ["/terms.html", "web/terms.html"], ["/privacy.html", "web/privacy.html"],
   ["/profile.html", "web/customer-panel.html"],
   ["/admin.html", "backend/core/panel.html"],
   ["/sms-settings.html", "web/sms-settings.html"]
