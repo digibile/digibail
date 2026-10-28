@@ -68,8 +68,20 @@ jobs:
                 docker cp "$TMP/payload-$i" "$SQLC:/var/opt/mssql/data/$target" >/dev/null
                 docker exec -u 0 "$SQLC" chown mssql:mssql "/var/opt/mssql/data/$target"
                 docker exec -u 0 "$SQLC" chmod 640 "/var/opt/mssql/data/$target"
-                echo "-- RESTORE HEADERONLY (READ ONLY) --"
-                docker exec -e SQLCMDPASSWORD="$PASS" "$SQLC" "$SQLCMD" -S localhost -U sa -C -W -s '|' -Q "RESTORE HEADERONLY FROM DISK=N'/var/opt/mssql/data/$target'" 2>&1 | head -n 35 || echo "RESTORE_HEADERONLY_NOT_AVAILABLE_FOR_PAYLOAD_$i"
+                echo "-- RESTORE HEADERONLY --"
+                docker exec -e SQLCMDPASSWORD="$PASS" "$SQLC" "$SQLCMD" -S localhost -U sa -C -W -s '|' -Q "RESTORE HEADERONLY FROM DISK=N'/var/opt/mssql/data/$target'" 2>&1 | head -n 4 || echo "RESTORE_HEADERONLY_NOT_AVAILABLE_FOR_PAYLOAD_$i"
+                echo "-- RESTORE VERIFYONLY --"
+                if docker exec -e SQLCMDPASSWORD="$PASS" "$SQLC" "$SQLCMD" -S localhost -U sa -C -b -Q "RESTORE VERIFYONLY FROM DISK=N'/var/opt/mssql/data/$target'" 2>&1; then echo "BACKUP_VERIFY_OK=$archive"; else echo "BACKUP_VERIFY_FAILED=$archive"; fi
+                echo "-- LOGICAL FILES --"
+                docker exec -e SQLCMDPASSWORD="$PASS" "$SQLC" "$SQLCMD" -S localhost -U sa -C -W -s '|' -Q "RESTORE FILELISTONLY FROM DISK=N'/var/opt/mssql/data/$target'" 2>&1 | grep -E 'LogicalName|\\.mdf|\\.ldf|ROWS|LOG|Data|Log' | head -n 12 || true
               fi
             done
+            if [ -n "$PASS" ] && [ -n "$SQLCMD" ]; then
+              echo "=== CURRENT DATABASE TABLE AND ROW COUNTS ==="
+              for db in vamcityc_vamcity vamcityc_vamcity_import_20261028 vamcityc_bluvamdb vamcityc_bluvamdb_import_20261028 vamcityc_transferDb vamcityc_transferDb_import_20261028 vamcity_stage; do
+                docker exec -e SQLCMDPASSWORD="$PASS" "$SQLC" "$SQLCMD" -S localhost -U sa -C -W -s '|' -Q "SET NOCOUNT ON; USE [$db]; SELECT '$db' AS database_name,(SELECT COUNT(*) FROM sys.tables WHERE is_ms_shipped=0) AS table_count,(SELECT COALESCE(SUM(p.rows),0) FROM sys.partitions p JOIN sys.tables t ON t.object_id=p.object_id WHERE p.is_ms_shipped=0 AND p.index_id IN (0,1)) AS row_count" 2>&1 | tail -n 3 || true
+              done
+              echo "=== RESTORE HISTORY ==="
+              docker exec -e SQLCMDPASSWORD="$PASS" "$SQLC" "$SQLCMD" -S localhost -U sa -C -W -s '|' -Q "SET NOCOUNT ON; SELECT TOP 20 destination_database_name,restore_date,restore_type,recovery,replace FROM msdb.dbo.restorehistory ORDER BY restore_date DESC" 2>&1 | tail -n 25 || true
+            fi
             echo "PAYLOAD_INSPECTION_COMPLETE=1"
