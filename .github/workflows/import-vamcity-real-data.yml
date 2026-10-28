@@ -34,7 +34,7 @@ jobs:
             if sudo -n docker info >/dev/null 2>&1; then D='sudo -n docker'; elif docker info >/dev/null 2>&1; then D='docker'; else echo "BLOCKED: Docker unavailable"; exit 20; fi
             FOUND=0
             for n in $(seq 1 90); do
-              if [ -s "$ROOT/scripts/import-vamcity-real-data.mjs" ] && grep -q "sensitive command details suppressed" "$ROOT/scripts/import-vamcity-real-data.mjs" && [ -s "$ROOT/scripts/migrate-legacy-digibail.js" ]; then FOUND=1; break; fi
+              if [ -s "$ROOT/scripts/import-vamcity-real-data.mjs" ] && grep -q "sensitive command details suppressed" "$ROOT/scripts/import-vamcity-real-data.mjs" && grep -q "chown.*node:node" "$ROOT/scripts/import-vamcity-real-data.mjs" && [ -s "$ROOT/scripts/migrate-legacy-digibail.js" ]; then FOUND=1; break; fi
               sleep 5
             done
             [ "$FOUND" -eq 1 ] || { echo "BLOCKED: importer files not deployed"; exit 21; }
