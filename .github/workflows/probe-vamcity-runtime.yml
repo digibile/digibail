@@ -35,6 +35,13 @@ jobs:
             ls -la /opt/vamcity-github-stage 2>/dev/null | head -n 60 || true
             echo "=== APP FILES ==="
             docker exec vamcity-stage-app sh -lc 'find /app -maxdepth 2 -type f \\( -name "*.dll" -o -name "appsettings*.json" -o -name "*.deps.json" -o -name "*.runtimeconfig.json" \\) -printf "%p\\n" 2>/dev/null | head -n 50' || true
+            echo "=== CURRENT RELEASE FILES ==="
+            RELEASE="/home/roofixo/domains/roofixo.ir/vamcity-app/releases/3d2d5546cd79fa77e3807eb5a1a5ea8379ecbbfe"
+            ls -la "$RELEASE" 2>/dev/null | head -n 45 || true
+            echo "=== EF MIGRATIONS EMBEDDED IN CURRENT APP ==="
+            if [ -f "$RELEASE/LoanSystemAvizhe.Site.dll" ]; then
+              strings -a "$RELEASE/LoanSystemAvizhe.Site.dll" | grep -E '20260411123705_Add_ThirdPersonAssuranceAuthorization|20260917120000_Change_ThirdPersonAssurance_To_Many|Migrate\\(' | sort -u | head -n 20 || true
+            fi
             echo "=== APP ENV DB NAME ONLY ==="
             docker inspect vamcity-stage-app --format '{{range .Config.Env}}{{println .}}{{end}}' | grep -E '^ConnectionStrings__DefaultConnection=' | sed -E 's/(Server=[^;]+;Database=)[^;]+/\\1[DB_NAME]/; s/(Password|Pwd|Token|Secret)=([^; ]+)/\\1=[REDACTED]/Ig' || true
             echo "=== APPSETTINGS CONNECTION STRINGS (NAMES AND DB NAMES ONLY) ==="
