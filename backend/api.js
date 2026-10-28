@@ -327,14 +327,14 @@ export async function handleApi(req, res, url) {
         await audit(req, "documents.uploaded", userId, { documentId:q.rows[0].id, kind, size:file.data.length });
         return json(res, 201, { ok:true, ocr:false, id:q.rows[0].id });
       }
-      const fileMatch = route.match(/^\\/api\\/v1\\/me\\/documents\\/([0-9a-f-]+)\\/file$/i);
+      const fileMatch = route.match(/^\/api\/v1\\/me\\/documents\\/([0-9a-f-]+)\\/file$/i);
       if (req.method === "GET" && fileMatch) {
         const q = await pool.query("SELECT mime_type,file_data FROM customer_documents WHERE id=$1 AND user_id=$2", [fileMatch[1],userId]);
         if (!q.rowCount) return json(res, 404, { message: "فایل مدرک پیدا نشد." });
         res.writeHead(200, { "Content-Type":q.rows[0].mime_type, "Cache-Control":"no-store", "X-Content-Type-Options":"nosniff" });
         return res.end(q.rows[0].file_data);
       }
-      const fieldsMatch = route.match(/^\\/api\\/v1\\/me\\/documents\\/([0-9a-f-]+)\\/fields$/i);
+      const fieldsMatch = route.match(/^\/api\/v1\\/me\\/documents\\/([0-9a-f-]+)\\/fields$/i);
       if (req.method === "PUT" && fieldsMatch) {
         const b = await body(req);
         if (!b.fields || typeof b.fields !== "object" || Array.isArray(b.fields)) return json(res, 400, { message: "اطلاعات مدرک معتبر نیست." });
@@ -343,7 +343,7 @@ export async function handleApi(req, res, url) {
         await audit(req, "documents.fields_updated", userId, { documentId:fieldsMatch[1] });
         return json(res, 200, { ok:true });
       }
-      const idMatch = route.match(/^\\/api\\/v1\\/me\\/documents\\/([0-9a-f-]+)$/i);
+      const idMatch = route.match(/^\/api\/v1\\/me\\/documents\\/([0-9a-f-]+)$/i);
       if (req.method === "DELETE" && idMatch) {
         const q = await pool.query("DELETE FROM customer_documents WHERE id=$1 AND user_id=$2 AND status='Pending' RETURNING id", [idMatch[1],userId]);
         if (!q.rowCount) return json(res, 404, { message: "مدرک پیدا نشد یا دیگر قابل حذف نیست." });
@@ -359,14 +359,14 @@ export async function handleApi(req, res, url) {
         const q = await pool.query("SELECT id,title,number,status,expires_at AS \"expiresAt\",created_on AS \"createdOn\" FROM customer_contracts WHERE user_id=$1 ORDER BY created_on DESC", [userId]);
         return json(res, 200, { data:q.rows });
       }
-      const htmlMatch = route.match(/^\\/api\\/v1\\/me\\/contracts\\/([0-9a-f-]+)\\/html$/i);
+      const htmlMatch = route.match(/^\/api\/v1\\/me\\/contracts\\/([0-9a-f-]+)\\/html$/i);
       if (req.method === "GET" && htmlMatch) {
         const q = await pool.query("SELECT body_html FROM customer_contracts WHERE id=$1 AND user_id=$2", [htmlMatch[1],userId]);
         if (!q.rowCount) return json(res, 404, { message: "قرارداد پیدا نشد." });
         res.writeHead(200, { "Content-Type":"text/html; charset=utf-8", "Cache-Control":"no-store", "Content-Security-Policy":"default-src 'none'; style-src 'unsafe-inline'; img-src data:" });
         return res.end(q.rows[0].body_html);
       }
-      const contractMatch = route.match(/^\\/api\\/v1\\/me\\/contracts\\/([0-9a-f-]+)\\/(sign|reject)$/i);
+      const contractMatch = route.match(/^\/api\/v1\\/me\\/contracts\\/([0-9a-f-]+)\\/(sign|reject)$/i);
       if (contractMatch && req.method === "POST") {
         const action = contractMatch[2].toLowerCase();
         const b = await body(req);
