@@ -1,0 +1,47 @@
+name: DigitalPay CI
+
+on:
+  push:
+    branches:
+      - feature/digitalpay-site-bootstrap
+  pull_request:
+    branches:
+      - main
+      - feature/digitalpay-site-bootstrap
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package-validation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate shell scripts
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t scripts < <(find . -type f -name '*.sh' -not -path './.git/*' -print)
+          test "${#scripts[@]}" -gt 0
+          for file in "${scripts[@]}"; do
+            bash -n "$file"
+            echo "Shell syntax OK: $file"
+          done
+      - name: Validate required package files
+        shell: bash
+        run: |
+          set -euo pipefail
+          for file in             database/01-create-database.sql             database/02-schema-new-modules.sql             database/03-seed-default-tenant.sql             install-all.sh             backend/security/smoke-test.sh             README-DigitalPay.txt             README.txt; do
+            test -s "$file" || { echo "Missing or empty required file: $file"; exit 1; }
+          done
+          echo "Required package files are present."
+      - name: Detect whether the host application is included
+        shell: bash
+        run: |
+          set -euo pipefail
+          if find . -type f \( -name '*.sln' -o -name '*.csproj' \) -not -path './.git/*' | grep -q .; then
+            echo "A .NET solution/project was found. This package validation does not replace a full build against the host application."
+          else
+            echo "::warning::No .sln or .csproj found. This repository contains modules intended to be installed into the separate Ghestine host application; a full .NET build cannot be performed from this repository alone."
+          fi
