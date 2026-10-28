@@ -438,7 +438,7 @@ const LK={login:'#',me:'#',admin:'#'};
 let role='guest',user=null;
 function renderAuth(){const b=role==='guest'?[['ورود / عضویت','solid','auth']]:role==='customer'?[['حساب من','solid','me']]:[['پنل مدیریت','','admin'],['حساب من','solid','me']];
  $('#auth').innerHTML=b.map(x=>`<button class="btn ${x[1]}" data-go="${x[2]}">${x[0]}</button>`).join('');
- const p=b[b.length-1];$('#mbAuth').textContent=p[0];$('#mbAuth').dataset.go=p[2];
+ const p=b[b.length-1],mobileAuth=$('#mbAuth');if(mobileAuth){mobileAuth.textContent=p[0];mobileAuth.dataset.go=p[2]}
  document.querySelectorAll('[data-role]').forEach(c=>c.setAttribute('aria-pressed',c.dataset.role===role))}
 document.addEventListener('click',e=>{const g=e.target.closest('[data-go]');if(!g)return;e.preventDefault();const k=g.dataset.go;
  if(k==='auth')openAuth('login');else if(k==='reg')openAuth('reg');else if(k==='me'){CFG.mock?toast('در سایت واقعی به صفحه‌ی حساب من می‌روید'):location.href=CFG.routes.account}else if(k==='admin'){CFG.mock?toast('در سایت واقعی به پنل مدیریت می‌روید'):location.href=CFG.routes.admin}});
