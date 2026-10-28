@@ -11,7 +11,7 @@ test("supported pages map to repository files", () => {
   assert.equal(resolveRoute("/register.html"), "backend/security/register-v2.html");
   assert.equal(resolveRoute("/documents.html"), "web/documents.html");
   assert.equal(resolveRoute("/contracts.html"), "web/contracts.html");
-  assert.equal(resolveRoute("/admin.html"), "web/admin.html");
+  assert.equal(resolveRoute("/admin.html"), "backend/core/panel.html");
   assert.equal(resolveRoute("/management-panel.html"), "backend/core/panel.html");
   assert.equal(resolveRoute("/loan-definition.html"), "web/loan-definition.html");
   assert.equal(resolveRoute("/profile.html"), "web/customer-panel.html");
