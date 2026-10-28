@@ -89,8 +89,26 @@ try {
       }
     }
   }
+  let genericTablesInserted = 0;
+  for (const table of input.genericTables || []) {
+    const sourceTable = String(table.sourceTable || "").slice(0,120);
+    if (!sourceTable || !Array.isArray(table.rows)) continue;
+    const occurrences = new Map();
+    for (const row of table.rows) {
+      const serialized = JSON.stringify(row);
+      const digest = crypto.createHash("sha256").update(serialized).digest("hex").slice(0,32);
+      const count = occurrences.get(digest) || 0;
+      occurrences.set(digest, count + 1);
+      const legacyId = digest + ":" + String(count + 1);
+      const result = await pool.query(
+        "INSERT INTO legacy_source_data(source_table,legacy_id,payload) VALUES($1,$2,$3::jsonb) ON CONFLICT(source_table,legacy_id) DO NOTHING",
+        [sourceTable, legacyId, serialized]
+      );
+      genericTablesInserted += result.rowCount;
+    }
+  }
   await pool.query("COMMIT");
-  console.log(JSON.stringify({status:"ok",usersInserted,usersSkipped,legacyCustomersInserted:customersInserted,smsTemplatesInserted:templatesInserted,purchasePlansInserted,loanStatusesInserted}));
+  console.log(JSON.stringify({status:"ok",usersInserted,usersSkipped,legacyCustomersInserted:customersInserted,smsTemplatesInserted:templatesInserted,purchasePlansInserted,loanStatusesInserted,genericTablesImported:(input.genericTables||[]).length,genericRowsInserted:genericTablesInserted}));
 } catch (error) {
   await pool.query("ROLLBACK").catch(()=>{});
   console.error("Legacy migration failed; transaction rolled back. Code:", error.code || "unknown");
