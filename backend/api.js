@@ -95,30 +95,55 @@ function maskPhone(phone) {
   const p = String(phone || "");
   return p.length >= 7 ? p.slice(0, 4) + "****" + p.slice(-3) : "***";
 }
+function settingsCipherKey() {
+  if (JWT_SECRET.length < 32) throw Object.assign(new Error("تنظیم کلید رمزنگاری امن سرور ناقص است."), { status: 503, code: "sms_settings_key_missing" });
+  return crypto.createHash("sha256").update(JWT_SECRET).digest();
+}
+function encryptSetting(value) {
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv("aes-256-gcm", settingsCipherKey(), iv);
+  const encrypted = Buffer.concat([cipher.update(String(value), "utf8"), cipher.final()]);
+  return [iv.toString("base64"), cipher.getAuthTag().toString("base64"), encrypted.toString("base64")].join(".");
+}
+function decryptSetting(value) {
+  if (!value) return "";
+  const parts = String(value).split(".");
+  const decipher = crypto.createDecipheriv("aes-256-gcm", settingsCipherKey(), Buffer.from(parts[0], "base64"));
+  decipher.setAuthTag(Buffer.from(parts[1], "base64"));
+  return Buffer.concat([decipher.update(Buffer.from(parts[2], "base64")), decipher.final()]).toString("utf8");
+}
+async function getKavenegarSettings() {
+  const q = await pool.query("SELECT api_key_encrypted,sender FROM sms_provider_settings WHERE provider=$1 LIMIT 1", ["kavenegar"]);
+  const row = q.rows[0]; let apiKey = "";
+  try { apiKey = row?.api_key_encrypted ? decryptSetting(row.api_key_encrypted) : ""; } catch {}
+  return { apiKey: apiKey || KAVENEGAR_API_KEY, sender: row?.sender || process.env.KAVENEGAR_SENDER || "" };
+}
 async function sendSmsText(phone, message) {
-  if (!KAVENEGAR_API_KEY) throw Object.assign(new Error("کلید کاوه‌نگار در تنظیمات محرمانه سرور ثبت نشده است."), { status: 503, code: "sms_provider_not_configured" });
+  const settings = await getKavenegarSettings();
+  if (!settings.apiKey) throw Object.assign(new Error("کلید کاوه‌نگار در تنظیمات پیامک ثبت نشده است."), { status: 503, code: "sms_provider_not_configured" });
   const form = new URLSearchParams({ receptor: phone, message });
-  if (process.env.KAVENEGAR_SENDER) form.set("sender", process.env.KAVENEGAR_SENDER);
-  const url = `https://api.kavenegar.com/v1/${encodeURIComponent(KAVENEGAR_API_KEY)}/sms/send.json`;
-  const response = await fetch(url, { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: form, signal: AbortSignal.timeout(10000) });
+  if (settings.sender) form.set("sender", settings.sender);
+  const endpoint = "https://api.kavenegar.com/v1/" + encodeURIComponent(settings.apiKey) + "/sms/send.json";
+  const response = await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: form, signal: AbortSignal.timeout(10000) });
   const result = await response.json().catch(() => ({}));
-  if (!response.ok || result?.return?.status !== 200) throw Object.assign(new Error("سرویس‌دهنده ارسال پیامک را تأیید نکرد."), { status: 502, code: "sms_delivery_failed" });
+  if (!response.ok || result?.return?.status !== 200) throw Object.assign(new Error("کاوه‌نگار ارسال را تأیید نکرد. کد پاسخ: " + String(result?.return?.status || response.status)), { status: 502, code: "sms_delivery_failed" });
   return String(result?.entries?.[0]?.messageid || "");
 }
 function captchaSvg(value) {
   return `<svg xmlns="http://www.w3.org/2000/svg" width="170" height="56" viewBox="0 0 170 56"><rect width="170" height="56" rx="12" fill="#241047"/><path d="M0 12L170 42M10 50L150 5" stroke="#ffb629" stroke-opacity=".35" stroke-width="2"/><text x="85" y="38" text-anchor="middle" font-family="monospace" font-size="30" font-weight="700" letter-spacing="5" fill="#fff">${value}</text></svg>`;
 }
 async function sendOtp(phone, code) {
-  if (!KAVENEGAR_API_KEY) throw Object.assign(new Error("کلید کاوه‌نگار در تنظیمات محرمانه سرور ثبت نشده است."), { status: 503, code: "sms_provider_not_configured" });
+  const settings = await getKavenegarSettings();
+  if (!settings.apiKey) throw Object.assign(new Error("کلید کاوه‌نگار در تنظیمات پیامک ثبت نشده است."), { status: 503, code: "sms_provider_not_configured" });
   if (!KAVENEGAR_TEMPLATE) {
-    await sendSmsText(phone, `${BRAND_NAME}: کد تأیید شما ${code} است. این کد را در اختیار دیگران قرار ندهید.`);
+    await sendSmsText(phone, BRAND_NAME + ": کد تأیید شما " + code + " است. این کد را در اختیار دیگران قرار ندهید.");
     return;
   }
-  const url = `https://api.kavenegar.com/v1/${encodeURIComponent(KAVENEGAR_API_KEY)}/verify/lookup.json`;
+  const endpoint = "https://api.kavenegar.com/v1/" + encodeURIComponent(settings.apiKey) + "/verify/lookup.json";
   const form = new URLSearchParams({ receptor: phone, token: code, template: KAVENEGAR_TEMPLATE });
-  const response = await fetch(url, { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: form, signal: AbortSignal.timeout(10000) });
+  const response = await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: form, signal: AbortSignal.timeout(10000) });
   const result = await response.json().catch(() => ({}));
-  if (!response.ok || result?.return?.status !== 200) throw Object.assign(new Error("ارسال پیامک توسط سرویس‌دهنده تأیید نشد."), { status: 502, code: "sms_delivery_failed" });
+  if (!response.ok || result?.return?.status !== 200) throw Object.assign(new Error("ارسال پیامک توسط کاوه‌نگار تأیید نشد."), { status: 502, code: "sms_delivery_failed" });
 }
 const recentFailures = new Map();
 function limited(key) {
@@ -137,6 +162,31 @@ export async function handleApi(req, res, url) {
     if (route.startsWith("/api/v1/admin/")) {
       const admin = adminFor(req);
       if (!admin) return json(res, 403, { message: "دسترسی مدیر لازم است." });
+      if (req.method === "GET" && route === "/api/v1/admin/sms/settings") {
+        const settings = await getKavenegarSettings();
+        return json(res, 200, { data: { provider: "kavenegar", sender: settings.sender, configured: Boolean(settings.apiKey), maskedKey: settings.apiKey ? "••••••••••••••••" : "" } });
+      }
+      if (req.method === "POST" && route === "/api/v1/admin/sms/settings") {
+        const b = await body(req); const apiKey = String(b.apiKey || "").trim(); const sender = String(b.sender || "").trim();
+        if (apiKey && (apiKey.length < 20 || apiKey.length > 256)) return json(res, 400, { message: "کلید API معتبر نیست." });
+        if (!/^\\d{5,20}$/.test(sender)) return json(res, 400, { message: "شماره فرستنده باید فقط شامل ۵ تا ۲۰ رقم باشد." });
+        if (JWT_SECRET.length < 32) return json(res, 503, { message: "کلید رمزنگاری امن سرور تنظیم نشده است." });
+        const existing = await pool.query("SELECT api_key_encrypted FROM sms_provider_settings WHERE provider=$1 LIMIT 1", ["kavenegar"]);
+        const encrypted = apiKey ? encryptSetting(apiKey) : (existing.rows[0]?.api_key_encrypted || null);
+        if (!encrypted) return json(res, 400, { message: "کلید API کاوه‌نگار را وارد کنید." });
+        await pool.query("INSERT INTO sms_provider_settings(provider,api_key_encrypted,sender,updated_by,updated_at) VALUES($1,$2,$3,$4,NOW()) ON CONFLICT(provider) DO UPDATE SET api_key_encrypted=EXCLUDED.api_key_encrypted,sender=EXCLUDED.sender,updated_by=EXCLUDED.updated_by,updated_at=NOW()", ["kavenegar", encrypted, sender, Number(admin.sub) || null]);
+        await audit(req, "admin.sms_settings.updated", Number(admin.sub), { provider: "kavenegar", sender });
+        return json(res, 200, { ok: true, data: { provider: "kavenegar", sender, configured: true, maskedKey: "••••••••••••••••" } });
+      }
+      if (req.method === "POST" && route === "/api/v1/admin/sms/test") {
+        const b = await body(req); const phone = String(b.phone || "").trim(); const message = String(b.message || "").trim();
+        if (!/^09\\d{9}$/.test(phone)) return json(res, 400, { message: "شماره مقصد باید با 09 شروع شود و ۱۱ رقم باشد." });
+        if (!message || message.length > 1000) return json(res, 400, { message: "متن آزمایشی باید بین ۱ تا ۱۰۰۰ نویسه باشد." });
+        if (limited("sms-test:" + String(admin.sub))) return json(res, 429, { message: "تعداد تست‌ها زیاد است؛ ۱۵ دقیقه بعد دوباره تلاش کنید." });
+        const messageId = await sendSmsText(phone, message);
+        await audit(req, "admin.sms_test.sent", Number(admin.sub), { provider: "kavenegar", phone: maskPhone(phone), messageId });
+        return json(res, 200, { ok: true, message: "کاوه‌نگار ارسال پیامک را پذیرفت.", messageId });
+      }
       if (req.method === "GET" && route === "/api/v1/admin/summary") {
         const q = await pool.query("SELECT (SELECT COUNT(*) FROM users) AS users,(SELECT COUNT(*) FROM users WHERE role IN ('admin','superadmin')) AS admins,(SELECT COUNT(*) FROM legacy_customers) AS legacy_customers,(SELECT COUNT(*) FROM sms_templates) AS sms_templates,(SELECT COUNT(*) FROM sms_logs) AS sms_logs");
         const configured = Boolean(KAVENEGAR_API_KEY);
