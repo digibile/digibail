@@ -14,7 +14,7 @@ const ROUTES = new Map([
   ["/loan-definition.html", "web/loan-definition.html"],
   ["/terms.html", "web/terms.html"], ["/privacy.html", "web/privacy.html"],
   ["/profile.html", "web/customer-panel.html"],
-  ["/admin.html", "backend/core/panel.html"],
+  ["/admin.html", "web/admin.html"], ["/management-panel.html", "backend/core/panel.html"],
   ["/sms-settings.html", "web/sms-settings.html"]
 ]);
 const MIME = { ".html": "text/html; charset=utf-8", ".css": "text/css; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".json": "application/json; charset=utf-8", ".svg": "image/svg+xml", ".png": "image/png", ".jpg": "image/jpeg", ".webp": "image/webp", ".ico": "image/x-icon", ".txt": "text/plain; charset=utf-8" };
@@ -67,7 +67,7 @@ const server = http.createServer(async (req, res) => {
     res.writeHead(302, { Location: "/admin.html", "Cache-Control": "no-store" });
     return res.end();
   }
-  if (url.pathname === "/admin.html" || url.pathname === "/sms-settings.html" || url.pathname === "/loan-definition.html") {
+  if (url.pathname === "/admin.html" || url.pathname === "/management-panel.html" || url.pathname === "/sms-settings.html" || url.pathname === "/loan-definition.html") {
     const isAdmin = await verifyAdminSession(req);
     if (!isAdmin) {
       res.writeHead(302, { Location: `/login.html?next=${encodeURIComponent(url.pathname)}`, "Cache-Control": "no-store" });
