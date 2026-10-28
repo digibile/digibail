@@ -279,6 +279,7 @@ export async function handleApi(req, res, url) {
         return json(res,200,{data:q.rows});
       }
       // IMPORT_LATEST_VAMCITY_LOAN_DEFINITIONS_V3
+      // IMPORT_LATEST_VAMCITY_LOAN_DEFINITIONS_V2
       if (req.method === "POST" && route === "/api/v1/admin/loan-products/import-legacy") {
         // Import only the latest VamCity loan-definition table, never mix in the separate BluVam database.
         const source=await pool.query("SELECT source_table FROM legacy_source_data WHERE source_table ~* '^vamcityc_vamcity_import_[0-9]{8}[.]dbo[.]Loans$' GROUP BY source_table ORDER BY source_table DESC LIMIT 1");
