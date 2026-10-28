@@ -12,7 +12,8 @@ const ROUTES = new Map([
   ["/login.html", "backend/security/login-v2.html"], ["/register.html", "backend/security/register-v2.html"],
   ["/documents.html", "web/documents.html"], ["/contracts.html", "web/contracts.html"],
   ["/panel.html", "backend/core/panel.html"], ["/profile.html", "backend/core/panel.html"],
-  ["/admin", "web/admin.html"], ["/admin.html", "web/admin.html"]
+  ["/admin", "web/admin.html"], ["/admin.html", "web/admin.html"],
+  ["/sms-settings.html", "web/sms-settings.html"]
 ]);
 const MIME = { ".html": "text/html; charset=utf-8", ".css": "text/css; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".json": "application/json; charset=utf-8", ".svg": "image/svg+xml", ".png": "image/png", ".jpg": "image/jpeg", ".webp": "image/webp", ".ico": "image/x-icon", ".txt": "text/plain; charset=utf-8" };
 
@@ -51,7 +52,7 @@ const server = http.createServer(async (req, res) => {
     return send(res, 405, "application/json; charset=utf-8", JSON.stringify({ error: "method_not_allowed" }));
   }
   const relative = resolveRoute(url.pathname);
-  if (url.pathname === "/panel.html" || url.pathname === "/profile.html" || url.pathname === "/admin" || url.pathname === "/admin.html") {
+  if (url.pathname === "/panel.html" || url.pathname === "/profile.html" || url.pathname === "/admin" || url.pathname === "/admin.html" || url.pathname === "/sms-settings.html") {
     const cookie = String(req.headers.cookie || "").split(";").map(v => v.trim()).find(v => v.startsWith("db_session="));
     const session = cookie ? verifySession(cookie.slice("db_session=".length)) : null;
     if (!session || !["admin", "superadmin"].includes(session.role)) {
