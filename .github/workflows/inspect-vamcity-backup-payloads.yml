@@ -66,6 +66,8 @@ jobs:
               strings -a "$TMP/payload-$i" | grep -Eim 12 'Microsoft SQL Server|SQL Server|BACKUP DATABASE|DatabaseName|vamcityc_vamcity|vamcityc_bluvamdb|vamcityc_transferDb|7-Zip|Zstandard|WZ' || true
               if [ -n "$PASS" ] && [ -n "$SQLCMD" ] && docker inspect "$SQLC" >/dev/null 2>&1; then
                 docker cp "$TMP/payload-$i" "$SQLC:/var/opt/mssql/data/$target" >/dev/null
+                docker exec -u 0 "$SQLC" chown mssql:mssql "/var/opt/mssql/data/$target"
+                docker exec -u 0 "$SQLC" chmod 640 "/var/opt/mssql/data/$target"
                 echo "-- RESTORE HEADERONLY (READ ONLY) --"
                 docker exec -e SQLCMDPASSWORD="$PASS" "$SQLC" "$SQLCMD" -S localhost -U sa -C -W -s '|' -Q "RESTORE HEADERONLY FROM DISK=N'/var/opt/mssql/data/$target'" 2>&1 | head -n 35 || echo "RESTORE_HEADERONLY_NOT_AVAILABLE_FOR_PAYLOAD_$i"
               fi
