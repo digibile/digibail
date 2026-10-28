@@ -506,14 +506,33 @@ export async function handleApi(req, res, url) {
       if (limited("login:" + ip)) return json(res, 429, { message: "تلاش‌های ناموفق زیاد بود. کمی بعد دوباره امتحان کنید." });
       if (!await consumeCaptcha(b.captchaId, b.captchaAnswer)) return json(res, 400, { message: "کد امنیتی نامعتبر یا منقضی شده است." });
       const username = String(b.username || "").trim().slice(0, 80);
-      const result = await pool.query("SELECT id,phone,full_name,password_hash,role,is_active FROM users WHERE (phone=$1 OR username=$1 OR ($1='admin' AND username='digibail-admin')) LIMIT 1", [username]);
-      if (!result.rowCount || !result.rows[0].is_active || !await verifyPassword(String(b.password || ""), result.rows[0].password_hash)) {
+      const password = String(b.password || "");
+      const result = await pool.query("SELECT id,phone,full_name,username,password_hash,role,is_active FROM users WHERE (phone=$1 OR username=$1 OR ($1='admin' AND username='digibail-admin')) LIMIT 1", [username]);
+      if (!result.rowCount || !result.rows[0].is_active) {
         await audit(req, "auth.login.failed"); return json(res, 401, { message: "نام کاربری یا رمز عبور نادرست است." });
       }
-      resetLimit("login:" + ip); const u = result.rows[0];
-      if (String(u.password_hash).startsWith("aspnet:")) {
-        const upgraded = await bcrypt.hash(String(b.password || ""), 12);
-        await pool.query("UPDATE users SET password_hash=$1,updated_at=NOW() WHERE id=$2 AND password_hash=$3", [upgraded, u.id, u.password_hash]);
+      const u = result.rows[0];
+      let passwordValid = await verifyPassword(password, u.password_hash);
+      let verifiedLegacyHash = null;
+      if (!passwordValid && username !== "admin") {
+        // If a legacy identity collided with an existing modern username, verify against
+        // the preserved ASP.NET Identity hash and upgrade only after a successful login.
+        const legacy = await pool.query(
+          "SELECT payload->>'PasswordHash' AS password_hash FROM legacy_source_data WHERE source_table LIKE '%AspNetUsers' AND (lower(COALESCE(payload->>'UserName',payload->>'username',''))=lower($1) OR COALESCE(payload->>'Mobile',payload->>'Phone',payload->>'mobile',payload->>'phone','')=$1) ORDER BY imported_at DESC LIMIT 1",
+          [username]
+        );
+        if (legacy.rowCount && legacy.rows[0].password_hash) {
+          verifiedLegacyHash = String(legacy.rows[0].password_hash);
+          passwordValid = await verifyPassword(password, "aspnet:" + verifiedLegacyHash);
+        }
+      }
+      if (!passwordValid) {
+        await audit(req, "auth.login.failed"); return json(res, 401, { message: "نام کاربری یا رمز عبور نادرست است." });
+      }
+      resetLimit("login:" + ip);
+      if (String(u.password_hash).startsWith("aspnet:") || verifiedLegacyHash) {
+        const upgraded = await bcrypt.hash(password, 12);
+        await pool.query("UPDATE users SET password_hash=$1,updated_at=NOW() WHERE id=$2", [upgraded, u.id]);
       }
       await audit(req, "auth.login.success", u.id);
       const token = tokenFor(u);
