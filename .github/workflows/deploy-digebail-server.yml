@@ -152,7 +152,7 @@ jobs:
             echo "=== route production domain to verified app on port 1631 ==="
             # Docker daemon access grants root-level host administration; use a
             # short-lived privileged container for a backed-up, validated route change.
-            $DOCKER run --rm --privileged --pid=host -v /:/host alpine:3.20 sh -c '
+            $DOCKER run --rm --privileged --pid=host --network host -v /:/host alpine:3.20 sh -c '
               set -eu
               apk add --no-cache procps >/dev/null
               CUST="$(find /host/usr/local/directadmin/data/users -type f -path "*/domains/digebail.ir.cust_nginx" -print -quit)"
