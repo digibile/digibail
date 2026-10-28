@@ -363,8 +363,20 @@ const NAV=[
 const BADGE={loans:()=>loans.filter(l=>l.st==='pending').length,kyc:()=>custs.filter(c=>c.kyc==='pending').length,fraud:()=>fraud.filter(f=>f[4]==='review').length,merchants:()=>merchants.filter(m=>m.st==='pending').length};
 function render(){
  $('#nav').innerHTML='<div class="brand">دیجی‌بایل پی<button class="btn nvx" data-nvclose="1" aria-label="بستن منو">×</button><button class="btn dcol" data-ncoll="1" style="float:left;min-height:30px;padding:0 10px" aria-label="جمع کردن منو" title="جمع/باز کردن منو">⇔</button></div>'+NAV.map(g=>`<div class="grp">${g[0]}</div>`+g[1].map(i=>`<button data-v="${i[0]}" aria-current="${state.view===i[0]}">${i[1]}${BADGE[i[0]]&&BADGE[i[0]]()?`<span class="cnt">${fa(BADGE[i[0]]())}</span>`:''}</button>`).join('')).join('');
- $('#main').innerHTML=V[state.view]();
+ const view=state.view,main=$('#main');
+ try {
+  const result=V[view]();
+  if(result&&typeof result.then==='function'){
+   main.innerHTML='<div class="panel" role="status" aria-live="polite">در حال بارگذاری اطلاعات…</div>';
+   result.then(html=>{if(state.view===view)main.innerHTML=String(html??'')})
+    .catch(err=>{console.error('Digibail view failed:',view,err);if(state.view===view)main.innerHTML='<div class="panel" role="alert"><h2>بارگذاری این بخش انجام نشد</h2><p class="sub">ارتباط با سرویس برقرار نشد یا پاسخ معتبر نبود. صفحه را دوباره باز کنید.</p><button class="btn solid" id="retryView">تلاش دوباره</button></div>'});
+  } else main.innerHTML=String(result??'');
+ } catch(err) {
+  console.error('Digibail view failed:',view,err);
+  main.innerHTML='<div class="panel" role="alert"><h2>بارگذاری این بخش انجام نشد</h2><p class="sub">خطای داخلی در نمایش این بخش رخ داد.</p><button class="btn solid" id="retryView">تلاش دوباره</button></div>';
+ }
 }
+document.addEventListener('click',e=>{if(e.target.closest('#retryView'))render()});
 $('#nav').onclick=e=>{if(e.target.closest('[data-nvclose]')){setNav(0);return}if(e.target.closest('[data-ncoll]')){const a=document.querySelector('.app');a.classList.toggle('coll');try{localStorage.setItem('gcoll',a.classList.contains('coll')?1:0)}catch(_){}return}const b=e.target.closest('[data-v]');if(b){setNav(0);state.view=b.dataset.v;$('#drawer').hidden=true;render();window.scrollTo(0,0)}};
 $('#main').addEventListener('input',e=>{
  if(e.target.id==='q'){const q=e.target.value.trim();document.querySelectorAll('#main tbody tr').forEach(tr=>tr.hidden=q&&!tr.textContent.includes(q));return}
