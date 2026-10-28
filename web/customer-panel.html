@@ -35,7 +35,11 @@ async function api(path){const r=await fetch(path,{credentials:"same-origin",hea
 function rows(items,cols,empty){return items.length?items.map(x=>"<tr>"+cols.map(c=>"<td>"+c(x)+"</td>").join("")+"</tr>").join(""):'<tr><td colspan="4">'+empty+"</td></tr>"}
 async function load(){try{
  const me=await api("/api/v1/security/me");
- if(["admin","superadmin"].includes(String(me.role||"").toLowerCase())){location.replace("/admin.html");return}
+ const role=String(me.role||"").toLowerCase();
+ if(["admin","superadmin"].includes(role)){
+   const nav=document.querySelector("header > div:last-child");
+   if(nav&&!document.querySelector("#adminAccess")){const link=document.createElement("a");link.id="adminAccess";link.className="btn";link.href="/admin.html";link.textContent="ورود به پنل مدیریت";link.style.marginInlineStart="8px";nav.prepend(link);}
+ }
  $("#welcome").textContent="خوش آمدید، "+(me.fullName||me.username||"کاربر گرامی");
  $("#account").innerHTML="<p><b>نام:</b> "+esc(me.fullName||"ثبت نشده")+"</p><p><b>نام کاربری:</b> "+esc(me.username||"—")+"</p><p><b>موبایل:</b> "+esc(me.phone||"—")+"</p><p><b>وضعیت:</b> <span class='pill'>حساب فعال</span></p>";
  const [docs,contracts]=await Promise.all([api("/api/v1/me/documents"),api("/api/v1/me/contracts")]);
