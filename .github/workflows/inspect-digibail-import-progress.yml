@@ -38,7 +38,13 @@ jobs:
             echo "=== IMPORT PROCESS ==="
             ps -eo pid,etime,pcpu,pmem,args | grep -E '[i]mport-vamcity-real-data|[m]igrate-legacy-digibail' | head -n 30 || true
             echo "=== TARGET POSTGRES COUNTS ==="
-            $D compose exec -T db sh -lc 'export PGPASSWORD="$POSTGRES_PASSWORD"; psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1 -Atc "SELECT 'users='||COUNT(*) FROM users; SELECT 'legacy_customers='||COUNT(*) FROM legacy_customers; SELECT 'sms_templates='||COUNT(*) FROM sms_templates; SELECT 'vamcity_preserved_rows='||COUNT(*) FROM legacy_source_data WHERE source_table LIKE 'vamcityc_%'; SELECT source_table||'|'||COUNT(*) FROM legacy_source_data WHERE source_table LIKE 'vamcityc_%' GROUP BY source_table ORDER BY source_table;"'
+            $D compose exec -T db sh -lc 'export PGPASSWORD="$POSTGRES_PASSWORD"; psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1 -At' <<'SQL'
+            SELECT 'users='||COUNT(*) FROM users;
+            SELECT 'legacy_customers='||COUNT(*) FROM legacy_customers;
+            SELECT 'sms_templates='||COUNT(*) FROM sms_templates;
+            SELECT 'vamcity_preserved_rows='||COUNT(*) FROM legacy_source_data WHERE source_table LIKE 'vamcityc_%';
+            SELECT source_table||'|'||COUNT(*) FROM legacy_source_data WHERE source_table LIKE 'vamcityc_%' GROUP BY source_table ORDER BY source_table;
+            SQL
             echo "=== SOURCE DATABASE STATUS ==="
             SQLC="vamcity-stage-sql"
             if $D inspect "$SQLC" >/dev/null 2>&1; then
