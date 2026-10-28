@@ -349,10 +349,17 @@ function openCust(i){const c=custs[i];const d=$('#drawer');d.hidden=false;
  <h3>وام‌های این مشتری</h3>${tbl([['کد',l=>fa(l.id),'n'],['مبلغ',l=>M(l.amount/1e6),'n'],['وضعیت',l=>pill('LoanApplication',l.st)]],loans.filter(l=>l.name===c.name))}`}
 
 /* ---------- shell ---------- */
-const NAV=[['نمای کلی',[['dash','داشبورد']]],['وام',[['loans','درخواست‌های وام'],['products','محصولات وام'],['scoring','موتور اعتبارسنجی'],['fraud','ریسک و تقلب'],['contracts','قالب‌ها و قراردادها'],['legacyContracts','قراردادهای صادرشده'],['beta','طرح بتا (بانک رفاه)'],['betaRequests','درخواست‌های استعلام بتا']]],
- ['مشتریان',[['customers','مشتریان'],['legacyCustomers','مشتریان سامانه قدیمی'],['kyc','احراز هویت'],['binder','زونکن دیجیتال']]],['شبکه‌ی فروش',[['merchants','پذیرنده‌ها'],['agents','نمایندگان'],['orgs','سازمان‌ها']]],
- ['مالی',[['collect','اقساط و وصول'],['wallet','کیف پول'],['gate','درگاه داخلی'],['settle','تسویه']]],['ارتباطات',[['comm','پیامک و اعلان'],['smsLegacy','الگوهای پیامک قدیمی'],['tickets','پشتیبانی']]],
- ['اتصال‌ها',[['hub','مرکز اتصال‌ها'],['docs','مستندات']]],['سازنده‌ها',[['forms','فرم‌ساز'],['pages','صفحه‌ساز'],['stories','استوری‌ساز'],['repb','گزارش‌ساز']]],['سیستم',[['reports','گزارش‌ها'],['users','کاربران و نقش‌ها'],['audit','گزارش فعالیت‌ها'],['legacyData','تمام داده‌های منتقل‌شده'],['settings','تنظیمات']]]];
+const NAV=[
+ ['نمای کلی',[['dash','داشبورد'])),
+ ['وام و اعتبار',[['loans','درخواست‌های وام'],['products','محصولات و طرح‌های اعتباری'],['scoring','موتور اعتبارسنجی'],['fraud','ریسک و تقلب'],['contracts','قالب‌ها و قراردادها'],['legacyContracts','قراردادهای صادرشده'],['beta','طرح بتا (بانک رفاه)'],['betaRequests','استعلام‌های بتا و سوابق درخواست']]],
+ ['مشتریان و مدارک',[['customers','مشتریان'],['legacyCustomers','مشتریان قدیمی و سوابق خرید'],['kyc','احراز هویت'],['binder','مدارک و زونکن دیجیتال']]],
+ ['شبکه فروش',[['merchants','پذیرندگان'],['agents','نمایندگان'],['orgs','سازمان‌ها']]],
+ ['مالی و پرداخت',[['collect','اقساط و وصول'],['wallet','کیف پول و تراکنش‌ها'],['gate','درگاه و پرداخت'],['settle','تسویه']]],
+ ['ارتباطات و پشتیبانی',[['comm','پیامک، اعلان و گزارش ارسال'],['smsLegacy','الگوهای پیامک'],['tickets','پشتیبانی']]],
+ ['اتصال‌ها و مستندات',[['hub','مرکز اتصال‌ها'],['docs','مستندات']]],
+ ['ابزارهای ساخت',[['forms','فرم‌ساز'],['pages','صفحه‌ساز'],['stories','استوری‌ساز'],['repb','گزارش‌ساز']]],
+ ['مدیریت سامانه',[['reports','گزارش‌ها'],['users','کاربران و نقش‌ها'],['audit','گزارش فعالیت‌ها و حسابرسی'],['legacyData','داده‌های منتقل‌شده و طرح‌های قدیمی'],['settings','تنظیمات']]]
+];
 const BADGE={loans:()=>loans.filter(l=>l.st==='pending').length,kyc:()=>custs.filter(c=>c.kyc==='pending').length,fraud:()=>fraud.filter(f=>f[4]==='review').length,merchants:()=>merchants.filter(m=>m.st==='pending').length};
 function render(){
  $('#nav').innerHTML='<div class="brand">دیجی‌بایل پی<button class="btn nvx" data-nvclose="1" aria-label="بستن منو">×</button><button class="btn dcol" data-ncoll="1" style="float:left;min-height:30px;padding:0 10px" aria-label="جمع کردن منو" title="جمع/باز کردن منو">⇔</button></div>'+NAV.map(g=>`<div class="grp">${g[0]}</div>`+g[1].map(i=>`<button data-v="${i[0]}" aria-current="${state.view===i[0]}">${i[1]}${BADGE[i[0]]&&BADGE[i[0]]()?`<span class="cnt">${fa(BADGE[i[0]]())}</span>`:''}</button>`).join('')).join('');
