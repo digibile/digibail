@@ -97,3 +97,35 @@ CREATE TABLE IF NOT EXISTS legacy_source_data (
 );
 CREATE INDEX IF NOT EXISTS legacy_source_data_table_idx
   ON legacy_source_data(source_table, imported_at DESC);
+
+CREATE TABLE IF NOT EXISTS customer_documents (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  kind VARCHAR(80) NOT NULL,
+  file_name VARCHAR(255) NOT NULL,
+  mime_type VARCHAR(80) NOT NULL,
+  file_data BYTEA NOT NULL,
+  fields JSONB NOT NULL DEFAULT '{}'::jsonb,
+  ocr_text TEXT,
+  status VARCHAR(24) NOT NULL DEFAULT 'Pending' CHECK (status IN ('Pending','Verified','Rejected')),
+  review_note TEXT,
+  created_on TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS customer_documents_user_created_idx ON customer_documents(user_id, created_on DESC);
+
+CREATE TABLE IF NOT EXISTS customer_contracts (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  title VARCHAR(240) NOT NULL,
+  number VARCHAR(120) NOT NULL,
+  body_html TEXT NOT NULL,
+  status VARCHAR(32) NOT NULL DEFAULT 'Presented' CHECK (status IN ('Presented','AwaitingSignature','Signed','Rejected','Expired')),
+  expires_at TIMESTAMPTZ,
+  signed_at TIMESTAMPTZ,
+  rejected_at TIMESTAMPTZ,
+  rejection_note TEXT,
+  created_on TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS customer_contracts_user_created_idx ON customer_contracts(user_id, created_on DESC);
