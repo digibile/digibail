@@ -129,3 +129,16 @@ CREATE TABLE IF NOT EXISTS customer_contracts (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS customer_contracts_user_created_idx ON customer_contracts(user_id, created_on DESC);
+
+CREATE TABLE IF NOT EXISTS beta_inquiries (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  reference VARCHAR(32) NOT NULL UNIQUE,
+  user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  national_code CHAR(10) NOT NULL,
+  consent_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  status VARCHAR(40) NOT NULL DEFAULT 'pending_provider',
+  status_note TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS beta_inquiries_user_created_idx ON beta_inquiries(user_id, created_at DESC);
