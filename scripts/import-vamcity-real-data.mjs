@@ -42,6 +42,7 @@ function importInput(appId, tempDir, input, label) {
   const path = join(tempDir, "legacy-migration.json");
   writeFileSync(path, JSON.stringify(input), { mode: 0o600 });
   docker(["cp", path, appId + ":/tmp/legacy-migration.json"]);
+  docker(["exec", "-u", "0", appId, "chown", "node:node", "/tmp/legacy-migration.json"]);
   const out = docker(["exec", appId, "node", "/app/scripts/migrate-legacy-digibail.js", "/tmp/legacy-migration.json"]);
   const line = out.split("\n").filter(x => x.trim()).slice(-2).join(" ");
   console.log("IMPORT_BATCH=" + label + " " + line);
