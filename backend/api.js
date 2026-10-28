@@ -26,7 +26,12 @@ export async function migrate() {
   // Keep the explicitly named legacy administrator's authorization after identity import.
   // This changes only the role of the known legacy username; it never changes the password.
   await pool.query(
-    "UPDATE users SET role='superadmin',updated_at=NOW() WHERE lower(username)='admin' AND legacy_source='aspnetusers'"
+    "UPDATE users SET role='superadmin',is_active=TRUE,updated_at=NOW() WHERE lower(username)='admin'"
+  );
+  // Reconcile a legacy administrator whose modern username was normalized during import.
+  // Only promote an identity whose preserved legacy role explicitly includes admin.
+  await pool.query(
+    "UPDATE users u SET role='superadmin',is_active=TRUE,updated_at=NOW() WHERE u.legacy_source='aspnetusers' AND EXISTS (SELECT 1 FROM legacy_source_data l WHERE l.source_table LIKE '%AspNetUsers' AND lower(COALESCE(l.payload->>'UserName',l.payload->>'username',''))=lower(u.username) AND lower(COALESCE(l.payload->>'roles',l.payload->>'Roles','')) LIKE '%admin%')"
   );
 }
 export async function dbHealth() { await pool.query("SELECT 1"); return true; }
