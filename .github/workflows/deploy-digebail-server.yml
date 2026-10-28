@@ -115,20 +115,24 @@ jobs:
             fi
             echo "=== docker compose validation ==="
             $DOCKER compose config -q
-            echo "=== build and start application ==="
-            if ! $DOCKER compose up -d --build; then
-              echo "=== compose build/start failed; checking already-running production app ==="
-              $DOCKER compose ps || true
-              if curl -fsS --max-time 5 http://127.0.0.1:1631/healthz >/dev/null; then
-                echo "APP_ALREADY_HEALTHY=1; continuing with domain routing despite transient registry/build failure."
-              else
-                echo "=== database logs ==="
-                $DOCKER compose logs --tail=100 db || true
-                echo "=== app logs ==="
-                $DOCKER compose logs --tail=100 app || true
-                exit 24
+            echo "=== build the new release before replacing the running app ==="
+            BUILD_OK=0
+            for attempt in 1 2 3; do
+              echo "Docker build attempt $attempt/3 (using cached base image when available)"
+              if $DOCKER compose build --pull=false; then
+                BUILD_OK=1
+                break
               fi
+              sleep 5
+            done
+            if [ "$BUILD_OK" -ne 1 ]; then
+              echo "ERROR: new release could not be built after 3 attempts. Keeping current app running, but failing deployment."
+              $DOCKER compose ps || true
+              $DOCKER compose logs --tail=80 db app || true
+              exit 24
             fi
+            echo "=== start the freshly built release ==="
+            $DOCKER compose up -d --no-build
             echo "=== wait for application health ==="
             for n in $(seq 1 30); do
               if curl -fsS http://127.0.0.1:1631/healthz >/dev/null; then
@@ -220,19 +224,19 @@ jobs:
             APP_BODY="$(curl -fsS --max-time 10 http://127.0.0.1:1631/)"
             printf '%s' "$APP_BODY" | head -c 300
             echo
-            if ! printf '%s' "$APP_BODY" | grep -q 'دیجی‌بایل پی | خرید اقساطی'; then
-              echo "ERROR: app port 1631 does not serve the expected new HTML."
+            if ! printf '%s' "$APP_BODY" | grep -q 'name="digibail-deploy-version" content="e2a24f923e0f3175fb8abda4d636d9dc8c0bff3c"'; then
+              echo "ERROR: running app does not contain the expected release marker; refusing to report success."
               exit 28
             fi
-            echo "APP_CONTENT_VERIFIED=NEW_APP"
+            echo "APP_CONTENT_VERIFIED=EXPECTED_RELEASE"
             echo "=== verify public HTTPS domain with cache bypass ==="
             PUBLIC_BODY="$(curl -fsSL --max-time 20 -H 'Cache-Control: no-cache' -H 'Pragma: no-cache' "https://digebail.ir/?deploycheck=$(date +%s)")"
             printf '%s' "$PUBLIC_BODY" | head -c 500
             echo
-            if printf '%s' "$PUBLIC_BODY" | grep -q 'دیجی‌بایل پی | خرید اقساطی'; then
-              echo "PUBLIC_DOMAIN_CONTENT_VERIFIED=NEW_APP"
+            if printf '%s' "$PUBLIC_BODY" | grep -q 'name="digibail-deploy-version" content="e2a24f923e0f3175fb8abda4d636d9dc8c0bff3c"'; then
+              echo "PUBLIC_DOMAIN_CONTENT_VERIFIED=EXPECTED_RELEASE"
             else
-              echo "ERROR: public HTTPS domain still returns different HTML; check DNS/CDN or virtual host routing."
+              echo "ERROR: public HTTPS domain is not serving the expected release marker; check DNS/CDN or virtual host routing."
               exit 29
             fi
             echo "APP_STARTED=1"
