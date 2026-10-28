@@ -38,18 +38,21 @@ function queryRows(db, query, label) {
   const raw = sql(["-b", "-w", "65535", "-y", "0", "-d", db, "-Q", query]);
   return jsonFromSql(raw, label);
 }
-function importInput(appId, tempDir, input, label) {
+function importInput(tempDir, input, label) {
   const path = join(tempDir, "legacy-migration.json");
-  writeFileSync(path, JSON.stringify(input), { mode: 0o600 });
-  docker(["cp", path, appId + ":/tmp/legacy-migration.json"]);
-  docker(["exec", "-u", "0", appId, "chown", "node:node", "/tmp/legacy-migration.json"]);
+  writeFileSync(path, JSON.stringify(input), { mode: 0o644 });
   let out;
   try {
-    out = docker(["exec", appId, "node", "/app/scripts/migrate-legacy-digibail.js", "/tmp/legacy-migration.json"]);
+    // Isolate the heavy migration process from the live web container.
+    out = docker([
+      "compose", "run", "--rm", "-T", "--no-deps",
+      "-v", path + ":/tmp/legacy-migration.json:ro",
+      "app", "node", "/app/scripts/migrate-legacy-digibail.js", "/tmp/legacy-migration.json"
+    ], { cwd: ROOT });
   } catch (error) {
     let diagnostic = [error?.stdout, error?.stderr, error?.message].map(value => String(value || "")).join("\n");
     if (SA_PASS) diagnostic = diagnostic.split(SA_PASS).join("[REDACTED]");
-    diagnostic = diagnostic.replace(/-P\\s+\\S+/g, "-P [REDACTED]").slice(-1200);
+    diagnostic = diagnostic.replace(/-P\s+\S+/g, "-P [REDACTED]").slice(-1200);
     console.error("IMPORT_BATCH_FAILED=" + label + " exit=" + String(error?.status ?? "unknown") +
       " signal=" + String(error?.signal ?? "none") + " code=" + String(error?.code ?? "none") +
       " stdout_bytes=" + String(String(error?.stdout || "").length) +
@@ -66,9 +69,7 @@ try {
   SQLCMD = clean(docker(["exec", SQLC, "sh", "-lc", "command -v /opt/mssql-tools18/bin/sqlcmd || command -v /opt/mssql-tools/bin/sqlcmd || command -v sqlcmd"])).split("\n")[0];
   SA_PASS = clean(docker(["exec", SQLC, "printenv", "MSSQL_SA_PASSWORD"]));
   if (!SQLCMD || !SA_PASS) throw new Error("SQL Server connection unavailable");
-  const appId = clean(docker(["compose", "ps", "-q", "app"], { cwd: ROOT })).split("\n")[0];
-  if (!appId) throw new Error("Digibail application container not found");
-  docker(["exec", appId, "test", "-f", "/app/scripts/migrate-legacy-digibail.js"]);
+  docker(["compose", "config", "-q"], { cwd: ROOT });
   const online = clean(sql(["-h", "-1", "-W", "-Q",
     "SET NOCOUNT ON; SELECT COUNT(*) FROM sys.databases WHERE name IN ('" +
     DB_NAMES.join("','") + "') AND state_desc='ONLINE';"])).replace(/\s/g, "");
@@ -88,13 +89,13 @@ try {
   }
   for (let offset = 0; offset < core.users.length; offset += 500) {
     const batch = core.users.slice(offset, offset + 500);
-    importInput(appId, tempDir, { users: batch, customers: [], smsPatterns: [] },
+    importInput(tempDir, { users: batch, customers: [], smsPatterns: [] },
       "users " + (offset + 1) + "-" + (offset + batch.length));
     if ((offset + batch.length) % 5000 === 0 || offset + batch.length === core.users.length) {
       console.log("CORE_USERS_IMPORTED=" + (offset + batch.length) + "/" + core.users.length);
     }
   }
-  importInput(appId, tempDir, { users: [], customers: core.customers, smsPatterns: core.sms }, "customers and SMS templates");
+  importInput(tempDir, { users: [], customers: core.customers, smsPatterns: core.sms }, "customers and SMS templates");
 
   let totalSourceRows = 0;
   let totalTables = 0;
@@ -131,7 +132,7 @@ try {
           legacyId: String(offset + i + 1),
           payload
         }));
-        importInput(appId, tempDir, {
+        importInput(tempDir, {
           genericTables: [{ sourceTable, rows: batch }]
         }, sourceTable + " rows " + (offset + 1) + "-" + (offset + batch.length));
       }
