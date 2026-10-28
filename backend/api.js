@@ -271,6 +271,10 @@ export async function handleApi(req, res, url) {
         );
         return json(res, 200, { data: q.rows });
       }
+      if (req.method === "GET" && route === "/api/v1/admin/beta-inquiries") {
+        const q = await pool.query("SELECT id,reference,user_id,national_code,status,status_note,created_at FROM beta_inquiries ORDER BY created_at DESC LIMIT 500");
+        return json(res,200,{data:q.rows});
+      }
       if (req.method === "GET" && route === "/api/v1/admin/documents") {
         const q = await pool.query("SELECT id,user_id,kind,status,created_on,updated_at,review_note,fields::text AS fields_json,file_name,mime_type FROM customer_documents ORDER BY created_on DESC LIMIT 500");
         return json(res, 200, { data:q.rows });
@@ -333,6 +337,27 @@ export async function handleApi(req, res, url) {
         return json(res, 200, { data: q.rows });
       }
       return json(res, 404, { message: "مسیر مدیریت پیدا نشد." });
+    }
+    if (req.method === "POST" && route === "/api/v1/beta/inquiry") {
+      const userId = authenticatedUserId(req);
+      if (!userId) return json(res, 401, { message: "برای استعلام ابتدا وارد حساب شوید." });
+      const b = await body(req);
+      const nationalCode = String(b.nationalCode || "").replace(/[۰-۹]/g,d=>"۰۱۲۳۴۵۶۷۸۹".indexOf(d)).replace(/[٠-٩]/g,d=>"٠١٢٣٤٥٦٧٨٩".indexOf(d));
+      if (b.consent !== true) return json(res, 400, { message: "رضایت استعلام بانکی باید تأیید شود." });
+      if (!nationalCodeOk(nationalCode)) return json(res, 400, { message: "کد ملی معتبر نیست." });
+      const user = await pool.query("SELECT national_code FROM users WHERE id=$1 AND is_active=TRUE", [userId]);
+      if (!user.rowCount) return json(res, 401, { message: "حساب کاربری فعال پیدا نشد." });
+      if (String(user.rows[0].national_code || "").trim() !== nationalCode) {
+        return json(res, 400, { message: "کد ملی واردشده با کد ملی ثبت‌شده در حساب یکسان نیست." });
+      }
+      const reference = "BETA-" + crypto.randomBytes(4).toString("hex").toUpperCase();
+      const statusNote = "درخواست و رضایت ثبت شد؛ اتصال API رسمی بانک رفاه تنظیم نشده و استعلام به بانک ارسال نشده است.";
+      const q = await pool.query(
+        "INSERT INTO beta_inquiries(reference,user_id,national_code,status,status_note) VALUES($1,$2,$3,'pending_provider',$4) RETURNING reference,status,status_note,created_at",
+        [reference,userId,nationalCode,statusNote]
+      );
+      await audit(req,"beta.inquiry.created",userId,{reference});
+      return json(res,202,{data:{ref:q.rows[0].reference,status:q.rows[0].status,message:q.rows[0].status_note,createdAt:q.rows[0].created_at}});
     }
     if (route.startsWith("/api/v1/me/documents")) {
       const userId = authenticatedUserId(req);
