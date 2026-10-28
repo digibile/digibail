@@ -66,10 +66,14 @@ jobs:
             test -f server.js
             test -f start.js
             echo "=== production environment (values hidden) ==="
+            # Never print .env values. If the file is incomplete, only repair it when no
+            # database volume/container exists; otherwise preserve data and stop safely.
+            DB_EXISTS=0
+            if docker volume ls --format '{{.Name}}' | grep -E '(^|[-_])digibail_pgdata$' >/dev/null; then DB_EXISTS=1; fi
+            if docker ps -a --format '{{.Names}}' | grep -E 'digibail.*db|db.*digibail' >/dev/null; then DB_EXISTS=1; fi
             if [ ! -f .env ]; then
-              echo "=== .env absent; checking for an existing database before generating credentials ==="
-              if docker volume ls --format '{{.Name}}' | grep -E '(^|_)digibail_pgdata$' >/dev/null || docker ps -a --format '{{.Names}}' | grep -E '(^|[-_])db([-_]|$)' >/dev/null; then
-                echo "BLOCKED: database volume/container already exists but .env is missing; preserving data and refusing to rotate credentials blindly."
+              if [ "$DB_EXISTS" -eq 1 ]; then
+                echo "BLOCKED: database exists but .env is missing; preserving data."
                 exit 20
               fi
               umask 077
@@ -91,15 +95,38 @@ jobs:
               unset DB_PASS JWT OTP CAPTCHA
               echo "SECURE_ENV_CREATED=1 (secret values hidden)"
             fi
+            missing=""
             for key in POSTGRES_DB POSTGRES_USER POSTGRES_PASSWORD DATABASE_URL JWT_SECRET OTP_PEPPER CAPTCHA_PEPPER; do
-              if ! grep -qE "^${key}=.+" .env; then
-                echo "BLOCKED: missing or empty required setting: $key"
+              if ! grep -qE "^\${key}=.+" .env; then missing="$missing $key"; fi
+            done
+            if [ -n "$missing" ]; then
+              if [ "$DB_EXISTS" -eq 1 ]; then
+                echo "BLOCKED: existing database detected; missing settings:$missing. Preserving database."
                 exit 21
+              fi
+              echo "Repairing incomplete .env with secure values (existing values preserved)."
+              umask 077
+              if ! grep -qE '^POSTGRES_DB=.+' .env; then printf '\nPOSTGRES_DB=digibail_prod\n' >> .env; fi
+              if ! grep -qE '^POSTGRES_USER=.+' .env; then printf '\nPOSTGRES_USER=digibail_app\n' >> .env; fi
+              if ! grep -qE '^POSTGRES_PASSWORD=.+' .env; then printf '\nPOSTGRES_PASSWORD=%s\n' "$(openssl rand -hex 32)" >> .env; fi
+              DB_NAME="$(sed -n 's/^POSTGRES_DB=//p' .env | tail -n 1)"
+              DB_USER="$(sed -n 's/^POSTGRES_USER=//p' .env | tail -n 1)"
+              DB_PASS="$(sed -n 's/^POSTGRES_PASSWORD=//p' .env | tail -n 1)"
+              if ! grep -qE '^DATABASE_URL=.+' .env; then printf '\nDATABASE_URL=postgresql://%s:%s@db:5432/%s\n' "$DB_USER" "$DB_PASS" "$DB_NAME" >> .env; fi
+              if ! grep -qE '^JWT_SECRET=.+' .env; then printf '\nJWT_SECRET=%s\n' "$(openssl rand -hex 48)" >> .env; fi
+              if ! grep -qE '^OTP_PEPPER=.+' .env; then printf '\nOTP_PEPPER=%s\n' "$(openssl rand -hex 32)" >> .env; fi
+              if ! grep -qE '^CAPTCHA_PEPPER=.+' .env; then printf '\nCAPTCHA_PEPPER=%s\n' "$(openssl rand -hex 32)" >> .env; fi
+              chmod 600 .env
+            fi
+            for key in POSTGRES_DB POSTGRES_USER POSTGRES_PASSWORD DATABASE_URL JWT_SECRET OTP_PEPPER CAPTCHA_PEPPER; do
+              if ! grep -qE "^\${key}=.+" .env; then
+                echo "BLOCKED: missing or empty required setting: $key"
+                exit 22
               fi
             done
             if grep -Eq 'REPLACE_WITH|URL_ENCODED_PASSWORD' .env; then
               echo "BLOCKED: .env still contains example placeholders."
-              exit 22
+              exit 23
             fi
             echo "=== docker compose validation ==="
             docker compose config -q
