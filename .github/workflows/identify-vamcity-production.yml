@@ -81,6 +81,28 @@ jobs:
               fi
               unset SA_PASS
             fi
+            echo "=== CORE MIGRATION QUERY CHECK (no rows printed) ==="
+            TMPQ="$(mktemp -d /tmp/vamcity-query-check.XXXXXX)"
+            trap 'rm -rf "$TMPQ"; unset SA_PASS 2>/dev/null || true' EXIT
+            SQLC="vamcity-stage-sql"
+            SQLCMD="$($D exec "$SQLC" sh -lc 'command -v /opt/mssql-tools18/bin/sqlcmd || command -v /opt/mssql-tools/bin/sqlcmd || command -v sqlcmd' 2>/dev/null | head -n 1)"
+            SA_PASS="$($D exec "$SQLC" printenv MSSQL_SA_PASSWORD 2>/dev/null || true)"
+            if [ -n "$SQLCMD" ] && [ -n "$SA_PASS" ]; then
+              Q_USERS="SET NOCOUNT ON; SELECT CAST(u.Id AS nvarchar(40)) AS legacyId, NULLIF(LTRIM(RTRIM(u.UserName)),'') AS username, NULLIF(LTRIM(RTRIM(CONCAT(ISNULL(u.FirstName,''),' ',ISNULL(u.LastName,'')))),'') AS fullName, NULLIF(LTRIM(RTRIM(u.Email)),'') AS email, NULLIF(LTRIM(RTRIM(u.NationalCode)),'') AS nationalCode, NULLIF(LTRIM(RTRIM(u.PasswordHash)),'') AS passwordHash, CAST(u.IsActive AS bit) AS isActive, COALESCE(NULLIF(LTRIM(RTRIM(u.Mobile)),''),NULLIF(LTRIM(RTRIM(u.Phone)),'')) AS phone, COALESCE((SELECT STRING_AGG(r.Name, ',') FROM AspNetUserRoles ur JOIN AspNetRoles r ON r.Id=ur.RoleId WHERE ur.UserId=u.Id),'') AS roles, u.RegDate AS createdAt FROM dbo.AspNetUsers u FOR JSON PATH;"
+              for DBNAME in vamcityc_vamcity_import_20261028; do
+                if $D exec "$SQLC" "$SQLCMD" -S localhost -U sa -P "$SA_PASS" -C -b -h -1 -w 65535 -y 0 -d "$DBNAME" -Q "$Q_USERS" > "$TMPQ/users.out" 2>&1; then
+                  echo "CORE_USERS_QUERY=$DBNAME:OK"
+                else
+                  echo "CORE_USERS_QUERY=$DBNAME:FAILED"
+                  grep -Ei 'Msg [0-9]+|error|invalid|cannot|failed|must|operand|column' "$TMPQ/users.out" | tail -n 12 || true
+                fi
+              done
+              Q_CUSTOMERS="SET NOCOUNT ON; SELECT CONVERT(nvarchar(36),Id) AS legacyId, Name AS name, Mobile AS mobile, Email AS email, Code AS code, RegDate AS createdAt, ExpireDate AS expiresAt, Permanent AS permanent, Purchased AS purchased, AffCode AS affiliateCode, ParkDomain AS parkedDomain FROM dbo.Customers FOR JSON PATH;"
+              if $D exec "$SQLC" "$SQLCMD" -S localhost -U sa -P "$SA_PASS" -C -b -h -1 -w 65535 -y 0 -d "vamcityc_vamcity_import_20261028" -Q "$Q_CUSTOMERS" > "$TMPQ/customers.out" 2>&1; then echo "CORE_CUSTOMERS_QUERY=OK"; else echo "CORE_CUSTOMERS_QUERY=FAILED"; grep -Ei 'Msg [0-9]+|error|invalid|cannot|failed|must|operand|column' "$TMPQ/customers.out" | tail -n 12 || true; fi
+              Q_SMS="SET NOCOUNT ON; SELECT CONVERT(nvarchar(36),Id) AS legacyId, Title AS title, Pattern AS pattern, IsSystem AS isSystem, Status AS status, Category AS category, SmsPatternPanel AS providerPanel, IsPatternBase AS isPatternBase, PatternBaseCode AS patternBaseCode, RejectReason AS rejectReason, CONVERT(nvarchar(36),CustomerId) AS legacyCustomerId FROM dbo.SmsPatterns FOR JSON PATH;"
+              if $D exec "$SQLC" "$SQLCMD" -S localhost -U sa -P "$SA_PASS" -C -b -h -1 -w 65535 -y 0 -d "vamcityc_vamcity_import_20261028" -Q "$Q_SMS" > "$TMPQ/sms.out" 2>&1; then echo "CORE_SMS_QUERY=OK"; else echo "CORE_SMS_QUERY=FAILED"; grep -Ei 'Msg [0-9]+|error|invalid|cannot|failed|must|operand|column' "$TMPQ/sms.out" | tail -n 12 || true; fi
+            fi
+            unset SA_PASS 2>/dev/null || true
             echo "=== SERVER APP SETTINGS PATHS ==="
             find /home/roofixo/domains/roofixo.ir/vamcity-app/releases -maxdepth 3 -type f \( -iname 'appsettings*.json' -o -iname '*.config' \) -printf '%p\n' 2>/dev/null | head -n 60
             echo "PRODUCTION_MAPPING_INSPECTION_COMPLETE=1"
