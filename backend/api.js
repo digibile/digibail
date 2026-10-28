@@ -353,8 +353,8 @@ export async function handleApi(req, res, url) {
         if (!["image/jpeg","image/png","image/webp"].includes(file.mime)) return json(res, 415, { message: "فقط تصویر JPG، PNG یا WEBP پذیرفته می‌شود." });
         const safeName = String(file.name || "document").replace(/[\\/\\r\\n\0]/g,"_").slice(0,255) || "document";
         const q = await pool.query(
-          "INSERT INTO customer_documents(user_id,kind,file_name,mime_type,file_data) VALUES($1,$2,$3,$4,$5) RETURNING id",
-          [userId,kind,safeName,file.mime,file.data]
+          "INSERT INTO customer_documents(user_id,kind,file_name,mime_type,file_data,fields) VALUES($1,$2,$3,$4,$5,$6::jsonb) RETURNING id",
+          [userId,kind,safeName,file.mime,file.data,JSON.stringify({fields:{fullName:"",nationalCode:""}})]
         );
         await audit(req, "documents.uploaded", userId, { documentId:q.rows[0].id, kind, size:file.data.length });
         return json(res, 201, { ok:true, ocr:false, id:q.rows[0].id });
