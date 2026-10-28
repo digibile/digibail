@@ -34,21 +34,21 @@ jobs:
             if sudo -n docker info >/dev/null 2>&1; then D='sudo -n docker'; elif docker info >/dev/null 2>&1; then D='docker'; else echo "BLOCKED: Docker unavailable"; exit 20; fi
             FOUND=0
             for n in $(seq 1 90); do
-              if [ -s "$ROOT/scripts/import-vamcity-real-data.mjs" ] && grep -q "sensitive command details suppressed" "$ROOT/scripts/import-vamcity-real-data.mjs" && grep -q "isolated worker container" "$ROOT/scripts/import-vamcity-real-data.mjs" && grep -q "diagnostic details filtered" "$ROOT/scripts/import-vamcity-real-data.mjs" && grep -q "error?.stdout" "$ROOT/scripts/import-vamcity-real-data.mjs" && grep -q "error?.message" "$ROOT/scripts/import-vamcity-real-data.mjs" && grep -q "stdout_bytes" "$ROOT/scripts/import-vamcity-real-data.mjs" && grep -q "offset += 500" "$ROOT/scripts/import-vamcity-real-data.mjs" && [ -s "$ROOT/scripts/migrate-legacy-digibail.js" ]; then FOUND=1; break; fi
+              if [ -s "$ROOT/scripts/import-vamcity-real-data.mjs" ] && grep -q "sensitive command details suppressed" "$ROOT/scripts/import-vamcity-real-data.mjs" && grep -q "Isolate the heavy migration process from the live web container" "$ROOT/scripts/import-vamcity-real-data.mjs" && grep -q "diagnostic details filtered" "$ROOT/scripts/import-vamcity-real-data.mjs" && grep -q "error?.stdout" "$ROOT/scripts/import-vamcity-real-data.mjs" && grep -q "error?.message" "$ROOT/scripts/import-vamcity-real-data.mjs" && grep -q "stdout_bytes" "$ROOT/scripts/import-vamcity-real-data.mjs" && grep -q "offset += 500" "$ROOT/scripts/import-vamcity-real-data.mjs" && [ -s "$ROOT/scripts/migrate-legacy-digibail.js" ]; then FOUND=1; break; fi
               sleep 5
             done
             [ "$FOUND" -eq 1 ] || { echo "BLOCKED: importer files not deployed"; exit 21; }
             echo "=== Wait for production deploy to finish before starting database writes ==="
-            sleep 120
             STABLE=0
             PREV=""
-            for n in $(seq 1 6); do
+            for n in $(seq 1 60); do
               CURRENT="$($D compose ps -q app 2>/dev/null || true)"
               if [ -n "$CURRENT" ] && [ "$CURRENT" = "$PREV" ] && curl -fsS http://127.0.0.1:1631/healthz >/dev/null 2>&1; then STABLE=$((STABLE+1)); else STABLE=0; fi
               PREV="$CURRENT"
+              if [ "$STABLE" -ge 3 ]; then break; fi
               sleep 10
             done
-            [ "$STABLE" -ge 3 ] || { echo "BLOCKED: app container did not stabilize after deploy"; exit 22; }
+            [ "$STABLE" -ge 3 ] || { echo "BLOCKED: app container did not stabilize after deploy within 10 minutes"; exit 22; }
             echo "=== Importing all verified source database tables into PostgreSQL using isolated worker containers ==="
             node "$ROOT/scripts/import-vamcity-real-data.mjs"
             echo "=== Server-side migration process returned success ==="
