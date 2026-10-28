@@ -56,8 +56,8 @@ jobs:
                 const capRes=await fetch("http://127.0.0.1:1631/api/v1/security/captcha");
                 if(!capRes.ok)throw new Error("captcha endpoint returned "+capRes.status);
                 const cap=await capRes.json();
-                const svg=Buffer.from(String(cap.image||"").replace(/^data:image\\/svg\\+xml;base64,/,""),"base64").toString("utf8");
-                const answer=svg.match(/<text[^>]*>(\\d{5})<\\/text>/)?.[1];
+                const svg=Buffer.from(String(cap.image||"").replace(/^data:image\/svg\+xml;base64,/,""),"base64").toString("utf8");
+                const answer=svg.match(/<text[^>]*>(\d{5})<\/text>/)?.[1];
                 if(!answer)throw new Error("could not read internal test captcha");
                 const loginRes=await fetch("http://127.0.0.1:1631/api/v1/security/login",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({username:"digibail-admin",password:process.env.TEMP_PASS,captchaId:cap.id,captchaAnswer:answer})});
                 const login=await loginRes.json();
