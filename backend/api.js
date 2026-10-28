@@ -217,6 +217,17 @@ export async function handleApi(req, res, url) {
         const q = await pool.query("SELECT legacy_id,name,mobile,email,customer_code,registered_at,expires_at,is_permanent,purchased,affiliate_code,parked_domain FROM legacy_customers ORDER BY registered_at DESC NULLS LAST");
         return json(res, 200, { data: q.rows });
       }
+      if (req.method === "GET" && route === "/api/v1/admin/legacy-source-data") {
+        const sourceTable = String(url.searchParams.get("table") || "");
+        if (!["CustomerPurchasePlan", "LoanRequestStatuses"].includes(sourceTable)) {
+          return json(res, 400, { message: "نوع داده قدیمی معتبر نیست." });
+        }
+        const q = await pool.query(
+          "SELECT legacy_id,payload,imported_at FROM legacy_source_data WHERE source_table=$1 ORDER BY legacy_id",
+          [sourceTable]
+        );
+        return json(res, 200, { data: q.rows });
+      }
       if (req.method === "GET" && route === "/api/v1/admin/sms/templates") {
         const q = await pool.query("SELECT id,legacy_id,title,body,is_system,status,category,provider_panel,is_pattern_base,pattern_base_code,reject_reason,updated_at FROM sms_templates ORDER BY id");
         return json(res, 200, { data: { items: q.rows, configured: Boolean(KAVENEGAR_API_KEY) } });
