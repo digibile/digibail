@@ -185,7 +185,13 @@ jobs:
             if (!login.ok || !cookie.startsWith("db_session=")) throw new Error("Recovery login failed: " + login.status);
             const admin = await fetch(base + "/api/v1/admin/summary", { headers: { Cookie: cookie } });
             if (!admin.ok) throw new Error("Admin authorization failed: " + admin.status);
+            const page = await fetch(base + "/admin.html", { headers: { Cookie: cookie } });
+            const html = await page.text();
+            if (!page.ok || !html.includes("<title>مدیریت دیجی‌بایل پی</title>") || !html.includes("همه داده‌های منتقل‌شده")) {
+              throw new Error("Real-data admin dashboard page check failed: HTTP " + page.status);
+            }
             console.log("ADMIN_LOGIN_AND_DASHBOARD_API_SMOKE=PASS");
+            console.log("ADMIN_DASHBOARD_PAGE_SMOKE=PASS");
             NODE
             unset RECOVERY_PASSWORD
             echo "ADMIN_RECOVERY_FILE=/root/digibail-admin-recovery.txt (root-only, mode 600; secret not logged)"
