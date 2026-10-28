@@ -116,7 +116,15 @@ jobs:
             echo "=== docker compose validation ==="
             $DOCKER compose config -q
             echo "=== build and start application ==="
-            $DOCKER compose up -d --build
+            if ! $DOCKER compose up -d --build; then
+              echo "=== compose status after startup failure ==="
+              $DOCKER compose ps || true
+              echo "=== database logs ==="
+              $DOCKER compose logs --tail=100 db || true
+              echo "=== app logs ==="
+              $DOCKER compose logs --tail=100 app || true
+              exit 24
+            fi
             echo "=== wait for application health ==="
             for n in $(seq 1 30); do
               if curl -fsS http://127.0.0.1:1631/healthz >/dev/null; then
