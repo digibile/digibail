@@ -146,9 +146,8 @@ jobs:
               fi
             done
             echo "=== route production domain to verified app ==="
-            CUSTS=(/usr/local/directadmin/data/users/*/domains/digebail.ir.cust_nginx)
             ROUTE_UPDATED=0
-            for CUST in "${CUSTS[@]}"; do
+            for CUST in /usr/local/directadmin/data/users/*/domains/digebail.ir.cust_nginx; do
               [ -f "$CUST" ] || continue
               echo "--- checking route file: $CUST"
               if grep -qE 'proxy_pass http://127\.0\.0\.1:(1361|1362);' "$CUST"; then
