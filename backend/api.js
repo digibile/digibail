@@ -271,6 +271,38 @@ export async function handleApi(req, res, url) {
         );
         return json(res, 200, { data: q.rows });
       }
+      if (req.method === "GET" && route === "/api/v1/admin/documents") {
+        const q = await pool.query("SELECT id,user_id,kind,status,created_on,updated_at,review_note,fields::text AS fields_json,file_name,mime_type FROM customer_documents ORDER BY created_on DESC LIMIT 500");
+        return json(res, 200, { data:q.rows });
+      }
+      if (req.method === "POST" && route === "/api/v1/admin/documents/review") {
+        const b = await body(req); const id = String(b.id || "");
+        const status = String(b.status || "");
+        const note = String(b.note || "").trim().slice(0,2000);
+        if (!/^[0-9a-f-]{36}$/i.test(id) || !["Verified","Rejected","Pending"].includes(status)) return json(res, 400, { message:"شناسه یا وضعیت مدرک معتبر نیست." });
+        const q = await pool.query("UPDATE customer_documents SET status=$1,review_note=$2,updated_at=NOW() WHERE id=$3 RETURNING id,user_id,status", [status,note||null,id]);
+        if (!q.rowCount) return json(res, 404, { message:"مدرک پیدا نشد." });
+        await audit(req,"admin.documents.reviewed",Number(admin.sub)||null,{documentId:id,status});
+        return json(res,200,{ok:true,data:q.rows[0]});
+      }
+      if (req.method === "GET" && route === "/api/v1/admin/contracts") {
+        const q = await pool.query("SELECT id,user_id,title,number,status,expires_at,created_on,signed_at,rejected_at,rejection_note FROM customer_contracts ORDER BY created_on DESC LIMIT 500");
+        return json(res,200,{data:q.rows});
+      }
+      if (req.method === "POST" && route === "/api/v1/admin/contracts/create") {
+        const b = await body(req);
+        const userId = Number(b.userId);
+        const title = String(b.title||"").trim().slice(0,240);
+        const number = String(b.number||"").trim().slice(0,120);
+        const bodyHtml = String(b.bodyHtml||"").trim();
+        const expiresAt = b.expiresAt ? new Date(b.expiresAt) : null;
+        if (!Number.isSafeInteger(userId)||userId<1||!title||!number||!bodyHtml||bodyHtml.length>200000||(expiresAt&&!Number.isFinite(expiresAt.getTime()))) return json(res,400,{message:"اطلاعات قرارداد معتبر نیست."});
+        const owner = await pool.query("SELECT id FROM users WHERE id=$1 AND is_active=TRUE",[userId]);
+        if(!owner.rowCount) return json(res,404,{message:"کاربر فعال پیدا نشد."});
+        const q=await pool.query("INSERT INTO customer_contracts(user_id,title,number,body_html,expires_at) VALUES($1,$2,$3,$4,$5) RETURNING id,title,number,status,created_on",[userId,title,number,bodyHtml,expiresAt?expiresAt.toISOString():null]);
+        await audit(req,"admin.contracts.created",Number(admin.sub)||null,{contractId:q.rows[0].id,userId});
+        return json(res,201,{ok:true,data:q.rows[0]});
+      }
       if (req.method === "GET" && route === "/api/v1/admin/sms/templates") {
         const q = await pool.query("SELECT id,legacy_id,title,body,is_system,status,category,provider_panel,is_pattern_base,pattern_base_code,reject_reason,updated_at FROM sms_templates ORDER BY id");
         return json(res, 200, { data: { items: q.rows, configured: Boolean(KAVENEGAR_API_KEY) } });
