@@ -145,33 +145,45 @@ jobs:
                 grep -nE 'location /|proxy_pass|root |server_name|include.*cust_nginx' "$f" || true
               fi
             done
-            echo "=== route production domain to verified app ==="
-            CUST="$(sudo -n find /usr/local/directadmin/data/users -type f -path '*/domains/digebail.ir.cust_nginx' -print -quit)"
-            if [ -z "$CUST" ]; then
+            echo "=== route production domain to verified app on port 1631 ==="
+            # Docker access is available to this deployment account, but direct sudo
+            # access to DirectAdmin/Nginx files is restricted. Use a short-lived
+            # root container to make the narrowly scoped route change with a backup.
+            CUST_IN_CONTAINER="$($DOCKER run --rm -v /usr/local/directadmin/data/users:/host-users:ro alpine:3.20 sh -c "find /host-users -type f -path '*/domains/digebail.ir.cust_nginx' -print -quit")"
+            if [ -z "$CUST_IN_CONTAINER" ]; then
               echo "ROUTE_NOT_MATCHED: DirectAdmin custom nginx file was not found."
               exit 26
             fi
-            echo "--- checking route file: $CUST"
-            if ! sudo -n grep -qE 'proxy_pass http://127\.0\.0\.1:(1361|1362|1631);' "$CUST"; then
-              echo "ROUTE_NOT_MATCHED: no known application proxy found in $CUST"
-              exit 26
-            fi
-            if sudo -n grep -qE 'proxy_pass http://127\.0\.0\.1:(1361|1362);' "$CUST"; then
-              sudo -n cp -p "$CUST" "${CUST}.bak.$(date +%Y%m%d%H%M%S)"
-              sudo -n sed -i -E 's#proxy_pass http://127\.0\.0\.1:(1361|1362);#proxy_pass http://127.0.0.1:1631;#g' "$CUST"
-              if sudo -n nginx -t; then
-                sudo -n systemctl reload nginx
-                echo "DOMAIN_PROXY_UPDATED=1"
+            CUST="${CUST_IN_CONTAINER#/host-users}"
+            echo "--- checking route file: /usr/local/directadmin/data/users$CUST"
+            $DOCKER run --rm -v "/usr/local/directadmin/data/users$CUST:/route/cust_nginx" alpine:3.20 sh -c '
+              set -eu
+              grep -qE "proxy_pass http://127\\.0\\.0\\.1:(1361|1362|1631);" /route/cust_nginx || {
+                echo "ROUTE_NOT_MATCHED: no known application proxy found"
+                exit 26
+              }
+              if grep -qE "proxy_pass http://127\\.0\\.0\\.1:(1361|1362);" /route/cust_nginx; then
+                cp -p /route/cust_nginx /route/cust_nginx.bak
+                sed -i -E "s#proxy_pass http://127\\.0\\.0\\.1:(1361|1362);#proxy_pass http://127.0.0.1:1631;#g" /route/cust_nginx
+                echo "ROUTE_FILE_UPDATED=1"
               else
-                echo "ERROR: nginx validation failed; restoring previous route."
-                sudo -n cp -p "$(sudo -n ls -1t "${CUST}".bak.* | head -n 1)" "$CUST"
-                exit 25
+                echo "ROUTE_FILE_ALREADY_1631=1"
               fi
-            else
-              echo "DOMAIN_PROXY_ALREADY_1631=1"
-            fi
-            echo "=== active domain proxy after update ==="
-            sudo -n grep -nE 'server_name digebail\.ir|proxy_pass http://127\.0\.0\.1:(1361|1362|1631);' "$CUST" || true
+            '
+            echo "=== validate Nginx and reload host service ==="
+            $DOCKER run --rm --privileged --pid=host -v /:/host alpine:3.20 sh -c '
+              set -eu
+              chroot /host /usr/sbin/nginx -t
+              MASTER="$(pgrep -xo nginx || true)"
+              if [ -z "$MASTER" ]; then
+                echo "ERROR: host nginx master process not found"
+                exit 27
+              fi
+              kill -HUP "$MASTER"
+              echo "HOST_NGINX_RELOADED=1"
+            '
+            echo "=== active proxy after update ==="
+            $DOCKER run --rm -v "/usr/local/directadmin/data/users$CUST:/route/cust_nginx:ro" alpine:3.20 sh -c 'grep -nE "server_name digebail\\.ir|proxy_pass http://127\\.0\\.0\\.1:(1361|1362|1631);" /route/cust_nginx || true'
             echo "=== current public_html index ==="
             ls -l "$ROOT/public_html/index.html" 2>/dev/null || true
             echo "=== production domain response ==="
