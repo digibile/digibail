@@ -66,8 +66,11 @@ jobs:
                 echo "=== SQL Server database names (no credentials) ==="
                 $DOCKER exec -e SQLCMDPASSWORD="$SA_PASS" "$SQLC" "$SQLCMD" -S localhost -U sa -C -b -h -1 -W -Q "SET NOCOUNT ON; SELECT name FROM sys.databases WHERE database_id > 4 ORDER BY name" | tr -d '\r'
                 echo "=== SQL Server table names and row counts ==="
-                SQL="SET NOCOUNT ON; DECLARE @db sysname; DECLARE c CURSOR LOCAL FAST_FORWARD FOR SELECT name FROM sys.databases WHERE database_id > 4; OPEN c; FETCH NEXT FROM c INTO @db; WHILE @@FETCH_STATUS=0 BEGIN EXEC(N'USE '+QUOTENAME(@db)+N'; SELECT DB_NAME() AS db_name, s.name AS schema_name, t.name AS table_name, SUM(p.rows) AS row_count FROM sys.tables t JOIN sys.schemas s ON s.schema_id=t.schema_id JOIN sys.partitions p ON p.object_id=t.object_id AND p.index_id IN (0,1) GROUP BY s.name,t.name ORDER BY t.name'); FETCH NEXT FROM c INTO @db; END; CLOSE c; DEALLOCATE c;"
-                $DOCKER exec -e SQLCMDPASSWORD="$SA_PASS" "$SQLC" "$SQLCMD" -S localhost -U sa -C -b -W -Q "$SQL" | tr -d '\r' | head -250
+                SQL="SET NOCOUNT ON; SELECT s.name AS schema_name, t.name AS table_name, SUM(p.rows) AS row_count FROM sys.tables t JOIN sys.schemas s ON s.schema_id=t.schema_id JOIN sys.partitions p ON p.object_id=t.object_id AND p.index_id IN (0,1) GROUP BY s.name,t.name ORDER BY t.name;"
+                $DOCKER exec -e SQLCMDPASSWORD="$SA_PASS" "$SQLC" "$SQLCMD" -S localhost -U sa -C -b -W -d Digibail -Q "$SQL" | tr -d '\r' | head -250
+                echo "=== SQL Server table columns (for migration mapping) ==="
+                SQL="SET NOCOUNT ON; SELECT t.name AS table_name, c.name AS column_name, TYPE_NAME(c.user_type_id) AS data_type, c.max_length, c.is_nullable FROM sys.tables t JOIN sys.columns c ON c.object_id=t.object_id ORDER BY t.name,c.column_id;"
+                $DOCKER exec -e SQLCMDPASSWORD="$SA_PASS" "$SQLC" "$SQLCMD" -S localhost -U sa -C -b -W -d Digibail -Q "$SQL" | tr -d '\r' | head -350
                 unset SA_PASS
               else
                 echo "SQL_SERVER_INSPECTION=BLOCKED (sqlcmd or local container password unavailable; no secrets printed)"
@@ -75,9 +78,15 @@ jobs:
             else
               echo "LEGACY_SQL_CONTAINER=NOT_FOUND"
             fi
-            echo "=== target PostgreSQL schema ==="
+            echo "=== old app container config key names only ==="
+            if $DOCKER inspect public_html-web-1 >/dev/null 2>&1; then
+              $DOCKER exec public_html-web-1 sh -lc 'for f in /app/appsettings*.json; do [ -f "$f" ] || continue; echo "CONFIG_FILE=$f"; grep -Eho '"'"'"[^"]*(Sms|Kavenegar|ApiKey|Template|OTP|Otp|Phone|ConnectionString|Admin|User)[^"]*"[[:space:]]*:'"'"' "$f" 2>/dev/null || true; done' || true
+              echo "OLD_APP_ENV_KEY_NAMES="
+              $DOCKER inspect --format '{{range .Config.Env}}{{println .}}{{end}}' public_html-web-1 | sed 's/=.*//' | grep -Ei 'sms|kavenegar|otp|connection|string|admin|user|phone|api' | sort -fu || true
+            fi
+            echo "=== target PostgreSQL tables ==="
             if [ -f docker-compose.yml ] && $DOCKER compose ps --services 2>/dev/null | grep -qx db; then
-              $DOCKER compose exec -T db sh -lc 'PGPASSWORD="$POSTGRES_PASSWORD" psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Atc "SELECT table_name || chr(9) || string_agg(column_name || \' : \' || data_type, \, \' ORDER BY ordinal_position) FROM information_schema.columns WHERE table_schema=\'public\' GROUP BY table_name ORDER BY table_name;"' 2>/dev/null || echo "TARGET_SCHEMA_QUERY=FAILED"
+              $DOCKER compose exec -T db sh -lc 'export PGPASSWORD="$POSTGRES_PASSWORD"; psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "\\dt"' || echo "TARGET_SCHEMA_QUERY=FAILED"
             else
               echo "TARGET_POSTGRES_SERVICE=NOT_FOUND"
             fi
