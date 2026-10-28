@@ -44,6 +44,7 @@ jobs:
       - name: Verify required source files
         run: |
           test -s web/template-v3.html
+          test -s web/customer-panel.html
           test -s frontend/login.html
           test -s frontend/register.html
           test -s web/documents.html
