@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#241047"><title>ورود امن مدیریت | دیجی‌بایل</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700;800&display=swap">
+<style>
+:root{color-scheme:light;--ink:#211436;--muted:#786c89;--line:#e9e1f2;--purple:#482478;--gold:#f6b62e;--paper:#fbf9fe}
+*{box-sizing:border-box}body{margin:0;min-height:100svh;display:grid;place-items:center;padding:20px;background:radial-gradient(ellipse at 15% 12%,#eee5ff 0,transparent 36%),radial-gradient(ellipse at 92% 88%,#fff0ce 0,transparent 30%),var(--paper);color:var(--ink);font:15px/1.8 Vazirmatn,Tahoma,sans-serif}
+.shell{width:min(100%,430px)}.brand{display:flex;align-items:center;gap:11px;margin:0 0 20px;font-weight:800;font-size:1.05rem}.mark{width:42px;height:42px;display:grid;place-items:center;border-radius:14px;background:linear-gradient(145deg,#5d35a0,#241047);color:var(--gold);font-size:1.4rem;box-shadow:0 8px 22px #4824782a}
+.card{background:#ffffffed;border:1px solid #fff;border-radius:25px;padding:clamp(22px,6vw,34px);box-shadow:0 22px 70px #2c174014;backdrop-filter:blur(14px)}h1{font-size:1.65rem;line-height:1.4;margin:0 0 6px;letter-spacing:-.04em}.sub{margin:0 0 24px;color:var(--muted);font-size:.9rem}
+label{display:block;font-weight:700;font-size:.84rem;margin:14px 0 6px}input{width:100%;min-height:47px;border:1px solid var(--line);border-radius:13px;background:#fff;padding:11px 13px;font:inherit;outline:none;transition:border .2s,box-shadow .2s}input:focus{border-color:#8c6ac1;box-shadow:0 0 0 3px #8c6ac11c}.captcha{display:flex;align-items:center;gap:9px}.captcha img{width:145px;height:48px;object-fit:contain;border-radius:10px;background:#241047}.refresh{width:46px;min-width:46px;height:46px;border:1px solid var(--line);border-radius:12px;background:#fff;color:var(--purple);font-size:1.25rem;cursor:pointer}
+.submit{width:100%;min-height:48px;margin-top:22px;border:0;border-radius:14px;background:linear-gradient(120deg,#4d287e,#2b1550);color:#fff;font:inherit;font-weight:800;cursor:pointer;box-shadow:0 9px 20px #48247825}.submit:disabled{opacity:.6;cursor:wait}.msg{display:none;margin-top:14px;padding:10px 12px;border-radius:12px;font-size:.86rem;background:#fff1f1;color:#9a2639}.msg.show{display:block}.foot{text-align:center;color:var(--muted);font-size:.76rem;margin-top:18px}.back{display:inline-block;margin-top:18px;color:var(--purple);font-size:.85rem;text-decoration:none}
+@media(max-width:420px){body{padding:14px}.brand{margin-bottom:14px}.card{border-radius:21px;padding:22px 18px}h1{font-size:1.45rem}.captcha img{width:132px}}
+</style></head>
+<body><main class="shell">
+<div class="brand"><span class="mark">د</span><span>دیجی‌بایل <span style="color:#9a7cbb">/</span> مرکز مدیریت امن</span></div>
+<section class="card"><h1>ورود به پنل مدیریت</h1><p class="sub">با حساب مدیر سامانه وارد شوید. دسترسی‌ها بعد از احراز هویت بررسی می‌شوند.</p>
+<form id="login" autocomplete="on">
+<label for="username">نام کاربری یا شماره موبایل</label><input id="username" name="username" autocomplete="username" required maxlength="80" placeholder="نام کاربری مدیر">
+<label for="password">رمز عبور</label><input id="password" name="password" type="password" autocomplete="current-password" required>
+<label>کد امنیتی</label><div class="captcha"><img id="captchaImage" alt="کد امنیتی"><button class="refresh" type="button" id="refresh" aria-label="کد امنیتی جدید">↻</button><input id="captchaAnswer" inputmode="numeric" autocomplete="off" maxlength="5" placeholder="۵ رقم" required aria-label="پاسخ کد امنیتی"></div>
+<button class="submit" id="submit" type="submit">ورود امن به مدیریت</button><div class="msg" id="message" role="alert"></div>
+</form></section><div class="foot">اتصال امن · ثبت رویدادهای ورود · نشست محدودمدت</div><div style="text-align:center"><a class="back" href="/">بازگشت به صفحه اصلی</a></div>
+</main>
+<script>
+const $=s=>document.querySelector(s);let captchaId="";
+async function refreshCaptcha(){try{const r=await fetch("/api/v1/security/captcha",{cache:"no-store",credentials:"same-origin"});const j=await r.json();if(!r.ok)throw new Error(j.message||"کد امنیتی بارگذاری نشد.");captchaId=j.id;$("#captchaImage").src=j.image;$("#captchaAnswer").value="";$("#message").classList.remove("show")}catch(e){show(e.message)}}
+function show(s){$("#message").textContent=s;$("#message").classList.add("show")}
+$("#refresh").addEventListener("click",refreshCaptcha);
+$("#login").addEventListener("submit",async e=>{e.preventDefault();const b=$("#submit");b.disabled=true;b.textContent="در حال بررسی…";$("#message").classList.remove("show");
+try{const r=await fetch("/api/v1/security/login",{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json"},body:JSON.stringify({username:$("#username").value.trim(),password:$("#password").value,captchaId,captchaAnswer:$("#captchaAnswer").value.trim()})});const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.message||"ورود انجام نشد.");const u=j.user||j.data?.user||{};const role=String(u.role||"").toLowerCase();if(!["admin","superadmin"].includes(role)){show("این حساب دسترسی مدیریت ندارد.");await refreshCaptcha();return}const q=new URLSearchParams(location.search).get("next")||"/admin.html";const dest=q.startsWith("/")&&!q.startsWith("//")?q:"/admin.html";location.replace(dest)}catch(err){show(err.message);await refreshCaptcha()}finally{b.disabled=false;b.textContent="ورود امن به مدیریت"}});
+refreshCaptcha();
+</script></body></html>
