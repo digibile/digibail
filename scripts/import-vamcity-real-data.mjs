@@ -35,7 +35,7 @@ function jsonFromSql(raw, label) {
   return JSON.parse(raw.slice(first, last + 1).replace(/[\r\n]/g, ""));
 }
 function queryRows(db, query, label) {
-  const raw = sql(["-b", "-h", "-1", "-w", "65535", "-y", "0", "-d", db, "-Q", query]);
+  const raw = sql(["-b", "-w", "65535", "-y", "0", "-d", db, "-Q", query]);
   return jsonFromSql(raw, label);
 }
 function importInput(appId, tempDir, input, label) {
@@ -100,7 +100,7 @@ try {
       try {
         rows = queryRows(db, "SET NOCOUNT ON; SELECT * FROM [" + schemaQ + "].[" + tableQ + "] FOR JSON PATH, INCLUDE_NULL_VALUES;", fullName);
       } catch (err) {
-        console.error("TABLE_EXPORT_FAILED=" + fullName + " " + String(err.message).slice(0, 800));
+        console.error("TABLE_EXPORT_FAILED=" + fullName + "; diagnostic details suppressed");
         throw err;
       }
       console.log("SOURCE_ROW_COUNT=" + fullName + ":" + rows.length);
@@ -124,7 +124,7 @@ try {
   console.log("TOTAL_SOURCE_ROWS_EXPORTED=" + totalSourceRows);
   console.log("IMPORT_SCRIPT_FINISHED=1");
 } catch (error) {
-  console.error("VAMCITY_IMPORT_FAILED=" + String(error?.stack || error).slice(0, 5000));
+  console.error("VAMCITY_IMPORT_FAILED=SQL export/import failed; sensitive command details suppressed.");
   process.exitCode = 1;
 } finally {
   if (SA_PASS) SA_PASS = "";
