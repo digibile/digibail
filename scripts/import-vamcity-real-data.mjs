@@ -86,7 +86,15 @@ try {
     core[key] = queryRows(primary, query, "core " + key);
     console.log("CORE_SOURCE_ROWS_" + key.toUpperCase() + "=" + core[key].length);
   }
-  importInput(appId, tempDir, { users: core.users, customers: core.customers, smsPatterns: core.sms }, "mapped core data");
+  for (let offset = 0; offset < core.users.length; offset += 500) {
+    const batch = core.users.slice(offset, offset + 500);
+    importInput(appId, tempDir, { users: batch, customers: [], smsPatterns: [] },
+      "users " + (offset + 1) + "-" + (offset + batch.length));
+    if ((offset + batch.length) % 5000 === 0 || offset + batch.length === core.users.length) {
+      console.log("CORE_USERS_IMPORTED=" + (offset + batch.length) + "/" + core.users.length);
+    }
+  }
+  importInput(appId, tempDir, { users: [], customers: core.customers, smsPatterns: core.sms }, "customers and SMS templates");
 
   let totalSourceRows = 0;
   let totalTables = 0;
