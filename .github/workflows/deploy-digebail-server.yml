@@ -197,14 +197,33 @@ jobs:
                 kill -HUP "$MASTER"
                 echo "DOMAIN_PROXY_UPDATED=1"
               else
-                chroot /host /usr/sbin/nginx -t
                 echo "DOMAIN_PROXY_ALREADY_1631=1"
               fi
-              echo "=== active route ==="
+              echo "=== regenerate DirectAdmin nginx configuration ==="
+              chroot /host /usr/local/directadmin/custombuild/build rewrite_confs
+              chroot /host /usr/sbin/nginx -t
+              MASTER="$(pgrep -xo nginx || true)"
+              if [ -z "$MASTER" ]; then
+                echo "ERROR: host nginx master process not found."
+                exit 27
+              fi
+              kill -HUP "$MASTER"
+              sleep 2
+              echo "=== generated domain route after reload ==="
+              grep -nE "server_name digebail.ir|proxy_pass http://127.0.0.1:(1361|1362|1631);" /host/usr/local/directadmin/data/users/*/nginx.conf || true
+              echo "=== active custom route ==="
               grep -nE "proxy_pass http://127.0.0.1:(1361|1362|1631);" "$CUST" || true
             '
             echo "=== current public_html index ==="
             ls -l "$ROOT/public_html/index.html" 2>/dev/null || true
-            echo "=== production domain response ==="
-            curl -sS -o /dev/null -w 'LOCAL_HTTP_STATUS=%{http_code}\n' -H 'Host: digebail.ir' http://127.0.0.1/ || true
+            echo "=== production domain response content ==="
+            DOMAIN_BODY="$(curl -fsS --max-time 10 -H 'Host: digebail.ir' http://127.0.0.1/)"
+            printf '%s' "$DOMAIN_BODY" | head -c 500
+            echo
+            if printf '%s' "$DOMAIN_BODY" | grep -q 'دیجی‌بایل پی | خرید اقساطی'; then
+              echo "DOMAIN_CONTENT_VERIFIED=NEW_APP"
+            else
+              echo "ERROR: domain is not serving the expected new app HTML."
+              exit 28
+            fi
             echo "APP_STARTED=1"
