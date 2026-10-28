@@ -112,15 +112,31 @@ try {
     const sourceTable = String(table.sourceTable || "").slice(0,120);
     if (!sourceTable || !Array.isArray(table.rows)) continue;
     const occurrences = new Map();
-    for (const row of table.rows) {
-      const serialized = JSON.stringify(row);
+    const normalized = table.rows.map((entry, index) => {
+      if (entry && typeof entry === "object" && Object.hasOwn(entry, "payload") && entry.legacyId != null) {
+        return { legacyId: String(entry.legacyId), payload: entry.payload };
+      }
+      const payload = entry;
+      const serialized = JSON.stringify(payload);
       const digest = crypto.createHash("sha256").update(serialized).digest("hex").slice(0,32);
       const count = occurrences.get(digest) || 0;
       occurrences.set(digest, count + 1);
-      const legacyId = digest + ":" + String(count + 1);
+      return { legacyId: digest + ":" + String(count + 1), payload };
+    });
+    for (let offset = 0; offset < normalized.length; offset += 250) {
+      const batch = normalized.slice(offset, offset + 250);
+      const values = [];
+      const params = [];
+      for (let i = 0; i < batch.length; i++) {
+        const p = i * 3;
+        values.push("($" + (p + 1) + ",$" + (p + 2) + ",$" + (p + 3) + "::jsonb)");
+        params.push(sourceTable, batch[i].legacyId, JSON.stringify(batch[i].payload));
+      }
+      if (!batch.length) continue;
       const result = await pool.query(
-        "INSERT INTO legacy_source_data(source_table,legacy_id,payload) VALUES($1,$2,$3::jsonb) ON CONFLICT(source_table,legacy_id) DO NOTHING",
-        [sourceTable, legacyId, serialized]
+        "INSERT INTO legacy_source_data(source_table,legacy_id,payload) VALUES " + values.join(",") +
+        " ON CONFLICT(source_table,legacy_id) DO NOTHING",
+        params
       );
       genericTablesInserted += result.rowCount;
     }
