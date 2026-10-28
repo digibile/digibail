@@ -29,6 +29,12 @@ jobs:
               [ -d "$p" ] || continue
               find "$p" -maxdepth 3 -type f \( -name '*compose*.yml' -o -name '*compose*.yaml' -o -name 'docker-compose.*' -o -name 'appsettings*.json' \) -printf '%p\n' 2>/dev/null | head -n 60
             done
+            echo "=== CONTAINER MOUNTS AND COMMAND ==="
+            docker inspect vamcity-stage-app --format 'MOUNTS={{json .Mounts}} CMD={{json .Config.Cmd}} ENTRYPOINT={{json .Config.Entrypoint}} WORKDIR={{.Config.WorkingDir}} USER={{.Config.User}} PORTS={{json .HostConfig.PortBindings}} RESTART={{json .HostConfig.RestartPolicy}}'
+            echo "=== STAGE DIRECTORY ==="
+            ls -la /opt/vamcity-github-stage 2>/dev/null | head -n 60 || true
+            echo "=== APP FILES ==="
+            docker exec vamcity-stage-app sh -lc 'find /app -maxdepth 2 -type f \\( -name "*.dll" -o -name "appsettings*.json" -o -name "*.deps.json" -o -name "*.runtimeconfig.json" \\) -printf "%p\\n" 2>/dev/null | head -n 50' || true
             echo "=== APP ENV DB NAME ONLY ==="
             docker inspect vamcity-stage-app --format '{{range .Config.Env}}{{println .}}{{end}}' | grep -E '^ConnectionStrings__DefaultConnection=' | sed -E 's/(Server=[^;]+;Database=)[^;]+/\\1[DB_NAME]/; s/(Password|Pwd|Token|Secret)=([^; ]+)/\\1=[REDACTED]/Ig' || true
             echo "=== HTTP CHECKS ==="
