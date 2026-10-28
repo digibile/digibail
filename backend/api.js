@@ -44,6 +44,49 @@ async function body(req) {
   for await (const chunk of req) { raw += chunk; if (raw.length > 32768) throw Object.assign(new Error("درخواست بیش از حد بزرگ است."), { status: 413 }); }
   try { return raw ? JSON.parse(raw) : {}; } catch { throw Object.assign(new Error("ساختار JSON معتبر نیست."), { status: 400 }); }
 }
+async function multipartBody(req, limit = 6_200_000) {
+  const type = String(req.headers["content-type"] || "");
+  const match = type.match(/boundary=(?:"([^"]+)"|([^;]+))/i);
+  if (!match) throw Object.assign(new Error("فرمت بارگذاری فایل معتبر نیست."), { status: 400 });
+  const boundary = Buffer.from("--" + (match[1] || match[2]).trim());
+  const chunks = []; let size = 0;
+  for await (const chunk of req) {
+    size += chunk.length;
+    if (size > limit) throw Object.assign(new Error("حجم فایل بیشتر از حد مجاز است."), { status: 413 });
+    chunks.push(chunk);
+  }
+  const raw = Buffer.concat(chunks); const fields = {}; let file = null; let pos = 0;
+  while (true) {
+    const start = raw.indexOf(boundary, pos);
+    if (start < 0) break;
+    let partStart = start + boundary.length;
+    if (raw.subarray(partStart, partStart + 2).toString() === "--") break;
+    if (raw.subarray(partStart, partStart + 2).toString() === "\r\n") partStart += 2;
+    const next = raw.indexOf(boundary, partStart);
+    if (next < 0) break;
+    let partEnd = next;
+    if (raw.subarray(partEnd - 2, partEnd).toString() === "\r\n") partEnd -= 2;
+    const part = raw.subarray(partStart, partEnd);
+    const headerEnd = part.indexOf(Buffer.from("\r\n\r\n"));
+    if (headerEnd < 0) { pos = next; continue; }
+    const headers = part.subarray(0, headerEnd).toString("utf8");
+    const disposition = headers.match(/content-disposition:\s*form-data;[^\r\n]*name="([^"]+)"(?:;\s*filename="([^"]*)")?/i);
+    if (!disposition) { pos = next; continue; }
+    const name = disposition[1]; const filename = disposition[2];
+    const data = part.subarray(headerEnd + 4);
+    if (filename !== undefined) {
+      const mime = headers.match(/content-type:\s*([^\r\n]+)/i)?.[1]?.trim().toLowerCase() || "application/octet-stream";
+      file = { name: filename, mime, data };
+    } else fields[name] = data.toString("utf8");
+    pos = next;
+  }
+  return { fields, file };
+}
+function authenticatedUserId(req) {
+  const session = sessionFor(req);
+  const id = Number(session?.sub);
+  return Number.isSafeInteger(id) && id > 0 ? id : null;
+}
 function clientIp(req) { return (req.socket.remoteAddress || "").replace(/^::ffff:/, "").slice(0, 64) || null; }
 async function audit(req, event, userId = null, details = {}) {
   await pool.query("INSERT INTO audit_logs(user_id,event_type,ip_address,details) VALUES($1,$2,$3,$4)", [userId, event, clientIp(req), JSON.stringify(details)]);
@@ -258,6 +301,86 @@ export async function handleApi(req, res, url) {
         return json(res, 200, { data: q.rows });
       }
       return json(res, 404, { message: "مسیر مدیریت پیدا نشد." });
+    }
+    if (route.startsWith("/api/v1/me/documents")) {
+      const userId = authenticatedUserId(req);
+      if (!userId) return json(res, 401, { message: "برای مشاهده مدارک وارد حساب شوید." });
+      if (req.method === "GET" && route === "/api/v1/me/documents") {
+        const q = await pool.query(
+          "SELECT id,kind,status,created_on AS \"createdOn\",review_note AS \"reviewNote\",fields::text AS \"fieldsJson\",ocr_text AS \"ocrText\",file_name AS \"fileName\" FROM customer_documents WHERE user_id=$1 ORDER BY created_on DESC",
+          [userId]
+        );
+        return json(res, 200, { data: q.rows });
+      }
+      if (req.method === "POST" && route === "/api/v1/me/documents") {
+        const { fields, file } = await multipartBody(req);
+        const kind = String(fields.kind || "").trim();
+        if (!["کارت ملی","شناسنامه","فیش حقوقی","سایر"].includes(kind)) return json(res, 400, { message: "نوع مدرک معتبر نیست." });
+        if (!file || !file.data.length) return json(res, 400, { message: "فایل مدرک انتخاب نشده است." });
+        if (file.data.length > 6_000_000) return json(res, 413, { message: "حجم عکس حداکثر ۶ مگابایت است." });
+        if (!["image/jpeg","image/png","image/webp"].includes(file.mime)) return json(res, 415, { message: "فقط تصویر JPG، PNG یا WEBP پذیرفته می‌شود." });
+        const safeName = String(file.name || "document").replace(/[\\/\\r\\n\0]/g,"_").slice(0,255) || "document";
+        const q = await pool.query(
+          "INSERT INTO customer_documents(user_id,kind,file_name,mime_type,file_data) VALUES($1,$2,$3,$4,$5) RETURNING id",
+          [userId,kind,safeName,file.mime,file.data]
+        );
+        await audit(req, "documents.uploaded", userId, { documentId:q.rows[0].id, kind, size:file.data.length });
+        return json(res, 201, { ok:true, ocr:false, id:q.rows[0].id });
+      }
+      const fileMatch = route.match(/^\\/api\\/v1\\/me\\/documents\\/([0-9a-f-]+)\\/file$/i);
+      if (req.method === "GET" && fileMatch) {
+        const q = await pool.query("SELECT mime_type,file_data FROM customer_documents WHERE id=$1 AND user_id=$2", [fileMatch[1],userId]);
+        if (!q.rowCount) return json(res, 404, { message: "فایل مدرک پیدا نشد." });
+        res.writeHead(200, { "Content-Type":q.rows[0].mime_type, "Cache-Control":"no-store", "X-Content-Type-Options":"nosniff" });
+        return res.end(q.rows[0].file_data);
+      }
+      const fieldsMatch = route.match(/^\\/api\\/v1\\/me\\/documents\\/([0-9a-f-]+)\\/fields$/i);
+      if (req.method === "PUT" && fieldsMatch) {
+        const b = await body(req);
+        if (!b.fields || typeof b.fields !== "object" || Array.isArray(b.fields)) return json(res, 400, { message: "اطلاعات مدرک معتبر نیست." });
+        const q = await pool.query("UPDATE customer_documents SET fields=$1::jsonb,updated_at=NOW() WHERE id=$2 AND user_id=$3 AND status<>'Verified' RETURNING id", [JSON.stringify(b.fields),fieldsMatch[1],userId]);
+        if (!q.rowCount) return json(res, 404, { message: "مدرک پیدا نشد یا تأیید نهایی شده است." });
+        await audit(req, "documents.fields_updated", userId, { documentId:fieldsMatch[1] });
+        return json(res, 200, { ok:true });
+      }
+      const idMatch = route.match(/^\\/api\\/v1\\/me\\/documents\\/([0-9a-f-]+)$/i);
+      if (req.method === "DELETE" && idMatch) {
+        const q = await pool.query("DELETE FROM customer_documents WHERE id=$1 AND user_id=$2 AND status='Pending' RETURNING id", [idMatch[1],userId]);
+        if (!q.rowCount) return json(res, 404, { message: "مدرک پیدا نشد یا دیگر قابل حذف نیست." });
+        await audit(req, "documents.deleted", userId, { documentId:idMatch[1] });
+        return json(res, 200, { ok:true });
+      }
+      return json(res, 404, { message: "مسیر مدارک پیدا نشد." });
+    }
+    if (route.startsWith("/api/v1/me/contracts")) {
+      const userId = authenticatedUserId(req);
+      if (!userId) return json(res, 401, { message: "برای مشاهده قراردادها وارد حساب شوید." });
+      if (req.method === "GET" && route === "/api/v1/me/contracts") {
+        const q = await pool.query("SELECT id,title,number,status,expires_at AS \"expiresAt\",created_on AS \"createdOn\" FROM customer_contracts WHERE user_id=$1 ORDER BY created_on DESC", [userId]);
+        return json(res, 200, { data:q.rows });
+      }
+      const htmlMatch = route.match(/^\\/api\\/v1\\/me\\/contracts\\/([0-9a-f-]+)\\/html$/i);
+      if (req.method === "GET" && htmlMatch) {
+        const q = await pool.query("SELECT body_html FROM customer_contracts WHERE id=$1 AND user_id=$2", [htmlMatch[1],userId]);
+        if (!q.rowCount) return json(res, 404, { message: "قرارداد پیدا نشد." });
+        res.writeHead(200, { "Content-Type":"text/html; charset=utf-8", "Cache-Control":"no-store", "Content-Security-Policy":"default-src 'none'; style-src 'unsafe-inline'; img-src data:" });
+        return res.end(q.rows[0].body_html);
+      }
+      const contractMatch = route.match(/^\\/api\\/v1\\/me\\/contracts\\/([0-9a-f-]+)\\/(sign|reject)$/i);
+      if (contractMatch && req.method === "POST") {
+        const action = contractMatch[2].toLowerCase();
+        const b = await body(req);
+        const status = action === "sign" ? "Signed" : "Rejected";
+        const note = action === "reject" ? String(b.note || "").trim().slice(0,2000) : null;
+        const q = await pool.query(
+          "UPDATE customer_contracts SET status=$1,signed_at=CASE WHEN $1='Signed' THEN NOW() ELSE signed_at END,rejected_at=CASE WHEN $1='Rejected' THEN NOW() ELSE rejected_at END,rejection_note=$2,updated_at=NOW() WHERE id=$3 AND user_id=$4 AND status IN ('Presented','AwaitingSignature') AND (expires_at IS NULL OR expires_at>NOW()) RETURNING id",
+          [status,note,contractMatch[1],userId]
+        );
+        if (!q.rowCount) return json(res, 404, { message: "قرارداد پیدا نشد یا دیگر قابل امضا نیست." });
+        await audit(req, action === "sign" ? "contracts.signed" : "contracts.rejected", userId, { contractId:contractMatch[1] });
+        return json(res, 200, { ok:true });
+      }
+      return json(res, 404, { message: "مسیر قراردادها پیدا نشد." });
     }
     if (req.method === "POST" && route === "/api/v1/security/password-reset/request") {
       const b = await body(req); const phone = String(b.phone || ""); const ip = clientIp(req) || "unknown";
