@@ -114,10 +114,15 @@ function sessionFor(req) {
   const cookie = String(req.headers.cookie || "").split(";").map(v => v.trim()).find(v => v.startsWith("db_session="));
   return verifySession(bearer || (cookie ? cookie.slice("db_session=".length) : ""));
 }
-function adminFor(req) {
+async function adminFor(req) {
   const session = sessionFor(req);
-  return session && ["admin", "superadmin"].includes(session.role) ? session : null;
+  if (!session) return null;
+  // Read the current role from PostgreSQL so role corrections take effect without waiting for an old JWT to expire.
+  const current = await pool.query("SELECT id,role,is_active,phone,full_name,username FROM users WHERE id=$1 LIMIT 1", [Number(session.sub)]);
+  if (!current.rowCount || !current.rows[0].is_active || !["admin", "superadmin"].includes(current.rows[0].role)) return null;
+  return { ...session, role: current.rows[0].role, fullName: current.rows[0].full_name, phone: current.rows[0].phone, username: current.rows[0].username };
 }
+export async function verifyAdminSession(req) { return Boolean(await adminFor(req)); }
 function verifyAspNetIdentityPassword(password, storedHash) {
   let data;
   try { data = Buffer.from(String(storedHash || ""), "base64"); } catch { return false; }
@@ -216,11 +221,19 @@ function resetLimit(key) { recentFailures.delete(key); }
 export async function handleApi(req, res, url) {
   const route = url.pathname;
   try {
+    if (req.method === "GET" && route === "/api/v1/security/me") {
+      const session = sessionFor(req);
+      if (!session) return json(res, 401, { message: "وارد حساب خود شوید." });
+      const current = await pool.query("SELECT id,phone,full_name,username,role,is_active FROM users WHERE id=$1 LIMIT 1", [Number(session.sub)]);
+      if (!current.rowCount || !current.rows[0].is_active) return json(res, 401, { message: "حساب کاربری فعال نیست." });
+      const u = current.rows[0];
+      return json(res, 200, { data: { id: u.id, phone: u.phone, fullName: u.full_name, username: u.username, role: u.role, roles: [u.role] } });
+    }
     if (req.method === "GET" && route === "/api/v1/tenant/config") {
       return json(res, 200, { data: { name: BRAND_NAME, brand: { logoText: BRAND_NAME.slice(0, 1), primary: "#4a2a86", accent: "#ffb629" } } });
     }
     if (route.startsWith("/api/v1/admin/")) {
-      const admin = adminFor(req);
+      const admin = await adminFor(req);
       if (!admin) return json(res, 403, { message: "دسترسی مدیر لازم است." });
       if (req.method === "GET" && route === "/api/v1/admin/sms/settings") {
         const settings = await getKavenegarSettings();
