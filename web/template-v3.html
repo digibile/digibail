@@ -111,6 +111,51 @@ details{border-bottom:1px solid var(--line);padding:14px 2px}summary{cursor:poin
 .chk{display:flex;gap:8px;align-items:flex-start;font-size:.84rem;color:var(--muted);margin-top:12px}.chk input{margin-top:5px;accent-color:var(--accent)}
 .close{float:left;font:inherit;background:none;border:0;color:var(--muted);font-size:1.4rem;cursor:pointer;line-height:1}
 .toast{position:fixed;inset-inline:0;bottom:calc(20px + env(safe-area-inset-bottom,0px));margin:auto;width:max-content;max-width:90%;background:var(--brand2);color:#fff;padding:10px 20px;border-radius:12px;z-index:90;font-weight:700}
+
+/* Mobile storefront polish: campaign banners and bottom navigation */
+.campaigns{position:relative;margin:18px 0 6px;overflow:hidden}
+.campaign-track{display:grid;grid-auto-columns:100%;grid-auto-flow:column;overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none;gap:12px;padding:0 1px 5px}
+.campaign-track::-webkit-scrollbar{display:none}
+.campaign{position:relative;isolation:isolate;min-height:188px;overflow:hidden;border-radius:24px;padding:24px 22px;display:flex;align-items:center;color:#fff;text-decoration:none;background:linear-gradient(112deg,#211044,#4c2586 65%,#7851b8);scroll-snap-align:center}
+.campaign:nth-child(2){background:linear-gradient(112deg,#123b42,#167a77 65%,#45aaa0)}
+.campaign:nth-child(3){background:linear-gradient(112deg,#55233f,#9d355b 65%,#d66c83)}
+.campaign-copy{position:relative;z-index:2;max-width:70%}
+.campaign-kicker{display:inline-flex;align-items:center;gap:6px;font-size:.74rem;font-weight:800;background:#ffffff20;border:1px solid #ffffff38;border-radius:999px;padding:3px 10px;margin-bottom:8px}
+.campaign h2{font-family:var(--f-disp);font-size:clamp(1.45rem,4vw,2rem);font-weight:400;line-height:1.35;margin:0 0 6px;color:#fff}
+.campaign p{font-size:.82rem;line-height:1.8;color:#f5efff;margin:0 0 12px;max-width:32ch}
+.campaign .campaign-cta{display:inline-flex;align-items:center;gap:6px;font-size:.8rem;font-weight:800;background:var(--accent);color:#2a1a00;border-radius:10px;padding:7px 12px}
+.campaign-art{position:absolute;inset-inline-start:4%;top:50%;transform:translateY(-50%);width:31%;max-width:150px;aspect-ratio:1;display:grid;place-items:center;opacity:.98}
+.campaign-art:before,.campaign-art:after{content:"";position:absolute;border-radius:50%;background:#ffffff12}
+.campaign-art:before{inset:0}.campaign-art:after{inset:13%}
+.campaign-art svg{position:relative;z-index:1;width:76%;height:76%;filter:drop-shadow(0 10px 14px #13062955)}
+.campaign-dots{display:flex;justify-content:center;gap:6px;padding:8px 0 0}
+.campaign-dots button{width:6px;height:6px;border:0;border-radius:99px;padding:0;background:var(--line);cursor:pointer}
+.campaign-dots button[aria-current=true]{width:20px;background:var(--brand)}
+.mobile-head-login{display:none}
+.mbar{display:none}
+@media(max-width:860px){
+ body{padding-bottom:calc(92px + env(safe-area-inset-bottom,0px))}
+ .campaigns{margin:12px 0 2px}
+ .campaign-track{grid-auto-columns:100%;gap:10px}
+ .campaign{min-height:174px;border-radius:21px;padding:19px 17px}
+ .campaign-copy{max-width:72%}
+ .campaign h2{font-size:1.4rem}
+ .campaign p{font-size:.76rem;margin-bottom:9px}
+ .campaign-art{width:29%;inset-inline-start:2%}
+ .mobile-head-login{display:inline-flex;width:39px;height:39px;align-items:center;justify-content:center;border:1px solid var(--line);border-radius:12px;text-decoration:none;color:var(--brand);background:var(--surface);flex:none}
+ .hd-in{gap:9px}
+ .logo{font-size:1.35rem;gap:7px}
+ .logo i{width:31px;height:31px}
+ .burger{margin-inline-start:auto;padding-inline:11px;min-height:39px}
+ .mbar{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));align-items:stretch;gap:2px;position:fixed;inset-inline:10px;bottom:calc(7px + env(safe-area-inset-bottom,0px));z-index:55;width:auto;margin:0;padding:7px 5px;border:1px solid color-mix(in srgb,var(--line) 82%,var(--brand) 18%);border-radius:21px;background:color-mix(in srgb,var(--surface) 95%,transparent);box-shadow:0 10px 34px rgba(30,12,58,.18),0 2px 8px rgba(30,12,58,.06);backdrop-filter:blur(20px) saturate(1.4);-webkit-backdrop-filter:blur(20px) saturate(1.4)}
+ .mbar a{min-width:0;min-height:51px;padding:5px 1px;border:0!important;border-radius:14px!important;background:transparent!important;box-shadow:none!important;color:var(--muted)!important;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;text-decoration:none;font-size:.64rem;line-height:1.2;font-weight:700;white-space:nowrap}
+ .mbar a svg{width:20px;height:20px;stroke:currentColor;flex:none}
+ .mbar a[aria-current=page]{color:var(--brand)!important;background:var(--surface2)!important}
+ .mbar a:active{transform:scale(.96)}
+ .wrap{padding-bottom:12px}
+}
+@media(max-width:380px){.campaign{min-height:160px;padding:15px 13px}.campaign h2{font-size:1.24rem}.campaign p{font-size:.71rem}.campaign-art{width:27%}.mbar{inset-inline:6px;padding:5px 3px}.mbar a{font-size:.59rem}.mbar a svg{width:18px;height:18px}}
+
 /* footer */
 .ft{margin-top:56px;border-top:1px solid var(--line);padding-block:32px 20px;color:var(--muted);font-size:.88rem}
 .ft-top{display:grid;grid-template-columns:1.6fr repeat(4,1fr);gap:24px}
@@ -145,7 +190,7 @@ details{border-bottom:1px solid var(--line);padding:14px 2px}summary{cursor:poin
 
 <div class="hd" id="hd"><div class="hd-in">
   <a class="logo" href="#home"><i>د</i>دیجی‌بایل پی</a>
-  <button class="btn burger" id="burger" aria-expanded="false" aria-controls="nv">منو</button>
+  <a class="mobile-head-login" href="/login.html" aria-label="ورود به حساب"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg></a><button class="btn burger" id="burger" aria-expanded="false" aria-controls="nv">منو</button>
   <nav class="nv" id="nv" aria-label="منوی اصلی">
     <div class="pm"><button class="l" id="pmBtn" aria-expanded="false" aria-haspopup="true">طرح‌های اقساط ▾</button><div class="pm-pop" id="pmPop" hidden></div></div>
     <a href="#how">مراحل خرید</a><a href="#trust">امنیت</a><a href="#faq">پرسش‌ها</a>
@@ -166,7 +211,13 @@ details{border-bottom:1px solid var(--line);padding:14px 2px}summary{cursor:poin
     <div class="ft-bot"><span>تمامی حقوق برای دیجی‌بایل پی محفوظ است.</span><span id="ftHost"></span></div>
   </footer>
 </div>
-<div class="mbar" aria-label="دسترسی سریع"><a class="btn" href="#calc"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 7h8M8 11h2m4 0h2M8 15h2m4 0h2M8 18h8"/></svg>محاسبه</a><a class="btn solid" id="mbAuth" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>ورود / عضویت</a></div>
+<nav class="mbar" aria-label="منوی پایین موبایل">
+ <a href="#home" data-mobile-nav="home" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m3 10 9-7 9 7"/><path d="M5 9v11h14V9M9 20v-7h6v7"/></svg><span>خانه</span></a>
+ <a href="#plans" data-mobile-nav="plans"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M7 8h10M7 12h6M7 16h4"/></svg><span>طرح‌ها</span></a>
+ <a href="/profile.html" data-mobile-nav="requests"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3h8l4 4v14H7z"/><path d="M15 3v5h4M10 12h6M10 16h6"/></svg><span>درخواست‌ها</span></a>
+ <a href="#how" data-mobile-nav="help"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.6 9a2.5 2.5 0 1 1 4.4 1.6c-1.2 1.1-2 1.4-2 3M12 17h.01"/></svg><span>راهنما</span></a>
+ <a href="/profile.html" data-mobile-nav="account"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg><span>حساب من</span></a>
+</nav>
 <div id="modal" hidden></div><div class="toast" id="toast" hidden></div>
 
 <script>
@@ -258,8 +309,27 @@ function mountBeta(box,p,fixed){
  {const vl=$('#vlim');if(vl)vl.textContent='بعد از صدور'}
  return ()=>{}}
 /* ---------- views ---------- */
+
+function initCampaigns(){
+ const track=$('#campaignTrack'),dots=[...document.querySelectorAll('#campaignDots button')];
+ if(!track||!dots.length||track.dataset.ready)return;track.dataset.ready='1';
+ const sync=()=>{const i=Math.round(track.scrollLeft/Math.max(1,track.clientWidth));dots.forEach((d,k)=>d.setAttribute('aria-current',String(k===i)))};
+ track.addEventListener('scroll',()=>requestAnimationFrame(sync),{passive:true});
+ dots.forEach((d,i)=>d.onclick=()=>track.scrollTo({left:i*track.clientWidth,behavior:'smooth'}));
+}
+function syncMobileNav(){
+ const h=location.hash.slice(1),active=h.startsWith('plan-')||h==='plans'?'plans':h==='how'?'help':'home';
+ document.querySelectorAll('[data-mobile-nav]').forEach(a=>a.setAttribute('aria-current',a.dataset.mobileNav===active?'page':'false'));
+}
+
 function home(){const A=act();
- $('#app').innerHTML=`<section class="hero" id="calc"><div><h1>همین حالا بخرید، ماه‌به‌ماه پرداخت کنید</h1><p class="lead">اعتبار شما در چند دقیقه تعیین می‌شود، قرارداد را دیجیتال امضا می‌کنید و کارت اعتباری مجازی‌تان صادر می‌شود.</p>
+ $('#app').innerHTML=`<section class="campaigns" aria-label="پیشنهادهای ویژه">
+ <div class="campaign-track" id="campaignTrack">
+  <a class="campaign" href="#plans"><div class="campaign-copy"><span class="campaign-kicker">✦ اعتبار و خرید اقساطی</span><h2>خرید امروز، پرداخت آسوده‌تر</h2><p>طرح‌های متنوع را ببینید و شرایط هر کدام را پیش از درخواست بررسی کنید.</p><span class="campaign-cta">مشاهده طرح‌ها ←</span></div><div class="campaign-art" aria-hidden="true"><svg viewBox="0 0 120 120" fill="none"><rect x="28" y="17" width="66" height="86" rx="13" fill="#fff" fill-opacity=".18" stroke="#fff" stroke-opacity=".75" stroke-width="2"/><rect x="37" y="30" width="48" height="9" rx="4.5" fill="#F5A400"/><rect x="37" y="48" width="20" height="20" rx="5" fill="#fff" fill-opacity=".8"/><rect x="63" y="48" width="22" height="7" rx="3.5" fill="#fff"/><rect x="63" y="60" width="16" height="6" rx="3" fill="#fff" fill-opacity=".65"/><path d="m43 81 10 9 23-25" stroke="#F5A400" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/></svg></div></a>
+  <a class="campaign" href="#how"><div class="campaign-copy"><span class="campaign-kicker">✓ مسیر روشن و مرحله‌به‌مرحله</span><h2>از ثبت‌نام تا پیگیری درخواست</h2><p>مراحل، مدارک و وضعیت پرونده را در یک مسیر مشخص دنبال کنید.</p><span class="campaign-cta">آشنایی با مراحل ←</span></div><div class="campaign-art" aria-hidden="true"><svg viewBox="0 0 120 120" fill="none"><circle cx="60" cy="60" r="38" fill="#fff" fill-opacity=".14" stroke="#fff" stroke-opacity=".8" stroke-width="2"/><path d="M42 60 54 72 79 46" stroke="#fff" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/><circle cx="88" cy="29" r="13" fill="#F5A400"/><path d="M82 29h12M88 23v12" stroke="#44210a" stroke-width="2.5" stroke-linecap="round"/></svg></div></a>
+  <a class="campaign" href="/profile.html"><div class="campaign-copy"><span class="campaign-kicker">◈ همه‌چیز در حساب شما</span><h2>درخواست‌ها و مدارک یک‌جا</h2><p>برای پیگیری پرونده، مدارک و قراردادها از حساب کاربری استفاده کنید.</p><span class="campaign-cta">ورود به حساب ←</span></div><div class="campaign-art" aria-hidden="true"><svg viewBox="0 0 120 120" fill="none"><rect x="25" y="20" width="70" height="80" rx="12" fill="#fff" fill-opacity=".17" stroke="#fff" stroke-opacity=".8" stroke-width="2"/><circle cx="60" cy="46" r="13" fill="#fff" fill-opacity=".9"/><path d="M38 79c2-13 11-19 22-19s20 6 22 19" fill="#F5A400"/><rect x="41" y="86" width="38" height="5" rx="2.5" fill="#fff" fill-opacity=".7"/></svg></div></a>
+ </div><div class="campaign-dots" id="campaignDots" aria-label="انتخاب بنر"><button aria-label="بنر اول" aria-current="true"></button><button aria-label="بنر دوم" aria-current="false"></button><button aria-label="بنر سوم" aria-current="false"></button></div>
+</section><section class="hero" id="calc"><div><h1>همین حالا بخرید، ماه‌به‌ماه پرداخت کنید</h1><p class="lead">اعتبار شما در چند دقیقه تعیین می‌شود، قرارداد را دیجیتال امضا می‌کنید و کارت اعتباری مجازی‌تان صادر می‌شود.</p>
   <div class="calc" id="calcBox"></div></div><div class="vwrap">${cardHtml()}</div></section>
  <section class="s" id="plans"><h2 class="t">طرح‌های اقساط فعال</h2><p class="sub">هر طرح شرایط، مدارک و جدول اقساط جداگانه دارد. روی هر طرح بزنید تا صفحه‌ی کامل آن باز شود.</p>
   <div class="bento">${A.map((p,i)=>{const f=p.tiers.map(t=>t.fee),d=p.tiers.map(t=>t.down);if(p.kind==='beta')return `<a class="pc" href="#plan-${p.id}"><span class="badge">${p.badge}</span><h3>${p.name}</h3><p class="m">${p.blurb}</p><div class="facts"><div><span>مبلغ و اقساط</span><b>استعلام از بانک</b></div><div><span>فاصله اقساط</span><b>${fa(p.iv)} روز</b></div></div></a>`;return `<a class="pc ${p.badge==='پرطرفدار'?'hot':''}" href="#plan-${p.id}">${p.badge?`<span class="badge">${p.badge}</span>`:''}<h3>${p.name}</h3><p class="m">${p.blurb}</p><div class="facts"><div><span>کارمزد ماهانه</span><b>${fa(Math.min(...f))}٪${Math.max(...f)>Math.min(...f)?' تا '+fa(Math.max(...f))+'٪':''}</b></div><div><span>پیش‌پرداخت</span><b>${fa(Math.min(...d))}٪${Math.max(...d)>Math.min(...d)?' تا '+fa(Math.max(...d))+'٪':''}</b></div><div><span>سقف خرید</span><b>${fa(p.max)} م.ت</b></div><div><span>فاصله اقساط</span><b>${fa(p.iv)} روز</b></div></div></a>`}).join('')}</div></section>
@@ -273,7 +343,7 @@ function home(){const A=act();
   <details><summary>اگر قسطی را دیر پرداخت کنم چه می‌شود؟</summary><p>جریمه‌ی دیرکرد طبق قرارداد محاسبه می‌شود و قبل از سررسید پیامک یادآوری می‌گیرید.</p></details>
   <details><summary>چطور فروشگاه خودم را اضافه کنم؟</summary><p>از «پذیرنده شوید» درخواست بدهید. بعد از تأیید، لینک اختصاصی و درگاه برای شما فعال می‌شود.</p></details></section>
  <div class="band"><div><h2>آماده‌اید؟</h2><p>عضو شوید و اعتبار خود را در چند دقیقه ببینید.</p></div><button class="btn solid lg" data-go="reg">عضویت رایگان</button></div>`;
- const box=$('#calcBox');mountCalc(box);tilt($('#vcard'));}
+ const box=$('#calcBox');mountCalc(box);tilt($('#vcard'));initCampaigns();syncMobileNav();}
 function planPage(p){
  $('#app').innerHTML=`<div class="crumb"><a href="#home">خانه</a> / <a href="#plans">طرح‌ها</a> / ${p.name}</div>
  <div class="pp"><div class="stack"><div><h1>${p.name}</h1><p class="lead">${p.blurb}</p></div>
@@ -289,7 +359,7 @@ function planPage(p){
 function route(){const h=location.hash.slice(1);const p=PLANS.find(x=>'plan-'+x.id===h&&x.on);
  if(p){planPage(p);window.scrollTo(0,0);return}
  home();if(h&&h!=='home'&&document.getElementById(h))document.getElementById(h).scrollIntoView();else window.scrollTo(0,0)}
-addEventListener('hashchange',route);
+addEventListener('hashchange',()=>{route();syncMobileNav()});
 /* ---------- auth modal ---------- */
 function modal(html){const m=$('#modal');m.hidden=false;m.innerHTML=`<div class="ov" id="ov"><div class="md" role="dialog" aria-modal="true">${html}</div></div>`;const f=m.querySelector('input');if(f)f.focus();
  m.querySelector('#ov').onclick=e=>{if(e.target.id==='ov')closeM()}}
