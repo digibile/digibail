@@ -271,7 +271,7 @@ V.loans=()=>{const chips=[['all','همه']].concat(S.LoanApplication.map(s=>[s[0
  `<div class="panel"><div class="bar">${chips.map(c=>`<button class="tab" data-lf="${c[0]}" aria-selected="${state.lf===c[0]}">${c[1]}</button>`).join('')}${search('جستجوی نام یا شماره')}</div>`+
  tbl([['کد',l=>fa(l.id),'n'],['مشتری',l=>esc(l.name)],['پذیرنده',l=>esc(l.merchant)],['مبلغ',l=>M(l.amount/1e6),'n'],['مدت',l=>fa(l.months)+' ماه'],['امتیاز',l=>fa(l.score),'n'],['وضعیت',l=>pill('LoanApplication',l.st)],['تاریخ',l=>l.date,'n']],rows.map(l=>l),'loan')+'</div>'};
 
-V.products=()=>head('محصولات وام','هر پذیرنده می‌تواند چند محصول فعال داشته باشد','<button class="btn solid" id="addProd">محصول جدید</button>')+
+V.products=()=>head('محصولات وام','هر پذیرنده می‌تواند چند محصول فعال داشته باشد','<a class="btn" href="/loan-definition.html">تعریف وام‌ها</a> <button class="btn solid" id="addProd">محصول جدید</button>')+
  `<div class="cards">${products.map((p,i)=>`<div class="card"><h3>${p.n}<span class="frow"><button class="btn" data-pe="${i}">ویرایش</button><button class="btn ${p.on?'ok':''}" data-prod="${i}">${p.on?'فعال':'غیرفعال'}</button></span></h3>
  <div class="kv"><span>بازه‌ی مبلغ</span><b class="n">${fa(p.min)} تا ${fa(p.max)} م.ت</b><span>مدت</span><b class="n">${fa(p.m)} ماه</b><span>کارمزد ماهانه</span><b class="n">${fa(p.fee)}٪</b><span>پیش‌پرداخت</span><b class="n">${fa(p.down)}٪</b></div></div>`).join('')}</div>`;
 
