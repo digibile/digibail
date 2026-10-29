@@ -680,6 +680,44 @@ export async function handleApi(req, res, url) {
         const rows=await pool.query("WITH numbered AS (SELECT legacy_id,name,mobile,email,customer_code,registered_at,expires_at,is_permanent,purchased,affiliate_code,parked_domain,legacy_username,account_type,legacy_source_table,ROW_NUMBER() OVER (ORDER BY registered_at ASC NULLS FIRST,legacy_id ASC) AS customer_number FROM legacy_customers) SELECT legacy_id,name,mobile,email,customer_code,customer_number,registered_at,expires_at,is_permanent,purchased,affiliate_code,parked_domain,legacy_username,account_type,legacy_source_table FROM numbered"+filter+" ORDER BY registered_at DESC NULLS LAST,legacy_id DESC LIMIT $"+(params.length+1)+" OFFSET $"+(params.length+2),[...params,pageSize,(page-1)*pageSize]);
         return json(res,200,{data:{rows:rows.rows,total:Number(count.rows[0]?.total)||0,overallTotal:Number(overall.rows[0]?.total)||0,latestRegistration:overall.rows[0]?.latest_registration||null,page,pageSize}});
       }
+      if (req.method === "GET" && route === "/api/v1/admin/legacy-agents-page") {
+        const page=Math.max(1,Number.parseInt(url.searchParams.get("page")||"1",10)||1);
+        const pageSize=Math.min(100,Math.max(10,Number.parseInt(url.searchParams.get("pageSize")||"25",10)||25));
+        const search=String(url.searchParams.get("q")||"").trim().slice(0,120);
+        const status=String(url.searchParams.get("status")||"").trim();
+        const params=[],where=[];
+        if(search){params.push("%"+search+"%");where.push("(name ILIKE $"+params.length+" OR business_name ILIKE $"+params.length+" OR mobile ILIKE $"+params.length+" OR agent_code ILIKE $"+params.length+" OR legacy_id ILIKE $"+params.length+")");}
+        if(status==="active")where.push("is_active IS TRUE");
+        if(status==="inactive")where.push("is_active IS FALSE");
+        const filter=where.length?" WHERE "+where.join(" AND "):"";
+        const base=`WITH agents AS (
+          SELECT s.source_table,s.legacy_id,s.payload,
+            COALESCE(NULLIF(s.payload->>'FullName',''),NULLIF(s.payload->>'DisplayName',''),NULLIF(s.payload->>'Name',''),NULLIF(trim(concat_ws(' ',NULLIF(s.payload->>'FirstName',''),NULLIF(s.payload->>'LastName',''))),''),NULLIF(s.payload->>'UserName',''),NULLIF(s.payload->>'Username',''),'نام ثبت نشده') AS name,
+            COALESCE(NULLIF(s.payload->>'BusinessName',''),NULLIF(s.payload->>'BrandName',''),NULLIF(s.payload->>'CompanyName',''),NULLIF(s.payload->>'ShopName',''),NULLIF(s.payload->>'Title','')) AS business_name,
+            COALESCE(NULLIF(s.payload->>'Mobile',''),NULLIF(s.payload->>'Phone',''),NULLIF(s.payload->>'PhoneNumber',''),NULLIF(s.payload->>'CellPhone','')) AS mobile,
+            COALESCE(NULLIF(s.payload->>'AgentCode',''),NULLIF(s.payload->>'Code',''),NULLIF(s.payload->>'ReferralCode',''),NULLIF(s.payload->>'AffiliateCode',''),s.legacy_id) AS agent_code,
+            COALESCE(NULLIF(s.payload->>'CommissionPercent',''),NULLIF(s.payload->>'FactorPercent',''),NULLIF(s.payload->>'Commission','')) AS commission_percent,
+            COALESCE(NULLIF(s.payload->>'LastLoginAt',''),NULLIF(s.payload->>'LastLogin',''),NULLIF(s.payload->>'LastLoginDate','')) AS last_login,
+            CASE WHEN lower(COALESCE(s.payload->>'IsActive',s.payload->>'Active',s.payload->>'Enabled','')) IN ('false','0','no') OR lower(COALESCE(s.payload->>'Disable','false')) IN ('true','1','yes') THEN FALSE
+                 WHEN lower(COALESCE(s.payload->>'IsActive',s.payload->>'Active',s.payload->>'Enabled','')) IN ('true','1','yes') THEN TRUE ELSE NULL END AS is_active,
+            COALESCE(NULLIF(s.payload->>'ParentAgentId',''),NULLIF(s.payload->>'ParentId',''),NULLIF(s.payload->>'SupervisorId','')) AS parent_id
+          FROM legacy_source_data s
+          WHERE s.source_table LIKE 'vamcityc_%.dbo.Agents'
+        ), enriched AS (
+          SELECT a.*,
+            (SELECT COUNT(*)::int FROM loan_requests lr WHERE lr.payload->>'AgentId'=a.payload->>'Id' OR lr.payload->>'AgentId'=a.legacy_id) AS loan_requests_count,
+            (SELECT COUNT(*)::int FROM agents child WHERE child.parent_id=COALESCE(a.payload->>'Id',a.legacy_id)) AS subagents_count,
+            (SELECT COUNT(*)::int FROM legacy_customers lc WHERE lc.affiliate_code=a.agent_code) AS customers_count
+          FROM agents a
+        )`;
+        const [count,overall,rows,customerTotal]=await Promise.all([
+          pool.query(base+" SELECT COUNT(*)::int AS total FROM enriched"+filter,params),
+          pool.query(base+" SELECT COUNT(*)::int AS total,COUNT(*) FILTER(WHERE is_active IS TRUE)::int AS active_total,COUNT(*) FILTER(WHERE is_active IS FALSE)::int AS inactive_total FROM enriched"),
+          pool.query(base+" SELECT legacy_id,name,business_name,mobile,agent_code,commission_percent,last_login AS last_login_fa,is_active,loan_requests_count,subagents_count,customers_count AS customer_count,payload AS raw_payload FROM enriched"+filter+" ORDER BY name,legacy_id LIMIT $"+(params.length+1)+" OFFSET $"+(params.length+2),[...params,pageSize,(page-1)*pageSize]),
+          pool.query(base+" SELECT COUNT(DISTINCT lc.legacy_id)::int AS total FROM legacy_customers lc WHERE EXISTS(SELECT 1 FROM enriched a WHERE a.agent_code=lc.affiliate_code)")
+        ]);
+        return json(res,200,{data:{rows:rows.rows,total:Number(count.rows[0]?.total)||0,overallTotal:Number(overall.rows[0]?.total)||0,activeTotal:Number(overall.rows[0]?.active_total)||0,inactiveTotal:Number(overall.rows[0]?.inactive_total)||0,customerTotal:Number(customerTotal.rows[0]?.total)||0,page,pageSize}});
+      }
       if (req.method === "GET" && route === "/api/v1/admin/legacy-customers") {
         const search = String(url.searchParams.get("q") || "").trim().slice(0,120);
         const page = Math.max(1, Number.parseInt(url.searchParams.get("page") || "1",10) || 1);
