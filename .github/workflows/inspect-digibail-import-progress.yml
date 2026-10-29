@@ -53,3 +53,5 @@ jobs:
             echo "MIGRATION_VERIFICATION_COMPLETE=1"
 
 # Final verification after current full legacy backfill.
+
+# Verify optimized idempotent import and final customer/request backfill.
