@@ -337,7 +337,7 @@ V.merchants=()=>head('پذیرنده‌ها')+tiles([['فروش اقساطی ا�
  `<div class="panel">`+tbl([['فروشگاه',m=>esc(m.name)],['شهر',m=>m.city],['فروش',m=>M(m.sales/1e6),'n'],['کارمزد',m=>fa(m.pct)+'٪','n'],['وضعیت',m=>pill('Merchant',m.st)],['',(m,i)=>m.st==='pending'?`<button class="btn ok" data-mr="approved:${i}">تأیید</button> <button class="btn bad" data-mr="rejected:${i}">رد</button>`:'']],merchants,'merch')+'</div>';
 
 let treeHtml=n=>`<li><div class="node"><b>${esc(n.name)}</b><code>${n.code}</code><span class="sub">${fa(n.cust)} مشتری · ${fa(n.pct)}٪ کمیسیون</span><button class="btn" data-cp="${n.code}">کپی لینک</button></div>${n.sub.length?`<ul class="tree">${n.sub.map(treeHtml).join('')}</ul>`:''}</li>`;
-V.agents=()=>head('نمایندگان و زیرمجموعه‌ها','هر نماینده لینک ثبت‌نام اختصاصی دارد و می‌تواند زیرمجموعه بگیرد')+tiles([['کل نمایندگان',fa(6)],['مشتریان جذب‌شده',fa(82)],['کمیسیون پرداختی','۴٫۲ م.ت']])+`<div class="panel"><ul class="tree root">${treeHtml(agentTree)}</ul></div>`;
+V.agents=()=>head('لیست نمایندگان','فهرست نمایندگان از داده‌های منتقل‌شده و پایگاه داده داخلی؛ جست‌وجو، وضعیت و صفحه‌بندی.')+'<div class="panel" style="padding:0;overflow:hidden"><iframe src="/agents.html" title="لیست نمایندگان" loading="lazy" style="display:block;width:100%;height:calc(100vh - 190px);min-height:780px;border:0;background:transparent"></iframe></div>';
 
 V.orgs=()=>head('سازمان‌ها','اعتبار گروهی برای کارکنان شرکت‌ها و دانشگاه‌ها')+`<div class="panel">`+tbl([['سازمان',o=>o[0]],['اعضا',o=>fa(o[1]),'n'],['سقف اعتبار گروهی',o=>M(o[2]),'n'],['وضعیت',o=>pill('Merchant',o[3])]],[['شرکت پارس‌نو',120,400,'approved'],['دانشگاه صنعتی نمونه',860,2500,'approved'],['بیمارستان مهر',45,150,'pending']])+'</div>';
 
