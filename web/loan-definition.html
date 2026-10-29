@@ -11,7 +11,7 @@
 :root[data-theme="dark"]{--bg:#0e1522;--sf:#172033;--ink:#e8edf6;--mut:#9aa6ba;--ln:#2a364d;--ac:#4fd1c0;--acs:#12343a;--wn:#f3b562;--wns:#3b2c12;--er:#ff8f85;--ers:#3d1c1a;--ed:#1d283e}
 *{box-sizing:border-box}html{scroll-padding-top:env(safe-area-inset-top,0px)}
 body{margin:0;background:var(--bg);color:var(--ink);font:400 15px/1.8 Vazirmatn,Tahoma,sans-serif;max-width:100%}
-.wrap{max-width:980px;margin:0 auto;padding:16px}
+.wrap{width:100%;max-width:none;margin:0 auto;padding:clamp(10px,1.8vw,28px)}
 h1{font-size:20px;margin:4px 0 2px}p.sub{margin:0 0 14px;color:var(--mut);font-size:13px}
 .tabs{display:flex;gap:4px;overflow-x:auto;border-bottom:1px solid var(--ln);margin-bottom:14px}
 .tabs button{flex:none;background:none;border:0;border-bottom:3px solid transparent;color:var(--mut);font:500 14px Vazirmatn,Tahoma,sans-serif;padding:8px 14px;cursor:pointer}
@@ -72,6 +72,58 @@ label.lb{display:block;font-size:12px;color:var(--mut)}
 .fsx{position:fixed!important;inset:0;z-index:50;background:var(--sf);overflow:auto;padding:12px;margin:0!important}
 .ov{position:fixed;inset:0;z-index:40;background:rgba(0,0,0,.45);overflow:auto;padding:16px}.ov[hidden]{display:none}.ov .modal{overflow:visible}
 #ts{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#14213d;color:#fff;padding:8px 18px;border-radius:8px;font-size:14px;opacity:0;transition:opacity .2s;z-index:60;pointer-events:none}
+
+/* Responsive production workspace refresh */
+html,body{width:100%;min-width:0;overflow-x:hidden}
+.wrap{min-height:100dvh}
+#lp{width:100%;max-width:none}
+#lp .card{width:100%;min-width:0}
+#lp .tw{width:100%;max-width:100%;overflow-x:auto;border-radius:14px}
+#lp table{width:100%;min-width:820px;border-collapse:separate;border-spacing:0}
+#lp th{font-weight:700;background:var(--ed);white-space:nowrap}
+#lp td,#lp th{padding:13px 12px;vertical-align:middle}
+#lp tbody tr{transition:background .16s}
+#lp tbody tr:hover{background:color-mix(in srgb,var(--ac) 5%,var(--sf))}
+#lp .loan-actions{display:flex;align-items:center;gap:7px;flex-wrap:wrap;white-space:normal;min-width:190px}
+#lp .action-btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:38px;padding:7px 11px;border:1px solid var(--ln);border-radius:11px;background:var(--sf);color:var(--ink);font:600 12px/1.3 Vazirmatn,Tahoma,sans-serif;cursor:pointer;box-shadow:0 1px 2px #1018280a;transition:transform .16s,border-color .16s,background .16s}
+#lp .action-btn:hover{transform:translateY(-1px);border-color:var(--ac);background:var(--acs)}
+#lp .action-btn:focus-visible{outline:3px solid color-mix(in srgb,var(--ac) 35%,transparent);outline-offset:2px}
+#lp .action-btn .action-icon{display:inline-grid;place-items:center;width:19px;height:19px;font-size:15px;line-height:1}
+#lp .action-btn.primary{background:var(--ac);border-color:var(--ac);color:#fff}
+#lp .action-btn.danger{color:var(--er);border-color:color-mix(in srgb,var(--er) 35%,var(--ln))}
+#lp .action-btn:disabled{opacity:.55;cursor:wait;transform:none}
+#lp .badge{display:inline-flex;align-items:center;border-radius:999px;padding:4px 10px}
+#loanCampaignStudio{width:100%;border-radius:18px;padding:clamp(14px,2vw,24px)}
+#loanCampaignStudio .row{display:flex;flex-wrap:wrap;gap:12px}
+#loanCampaignStudio .row>*{min-width:min(100%,220px)}
+#loanCampaignStudio input,#loanCampaignStudio select,#loanCampaignStudio textarea{max-width:100%;min-width:0}
+#csPreview{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));gap:14px}
+#csPreview>div{min-width:0;border:1px solid var(--ln);border-radius:14px;padding:10px;background:var(--sf)}
+@media(max-width:760px){
+ .wrap{padding:10px}
+ #lp .tw{overflow:visible}
+ #lp table{min-width:0;display:block}
+ #lp thead{display:none}
+ #lp tbody,#lp tbody tr{display:block;width:100%}
+ #lp tbody tr{margin:0 0 14px;padding:8px;border:1px solid var(--ln);border-radius:16px;background:var(--sf);box-shadow:0 4px 18px #10182808}
+ #lp tbody td{display:grid;grid-template-columns:minmax(82px,30%) minmax(0,1fr);gap:10px;align-items:center;width:100%;padding:10px 8px;border-bottom:1px solid var(--ln);overflow-wrap:anywhere}
+ #lp tbody td:last-child{border-bottom:0}
+ #lp tbody td:before{content:attr(data-label);font-size:11px;color:var(--mut);font-weight:700}
+ #lp tbody td:first-child{display:block;padding-top:12px}
+ #lp tbody td:first-child:before{content:""}
+ #lp .loan-actions{min-width:0;gap:6px}
+ #lp .action-btn{flex:1 1 calc(50% - 6px);min-height:42px;padding:8px 9px;font-size:12px}
+ #lp tbody td[colspan]{display:block;text-align:center}
+ #lp tbody td[colspan]:before{content:none}
+ #lpager{align-items:stretch!important}
+ #lpager>div{width:100%}
+ #lpager .btn{flex:1;min-height:42px}
+ #loanCampaignStudio .row{display:grid;grid-template-columns:1fr}
+ #loanCampaignStudio .row>*{min-width:0;width:100%}
+ #csPreview{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media(max-width:390px){#lp .action-btn{flex-basis:100%}#csPreview{grid-template-columns:1fr}}
+
 </style>
 </head>
 <body>
@@ -278,7 +330,7 @@ function rateOf(s){return s.c==='نوع سود قدیمی (بررسی)'?(s.r?'م
 function refreshCampaignOptions(){var s=document.getElementById('csLoan');if(!s)return;var old=s.value;s.innerHTML=loans.map(function(x){return '<option value="'+esc(x.id)+'">'+esc(x.snap.S.p||x.snap.S.t)+'</option>'}).join('');if(loans.some(function(x){return String(x.id)===old}))s.value=old}
 function paintL(){var L=loans;var total=Number(loanSummary.total)||totalLoans,active=Number(loanSummary.active)||0,review=Number(loanSummary.review)||0,listed=Number(loanSummary.listed)||0;
 $('ls').textContent=nf(total,0)+' تعریف در پایگاه داده · '+nf(active,0)+' فعال · '+nf(review,0)+' نیازمند بررسی · '+nf(listed,0)+' در لیست عمومی · نمایش '+nf(Math.min(pageOffset+1,totalLoans),0)+' تا '+nf(Math.min(pageOffset+L.length,totalLoans),0)+' از '+nf(totalLoans,0);
-$('lt').innerHTML=L.length?L.map(function(l){var s=l.snap;var preview='/#plan-'+encodeURIComponent(l.apiProduct.id||s.S.slug);return `<tr><td><b>${esc(s.S.t)}</b><div class="sub" style="margin:0">${l.active?'فعال':'غیرفعال'}${l.needsReview?' · نیازمند بررسی اطلاعات قدیمی':''}${l.apiProduct&&l.apiProduct.legacySourceTable?' · منبع: '+esc(l.apiProduct.legacySourceTable):''} · به‌روزرسانی: ${esc(l.upd)}</div></td><td><span class="badge">${s.S.c}</span></td><td>${rateOf(s.S)}</td><td>${nf(s.docs.filter(function(d){return d.r}).length,0)} از ${nf(s.docs.length,0)}</td><td>${nf(s.tpls.length,0)}</td><td><label class="sw"><input type="checkbox" data-lt="${l.id}"${l.listed?' checked':''} aria-label="نمایش در لیست طرح‌ها"><i></i></label></td><td style="white-space:nowrap"><button type="button" class="btn" data-le="${l.id}">ویرایش</button> <button type="button" class="btn" data-lv="${l.id}" data-preview-url="${preview}">مشاهده</button> <button type="button" class="btn" data-campaign="${l.id}">ساخت تبلیغ</button> <button type="button" class="btn" data-ld="${l.id}">تکثیر</button> ${dc==l.id?`<button type="button" class="btn" data-lc="${l.id}" style="color:var(--er)">${l.active?'تأیید غیرفعال‌سازی':'تأیید فعال‌سازی'}</button> <button type="button" class="btn" data-ln="1">انصراف</button>`:`<button type="button" class="btn" data-lx="${l.id}">${l.needsReview&&!l.active?'تکمیل و بررسی':l.active?'غیرفعال‌سازی':'فعال‌سازی'}</button>`}</td></tr>`}).join(''):`<tr><td colspan="7" style="text-align:center;padding:24px" class="sub">${totalLoans?'در این صفحه موردی پیدا نشد.':'هنوز وامی در پایگاه داده ثبت نشده است؛ با «تعریف وام جدید» شروع کنید.'}</td></tr>`;
+$('lt').innerHTML=L.length?L.map(function(l){var s=l.snap;var preview='/#plan-'+encodeURIComponent(l.apiProduct.id||s.S.slug);return `<tr><td data-label="طرح"><b>${esc(s.S.t)}</b><div class="sub" style="margin:0">${l.active?'فعال':'غیرفعال'}${l.needsReview?' · نیازمند بررسی اطلاعات قدیمی':''}${l.apiProduct&&l.apiProduct.legacySourceTable?' · منبع: '+esc(l.apiProduct.legacySourceTable):''} · به‌روزرسانی: ${esc(l.upd)}</div></td><td data-label="نوع محاسبه"><span class="badge">${s.S.c}</span></td><td data-label="نرخ"><span>${rateOf(s.S)}</span></td><td data-label="مدارک"><span>${nf(s.docs.filter(function(d){return d.r}).length,0)} از ${nf(s.docs.length,0)}</span></td><td data-label="قالب قرارداد"><span>${nf(s.tpls.length,0)}</span></td><td data-label="نمایش عمومی"><label class="sw"><input type="checkbox" data-lt="${l.id}"${l.listed?' checked':''} aria-label="نمایش در لیست طرح‌ها"><i></i></label></td><td data-label="عملیات"><div class="loan-actions"><button type="button" class="action-btn" title="ویرایش اطلاعات وام" aria-label="ویرایش اطلاعات وام" data-le="${l.id}"><span class="action-icon" aria-hidden="true">✎</span>ویرایش</button> <button type="button" class="action-btn" title="پیش‌نمایش طرح در سایت" aria-label="مشاهده طرح" data-lv="${l.id}" data-preview-url="${preview}"><span class="action-icon" aria-hidden="true">↗</span>مشاهده</button> <button type="button" class="action-btn primary" title="ساخت محتوای تبلیغاتی همین وام" aria-label="ساخت تبلیغ برای این وام" data-campaign="${l.id}"><span class="action-icon" aria-hidden="true">✦</span>استودیو محتوا</button> ${dc==l.id?`<button type="button" class="action-btn danger" data-lc="${l.id}"><span class="action-icon" aria-hidden="true">✓</span>${l.active?'تأیید غیرفعال‌سازی':'تأیید فعال‌سازی'}</button> <button type="button" class="action-btn" data-ln="1"><span class="action-icon" aria-hidden="true">×</span>انصراف</button>`:`<button type="button" class="action-btn ${l.active?'danger':'primary'}" data-lx="${l.id}" title="${l.needsReview&&!l.active?'برای فعال‌سازی ابتدا اطلاعات این طرح قدیمی را بررسی و ذخیره کنید':l.active?'غیرفعال‌کردن نمایش فعال':'فعال‌سازی طرح'}"><span class="action-icon" aria-hidden="true">${l.active?'⏸':'✓'}</span>${l.needsReview&&!l.active?'بررسی و فعال‌سازی':l.active?'غیرفعال‌سازی':'فعال‌سازی'}</button>`}</div></td></tr>`}).join(''):`<tr><td colspan="7" style="text-align:center;padding:24px" class="sub">${totalLoans?'در این صفحه موردی پیدا نشد.':'هنوز وامی در پایگاه داده ثبت نشده است؛ با «تعریف وام جدید» شروع کنید.'}</td></tr>`;
 var pg=document.getElementById('lpager'),pages=Math.max(1,Math.ceil(totalLoans/pageLimit)),current=Math.floor(pageOffset/pageLimit)+1;if(pg)pg.innerHTML='<span class="sub" style="margin:0">صفحه '+nf(current,0)+' از '+nf(pages,0)+' · '+nf(pageLimit,0)+' مورد در هر صفحه</span><div style="display:flex;gap:8px"><button type="button" class="btn" id="prevLoans" '+(pageOffset<=0?'disabled':'')+'>صفحه قبل</button><button type="button" class="btn" id="nextLoans" '+(pageOffset+pageLimit>=totalLoans?'disabled':'')+'>صفحه بعد</button></div>'}
 function toast(m){ts.textContent=m;ts.style.opacity=1;clearTimeout(toast.h);toast.h=setTimeout(function(){ts.style.opacity=0},2500)}
 function byId(id){return loans.filter(function(x){return String(x.id)===String(id)})[0]}
