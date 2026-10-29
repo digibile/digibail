@@ -111,8 +111,8 @@ try {
       const isActive = disabledRaw === null ? false : !asBool(disabledRaw);
       const showInList = asBool(includedRaw);
       const ins = await pool.query(
-        "INSERT INTO loan_products(slug,name,title,description,badge,min_amount,max_amount,interval_days,tiers,conditions,documents,is_active,sort_order,interest_method,interest_percent,late_daily_coef,early_daily_coef,show_in_list,send_reminders,labels,full_description_html,operational_costs,legacy_source_table,legacy_id,legacy_payload,needs_review) VALUES($1,$2,$3,$4,'',$5,$6,$7,$8::jsonb,$9::jsonb,'[]'::jsonb,$10,$11,$12,$13,$14,$15,$16,FALSE,'[]'::jsonb,$17,$18::jsonb,$19,$20,$21::jsonb,TRUE) ON CONFLICT DO NOTHING RETURNING id",
-        [stableSlug,name,title,description,min,max,intervalDays,JSON.stringify(tiers),JSON.stringify(conditions),isActive,1000+imported,method,rate??0,lateCoef,earlyCoef,showInList,safeHtml(pick(p,["PlanHtml","FullDescriptionHtml"])),JSON.stringify(costs),sourceTable,row.legacy_id,JSON.stringify(legacyPayload)]
+        "INSERT INTO loan_products(slug,name,title,description,badge,min_amount,max_amount,interval_days,tiers,conditions,documents,is_active,sort_order,interest_method,interest_percent,late_daily_coef,early_daily_coef,show_in_list,send_reminders,labels,full_description_html,operational_costs,legacy_source_table,legacy_id,legacy_payload,needs_review) VALUES($1,$2,$3,$4,'',$5,$6,$7,$8::jsonb,$9::jsonb,'[]'::jsonb,$10,$11,$12,$13,$14,$15,$16,FALSE,'[]'::jsonb,$17,$18::jsonb,$19,$20,$21::jsonb,$22) ON CONFLICT DO NOTHING RETURNING id",
+        [stableSlug,name,title,description,min,max,intervalDays,JSON.stringify(tiers),JSON.stringify(conditions),isActive,1000+imported,method,rate??0,lateCoef,earlyCoef,showInList,safeHtml(pick(p,["PlanHtml","FullDescriptionHtml"])),JSON.stringify(costs),sourceTable,row.legacy_id,JSON.stringify(legacyPayload),(min<=0 || max<min || tiers.length===0)]
       );
       if (ins.rowCount) imported++; else skipped++;
     }
