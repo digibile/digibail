@@ -105,9 +105,14 @@ try {
       const lateCoef = num(pick(p, ["DelayPercent","LateDailyCoef","LatePenaltyDailyCoefficient"])) ?? 0;
       const earlyCoef = num(pick(p, ["EarlyPercent","EarlyDailyCoef","EarlyPaymentDailyCoefficient"])) ?? 0;
       const legacyPayload = Object.fromEntries(["Title","Code","DelayPercent","EarlyPercent","ProfitPercent","MaxAmount","MaxMonthGap","AllowedInstallments","CostsJson","Disable","DisableText","IncludePlan","PlanTitle","PlanShortDescription","HasSponsore","DefaultSponsoreCheckoutDays","LoanProfitType"].filter(k => p[k] !== undefined).map(k => [k, p[k]]));
+      const disabledRaw = pick(p, ["Disable"]);
+      const includedRaw = pick(p, ["IncludePlan"]);
+      const asBool = value => value === true || value === 1 || /^(true|1|yes|y)$/i.test(String(value ?? "").trim());
+      const isActive = disabledRaw === null ? false : !asBool(disabledRaw);
+      const showInList = asBool(includedRaw);
       const ins = await pool.query(
-        "INSERT INTO loan_products(slug,name,title,description,badge,min_amount,max_amount,interval_days,tiers,conditions,documents,is_active,sort_order,interest_method,interest_percent,late_daily_coef,early_daily_coef,show_in_list,send_reminders,labels,full_description_html,operational_costs,legacy_source_table,legacy_id,legacy_payload,needs_review) VALUES($1,$2,$3,$4,'',$5,$6,$7,$8::jsonb,$9::jsonb,'[]'::jsonb,FALSE,$10,$11,$12,$13,$14,FALSE,FALSE,'[]'::jsonb,$15,$16::jsonb,$17,$18,$19::jsonb,TRUE) ON CONFLICT DO NOTHING RETURNING id",
-        [stableSlug,name,title,description,min,max,intervalDays,JSON.stringify(tiers),JSON.stringify(conditions),1000+imported,method,rate??0,lateCoef,earlyCoef,safeHtml(pick(p,["PlanHtml","FullDescriptionHtml"])),JSON.stringify(costs),sourceTable,row.legacy_id,JSON.stringify(legacyPayload)]
+        "INSERT INTO loan_products(slug,name,title,description,badge,min_amount,max_amount,interval_days,tiers,conditions,documents,is_active,sort_order,interest_method,interest_percent,late_daily_coef,early_daily_coef,show_in_list,send_reminders,labels,full_description_html,operational_costs,legacy_source_table,legacy_id,legacy_payload,needs_review) VALUES($1,$2,$3,$4,'',$5,$6,$7,$8::jsonb,$9::jsonb,'[]'::jsonb,$10,$11,$12,$13,$14,$15,$16,FALSE,'[]'::jsonb,$17,$18::jsonb,$19,$20,$21::jsonb,TRUE) ON CONFLICT DO NOTHING RETURNING id",
+        [stableSlug,name,title,description,min,max,intervalDays,JSON.stringify(tiers),JSON.stringify(conditions),isActive,1000+imported,method,rate??0,lateCoef,earlyCoef,showInList,safeHtml(pick(p,["PlanHtml","FullDescriptionHtml"])),JSON.stringify(costs),sourceTable,row.legacy_id,JSON.stringify(legacyPayload)]
       );
       if (ins.rowCount) imported++; else skipped++;
     }
@@ -115,6 +120,13 @@ try {
       console.log("LEGACY_LOAN_IMPORT_PROGRESS=" + processed + "/" + sourceRows + " imported=" + imported + " skipped=" + skipped);
     }
   }
+  // Reconcile statuses for records imported by earlier versions as well.
+  // The source snapshot lives in this site's own PostgreSQL database.
+  const synced = await pool.query(
+    "UPDATE loan_products lp SET is_active = CASE WHEN lower(COALESCE(src.payload->>'Disable','')) IN ('true','1','yes','y') THEN FALSE WHEN lower(COALESCE(src.payload->>'Disable','')) IN ('false','0','no','n') THEN TRUE ELSE lp.is_active END, show_in_list = CASE WHEN lower(COALESCE(src.payload->>'IncludePlan','')) IN ('true','1','yes','y') THEN TRUE WHEN lower(COALESCE(src.payload->>'IncludePlan','')) IN ('false','0','no','n') THEN FALSE ELSE lp.show_in_list END, updated_at=NOW() FROM legacy_source_data src WHERE lp.legacy_source_table=src.source_table AND lp.legacy_id=src.legacy_id AND src.source_table=$1",
+    [sourceTable]
+  );
+  console.log("LEGACY_LOAN_STATUS_ROWS_RECONCILED=" + synced.rowCount);
   const totals = await pool.query(
     "SELECT COUNT(*)::int AS total, COUNT(*) FILTER (WHERE needs_review)::int AS review, COUNT(*) FILTER (WHERE is_active)::int AS active FROM loan_products WHERE legacy_source_table=$1",
     [sourceTable]
