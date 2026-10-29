@@ -81,14 +81,8 @@ export async function migrate() {
   await pool.query(
     "UPDATE users SET role='superadmin',is_active=TRUE,updated_at=NOW() WHERE lower(username)='admin'"
   );
-  // Index the legacy username expression before reconciling the admin role.
-  // Without this index, every application restart scans the entire 818k-row legacy archive.
-  await pool.query("CREATE INDEX IF NOT EXISTS legacy_source_data_aspnet_username_idx ON legacy_source_data (lower(COALESCE(payload->>'UserName',payload->>'username',''))) WHERE source_table LIKE '%AspNetUsers'");
-  // Reconcile a legacy administrator whose modern username was normalized during import.
-  // Only promote an identity whose preserved legacy role explicitly includes admin.
-  await pool.query(
-    "UPDATE users u SET role='superadmin',is_active=TRUE,updated_at=NOW() WHERE u.legacy_source='aspnetusers' AND EXISTS (SELECT 1 FROM legacy_source_data l WHERE l.source_table LIKE '%AspNetUsers' AND lower(COALESCE(l.payload->>'UserName',l.payload->>'username',''))=lower(u.username) AND lower(COALESCE(l.payload->>'roles',l.payload->>'Roles','')) LIKE '%admin%')"
-  );
+  // Legacy role reconciliation is performed during the controlled import, not on every app startup.
+  // The explicit "admin" username promotion above is the only startup role adjustment.
 }
 export async function dbHealth() { await pool.query("SELECT 1"); return true; }
 function hash(value, pepper) { return crypto.createHmac("sha256", pepper).update(String(value)).digest("hex"); }
