@@ -51,11 +51,12 @@ jobs:
           test -s web/contracts.html
           test -s web/loan-definition.html
           test -s web/loan-requests.html
+          test -s web/customers.html
           test -s backend/core/panel.html
           test -s backend/db/001_init.sql
       - name: Validate inline JavaScript in live pages
         run: |
-          node -e 'const fs=require("node:fs"),vm=require("node:vm"); for (const file of ["web/template-v3.html","web/admin.html","web/documents.html","web/contracts.html","web/loan-definition.html","web/loan-requests.html","backend/core/panel.html"]) { const html=fs.readFileSync(file,"utf8"); const scripts=[...html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi)]; scripts.forEach((m,i)=>new vm.Script(m[1],{filename:file+".inline-"+i+".js"})); console.log(file+": "+scripts.length+" inline scripts OK"); }'
+          node -e 'const fs=require("node:fs"),vm=require("node:vm"); for (const file of ["web/template-v3.html","web/admin.html","web/documents.html","web/contracts.html","web/loan-definition.html","web/loan-requests.html","web/customers.html","backend/core/panel.html"]) { const html=fs.readFileSync(file,"utf8"); const scripts=[...html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi)]; scripts.forEach((m,i)=>new vm.Script(m[1],{filename:file+".inline-"+i+".js"})); console.log(file+": "+scripts.length+" inline scripts OK"); }'
       - name: Validate shell installers and sample configuration
         shell: bash
         run: |
@@ -85,5 +86,6 @@ jobs:
           test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:1631/panel.html)" = "302"
           test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:1631/loan-definition.html)" = "302"
           test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:1631/loan-requests.html)" = "302"
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:1631/customers.html)" = "302"
       - name: Build Docker image
         run: docker build -t digibail-app:${{ github.sha }} .
