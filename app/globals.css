@@ -478,3 +478,34 @@ body{font-family:Vazirmatn,Tahoma,sans-serif;background:#f4f8fc;color:#123653}
  .mobile-dock{right:8px;left:8px;bottom:calc(7px + env(safe-area-inset-bottom));grid-template-columns:repeat(5,minmax(0,1fr));padding:7px 5px;border-radius:17px}
  .mobile-dock a{min-height:48px}
 }
+
+
+/* Category gallery: high-contrast photographic tiles, stable fallback if a CDN image fails */
+.category-showcase{background:linear-gradient(180deg,#f6f9fc 0%,#edf4fa 100%)}
+.showcase-heading{margin-bottom:30px}
+.category-grid{grid-template-columns:1.45fr repeat(4,minmax(0,1fr));gap:18px}
+.category-tile{height:285px;border-radius:20px;background:#123b56;box-shadow:0 16px 38px #082f4c18;outline:1px solid #ffffff55;outline-offset:-1px}
+.category-tile.tile-home{height:285px}
+.category-tile img{display:block;opacity:1;filter:saturate(1.12) contrast(1.03);transition:transform .55s cubic-bezier(.2,.7,.2,1),filter .3s}
+.category-tile:hover img{transform:scale(1.075);filter:saturate(1.2) contrast(1.05)}
+.category-tile:after{background:linear-gradient(0deg,rgba(2,22,39,.94) 0%,rgba(2,22,39,.42) 32%,rgba(2,22,39,.02) 78%)}
+.category-tile span{right:18px;bottom:19px;left:15px;gap:7px}
+.category-tile b{font-size:1.03rem;line-height:1.7}
+.category-tile small{font-size:.78rem}
+.image-fallback-home{background:radial-gradient(ellipse at 70% 20%,#8ab8c9,transparent 48%),linear-gradient(135deg,#244b61,#0c293e)}
+.image-fallback-phone{background:radial-gradient(ellipse at 55% 20%,#8ab8d8,transparent 40%),linear-gradient(135deg,#17496b,#09283e)}
+.image-fallback-watch{background:radial-gradient(ellipse at 50% 20%,#b3d9e0,transparent 42%),linear-gradient(135deg,#315c6d,#112f46)}
+.image-fallback-car{background:radial-gradient(ellipse at 55% 20%,#8db2d0,transparent 42%),linear-gradient(135deg,#2b536d,#102d43)}
+.image-fallback-moto{background:radial-gradient(ellipse at 55% 20%,#a1c9d5,transparent 42%),linear-gradient(135deg,#28576b,#102d43)}
+@media(max-width:1000px){.category-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.category-tile,.category-tile.tile-home{height:235px}}
+@media(max-width:650px){
+ .category-showcase{padding:34px 14px}
+ .showcase-heading{gap:10px;margin-bottom:18px}
+ .showcase-heading h2{font-size:1.55rem}
+ .category-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+ .category-tile,.category-tile.tile-home{height:205px;border-radius:15px}
+ .category-tile.tile-home{grid-column:span 2;height:230px}
+ .category-tile span{right:12px;bottom:13px}
+ .category-tile b{font-size:.9rem}
+ .category-tile small{font-size:.68rem}
+}
