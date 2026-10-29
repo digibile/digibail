@@ -50,6 +50,10 @@ h1{font-family:var(--f-disp);font-weight:400;font-size:clamp(2.4rem,5.4vw,4.2rem
 .lead{color:var(--muted);font-size:1.08rem;max-width:48ch;margin:0 0 24px}
 .calc{background:var(--surface);border:1px solid var(--line);border-radius:24px;padding:22px;min-width:0;box-shadow:0 20px 60px -30px rgba(40,10,80,.35)}
 .plans-chips,.chips{display:flex;gap:8px;flex-wrap:wrap}
+.plan-picker{display:grid;gap:7px;margin:0 0 18px;padding:14px;background:var(--surface2);border:1px solid var(--line);border-radius:16px}
+.plan-picker label{font-size:.86rem;font-weight:700;color:var(--muted)}
+.plan-picker select{width:100%;min-width:0;min-height:50px;padding:10px 42px 10px 14px;border:1px solid var(--line);border-radius:12px;background:var(--surface);color:var(--fg);font:inherit;font-weight:700;cursor:pointer}
+.plan-picker p{margin:0;color:var(--muted);font-size:.76rem;line-height:1.7}
 .chip{font:inherit;border:1px solid var(--line);background:transparent;color:var(--fg);border-radius:999px;padding:5px 16px;cursor:pointer;font-size:.9rem}
 .chip[aria-pressed=true]{background:var(--brand);color:#fff;border-color:var(--brand)}
 .amt{display:flex;justify-content:space-between;align-items:baseline;margin-top:16px;gap:10px}
@@ -436,6 +440,7 @@ function dateAfter(months,baseDate){const base=baseDate?new Date(baseDate):new D
 /* ---------- plans (production: loaded from the loan-products API) ---------- */
 let PLANS=[];
 const act=()=>PLANS.filter(p=>p.on);
+function planPicker(p){return `<div class="plan-picker"><label for="planSelect">انتخاب طرح تسهیلات</label><select id="planSelect" aria-label="انتخاب طرح تسهیلات">${act().map(x=>`<option value="${x.id}" ${x.id===p.id?'selected':''}>${x.name} · ${x.kind==='beta'?'استعلام بانکی':x.method==='Annual'?'نرخ سالانه':x.method==='Flat'?'کارمزد ثابت':'نرخ ماهانه'}</option>`).join('')}</select><p>طرح موردنظر را انتخاب کنید؛ محاسبه بر اساس شرایط همان طرح به‌روزرسانی می‌شود.</p></div>`}
 function calc(p,a,t){
  const amount=Math.max(0,numVal(a,0)),months=Math.max(1,Math.trunc(numVal(t&&t.m,6)));
  const downPct=Math.min(100,Math.max(0,numVal(t&&t.down,0)));
@@ -480,7 +485,7 @@ function tilt(el){if(!el||matchMedia('(prefers-reduced-motion: reduce)').matches
 function mountCalc(box,fixed){let p=PLANS.find(x=>x.id===S.plan&&x.on)||act()[0];if(fixed)p=fixed;if(!p){box.innerHTML='<div class="empty-plans"><span class="badge">در انتظار تأیید</span><h3>فعلاً طرح فعال و تأییدشده‌ای برای محاسبه وجود ندارد</h3><p>تعریف‌های منتقل‌شده در بخش مدیریت قابل بررسی‌اند. پس از تأیید شرایط واقعی و فعال‌سازی، طرح‌ها در این بخش نمایش داده می‌شوند.</p><a class="btn brand" href="/login.html">ورود به حساب</a></div>';const vl=$('#vlim');if(vl)vl.textContent='پس از تأیید طرح';return ()=>{}}S.plan=p.id;
 if(p.kind==='beta'){return mountBeta(box,p,fixed)}
  const clamp=()=>{S.amt=Math.min(Math.max(S.amt,p.min*1e6),p.max*1e6);S.ti=Math.min(S.ti,p.tiers.length-1)};
- box.innerHTML=`${fixed?'':`<div class="plans-chips" id="pch" role="group" aria-label="طرح اقساط">${act().map(x=>`<button class="chip" data-p="${x.id}">${x.name}</button>`).join('')}</div>`}
+ box.innerHTML=`${fixed?'':planPicker(p)}
  <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px"><h3 style="margin:0;font-size:18px">محاسبه‌گر پیشرفته وام</h3><span class="badge">محاسبه تقریبی</span></div><div class="amt"><span>مبلغ مورد نیاز (تومان)</span><output id="aOut" class="num"></output></div><input id="amtInput" type="text" inputmode="numeric" autocomplete="off" aria-label="مبلغ مورد نیاز به تومان" style="width:100%;box-sizing:border-box;margin:4px 0 10px;padding:11px 12px;border:1px solid var(--line,#dbe3ee);border-radius:12px;background:var(--surface,#fff);color:inherit;font:inherit"><input id="aRng" type="range" aria-label="مبلغ مورد نیاز"><div class="scale"><span id="aMin"></span><span id="aMax"></span></div>
  <div class="chips" id="tch" role="group" aria-label="تعداد اقساط" style="margin-top:14px"></div>
  <div class="big"><div><small>قسط ماهانه</small><b id="cM"></b></div><div><small>سررسید اولین قسط</small><span class="num" id="cD"></span></div></div>
@@ -500,18 +505,18 @@ if(p.kind==='beta'){return mountBeta(box,p,fixed)}
   box.dispatchEvent(new CustomEvent('calc',{detail:{p,t,c}}))}
  rng.oninput=()=>{S.amt=+rng.value;draw()};
  const amountInput=box.querySelector('#amtInput');if(amountInput){const formatAmountInput=()=>{const entered=numVal(amountInput.value,NaN);if(Number.isFinite(entered)){S.amt=Math.min(Math.max(entered,p.min*1e6),p.max*1e6);const formatted=Math.round(S.amt).toLocaleString('en-US');if(amountInput.value!==formatted)amountInput.value=formatted;draw()}else if(amountInput.value.trim()===''){S.amt=p.min*1e6;draw()}};amountInput.addEventListener('input',formatAmountInput);amountInput.addEventListener('change',()=>{if(!Number.isFinite(numVal(amountInput.value,NaN)))amountInput.value=Math.round(S.amt).toLocaleString('en-US');formatAmountInput()})}
- box.onclick=e=>{const a=e.target.closest('[data-p]'),b=e.target.closest('[data-t]');if(a){p=PLANS.find(x=>x.id===a.dataset.p);S.plan=p.id;if(p.kind==='beta'){mountCalc(box);return}S.ti=Math.min(1,p.tiers.length-1);draw()}if(b){S.ti=+b.dataset.t;draw()}};
+ const planSelect=box.querySelector('#planSelect');if(planSelect)planSelect.addEventListener('change',()=>{S.plan=planSelect.value;mountCalc(box)});box.onclick=e=>{const b=e.target.closest('[data-t]');if(b){S.ti=+b.dataset.t;draw()}};
  draw();return draw}
 
 /* ---------- طرح بتا: مبلغ و اقساط از API بانک استعلام می‌شود ---------- */
 const BETA={q:null};
 function mountBeta(box,p,fixed){
- const chips=fixed?'':`<div class="plans-chips" id="pch" role="group" aria-label="طرح اقساط">${act().map(x=>`<button class="chip" data-p="${x.id}" aria-pressed="${x.id===p.id}">${x.name}</button>`).join('')}</div>`;
+ const chips=fixed?'':planPicker(p);
  box.innerHTML=chips+`<h3 style="margin:14px 0 4px">استعلام تسهیلات بانک رفاه</h3><p class="note" style="margin:0 0 10px">مبلغ تسهیلات، تعداد و مبلغ اقساط را بانک تعیین می‌کند و ما فقط نتیجه را نشان می‌دهیم.</p>
  <div class="fld"><label for="bn">کد ملی</label><input id="bn" inputmode="numeric" maxlength="10" style="width:100%;font:inherit;background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:12px;padding:11px 14px;min-height:46px"><div class="h"></div></div>
  <label class="chk"><input type="checkbox" id="bc"> با استعلام تسهیلات از بانک رفاه و پردازش اطلاعاتم موافقم.</label>
  <div class="cta2"><button class="btn solid lg" id="bq">استعلام تسهیلات</button><button class="btn lg" data-go="reg">عضویت</button></div><div id="bres"></div>`;
- box.onclick=e=>{const a=e.target.closest('[data-p]');if(a){S.plan=a.dataset.p;home()}};
+ const planSelect=box.querySelector('#planSelect');if(planSelect)planSelect.addEventListener('change',()=>{S.plan=planSelect.value;mountCalc(box)});
  const f=box.querySelector('#bn');f.oninput=()=>{const v=f.value;hint(f,v.length===10?(okNid(v)?'کد ملی از نظر ساختار معتبر است':'کد ملی معتبر نیست'):'',okNid(v))};
  box.querySelector('#bq').onclick=async()=>{if(!okNid(f.value)){hint(f,'کد ملی معتبر نیست',0);return}if(!box.querySelector('#bc').checked){toast('رضایت استعلام را تأیید کنید');return}
   if(role==='guest'){openAuth('reg','برای استعلام ابتدا عضو شوید یا وارد شوید.');return}
