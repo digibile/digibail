@@ -711,9 +711,9 @@ export async function handleApi(req, res, url) {
       }
       if (req.method === "GET" && route === "/api/v1/admin/legacy-customers-page") {
         const page=Math.max(1,Number.parseInt(url.searchParams.get("page")||"1",10)||1), pageSize=Math.min(100,Math.max(10,Number.parseInt(url.searchParams.get("pageSize")||"50",10)||50)), search=String(url.searchParams.get("q")||"").trim().slice(0,120);
-        const params=[], where=[]; if(search){params.push("%"+search+"%");where.push("(name ILIKE $1 OR mobile ILIKE $1 OR email ILIKE $1 OR customer_code ILIKE $1 OR legacy_id ILIKE $1)");}
+        const params=[], where=[]; if(search){params.push("%"+search+"%");where.push("(name ILIKE $1 OR mobile ILIKE $1 OR email ILIKE $1 OR customer_code::text ILIKE $1 OR legacy_id::text ILIKE $1 OR legacy_username ILIKE $1 OR affiliate_code ILIKE $1)");}
         const filter=where.length?" WHERE "+where.join(" AND "):"", count=await pool.query("SELECT COUNT(*)::int AS total FROM legacy_customers"+filter,params);
-        const rows=await pool.query("SELECT legacy_id,name,mobile,email,customer_code,registered_at,expires_at,is_permanent,purchased,affiliate_code,parked_domain FROM legacy_customers"+filter+" ORDER BY registered_at DESC NULLS LAST,legacy_id LIMIT $"+(params.length+1)+" OFFSET $"+(params.length+2),[...params,pageSize,(page-1)*pageSize]);
+        const rows=await pool.query("SELECT legacy_id,name,mobile,email,customer_code,registered_at,expires_at,is_permanent,purchased,affiliate_code,parked_domain,legacy_username,account_type FROM legacy_customers"+filter+" ORDER BY registered_at DESC NULLS LAST,legacy_id LIMIT $"+(params.length+1)+" OFFSET $"+(params.length+2),[...params,pageSize,(page-1)*pageSize]);
         return json(res,200,{data:{rows:rows.rows,total:count.rows[0].total,page,pageSize}});
       }
       if (req.method === "GET" && route === "/api/v1/admin/legacy-customers") {
