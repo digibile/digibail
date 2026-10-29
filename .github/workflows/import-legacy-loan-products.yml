@@ -76,5 +76,5 @@ jobs:
             echo "=== Backfill all verified legacy loan requests and customer records into local PostgreSQL ==="
             $D compose run --rm --no-deps app node /app/scripts/backfill-legacy-customers.mjs
             echo "=== Verify local request and customer records (counts only) ==="
-            $D compose exec -T db sh -lc 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1 -Atc "SELECT '\''LOCAL_LOAN_REQUESTS='\''||COUNT(*) FROM loan_requests; SELECT '\''LOCAL_CUSTOMERS='\''||COUNT(*) FROM legacy_customers; SELECT '\''LOCAL_REQUESTS_BY_SOURCE='\''||source_table||'\''| '\''||COUNT(*) FROM loan_requests GROUP BY source_table ORDER BY source_table; SELECT '\''CUSTOMERS_WITH_NAME='\''||COUNT(*) FILTER (WHERE btrim(name)<> '\'''\'') FROM legacy_customers;"'
+            $D compose exec -T db sh -lc 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1 -Atc "SELECT '\''LOCAL_LOAN_REQUESTS='\''||COUNT(*) FROM loan_requests; SELECT '\''LOCAL_CUSTOMERS='\''||COUNT(*) FROM legacy_customers; SELECT source_table||'\''| '\''||COUNT(*) FROM loan_requests GROUP BY source_table ORDER BY source_table;"'
             echo "LOCAL_LEGACY_REQUEST_AND_CUSTOMER_BACKFILL_COMPLETE=1"
