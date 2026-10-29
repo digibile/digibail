@@ -1618,12 +1618,12 @@ V.dash=view('real-dashboard',async()=>{
   api('GET','/api/v1/admin/loan-products').catch(()=>[])
  ]);
  const rows=v=>Array.isArray(v)?v:Array.isArray(v?.data)?v.data:Array.isArray(v?.items)?v.items:[];
- const users=rows(rs[0]),customers=rows(rs[1]),sms=rows(rs[2]),beta=rows(rs[3]),legacy=rows(rs[4]),orders=rows(rs[5]),cards=rows(rs[6]),ledger=rows(rs[7]),products=rows(rs[8]);
+ const users=rows(rs[0]),customerCount=Number(rs[1]?.legacy_customers)||0,sms=rows(rs[2]),beta=rows(rs[3]),legacy=rows(rs[4]),orders=rows(rs[5]),cards=rows(rs[6]),ledger=rows(rs[7]),products=rows(rs[8]);
  const total=legacy.reduce((n,t)=>n+(Number(t.row_count)||0),0),activeProducts=products.filter(p=>p.isActive===true||p.isActive===1).length;
  return head('داشبورد مدیریت','همه‌ی اعداد از API و پایگاه داده خوانده می‌شوند؛ برای دیدن جزئیات روی هر کارت بزنید.')+
  tiles([
   ['حساب‌های کاربری',nf(users.length),'مشاهده فهرست کاربران','','users'],
-  ['مشتریان قدیمی',nf(customers.length),'مشاهده سوابق منتقل‌شده','','legacyCustomers'],
+  ['مشتریان قدیمی',nf(customerCount),'مشاهده سوابق منتقل‌شده','','legacyCustomers'],
   ['الگوهای پیامک',nf(sms.length),'مشاهده و مدیریت الگوها','','smsLegacy'],
   ['استعلام‌های بتا',nf(beta.length),'مشاهده درخواست‌ها','','betaRequests'],
   ['جدول‌های قدیمی',nf(legacy.length),'مشاهده جدول‌ها و ردیف‌ها','','legacyData'],
