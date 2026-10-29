@@ -34,7 +34,7 @@ try {
       applicant_name=EXCLUDED.applicant_name,mobile=EXCLUDED.mobile,national_code=EXCLUDED.national_code,
       status=EXCLUDED.status,amount=EXCLUDED.amount,created_at=EXCLUDED.created_at,payload=EXCLUDED.payload,imported_at=NOW()`);
   console.log("LOAN_REQUESTS_BACKFILL_ROWS=" + Number(requestResult.rowCount || 0));
-  const historyResult = await pool.query(\`
+  const historyResult = await pool.query(`
     WITH status_lookup AS (
       SELECT source_table,payload->>'Id' AS status_id,payload->>'Title' AS title,
         ROW_NUMBER() OVER (PARTITION BY source_table,payload->>'Id' ORDER BY legacy_id) AS rn
@@ -80,9 +80,9 @@ try {
     FROM mapped
     WHERE loan_request_id IS NOT NULL AND (old_status<>'' OR new_status<>'')
     ON CONFLICT DO NOTHING
-  \`);
+  `);
   console.log("LOAN_REQUEST_STATUS_HISTORY_BACKFILL_ROWS=" + Number(historyResult.rowCount || 0));
-  const registrantResult = await pool.query(\`
+  const registrantResult = await pool.query(`
     WITH agent_lookup AS (
       SELECT replace(source_table,'.dbo.Agents','.dbo.UserLoanRequests') AS request_source,
         payload->>'Id' AS entity_id,
