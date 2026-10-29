@@ -39,8 +39,10 @@ export async function migrate() {
       UNIQUE(source_table, legacy_id)
     );
     CREATE INDEX IF NOT EXISTS loan_requests_created_idx ON loan_requests(created_at DESC NULLS LAST);
+    CREATE INDEX IF NOT EXISTS loan_requests_created_id_idx ON loan_requests(created_at DESC NULLS LAST, legacy_id DESC);
     CREATE INDEX IF NOT EXISTS loan_requests_status_created_idx ON loan_requests(status, created_at DESC NULLS LAST);
     CREATE INDEX IF NOT EXISTS loan_requests_mobile_idx ON loan_requests(mobile);
+    CREATE INDEX IF NOT EXISTS loan_requests_national_code_idx ON loan_requests(national_code);
     WITH src AS (
       SELECT source_table, legacy_id, payload,
         COALESCE(payload->>'CreatedAt',payload->>'CreatedOn',payload->>'CreationDate',payload->>'DateCreated',payload->>'RequestDate',payload->>'CreateDate',payload->>'Created',payload->>'SubmissionDate',payload->>'InsertDate',payload->>'DateTime') AS raw_date,
