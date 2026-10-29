@@ -40,11 +40,6 @@ try {
         payload->>'Id' AS entity_id,
         COALESCE(NULLIF(payload->>'FullName',''),NULLIF(payload->>'DisplayName',''),NULLIF(payload->>'Name',''),NULLIF(trim(concat_ws(' ',NULLIF(payload->>'FirstName',''),NULLIF(payload->>'LastName',''))),''),NULLIF(payload->>'UserName',''),NULLIF(payload->>'Username','')) AS name
       FROM legacy_source_data WHERE lower(source_table) LIKE '%.dbo.agents'
-      UNION ALL
-      SELECT replace(source_table,'.dbo.AspNetUsers','.dbo.UserLoanRequests') AS request_source,
-        payload->>'Id' AS entity_id,
-        COALESCE(NULLIF(payload->>'FullName',''),NULLIF(payload->>'DisplayName',''),NULLIF(trim(concat_ws(' ',NULLIF(payload->>'FirstName',''),NULLIF(payload->>'LastName',''))),''),NULLIF(payload->>'UserName',''),NULLIF(payload->>'Username','')) AS name
-      FROM legacy_source_data WHERE lower(source_table) LIKE '%.dbo.aspnetusers'
     ), user_lookup AS (
       SELECT replace(source_table,'.dbo.AspNetUsers','.dbo.UserLoanRequests') AS request_source,
         payload->>'Id' AS entity_id,
