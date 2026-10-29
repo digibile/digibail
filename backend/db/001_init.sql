@@ -151,7 +151,7 @@ CREATE TABLE IF NOT EXISTS loan_products (
   is_active BOOLEAN NOT NULL DEFAULT FALSE, sort_order INTEGER NOT NULL DEFAULT 0,
   interest_method VARCHAR(12) NOT NULL DEFAULT 'Monthly' CHECK (interest_method IN ('Monthly','Annual','Flat')),
   interest_percent NUMERIC(18,6) NOT NULL DEFAULT 0, late_daily_coef NUMERIC(18,8) NOT NULL DEFAULT 0, early_daily_coef NUMERIC(18,8) NOT NULL DEFAULT 0,
-  show_in_list BOOLEAN NOT NULL DEFAULT FALSE, send_reminders BOOLEAN NOT NULL DEFAULT FALSE, image_url VARCHAR(400) NOT NULL DEFAULT '',
+  show_in_list BOOLEAN NOT NULL DEFAULT FALSE, send_reminders BOOLEAN NOT NULL DEFAULT FALSE, image_url TEXT NOT NULL DEFAULT '',
   labels JSONB NOT NULL DEFAULT '[]'::jsonb, full_description_html TEXT NOT NULL DEFAULT '', operational_costs JSONB NOT NULL DEFAULT '[]'::jsonb,
   legacy_source_table VARCHAR(120), legacy_id VARCHAR(160), legacy_payload JSONB NOT NULL DEFAULT '{}'::jsonb, needs_review BOOLEAN NOT NULL DEFAULT FALSE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
