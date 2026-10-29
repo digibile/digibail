@@ -1,0 +1,70 @@
+/* Digibail homepage-only refinement. Kept separate from shared application styles. */
+.db-home { overflow: clip; background:#f5f8fb; color:#102f43; }
+.db-home .top { min-height:78px; padding:14px clamp(18px,5vw,76px); background:#fff; border-bottom:1px solid #e4edf2; box-shadow:0 4px 22px #173b5010; }
+.db-home .brand { font-size:1.55rem; letter-spacing:-.7px; font-weight:950; color:#123c55; }
+.db-home .brand span { display:inline-grid; place-items:center; margin-right:5px; width:27px; height:27px; border-radius:8px; color:#14394b; background:#c9f36b; font-size:.8rem; }
+.db-home .top nav { gap:clamp(14px,2vw,30px); }
+.db-home .top nav a { color:#4d6878; font-weight:800; font-size:.83rem; transition:color .18s ease; }
+.db-home .top nav a:hover { color:#087f8c; }
+.db-home .login { border-radius:11px; padding:12px 17px; background:#0a526a; color:#fff; font-weight:900; }
+.db-home .hero { position:relative; grid-template-columns:minmax(0,.88fr) minmax(0,1.12fr); gap:clamp(28px,4vw,68px); padding:clamp(48px,6vw,88px) clamp(18px,5vw,76px); min-height:650px; background:radial-gradient(ellipse at 76% 30%,#155c70 0%,#0b354c 43%,#08283d 100%); color:#fff; }
+.db-home .hero:before { content:""; position:absolute; inset:0; pointer-events:none; opacity:.18; background-image:radial-gradient(#b5e9ed 1px,transparent 1px); background-size:24px 24px; mask-image:linear-gradient(90deg,transparent,black); }
+.db-home .hero-copy,.db-home .visual { position:relative; z-index:1; }
+.db-home .hero-copy { align-self:center; }
+.db-home .eyebrow { color:#c9f36b; font-size:.78rem; font-weight:900; letter-spacing:.1px; }
+.db-home .hero-copy h1 { margin:18px 0; font-size:clamp(2.45rem,4.4vw,4.5rem); line-height:1.3; letter-spacing:-1.7px; font-weight:950; }
+.db-home .hero-copy h1 em { color:#c9f36b; font-style:normal; }
+.db-home .hero-copy p { max-width:54ch; color:#d4e7ed; font-size:1rem; line-height:2.1; }
+.db-home .hero-actions { margin-top:26px; }
+.db-home .hero-actions .primary,.db-home .primary { background:#c9f36b; color:#15384a; border-radius:12px; padding:14px 20px; font-weight:950; box-shadow:0 10px 28px #061f2d35; }
+.db-home .hero-actions .secondary,.db-home .secondary { border:1px solid #ffffff50; border-radius:12px; padding:13px 18px; color:#fff; background:#ffffff0b; }
+.db-home .trust { margin-top:24px; gap:9px; }
+.db-home .trust span { padding:8px 11px; border:1px solid #ffffff24; border-radius:9px; color:#d8eaf0; background:#ffffff08; font-size:.72rem; }
+.db-home .hero-stage { grid-template-columns:minmax(0,1fr) minmax(290px,.88fr); gap:16px; }
+.db-home .hero-photo-grid { min-height:460px; grid-template-columns:1.12fr .88fr; grid-template-rows:repeat(2,minmax(180px,1fr)); gap:12px; }
+.db-home .hero-photo { border:1px solid #ffffff35; border-radius:19px; box-shadow:0 20px 45px #00152145; }
+.db-home .hero-photo img,.db-home .category-tile img,.db-home .promo-image img { object-fit:cover; }
+.db-home .hero-calc-panel { border:1px solid #e0ecee; border-radius:20px; box-shadow:0 28px 65px #00152155; }
+.db-home .hero-calc-mark { background:#e5f6d0; color:#315f35; }
+.db-home .hero-calc-button { background:#0a6578; border-radius:12px; }
+.db-home .benefits { border-bottom:1px solid #e1eaef; }
+.db-home .category-showcase,.db-home .steps-section { padding-inline:clamp(18px,5vw,76px); }
+.db-home .category-tile { border-radius:18px; box-shadow:0 15px 36px #102f4318; }
+.db-home .category-tile:after { background:linear-gradient(0deg,#061c2bed 0%,#061c2b4a 48%,transparent 80%); }
+.db-home .brand-promo { background:#e7f2f4; border:1px solid #d8e8eb; }
+.db-home .promo-copy { padding:clamp(24px,4vw,52px); }
+.db-home .steps-grid article { border-radius:17px; }
+.db-home .site-footer { background:#082b40; }
+.db-home .mobile-dock { border:1px solid #d6e5e8; box-shadow:0 12px 36px #062d3c30; }
+.db-home a:focus-visible,.db-home button:focus-visible,.db-home input:focus-visible,.db-home select:focus-visible { outline:3px solid #b5e85b; outline-offset:3px; }
+@media(max-width:1180px) {
+ .db-home .hero { grid-template-columns:minmax(0,1fr); }
+ .db-home .hero-stage { grid-template-columns:minmax(0,1fr) minmax(290px,.85fr); }
+ .db-home .hero-photo-grid { min-height:390px; }
+}
+@media(max-width:900px) {
+ .db-home .hero-stage { grid-template-columns:minmax(0,1fr); }
+ .db-home .hero-photo-grid { min-height:390px; }
+ .db-home .hero { padding:48px 22px; }
+}
+@media(max-width:700px) {
+ .db-home .top { padding:12px 15px; }
+ .db-home .hero { padding:36px 15px 42px; }
+ .db-home .hero-copy h1 { font-size:clamp(2.25rem,10vw,3.2rem); letter-spacing:-.8px; }
+ .db-home .hero-copy p { font-size:.9rem; }
+ .db-home .hero-photo-grid { min-height:290px; grid-template-rows:repeat(2,minmax(120px,1fr)); gap:8px; }
+ .db-home .hero-calc-panel { padding:17px; }
+ .db-home .category-showcase,.db-home .steps-section { padding-inline:15px; }
+ .db-home .category-grid { gap:10px; }
+ .db-home .category-tile { height:205px; min-height:205px; }
+ .db-home .brand-promo { margin:24px 12px; }
+ .db-home .footer-main { gap:24px 14px; }
+ .db-home .mobile-dock { z-index:60; }
+}
+@media(max-width:380px) {
+ .db-home .hero-photo-grid { min-height:245px; }
+ .db-home .hero-calc-total { grid-template-columns:minmax(0,1fr); }
+}
+@media(prefers-reduced-motion:reduce) {
+ .db-home *, .db-home *:before, .db-home *:after { scroll-behavior:auto!important; animation:none!important; transition:none!important; }
+}
