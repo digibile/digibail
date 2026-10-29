@@ -29,6 +29,8 @@ jobs:
             if sudo -n docker info >/dev/null 2>&1; then D='sudo -n docker'; else D='docker'; fi
             echo "=== APPLICATION AND DATABASE CONTAINERS ==="
             $D compose ps
+            echo "=== APPLICATION STARTUP LOGS ==="
+            $D compose logs --tail=120 app || true
             echo "=== APP HEALTH AND LOGIN PAGE ==="
             for path in /healthz /login.html /admin.html; do
               code="$(curl -sS -o /tmp/digibail-check-body -w '%{http_code}' --max-time 10 "http://127.0.0.1:1631$path" || true)"
