@@ -108,7 +108,7 @@ try {
       const disabledRaw = pick(p, ["Disable"]);
       const includedRaw = pick(p, ["IncludePlan"]);
       const asBool = value => value === true || value === 1 || /^(true|1|yes|y)$/i.test(String(value ?? "").trim());
-      const isActive = disabledRaw === null ? false : !asBool(disabledRaw);
+      const isActive = disabledRaw === null ? (min > 0 && max >= min && tiers.length > 0) : !asBool(disabledRaw);
       const showInList = asBool(includedRaw);
       const ins = await pool.query(
         "INSERT INTO loan_products(slug,name,title,description,badge,min_amount,max_amount,interval_days,tiers,conditions,documents,is_active,sort_order,interest_method,interest_percent,late_daily_coef,early_daily_coef,show_in_list,send_reminders,labels,full_description_html,operational_costs,legacy_source_table,legacy_id,legacy_payload,needs_review) VALUES($1,$2,$3,$4,'',$5,$6,$7,$8::jsonb,$9::jsonb,'[]'::jsonb,$10,$11,$12,$13,$14,$15,$16,FALSE,'[]'::jsonb,$17,$18::jsonb,$19,$20,$21::jsonb,$22) ON CONFLICT DO NOTHING RETURNING id",
@@ -123,7 +123,7 @@ try {
   // Reconcile statuses for records imported by earlier versions as well.
   // The source snapshot lives in this site's own PostgreSQL database.
   const synced = await pool.query(
-    "UPDATE loan_products lp SET is_active = CASE WHEN lower(COALESCE(src.payload->>'Disable','')) IN ('true','1','yes','y') THEN FALSE WHEN lower(COALESCE(src.payload->>'Disable','')) IN ('false','0','no','n') THEN TRUE ELSE lp.is_active END, show_in_list = CASE WHEN lower(COALESCE(src.payload->>'IncludePlan','')) IN ('true','1','yes','y') THEN TRUE WHEN lower(COALESCE(src.payload->>'IncludePlan','')) IN ('false','0','no','n') THEN FALSE ELSE lp.show_in_list END, updated_at=NOW() FROM legacy_source_data src WHERE lp.legacy_source_table=src.source_table AND lp.legacy_id=src.legacy_id AND src.source_table=$1",
+    "UPDATE loan_products lp SET is_active = CASE WHEN lower(COALESCE(src.payload->>'Disable','')) IN ('true','1','yes','y') THEN FALSE WHEN lower(COALESCE(src.payload->>'Disable','')) IN ('false','0','no','n') THEN TRUE ELSE CASE WHEN COALESCE(lp.min_amount,0)>0 AND COALESCE(lp.max_amount,0)>=COALESCE(lp.min_amount,0) AND jsonb_typeof(lp.tiers)='array' AND jsonb_array_length(CASE WHEN jsonb_typeof(lp.tiers)='array' THEN lp.tiers ELSE '[]'::jsonb END)>0 THEN TRUE ELSE lp.is_active END END, show_in_list = CASE WHEN lower(COALESCE(src.payload->>'IncludePlan','')) IN ('true','1','yes','y') THEN TRUE WHEN lower(COALESCE(src.payload->>'IncludePlan','')) IN ('false','0','no','n') THEN FALSE ELSE lp.show_in_list END, updated_at=NOW() FROM legacy_source_data src WHERE lp.legacy_source_table=src.source_table AND lp.legacy_id=src.legacy_id AND src.source_table=$1",
     [sourceTable]
   );
   console.log("LEGACY_LOAN_STATUS_ROWS_RECONCILED=" + synced.rowCount);
