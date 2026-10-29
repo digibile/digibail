@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 12
     steps:
-      - name: Verify import progress, internal database totals, and production pages
+      - name: Verify import progress, internal database totals, history fields, and production pages
         uses: appleboy/ssh-action@v1.2.2
         with:
           host: ${{ secrets.DEPLOY_HOST }}
@@ -27,11 +27,12 @@ jobs:
             if sudo -n docker info >/dev/null 2>&1; then D='sudo -n docker'; else D='docker'; fi
             echo "=== MIGRATION STATE ==="
             if [ -f "$ROOT/var/migrations/vamcity-import.status" ]; then echo "IMPORT_STATUS=$(cat "$ROOT/var/migrations/vamcity-import.status")"; else echo "IMPORT_STATUS=RUNNING_OR_STATUS_PENDING"; fi
-            if [ -f "$ROOT/var/migrations/vamcity-import.log" ]; then tail -n 70 "$ROOT/var/migrations/vamcity-import.log" | sed -E 's/(password|token|secret|authorization|api[_-]?key)[=: ]+[^ ]+/\1=[REDACTED]/Ig'; else echo "IMPORT_LOG=MISSING"; fi
+            if [ -f "$ROOT/var/migrations/vamcity-import.log" ]; then tail -n 35 "$ROOT/var/migrations/vamcity-import.log" | sed -E 's/(password|token|secret|authorization|api[_-]?key)[=: ]+[^ ]+/\1=[REDACTED]/Ig'; else echo "IMPORT_LOG=MISSING"; fi
             ps -eo pid,etime,pcpu,pmem,args | grep -E '[i]mport-vamcity-real-data|[m]igrate-legacy-digibail|[b]ackfill-legacy-customers' | head -n 20 || true
             echo "=== TARGET POSTGRES TOTALS ==="
             $D compose exec -T db sh -lc 'export PGPASSWORD="$POSTGRES_PASSWORD"; psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1 -At' <<'SQL'
             SELECT 'users='||COUNT(*) FROM users;
+            SELECT 'users_legacy='||COUNT(*) FROM users WHERE legacy_source='aspnetusers';
             SELECT 'legacy_customers='||COUNT(*) FROM legacy_customers;
             SELECT 'legacy_customers_named='||COUNT(*) FILTER (WHERE trim(COALESCE(name,''))<>'') FROM legacy_customers;
             SELECT 'loan_products='||COUNT(*) FROM loan_products;
@@ -40,69 +41,12 @@ jobs:
             SELECT 'loan_request_comments='||COUNT(*) FROM loan_request_comments;
             SELECT 'legacy_source_data_total='||COUNT(*) FROM legacy_source_data WHERE source_table<>'__legacy_schema__';
             SELECT 'legacy_source_table_count='||COUNT(DISTINCT source_table) FROM legacy_source_data WHERE source_table<>'__legacy_schema__';
-            SELECT source_table||'|'||COUNT(*) FROM legacy_source_data WHERE source_table<>'__legacy_schema__' AND source_table LIKE 'vamcityc_%' GROUP BY source_table ORDER BY source_table;
-            SELECT 'DOMAIN_TABLE='||source_table||'|'||COUNT(*) FROM legacy_source_data WHERE source_table<>'__legacy_schema__' AND source_table ~* '(agent|representative|loan|customer|merchant|sponsor|installment|contract|payment|commission|userloan|aspnetusers)' GROUP BY source_table ORDER BY source_table;
+            SELECT source_table||'|'||COUNT(*) FROM legacy_source_data WHERE source_table<>'__legacy_schema__' AND source_table ~* '(agent|representative|loan|customer|merchant|sponsor|installment|contract|payment|commission|userloan|aspnetusers)' GROUP BY source_table ORDER BY source_table;
             SELECT 'REQUEST_DATE_RANGE='||COALESCE(MIN(created_at)::text,'none')||'|'||COALESCE(MAX(created_at)::text,'none') FROM loan_requests;
-            SELECT 'HISTORY_FIELDS='||COALESCE(string_agg(DISTINCT k,', ' ORDER BY k),'none') FROM legacy_source_data s CROSS JOIN LATERAL jsonb_object_keys(s.payload) AS x(k) WHERE source_table ~* '[.]UserLoanRequestStatusHistories
-            echo "=== PRODUCTION ROUTES ==="
-            for path in /healthz /loan-requests.html /customers.html /agents.html /loan-definition.html; do
-              code="$(curl -sS -o /tmp/digibail-verify-body -w '%{http_code}' --max-time 10 "http://127.0.0.1:1631$path" || true)"
-              echo "PATH=$path HTTP=$code BYTES=$(wc -c </tmp/digibail-verify-body 2>/dev/null || echo 0)"
-            done
-            rm -f /tmp/digibail-verify-body
-            echo "MIGRATION_VERIFICATION_COMPLETE=1"
-
-# Final verification after current full legacy backfill.
-
-# Verify optimized idempotent import and final customer/request backfill.
-
-# Confirm the import and customer backfill status after the optimized pass.
-;
-            SELECT 'HISTORY_SAMPLE='||payload::text FROM legacy_source_data WHERE source_table ~* '[.]UserLoanRequestStatusHistories
-            echo "=== PRODUCTION ROUTES ==="
-            for path in /healthz /loan-requests.html /customers.html /agents.html /loan-definition.html; do
-              code="$(curl -sS -o /tmp/digibail-verify-body -w '%{http_code}' --max-time 10 "http://127.0.0.1:1631$path" || true)"
-              echo "PATH=$path HTTP=$code BYTES=$(wc -c </tmp/digibail-verify-body 2>/dev/null || echo 0)"
-            done
-            rm -f /tmp/digibail-verify-body
-            echo "MIGRATION_VERIFICATION_COMPLETE=1"
-
-# Final verification after current full legacy backfill.
-
-# Verify optimized idempotent import and final customer/request backfill.
-
-# Confirm the import and customer backfill status after the optimized pass.
- ORDER BY legacy_id LIMIT 1;
-            SELECT 'AGENT_FIELDS='||COALESCE(string_agg(DISTINCT k,', ' ORDER BY k),'none') FROM legacy_source_data s CROSS JOIN LATERAL jsonb_object_keys(s.payload) AS x(k) WHERE source_table ~* '[.]Agents
-            echo "=== PRODUCTION ROUTES ==="
-            for path in /healthz /loan-requests.html /customers.html /agents.html /loan-definition.html; do
-              code="$(curl -sS -o /tmp/digibail-verify-body -w '%{http_code}' --max-time 10 "http://127.0.0.1:1631$path" || true)"
-              echo "PATH=$path HTTP=$code BYTES=$(wc -c </tmp/digibail-verify-body 2>/dev/null || echo 0)"
-            done
-            rm -f /tmp/digibail-verify-body
-            echo "MIGRATION_VERIFICATION_COMPLETE=1"
-
-# Final verification after current full legacy backfill.
-
-# Verify optimized idempotent import and final customer/request backfill.
-
-# Confirm the import and customer backfill status after the optimized pass.
-;
-            SELECT 'REQUEST_STATUS_FIELDS='||COALESCE(string_agg(DISTINCT k,', ' ORDER BY k),'none') FROM legacy_source_data s CROSS JOIN LATERAL jsonb_object_keys(s.payload) AS x(k) WHERE source_table ~* '[.]LoanRequestStatuses
-            echo "=== PRODUCTION ROUTES ==="
-            for path in /healthz /loan-requests.html /customers.html /agents.html /loan-definition.html; do
-              code="$(curl -sS -o /tmp/digibail-verify-body -w '%{http_code}' --max-time 10 "http://127.0.0.1:1631$path" || true)"
-              echo "PATH=$path HTTP=$code BYTES=$(wc -c </tmp/digibail-verify-body 2>/dev/null || echo 0)"
-            done
-            rm -f /tmp/digibail-verify-body
-            echo "MIGRATION_VERIFICATION_COMPLETE=1"
-
-# Final verification after current full legacy backfill.
-
-# Verify optimized idempotent import and final customer/request backfill.
-
-# Confirm the import and customer backfill status after the optimized pass.
-;
+            SELECT 'HISTORY_FIELDS='||COALESCE(string_agg(DISTINCT k,', ' ORDER BY k),'none') FROM legacy_source_data s CROSS JOIN LATERAL jsonb_object_keys(s.payload) AS x(k) WHERE source_table ~* '[.]UserLoanRequestStatusHistories$';
+            SELECT 'HISTORY_SAMPLE='||payload::text FROM legacy_source_data WHERE source_table ~* '[.]UserLoanRequestStatusHistories$' ORDER BY legacy_id LIMIT 1;
+            SELECT 'AGENT_FIELDS='||COALESCE(string_agg(DISTINCT k,', ' ORDER BY k),'none') FROM legacy_source_data s CROSS JOIN LATERAL jsonb_object_keys(s.payload) AS x(k) WHERE source_table ~* '[.]Agents$';
+            SELECT 'REQUEST_STATUS_FIELDS='||COALESCE(string_agg(DISTINCT k,', ' ORDER BY k),'none') FROM legacy_source_data s CROSS JOIN LATERAL jsonb_object_keys(s.payload) AS x(k) WHERE source_table ~* '[.]LoanRequestStatuses$';
             SQL
             echo "=== PRODUCTION ROUTES ==="
             for path in /healthz /loan-requests.html /customers.html /agents.html /loan-definition.html; do
@@ -111,9 +55,3 @@ jobs:
             done
             rm -f /tmp/digibail-verify-body
             echo "MIGRATION_VERIFICATION_COMPLETE=1"
-
-# Final verification after current full legacy backfill.
-
-# Verify optimized idempotent import and final customer/request backfill.
-
-# Confirm the import and customer backfill status after the optimized pass.
