@@ -426,7 +426,7 @@ const CFG={mock:false,endpoints:{login:'/api/v1/Auth/login',register:'/api/v1/Au
 /* ---------- helpers ---------- */
 const $=s=>document.querySelector(s);
 const numVal=(v,fallback=0)=>{if(v===null||v===undefined||v==='')return fallback;const raw=toEn(String(v)).replace(/[٬,،\s]/g,'').replace(/[^0-9.+-]/g,'');const n=Number(raw);return Number.isFinite(n)?n:fallback};
-const fa=n=>{const v=numVal(n,NaN);return Number.isFinite(v)?Math.round(v).toLocaleString('fa-IR'):'—'};
+const fa=n=>{const v=numVal(n,NaN);return Number.isFinite(v)?Math.round(v).toLocaleString('en-US'):'—'};
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const toEn=s=>String(s).replace(/[۰-۹]/g,d=>'۰۱۲۳۴۵۶۷۸۹'.indexOf(d)).replace(/[٠-٩]/g,d=>'٠١٢٣٤٥٦٧٨٩'.indexOf(d));
 const okNid=v=>{v=toEn(v);if(!/^\d{10}$/.test(v)||/^(\d)\1{9}$/.test(v))return false;let s=0;for(let i=0;i<9;i++)s+=(+v[i])*(10-i);const r=s%11,c=+v[9];return r<2?c===r:c===11-r};
@@ -499,7 +499,7 @@ if(p.kind==='beta'){return mountBeta(box,p,fixed)}
   const vl=$('#vlim');if(vl)vl.textContent=fa(S.amt)+' ت';
   box.dispatchEvent(new CustomEvent('calc',{detail:{p,t,c}}))}
  rng.oninput=()=>{S.amt=+rng.value;draw()};
- const amountInput=box.querySelector('#amtInput');if(amountInput)amountInput.addEventListener('change',()=>{const entered=numVal(amountInput.value,NaN);if(Number.isFinite(entered)){S.amt=entered;draw()}else{amountInput.value=fa(S.amt)}});
+ const amountInput=box.querySelector('#amtInput');if(amountInput){const formatAmountInput=()=>{const entered=numVal(amountInput.value,NaN);if(Number.isFinite(entered)){S.amt=Math.min(Math.max(entered,p.min*1e6),p.max*1e6);const formatted=Math.round(S.amt).toLocaleString('en-US');if(amountInput.value!==formatted)amountInput.value=formatted;draw()}else if(amountInput.value.trim()===''){S.amt=p.min*1e6;draw()}};amountInput.addEventListener('input',formatAmountInput);amountInput.addEventListener('change',()=>{if(!Number.isFinite(numVal(amountInput.value,NaN)))amountInput.value=Math.round(S.amt).toLocaleString('en-US');formatAmountInput()})}
  box.onclick=e=>{const a=e.target.closest('[data-p]'),b=e.target.closest('[data-t]');if(a){p=PLANS.find(x=>x.id===a.dataset.p);S.plan=p.id;if(p.kind==='beta'){mountCalc(box);return}S.ti=Math.min(1,p.tiers.length-1);draw()}if(b){S.ti=+b.dataset.t;draw()}};
  draw();return draw}
 
