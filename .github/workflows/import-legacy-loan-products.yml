@@ -66,8 +66,8 @@ jobs:
             [ "$STABLE" -ge 3 ] || { echo "BLOCKED: validated app version did not become healthy and stable"; exit 21; }
             echo "=== Ensure indexed keyset scans so import never rescans the full legacy table ==="
             $D compose exec -T db sh -lc 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1 -c "CREATE INDEX IF NOT EXISTS legacy_source_data_source_table_legacy_id_idx ON legacy_source_data (source_table, legacy_id)"'
-            echo "=== Import latest VamCity Loans table with single-row memory bound; records remain inactive pending review ==="
-            $D compose exec -T app node scripts/import-legacy-loan-products.mjs
+            echo "=== Run isolated one-off importer; one source row per query, live API remains untouched ==="
+            $D compose run --rm --no-deps app node scripts/import-legacy-loan-products.mjs
             echo "=== Verify loan product totals without exposing customer data ==="
             $D compose exec -T db sh -lc 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1 -Atc "SELECT '\''loan_products_total='\''||COUNT(*) FROM loan_products; SELECT '\''legacy_vamcity_loans='\''||COUNT(*) FROM loan_products WHERE legacy_source_table ~* '\''^vamcityc_vamcity_import_[0-9]{8}[.]dbo[.]Loans$'\''; SELECT '\''legacy_vamcity_needs_review='\''||COUNT(*) FROM loan_products WHERE legacy_source_table ~* '\''^vamcityc_vamcity_import_[0-9]{8}[.]dbo[.]Loans$'\'' AND needs_review=TRUE;"'
             echo "LEGACY_LOAN_DEFINITION_IMPORT_COMPLETE=1"
