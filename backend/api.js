@@ -648,25 +648,6 @@ export async function handleApi(req, res, url) {
         const q = await pool.query("SELECT id,username,phone,full_name,email,role,is_active,created_at,legacy_source FROM users ORDER BY created_at DESC,id DESC LIMIT 500");
         return json(res, 200, { data: q.rows });
       }
-      if (req.method === "GET" && route === "/api/v1/admin/legacy-agents-page") {
-        const page=Math.max(1,Number.parseInt(url.searchParams.get("page")||"1",10)||1),pageSize=Math.min(100,Math.max(10,Number.parseInt(url.searchParams.get("pageSize")||"25",10)||25)),search=String(url.searchParams.get("q")||"").trim().slice(0,120),status=String(url.searchParams.get("status")||"").trim();
-        const base=" FROM legacy_source_data WHERE source_table ILIKE '%Agents' ";
-        const activeExpr="lower(COALESCE(payload->>'IsActive',payload->>'Active',payload->>'Enabled',payload->>'IsEnabled','')) IN ('true','1','yes','active','فعال')";
-        const where=[],params=[];
-        if(search){params.push("%"+search+"%");where.push("(COALESCE(payload->>'FullName',payload->>'DisplayName',payload->>'Name',trim(concat_ws(' ',payload->>'FirstName',payload->>'LastName')),payload->>'UserName',payload->>'Username','') ILIKE $"+params.length+" OR COALESCE(payload->>'BusinessName',payload->>'BrandName',payload->>'CompanyName',payload->>'TradeName','') ILIKE $"+params.length+" OR COALESCE(payload->>'Mobile',payload->>'PhoneNumber',payload->>'Phone',payload->>'CellPhone','') ILIKE $"+params.length+" OR legacy_id ILIKE $"+params.length+" OR payload::text ILIKE $"+params.length+")");}
-        if(status==="active")where.push("("+activeExpr+")");
-        if(status==="inactive")where.push("NOT ("+activeExpr+")");
-        const filter=where.length?" AND "+where.join(" AND "):"";
-        const [count,overall,active,customers,rows]=await Promise.all([
-          pool.query("SELECT COUNT(*)::int AS total"+base+filter,params),
-          pool.query("SELECT COUNT(*)::int AS total"+base,[]),
-          pool.query("SELECT COUNT(*)::int AS total"+base+" AND ("+activeExpr+")",[]),
-          pool.query("SELECT source_table,legacy_id,COALESCE(NULLIF(payload->>'FullName',''),NULLIF(payload->>'DisplayName',''),NULLIF(payload->>'Name',''),NULLIF(trim(concat_ws(' ',NULLIF(payload->>'FirstName',''),NULLIF(payload->>'LastName',''))),''),NULLIF(payload->>'UserName',''),NULLIF(payload->>'Username',''),'نام ثبت نشده') AS name,COALESCE(NULLIF(payload->>'BusinessName',''),NULLIF(payload->>'BrandName',''),NULLIF(payload->>'CompanyName',''),NULLIF(payload->>'TradeName','')) AS business_name,COALESCE(NULLIF(payload->>'Mobile',''),NULLIF(payload->>'PhoneNumber',''),NULLIF(payload->>'Phone',''),NULLIF(payload->>'CellPhone','')) AS mobile,COALESCE(NULLIF(payload->>'CommissionPercent',''),NULLIF(payload->>'CommissionRate',''),NULLIF(payload->>'SharePercent','')) AS commission_percent,COALESCE(NULLIF(payload->>'LastLoginAt',''),NULLIF(payload->>'LastLoginDate',''),NULLIF(payload->>'LastLogin','')) AS last_login,COALESCE(NULLIF(payload->>'IsActive',''),NULLIF(payload->>'Active',''),NULLIF(payload->>'Enabled',''),NULLIF(payload->>'IsEnabled','')) AS active_raw,COALESCE(NULLIF(payload->>'CustomerCount',''),NULLIF(payload->>'CustomersCount',''),NULLIF(payload->>'TotalCustomers','')) AS customer_count,COALESCE(NULLIF(payload->>'SubAgentsCount',''),NULLIF(payload->>'SubAgentCount',''),NULLIF(payload->>'ChildrenCount','')) AS subagents_count,(SELECT COUNT(*)::int FROM loan_requests lr WHERE lr.source_table=regexp_replace(legacy_source_data.source_table,'[.]Agents"+base+filter+" ORDER BY COALESCE(NULLIF(payload->>'CreatedAt',''),NULLIF(payload->>'RegisterDate',''),NULLIF(payload->>'CreatedOn','')) DESC NULLS LAST,legacy_id DESC LIMIT $"+(params.length+1)+" OFFSET $"+(params.length+2),[...params,pageSize,(page-1)*pageSize])
-        ]);
-        const mapped=rows.rows.map(r=>({...r,is_active:r.active_raw==null?null:['true','1','yes','active','فعال'].includes(String(r.active_raw).toLowerCase()),commission_percent:r.commission_percent==null?null:Number(r.commission_percent),customer_count:r.customer_count==null?null:Number(r.customer_count),subagents_count:r.subagents_count==null?null:Number(r.subagents_count),loan_requests_count:Number(r.loan_requests_count)||0}));
-        const customerTotal=mapped.reduce((n,r)=>n+(Number.isFinite(r.customer_count)?r.customer_count:0),0);
-        return json(res,200,{data:{rows:mapped,total:Number(count.rows[0]?.total)||0,overallTotal:Number(overall.rows[0]?.total)||0,activeTotal:Number(active.rows[0]?.total)||0,customerTotal:mapped.some(r=>r.customer_count!=null)?customerTotal:null,page,pageSize}});
-      }
       if (req.method === "GET" && route === "/api/v1/admin/legacy-customers-page") {
         const page=Math.max(1,Number.parseInt(url.searchParams.get("page")||"1",10)||1), pageSize=Math.min(100,Math.max(10,Number.parseInt(url.searchParams.get("pageSize")||"50",10)||50)), search=String(url.searchParams.get("q")||"").trim().slice(0,120);
         const params=[], where=[];
