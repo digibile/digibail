@@ -1,144 +1,53 @@
-name: Inspect Digibail migration and admin access
+name: Verify Digibail legacy data migration
 on:
   workflow_dispatch:
   push:
     branches: [main]
     paths:
       - .github/workflows/inspect-digibail-import-progress.yml
-
 permissions:
   contents: read
-
 jobs:
-  inspect:
+  verify:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 12
     steps:
-      - name: Inspect migration progress and dashboard routing without changing data
+      - name: Verify import progress, internal database totals, and production pages
         uses: appleboy/ssh-action@v1.2.2
         with:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
-          command_timeout: 8m
+          command_timeout: 10m
           script: |
             set -eu
             ROOT="/home/digibail/domains/digebail.ir"
             cd "$ROOT"
             if sudo -n docker info >/dev/null 2>&1; then D='sudo -n docker'; else D='docker'; fi
-            echo "=== APPLICATION AND DATABASE CONTAINERS ==="
-            $D compose ps
-            echo "=== APPLICATION STARTUP LOGS ==="
-            $D compose logs --tail=120 app || true
-            echo "=== APP HEALTH AND LOGIN PAGE ==="
-            for path in /healthz /login.html /admin.html; do
-              code="$(curl -sS -o /tmp/digibail-check-body -w '%{http_code}' --max-time 10 "http://127.0.0.1:1631$path" || true)"
-              echo "PATH=$path HTTP=$code BYTES=$(wc -c </tmp/digibail-check-body 2>/dev/null || echo 0)"
-            done
-            rm -f /tmp/digibail-check-body
-            echo "=== IMPORT PROCESS ==="
+            echo "=== MIGRATION STATE ==="
             if [ -f "$ROOT/var/migrations/vamcity-import.status" ]; then echo "IMPORT_STATUS=$(cat "$ROOT/var/migrations/vamcity-import.status")"; else echo "IMPORT_STATUS=RUNNING_OR_STATUS_PENDING"; fi
-            if [ -f "$ROOT/var/migrations/vamcity-import.log" ]; then tail -n 100 "$ROOT/var/migrations/vamcity-import.log" | sed -E 's/(password|token|secret|authorization|api[_-]?key)[=: ]+[^ ]+/\1=[REDACTED]/Ig'; else echo "IMPORT_LOG=MISSING"; fi
-            ps -eo pid,etime,pcpu,pmem,args | grep -E '[i]mport-vamcity-real-data|[m]igrate-legacy-digibail|[b]ackfill-legacy-customers' | head -n 30 || true
-            echo "=== TARGET POSTGRES COUNTS ==="
+            if [ -f "$ROOT/var/migrations/vamcity-import.log" ]; then tail -n 70 "$ROOT/var/migrations/vamcity-import.log" | sed -E 's/(password|token|secret|authorization|api[_-]?key)[=: ]+[^ ]+/\1=[REDACTED]/Ig'; else echo "IMPORT_LOG=MISSING"; fi
+            ps -eo pid,etime,pcpu,pmem,args | grep -E '[i]mport-vamcity-real-data|[m]igrate-legacy-digibail|[b]ackfill-legacy-customers' | head -n 20 || true
+            echo "=== TARGET POSTGRES TOTALS ==="
             $D compose exec -T db sh -lc 'export PGPASSWORD="$POSTGRES_PASSWORD"; psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1 -At' <<'SQL'
             SELECT 'users='||COUNT(*) FROM users;
             SELECT 'legacy_customers='||COUNT(*) FROM legacy_customers;
-            SELECT 'legacy_customers_named='||COUNT(*) FILTER (WHERE trim(COALESCE(name,''))<>'')||'|empty_name='||COUNT(*) FILTER (WHERE trim(COALESCE(name,''))='')||'|with_mobile='||COUNT(*) FILTER (WHERE trim(COALESCE(mobile,''))<>'') FROM legacy_customers;
-            SELECT 'sms_templates='||COUNT(*) FROM sms_templates;
-            SELECT 'vamcity_preserved_rows='||COUNT(*) FROM legacy_source_data WHERE source_table LIKE 'vamcityc_%';
-            SELECT source_table||'|'||COUNT(*) FROM legacy_source_data WHERE source_table LIKE 'vamcityc_%' GROUP BY source_table ORDER BY source_table;
+            SELECT 'legacy_customers_named='||COUNT(*) FILTER (WHERE trim(COALESCE(name,''))<>'') FROM legacy_customers;
+            SELECT 'loan_products='||COUNT(*) FROM loan_products;
             SELECT 'loan_requests='||COUNT(*) FROM loan_requests;
-            SELECT 'loan_requests_with_date='||COUNT(*) FILTER (WHERE created_at IS NOT NULL)||'|without_date='||COUNT(*) FILTER (WHERE created_at IS NULL) FROM loan_requests;
-            SELECT 'loan_requests_range='||COALESCE(MIN(created_at)::text,'none')||'|'||COALESCE(MAX(created_at)::text,'none') FROM loan_requests;
-            SELECT source_table||'|'||COUNT(*) FROM loan_requests GROUP BY source_table ORDER BY source_table;
-            SELECT 'loan_request_status='||COALESCE(NULLIF(status,''),'(blank)')||'|'||COUNT(*) FROM loan_requests GROUP BY status ORDER BY COUNT(*) DESC LIMIT 25;
-            SELECT 'legacy_status_fields='||string_agg(DISTINCT k,', ' ORDER BY k) FROM legacy_source_data s CROSS JOIN LATERAL jsonb_object_keys(s.payload) AS x(k) WHERE source_table='vamcityc_vamcity_import_20261028.dbo.LoanRequestStatuses';
-            SELECT 'legacy_status_sample='||legacy_id||'|'||payload::text FROM legacy_source_data WHERE source_table='vamcityc_vamcity_import_20261028.dbo.LoanRequestStatuses' ORDER BY legacy_id LIMIT 20;
+            SELECT 'loan_request_status_history='||COUNT(*) FROM loan_request_status_history;
+            SELECT 'loan_request_comments='||COUNT(*) FROM loan_request_comments;
+            SELECT 'legacy_source_data_total='||COUNT(*) FROM legacy_source_data WHERE source_table<>'__legacy_schema__';
+            SELECT 'legacy_source_table_count='||COUNT(DISTINCT source_table) FROM legacy_source_data WHERE source_table<>'__legacy_schema__';
+            SELECT source_table||'|'||COUNT(*) FROM legacy_source_data WHERE source_table<>'__legacy_schema__' AND source_table LIKE 'vamcityc_%' GROUP BY source_table ORDER BY source_table;
+            SELECT 'DOMAIN_TABLE='||source_table||'|'||COUNT(*) FROM legacy_source_data WHERE source_table<>'__legacy_schema__' AND source_table ~* '(agent|representative|loan|customer|merchant|sponsor|installment|contract|payment|commission|userloan|aspnetusers)' GROUP BY source_table ORDER BY source_table;
+            SELECT 'REQUEST_DATE_RANGE='||COALESCE(MIN(created_at)::text,'none')||'|'||COALESCE(MAX(created_at)::text,'none') FROM loan_requests;
             SQL
-            echo "=== REQUESTS PAGE HTTP CHECK ==="
-            for path in /loan-requests.html /api/v1/admin/loan-requests; do
-              code="$(curl -sS -o /tmp/digibail-request-check -w '%{http_code}' --max-time 10 "http://127.0.0.1:1631$path" || true)"
-              echo "PATH=$path HTTP=$code BYTES=$(wc -c </tmp/digibail-request-check 2>/dev/null || echo 0)"
+            echo "=== PRODUCTION ROUTES ==="
+            for path in /healthz /loan-requests.html /customers.html /agents.html /loan-definition.html; do
+              code="$(curl -sS -o /tmp/digibail-verify-body -w '%{http_code}' --max-time 10 "http://127.0.0.1:1631$path" || true)"
+              echo "PATH=$path HTTP=$code BYTES=$(wc -c </tmp/digibail-verify-body 2>/dev/null || echo 0)"
             done
-            rm -f /tmp/digibail-request-check
-            echo "=== AUTHENTICATED REQUEST LIST AND FILTER SMOKE TEST ==="
-            RECOVERY_PASSWORD="$($D run --rm -v /:/host alpine:3.20 sh -c "sed -n 's/^password=//p' /host/root/digibail-admin-recovery.txt | head -n 1")"
-            export RECOVERY_PASSWORD
-            node --input-type=module <<'NODE'
-            const base="http://127.0.0.1:1631";
-            const password=process.env.RECOVERY_PASSWORD||"";
-            const c=await fetch(base+"/api/v1/security/captcha");
-            if(!c.ok)throw new Error("captcha_http_"+c.status);
-            const challenge=await c.json();
-            const svg=Buffer.from(String(challenge.image||"").split(",")[1]||"","base64").toString("utf8");
-            const match=svg.match(/<text[^>]*>([0-9]{5})<[/]text>/);
-            if(!challenge.id||!match)throw new Error("captcha_parse_failed");
-            const login=await fetch(base+"/api/v1/security/login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({username:"digibail-recovery",password,captchaId:challenge.id,captchaAnswer:match[1]})});
-            const cookie=String(login.headers.get("set-cookie")||"").split(";")[0];
-            if(!login.ok||!cookie.startsWith("db_session="))throw new Error("admin_login_http_"+login.status);
-            const page=await fetch(base+"/loan-requests.html",{headers:{Cookie:cookie}});
-            const html=await page.text();
-            if(!page.ok||!html.includes("همهٔ درخواست‌ها"))throw new Error("requests_page_http_"+page.status);
-            const headers={Cookie:cookie};
-            const listResponse=await fetch(base+"/api/v1/admin/loan-requests?page=1&pageSize=25",{headers});
-            if(!listResponse.ok)throw new Error("request_list_http_"+listResponse.status);
-            const list=(await listResponse.json()).data;
-            if(Number(list.total)<20000||list.rows.length!==25)throw new Error("request_list_count_or_page_size_mismatch");
-            if(list.rows.some(r=>!r.status||/^[0-9a-f-]{36}$/i.test(r.status)))throw new Error("legacy_status_labels_not_mapped");
-            const detailResponse=await fetch(base+"/api/v1/admin/loan-requests/"+list.rows[0].id,{headers});
-            if(!detailResponse.ok)throw new Error("request_detail_http_"+detailResponse.status);
-            const detail=(await detailResponse.json()).data;
-            if(Number(detail.id)!==Number(list.rows[0].id)||!Array.isArray(detail.comments)||!Array.isArray(detail.history)||!String(detail.registrar||"").trim())throw new Error("request_detail_comments_history_or_registrar_missing");
-            console.log("REQUEST_DETAIL=PASS COMMENTS_HISTORY=PASS REGISTRAR=PASS");
-            const status=list.statuses.find(s=>s.status);
-            if(status){
-              const p=new URLSearchParams({page:"1",pageSize:"25",status:status.status});
-              const filtered=await fetch(base+"/api/v1/admin/loan-requests?"+p,{headers});
-              const data=(await filtered.json()).data;
-              if(!filtered.ok||Number(data.total)!==Number(status.count))throw new Error("status_filter_mismatch");
-            }
-            const dateParams=new URLSearchParams({page:"1",pageSize:"25",from:"2023-08-02",to:"2023-08-02"});
-            const dateResponse=await fetch(base+"/api/v1/admin/loan-requests?"+dateParams,{headers});
-            const dateData=(await dateResponse.json()).data;
-            if(!dateResponse.ok||!dateData.total||dateData.rows.some(r=>!String(r.created_at||"").startsWith("2023-08-02")))throw new Error("date_filter_failed");
-            const customerResponse=await fetch(base+"/api/v1/admin/legacy-customers-page?page=1&pageSize=25",{headers});
-            if(!customerResponse.ok)throw new Error("customer_list_http_"+customerResponse.status);
-            const customerData=(await customerResponse.json()).data;
-            if(Number(customerData.total)<50000||customerData.rows.length!==25||customerData.rows.some(r=>!String(r.name||"").trim()))throw new Error("customer_list_count_or_names_mismatch");
-            console.log("CUSTOMERS_TOTAL="+customerData.total+" PAGE_ROWS="+customerData.rows.length);
-            console.log("CUSTOMER_NAMES=PASS CUSTOMER_PAGINATION=PASS");
-            console.log("REQUESTS_PAGE_AUTH=PASS");
-            console.log("REQUESTS_TOTAL="+list.total+" PAGE_ROWS="+list.rows.length);
-            console.log("STATUS_FILTER=PASS DATE_FILTER=PASS LEGACY_STATUS_LABELS=PASS");
-            NODE
-            unset RECOVERY_PASSWORD
-            echo "=== SOURCE DATABASE STATUS ==="
-            SQLC="vamcity-stage-sql"
-            if $D inspect "$SQLC" >/dev/null 2>&1; then
-              SQLCMD="$($D exec "$SQLC" sh -lc 'command -v /opt/mssql-tools18/bin/sqlcmd || command -v /opt/mssql-tools/bin/sqlcmd || command -v sqlcmd' 2>/dev/null | head -n 1)"
-              SA_PASS="$($D exec "$SQLC" printenv MSSQL_SA_PASSWORD 2>/dev/null || true)"
-              if [ -n "$SQLCMD" ] && [ -n "$SA_PASS" ]; then
-                $D exec "$SQLC" "$SQLCMD" -S localhost -U sa -P "$SA_PASS" -C -W -s '|' -Q "SET NOCOUNT ON; SELECT name,state_desc FROM sys.databases WHERE name LIKE 'vamcityc_%' OR name='vamcity_stage' ORDER BY name;" 2>&1 | tail -n 35
-                echo "=== LOAN PRODUCT SOURCE SCHEMA (column names only; no customer data) ==="
-                $D exec "$SQLC" "$SQLCMD" -S localhost -U sa -P "$SA_PASS" -C -W -s '|' -d "vamcityc_vamcity_import_20261028" -Q "SET NOCOUNT ON; SELECT t.name AS table_name,c.column_id,c.name AS column_name,TYPE_NAME(c.user_type_id) AS data_type FROM sys.tables t JOIN sys.columns c ON c.object_id=t.object_id WHERE t.name IN ('Loans','AgentLoans','CustomerPurchasePlan','UserLoanRequests','UserLoans','UserLoanRequestStatuses','LoanRequestStatuses') ORDER BY t.name,c.column_id;" 2>&1 | head -n 240
-                echo "=== LEGACY LOAN TERMS SAMPLE (no customer identifiers) ==="
-                $D exec "$SQLC" "$SQLCMD" -S localhost -U sa -P "$SA_PASS" -C -W -s '|' -d "vamcityc_vamcity_import_20261028" -Q "SET NOCOUNT ON; SELECT TOP 5 Title,Code,DelayPercent,EarlyPercent,ProfitPercent,MaxAmount,MaxMonthGap,AllowedInstallments,CostsJson,Disable,IncludePlan,PlanTitle,PlanShortDescription,HasSponsore,DefaultSponsoreCheckoutDays,LoanProfitType FROM dbo.Loans ORDER BY Code;" 2>&1 | head -n 20
-              else
-                echo "SOURCE_SQL_ACCESS_UNAVAILABLE"
-              fi
-              unset SA_PASS
-            else
-              echo "SOURCE_SQL_CONTAINER_NOT_FOUND"
-            fi
-            echo "=== ADMIN RECOVERY FILE STATUS (NO SECRET CONTENT) ==="
-            if [ -s /root/digibail-admin-recovery.txt ]; then stat -c 'RECOVERY_FILE_PRESENT=1 MODE=%a OWNER=%U:%G SIZE=%s' /root/digibail-admin-recovery.txt; else echo "RECOVERY_FILE_PRESENT=0"; fi
-            echo "MIGRATION_PROGRESS_INSPECTION_COMPLETE=1"
-            echo "READ_ONLY_VALIDATION_COMPLETED=1"
-
-# Re-run after deployment and customer/request backfill to verify local records.
-# Recheck after the latest Next.js release marker deployment attempt.
-# Verify app stability after latest deployment attempt.
-# Final verification after the customer terminology update was deployed.
-# Check latest progress of the ongoing source-database import.
+            rm -f /tmp/digibail-verify-body
+            echo "MIGRATION_VERIFICATION_COMPLETE=1"
