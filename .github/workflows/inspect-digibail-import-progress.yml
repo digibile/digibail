@@ -55,3 +55,5 @@ jobs:
             done
             rm -f /tmp/digibail-verify-body
             echo "MIGRATION_VERIFICATION_COMPLETE=1"
+
+# Check health after the latest release and request-history migration.
