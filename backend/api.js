@@ -83,6 +83,9 @@ export async function migrate() {
       applicant_name=EXCLUDED.applicant_name,mobile=EXCLUDED.mobile,national_code=EXCLUDED.national_code,
       status=EXCLUDED.status,amount=EXCLUDED.amount,created_at=EXCLUDED.created_at,payload=EXCLUDED.payload,imported_at=NOW()
   `);
+  await pool.query("CREATE INDEX IF NOT EXISTS legacy_customers_registered_idx ON legacy_customers(registered_at DESC NULLS LAST)");
+  await pool.query("CREATE INDEX IF NOT EXISTS legacy_customers_mobile_idx ON legacy_customers(mobile)");
+  await pool.query("CREATE INDEX IF NOT EXISTS legacy_customers_name_idx ON legacy_customers(name)");
   await pool.query("ANALYZE loan_requests");
   // Provision a password-only initial superadmin without relying on SMS delivery.
   // The password itself is never stored in source; only a salted scrypt verifier is.
@@ -672,8 +675,18 @@ export async function handleApi(req, res, url) {
         return json(res,200,{data:{rows:rows.rows,total:count.rows[0].total,page,pageSize}});
       }
       if (req.method === "GET" && route === "/api/v1/admin/legacy-customers") {
-        const q = await pool.query("SELECT legacy_id,name,mobile,email,customer_code,registered_at,expires_at,is_permanent,purchased,affiliate_code,parked_domain FROM legacy_customers ORDER BY registered_at DESC NULLS LAST");
-        return json(res, 200, { data: q.rows });
+        const search = String(url.searchParams.get("q") || "").trim().slice(0,120);
+        const page = Math.max(1, Number.parseInt(url.searchParams.get("page") || "1",10) || 1);
+        const pageSize = Math.min(100,Math.max(10,Number.parseInt(url.searchParams.get("pageSize") || "50",10) || 50));
+        const params = [];
+        let filter = "";
+        if (search) {
+          params.push("%"+search+"%");
+          filter = " WHERE name ILIKE $1 OR mobile ILIKE $1 OR email ILIKE $1 OR customer_code::text ILIKE $1 OR affiliate_code ILIKE $1";
+        }
+        const totalQ = await pool.query("SELECT COUNT(*)::int AS total FROM legacy_customers"+filter,params);
+        const rowsQ = await pool.query("SELECT legacy_id,name,mobile,email,customer_code,registered_at,expires_at,is_permanent,purchased,affiliate_code,parked_domain FROM legacy_customers"+filter+" ORDER BY registered_at DESC NULLS LAST,legacy_id LIMIT $"+(params.length+1)+" OFFSET $"+(params.length+2),[...params,pageSize,(page-1)*pageSize]);
+        return json(res,200,{data:{rows:rowsQ.rows,total:Number(totalQ.rows[0]?.total)||0,page,pageSize}});
       }
       if (req.method === "GET" && route === "/api/v1/admin/legacy-source-tables") {
         const q = await pool.query(
