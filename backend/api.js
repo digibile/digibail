@@ -36,8 +36,8 @@ export async function migrate() {
 }
 export async function dbHealth() { await pool.query("SELECT 1"); return true; }
 function hash(value, pepper) { return crypto.createHmac("sha256", pepper).update(String(value)).digest("hex"); }
-function json(res, status, value) {
-  res.writeHead(status, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" });
+function json(res, status, value, extraHeaders = {}) {
+  res.writeHead(status, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", ...extraHeaders });
   res.end(JSON.stringify(value));
 }
 function authJson(res, status, token, value) {
@@ -246,12 +246,13 @@ export async function handleApi(req, res, url) {
     }
     if (req.method === "GET" && (route === "/api/v1/loan-products" || /^\/api\/v1\/loan-products\/[^/]+$/.test(route))) {
       const slug = route === "/api/v1/loan-products" ? null : decodeURIComponent(route.slice("/api/v1/loan-products/".length));
+      const publicColumns = "slug,name,title,description,badge,min_amount,max_amount,interval_days,tiers,conditions,documents,is_active,sort_order,show_in_list,interest_method,interest_percent,image_url";
       const q = slug
-        ? await pool.query("SELECT * FROM loan_products WHERE slug=$1 AND is_active=TRUE AND show_in_list=TRUE LIMIT 1", [slug])
-        : await pool.query("SELECT * FROM loan_products WHERE is_active=TRUE AND show_in_list=TRUE ORDER BY sort_order,created_at DESC");
+        ? await pool.query("SELECT " + publicColumns + " FROM loan_products WHERE slug=$1 AND is_active=TRUE AND show_in_list=TRUE LIMIT 1", [slug])
+        : await pool.query("SELECT " + publicColumns + " FROM loan_products WHERE is_active=TRUE AND show_in_list=TRUE ORDER BY sort_order,created_at DESC");
       const shape = (p) => ({ id:p.slug,name:p.name,description:p.description,badge:p.badge,isActive:p.is_active,minAmount:Number(p.min_amount),maxAmount:Number(p.max_amount),intervalMonths:intervalMonthsFromStored(p.interval_days),intervalDays:intervalMonthsFromStored(p.interval_days),tiers:p.tiers,conditions:p.conditions,documents:p.documents,title:p.title||p.name,imageUrl:p.image_url,fullDescriptionHtml:p.full_description_html,labels:p.labels,operationalCosts:p.operational_costs,interestMethod:p.interest_method,interestPercent:Number(p.interest_percent),lateDailyCoef:Number(p.late_daily_coef),earlyDailyCoef:Number(p.early_daily_coef),showInList:p.show_in_list,sendReminders:p.send_reminders });
-      if (slug) return q.rowCount ? json(res,200,shape(q.rows[0])) : json(res,404,{message:"طرح وام پیدا نشد."});
-      return json(res,200,q.rows.map(shape));
+      if (slug) return q.rowCount ? json(res,200,shape(q.rows[0]),{"Cache-Control":"public, max-age=10, stale-while-revalidate=30"}) : json(res,404,{message:"طرح وام پیدا نشد."});
+      return json(res,200,q.rows.map(shape),{"Cache-Control":"public, max-age=10, stale-while-revalidate=30"});
     }
     if (route.startsWith("/api/v1/admin/")) {
       const admin = await adminFor(req);
