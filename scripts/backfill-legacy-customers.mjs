@@ -62,8 +62,52 @@ try {
       COALESCE(username,''),CASE WHEN lower(COALESCE(role_text,'')) LIKE '%admin%' OR lower(COALESCE(role_text,'')) LIKE '%مدیر%' THEN 'کاربر مدیریتی منتقل‌شده' ELSE 'مشتری / کاربر منتقل‌شده' END,source_table
     FROM ranked WHERE source_rank=1
     ON CONFLICT(legacy_id) DO UPDATE SET name=COALESCE(NULLIF(EXCLUDED.name,''),legacy_customers.name),mobile=COALESCE(NULLIF(EXCLUDED.mobile,''),legacy_customers.mobile),email=COALESCE(NULLIF(EXCLUDED.email,''),legacy_customers.email),registered_at=COALESCE(EXCLUDED.registered_at,legacy_customers.registered_at),legacy_username=COALESCE(NULLIF(EXCLUDED.legacy_username,''),legacy_customers.legacy_username),account_type=COALESCE(NULLIF(EXCLUDED.account_type,''),legacy_customers.account_type),legacy_source_table=COALESCE(EXCLUDED.legacy_source_table,legacy_customers.legacy_source_table)`);
+  // Also materialize the original business customer directory (dbo.Customers), not only login accounts (AspNetUsers).
+  // Upsert by stable UUID and merge populated fields; never delete or replace existing customer records.
+  const sourceCustomers = await pool.query(`
+    WITH src AS (
+      SELECT source_table,legacy_id,payload,
+        COALESCE(NULLIF(payload->>'Id',''),legacy_id) AS raw_id,
+        COALESCE(NULLIF(payload->>'Name',''),NULLIF(payload->>'FullName',''),NULLIF(payload->>'CustomerName',''),NULLIF(payload->>'Title','')) AS display_name,
+        COALESCE(NULLIF(payload->>'Mobile',''),NULLIF(payload->>'Phone',''),NULLIF(payload->>'PhoneNumber','')) AS phone,
+        COALESCE(NULLIF(payload->>'Email',''),NULLIF(payload->>'EmailAddress','')) AS email_address,
+        COALESCE(NULLIF(payload->>'Code',''),NULLIF(payload->>'CustomerCode',''),NULLIF(payload->>'CustomerNumber','')) AS code,
+        COALESCE(payload->>'RegDate',payload->>'RegisteredAt',payload->>'CreatedAt',payload->>'CreatedOn',payload->>'RegisterDate',payload->>'RegistrationDate') AS raw_registered,
+        COALESCE(payload->>'ExpireDate',payload->>'ExpiresAt',payload->>'ExpireAt') AS raw_expires,
+        COALESCE(payload->>'Permanent',payload->>'IsPermanent','false') AS raw_permanent,
+        COALESCE(payload->>'Purchased',payload->>'HasPurchased','false') AS raw_purchased,
+        COALESCE(NULLIF(payload->>'AffCode',''),NULLIF(payload->>'AffiliateCode','')) AS aff_code,
+        COALESCE(NULLIF(payload->>'ParkDomain',''),NULLIF(payload->>'ParkedDomain','')) AS park_domain
+      FROM legacy_source_data
+      WHERE lower(source_table) LIKE '%.dbo.customers'
+    )
+    INSERT INTO legacy_customers(legacy_id,name,mobile,email,customer_code,registered_at,expires_at,is_permanent,purchased,affiliate_code,parked_domain,account_type,legacy_source_table)
+    SELECT CASE
+      WHEN length(raw_id)=36 AND substring(raw_id from 9 for 1)='-' AND substring(raw_id from 14 for 1)='-' AND substring(raw_id from 19 for 1)='-' AND substring(raw_id from 24 for 1)='-' AND translate(replace(raw_id,'-',''),'0123456789abcdefABCDEF','')='' THEN raw_id::uuid
+      ELSE (substr(md5(source_table||':'||raw_id),1,8)||'-'||substr(md5(source_table||':'||raw_id),9,4)||'-'||substr(md5(source_table||':'||raw_id),13,4)||'-'||substr(md5(source_table||':'||raw_id),17,4)||'-'||substr(md5(source_table||':'||raw_id),21,12))::uuid
+    END,COALESCE(display_name,''),COALESCE(phone,''),COALESCE(email_address,''),code,
+      CASE WHEN left(raw_registered,6)='/Date(' AND right(raw_registered,2)=')/' THEN to_timestamp(regexp_replace(raw_registered,'[^0-9-]','','g')::numeric/1000) WHEN raw_registered ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}' THEN raw_registered::timestamptz WHEN length(raw_registered) IN (10,13) AND raw_registered ~ '^[0-9]+' THEN to_timestamp(raw_registered::numeric/CASE WHEN length(raw_registered)=13 THEN 1000 ELSE 1 END) ELSE NULL END,
+      CASE WHEN left(raw_expires,6)='/Date(' AND right(raw_expires,2)=')/' THEN to_timestamp(regexp_replace(raw_expires,'[^0-9-]','','g')::numeric/1000) WHEN raw_expires ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}' THEN raw_expires::timestamptz WHEN length(raw_expires) IN (10,13) AND raw_expires ~ '^[0-9]+' THEN to_timestamp(raw_expires::numeric/CASE WHEN length(raw_expires)=13 THEN 1000 ELSE 1 END) ELSE NULL END,
+      lower(raw_permanent) IN ('true','1','yes','y'),lower(raw_purchased) IN ('true','1','yes','y'),COALESCE(aff_code,''),COALESCE(park_domain,''),'مشتری منتقل‌شده از فهرست اصلی',source_table
+    FROM src WHERE raw_id IS NOT NULL AND raw_id<>''
+    ON CONFLICT(legacy_id) DO UPDATE SET
+      name=COALESCE(NULLIF(EXCLUDED.name,''),legacy_customers.name),
+      mobile=COALESCE(NULLIF(EXCLUDED.mobile,''),legacy_customers.mobile),
+      email=COALESCE(NULLIF(EXCLUDED.email,''),legacy_customers.email),
+      customer_code=COALESCE(NULLIF(EXCLUDED.customer_code,''),legacy_customers.customer_code),
+      registered_at=COALESCE(EXCLUDED.registered_at,legacy_customers.registered_at),
+      expires_at=COALESCE(EXCLUDED.expires_at,legacy_customers.expires_at),
+      is_permanent=legacy_customers.is_permanent OR EXCLUDED.is_permanent,
+      purchased=legacy_customers.purchased OR EXCLUDED.purchased,
+      affiliate_code=COALESCE(NULLIF(EXCLUDED.affiliate_code,''),legacy_customers.affiliate_code),
+      parked_domain=COALESCE(NULLIF(EXCLUDED.parked_domain,''),legacy_customers.parked_domain),
+      legacy_source_table=COALESCE(EXCLUDED.legacy_source_table,legacy_customers.legacy_source_table)`);
+  console.log("BUSINESS_CUSTOMERS_BACKFILL_ROWS=" + Number(sourceCustomers.rowCount || 0));
   await pool.query("ANALYZE legacy_customers");
   const count = await pool.query("SELECT COUNT(*)::int AS total FROM legacy_customers");
+  const sourceCounts = await pool.query("SELECT COUNT(*) FILTER (WHERE lower(COALESCE(legacy_source_table,'')) LIKE '%.dbo.customers')::int AS business_customers, COUNT(*) FILTER (WHERE lower(COALESCE(legacy_source_table,'')) LIKE '%.dbo.aspnetusers')::int AS login_accounts FROM legacy_customers");
+  console.log("LEGACY_BUSINESS_CUSTOMERS_TOTAL=" + Number(sourceCounts.rows[0]?.business_customers || 0));
+  console.log("LEGACY_LOGIN_ACCOUNTS_TOTAL=" + Number(sourceCounts.rows[0]?.login_accounts || 0));
   console.log("LEGACY_RECORD_BACKFILL_COMPLETE=1");
   console.log("LEGACY_CUSTOMERS_TOTAL=" + Number(count.rows[0]?.total || 0));
   console.log("LEGACY_CUSTOMER_UPSERT_ROWS=" + Number(result.rowCount || 0));
