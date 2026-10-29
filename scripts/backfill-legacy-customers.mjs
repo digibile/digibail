@@ -80,6 +80,25 @@ try {
         COALESCE(NULLIF(payload->>'ParkDomain',''),NULLIF(payload->>'ParkedDomain','')) AS park_domain
       FROM legacy_source_data
       WHERE lower(source_table) LIKE '%.dbo.customers'
+    ), ranked AS (
+      SELECT src.*,
+        ROW_NUMBER() OVER (
+          PARTITION BY CASE
+            WHEN length(raw_id)=36 AND substring(raw_id from 9 for 1)='-' AND substring(raw_id from 14 for 1)='-' AND substring(raw_id from 19 for 1)='-' AND substring(raw_id from 24 for 1)='-' AND translate(replace(raw_id,'-',''),'0123456789abcdefABCDEF','')='' THEN lower(raw_id)
+            ELSE source_table||':'||raw_id
+          END
+          ORDER BY
+            ((CASE WHEN display_name IS NOT NULL THEN 1 ELSE 0 END) +
+             (CASE WHEN phone IS NOT NULL THEN 1 ELSE 0 END) +
+             (CASE WHEN email_address IS NOT NULL THEN 1 ELSE 0 END) +
+             (CASE WHEN code IS NOT NULL THEN 1 ELSE 0 END) +
+             (CASE WHEN raw_registered IS NOT NULL THEN 1 ELSE 0 END) +
+             (CASE WHEN aff_code IS NOT NULL THEN 1 ELSE 0 END) +
+             (CASE WHEN park_domain IS NOT NULL THEN 1 ELSE 0 END)) DESC,
+            CASE WHEN lower(source_table) LIKE '%vamcity_import%' THEN 0 ELSE 1 END,
+            source_table,legacy_id
+        ) AS source_rank
+      FROM src WHERE raw_id IS NOT NULL AND raw_id<>''
     )
     INSERT INTO legacy_customers(legacy_id,name,mobile,email,customer_code,registered_at,expires_at,is_permanent,purchased,affiliate_code,parked_domain,account_type,legacy_source_table)
     SELECT CASE
@@ -89,7 +108,7 @@ try {
       CASE WHEN left(raw_registered,6)='/Date(' AND right(raw_registered,2)=')/' THEN to_timestamp(regexp_replace(raw_registered,'[^0-9-]','','g')::numeric/1000) WHEN raw_registered ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}' THEN raw_registered::timestamptz WHEN length(raw_registered) IN (10,13) AND raw_registered ~ '^[0-9]+' THEN to_timestamp(raw_registered::numeric/CASE WHEN length(raw_registered)=13 THEN 1000 ELSE 1 END) ELSE NULL END,
       CASE WHEN left(raw_expires,6)='/Date(' AND right(raw_expires,2)=')/' THEN to_timestamp(regexp_replace(raw_expires,'[^0-9-]','','g')::numeric/1000) WHEN raw_expires ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}' THEN raw_expires::timestamptz WHEN length(raw_expires) IN (10,13) AND raw_expires ~ '^[0-9]+' THEN to_timestamp(raw_expires::numeric/CASE WHEN length(raw_expires)=13 THEN 1000 ELSE 1 END) ELSE NULL END,
       lower(raw_permanent) IN ('true','1','yes','y'),lower(raw_purchased) IN ('true','1','yes','y'),COALESCE(aff_code,''),COALESCE(park_domain,''),'مشتری منتقل‌شده از فهرست اصلی',source_table
-    FROM src WHERE raw_id IS NOT NULL AND raw_id<>''
+    FROM ranked WHERE source_rank=1
     ON CONFLICT(legacy_id) DO UPDATE SET
       name=COALESCE(NULLIF(EXCLUDED.name,''),legacy_customers.name),
       mobile=COALESCE(NULLIF(EXCLUDED.mobile,''),legacy_customers.mobile),
