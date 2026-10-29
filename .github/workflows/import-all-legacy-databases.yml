@@ -113,5 +113,5 @@ jobs:
             $D exec -u 0 "$APP_ID" chown node:node /tmp/legacy-migration.json
             $D exec "$APP_ID" node /app/scripts/migrate-legacy-digibail.js /tmp/legacy-migration.json
             echo "=== VERIFY DATABASE-SCOPED LEGACY ROW COUNTS ==="
-            $D compose exec -T db sh -lc 'export PGPASSWORD="$POSTGRES_PASSWORD"; psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Atc "SELECT source_table||''|''||COUNT(*) FROM legacy_source_data WHERE source_table LIKE ''vamcityc_%'' GROUP BY source_table ORDER BY source_table"'
+            $D compose exec -T db sh -lc 'export PGPASSWORD="$POSTGRES_PASSWORD"; psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Atc "SELECT source_table||'|'||COUNT(*) FROM legacy_source_data WHERE source_table LIKE 'vamcityc_%' GROUP BY source_table ORDER BY source_table"'
             echo "ALL_THREE_LEGACY_DATABASES_IMPORTED_WITHOUT_SOURCE_DELETION=1"
