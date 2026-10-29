@@ -261,6 +261,43 @@ export async function handleApi(req, res, url) {
     if (route.startsWith("/api/v1/admin/")) {
       const admin = await adminFor(req);
       if (!admin) return json(res, 403, { message: "دسترسی مدیر لازم است." });
+      if (req.method === "POST" && route === "/api/v1/admin/ai/story") {
+        const input = await body(req);
+        const provider = ["openai", "gemini", "anthropic"].includes(String(input.provider || "").toLowerCase()) ? String(input.provider).toLowerCase() : "openai";
+        const brief = String(input.brief || "").trim().slice(0, 1600);
+        const campaign = String(input.campaign || "general").slice(0, 80);
+        if (brief.length < 8) return json(res, 400, { message: "شرح کمپین را با حداقل ۸ نویسه وارد کنید." });
+        const keys = {
+          openai: process.env.OPENAI_API_KEY || "",
+          gemini: process.env.GEMINI_API_KEY || "",
+          anthropic: process.env.ANTHROPIC_API_KEY || ""
+        };
+        if (!keys[provider]) return json(res, 503, { message: "کلید این سرویس روی سرور تنظیم نشده است. کلید را در متغیر محیطی امن سرور ثبت کنید؛ کلید را داخل مرورگر وارد نکنید." });
+        const prompt = "برای برند فارسی‌زبان «دیجی‌بایل پی» یک متن تبلیغاتی حرفه‌ای و غیرگمراه‌کننده برای استوری عمودی 9:16 بساز. ادعای نرخ صفر، تأیید قطعی و مزیت مالی تضمین‌شده نکن مگر در شرح کمپین صریحاً تأیید شده باشد. خروجی فقط JSON معتبر با کلیدهای h,p,cta,caption,hashtags,designNotes باشد. h حداکثر 55 نویسه، p حداکثر 110، cta حداکثر 24، caption حداکثر 500 و hashtags آرایه‌ای با حداکثر 8 هشتگ فارسی/انگلیسی باشد. از فارسی طبیعی، تیتر قوی، مزیت روشن و دعوت به اقدام استفاده کن. نوع کمپین: " + campaign + ". شرح کمپین: " + brief;
+        try {
+          let responseText = "";
+          if (provider === "openai") {
+            const r = await fetch(process.env.OPENAI_BASE_URL || "https://api.openai.com/v1/chat/completions", { method: "POST", headers: { "Authorization": "Bearer " + keys.openai, "Content-Type": "application/json" }, body: JSON.stringify({ model: process.env.OPENAI_MODEL || "gpt-4o-mini", temperature: 0.75, response_format: { type: "json_object" }, messages: [{ role: "system", content: "You are a senior Persian performance-marketing creative director. Return valid JSON only." }, { role: "user", content: prompt }] }), signal: AbortSignal.timeout(45000) });
+            const j = await r.json().catch(() => ({})); if (!r.ok) return json(res, 502, { message: "سرویس OpenAI پاسخ موفق نداد؛ تنظیمات مدل و کلید را بررسی کنید." });
+            responseText = j.choices?.[0]?.message?.content || "";
+          } else if (provider === "gemini") {
+            const model = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+            const r = await fetch("https://generativelanguage.googleapis.com/v1beta/models/" + encodeURIComponent(model) + ":generateContent?key=" + encodeURIComponent(keys.gemini), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ generationConfig: { responseMimeType: "application/json", temperature: 0.75 }, contents: [{ role: "user", parts: [{ text: prompt }] }] }), signal: AbortSignal.timeout(45000) });
+            const j = await r.json().catch(() => ({})); if (!r.ok) return json(res, 502, { message: "سرویس Gemini پاسخ موفق نداد؛ تنظیمات مدل و کلید را بررسی کنید." });
+            responseText = j.candidates?.[0]?.content?.parts?.map(p => p.text || "").join("") || "";
+          } else {
+            const r = await fetch("https://api.anthropic.com/v1/messages", { method: "POST", headers: { "x-api-key": keys.anthropic, "anthropic-version": "2023-06-01", "Content-Type": "application/json" }, body: JSON.stringify({ model: process.env.ANTHROPIC_MODEL || "claude-3-5-haiku-latest", max_tokens: 900, temperature: 0.75, system: "You are a senior Persian performance-marketing creative director. Return valid JSON only.", messages: [{ role: "user", content: prompt }] }), signal: AbortSignal.timeout(45000) });
+            const j = await r.json().catch(() => ({})); if (!r.ok) return json(res, 502, { message: "سرویس Anthropic پاسخ موفق نداد؛ تنظیمات مدل و کلید را بررسی کنید." });
+            responseText = j.content?.map(p => p.text || "").join("") || "";
+          }
+          const cleaned = responseText.replace(/^\s*```(?:json)?/i, "").replace(/```\s*$/i, "").trim();
+          const story = JSON.parse(cleaned);
+          const str = (v, max) => String(v || "").trim().slice(0, max);
+          return json(res, 200, { provider, story: { h: str(story.h, 90), p: str(story.p, 180), cta: str(story.cta, 36), caption: str(story.caption, 800), hashtags: Array.isArray(story.hashtags) ? story.hashtags.slice(0, 8).map(x => str(x, 40)) : [], designNotes: str(story.designNotes, 500) } });
+        } catch (e) {
+          return json(res, 502, { message: e?.name === "TimeoutError" ? "زمان پاسخ هوش مصنوعی تمام شد؛ دوباره تلاش کنید." : "پاسخ هوش مصنوعی قابل پردازش نبود؛ دوباره تولید کنید." });
+        }
+      }
       const loanShape = (p) => ({ id:p.slug,name:p.name,description:p.description,badge:p.badge,isActive:p.is_active,minAmount:Number(p.min_amount),maxAmount:Number(p.max_amount),intervalMonths:intervalMonthsFromStored(p.interval_days),intervalDays:intervalMonthsFromStored(p.interval_days),tiers:p.tiers,conditions:p.conditions,documents:p.documents,title:p.title||p.name,imageUrl:p.image_url,fullDescriptionHtml:p.full_description_html,labels:p.labels,operationalCosts:p.operational_costs,interestMethod:p.interest_method,interestPercent:Number(p.interest_percent),lateDailyCoef:Number(p.late_daily_coef),earlyDailyCoef:Number(p.early_daily_coef),showInList:p.show_in_list,sendReminders:p.send_reminders });
       const loanRow = (p) => ({ id:p.id,shape:loanShape(p),isActive:p.is_active,sortOrder:p.sort_order,showInList:p.show_in_list,sendReminders:p.send_reminders,legacySourceTable:p.legacy_source_table,legacyId:p.legacy_id,needsReview:Boolean(p.needs_review) });
       const cleanLoanInput = (b) => {
