@@ -71,6 +71,8 @@ jobs:
           node -e "JSON.parse(require('node:fs').readFileSync('config/appsettings.sample.json','utf8')); console.log('Sample JSON is valid')"
       - name: Run route and API tests
         run: npm test
+      - name: Build Next.js production UI
+        run: npm run build
       - name: Apply migrations and start app on port 1631
         shell: bash
         run: |
