@@ -83,6 +83,37 @@ export async function migrate() {
       applicant_name=EXCLUDED.applicant_name,mobile=EXCLUDED.mobile,national_code=EXCLUDED.national_code,
       status=EXCLUDED.status,amount=EXCLUDED.amount,created_at=EXCLUDED.created_at,payload=EXCLUDED.payload,imported_at=NOW()
   `);
+  await pool.query("CREATE INDEX IF NOT EXISTS legacy_customers_registered_idx ON legacy_customers(registered_at DESC NULLS LAST)");
+  await pool.query("CREATE INDEX IF NOT EXISTS legacy_customers_mobile_idx ON legacy_customers(mobile)");
+  await pool.query("CREATE INDEX IF NOT EXISTS legacy_customers_name_idx ON legacy_customers(name)");
+  // Merge all preserved ASP.NET accounts into the local customer directory; source payloads remain untouched.
+  await pool.query("ALTER TABLE legacy_customers ADD COLUMN IF NOT EXISTS legacy_username TEXT");
+  await pool.query("ALTER TABLE legacy_customers ADD COLUMN IF NOT EXISTS account_type TEXT NOT NULL DEFAULT 'مشتری / کاربر منتقل‌شده'");
+  await pool.query("ALTER TABLE legacy_customers ADD COLUMN IF NOT EXISTS legacy_source_table TEXT");
+  await pool.query("CREATE INDEX IF NOT EXISTS legacy_customers_registered_idx ON legacy_customers(registered_at DESC NULLS LAST)");
+  await pool.query("CREATE INDEX IF NOT EXISTS legacy_customers_mobile_idx ON legacy_customers(mobile)");
+  await pool.query("CREATE INDEX IF NOT EXISTS legacy_customers_name_idx ON legacy_customers(name)");
+  await pool.query("CREATE INDEX IF NOT EXISTS legacy_customers_username_idx ON legacy_customers(legacy_username)");
+  await pool.query(`
+    WITH src AS (
+      SELECT source_table,legacy_id,payload,COALESCE(NULLIF(payload->>'Id',''),legacy_id) AS raw_id,
+        COALESCE(NULLIF(payload->>'FullName',''),NULLIF(payload->>'DisplayName',''),NULLIF(payload->>'Name',''),NULLIF(trim(concat_ws(' ',NULLIF(payload->>'FirstName',''),NULLIF(payload->>'LastName',''))),''),NULLIF(payload->>'UserName',''),NULLIF(payload->>'Username',''),NULLIF(payload->>'Email','')) AS display_name,
+        COALESCE(NULLIF(payload->>'PhoneNumber',''),NULLIF(payload->>'Mobile',''),NULLIF(payload->>'Phone',''),NULLIF(payload->>'CellPhone','')) AS phone,
+        COALESCE(NULLIF(payload->>'Email',''),NULLIF(payload->>'EmailAddress','')) AS email_address,
+        COALESCE(NULLIF(payload->>'UserName',''),NULLIF(payload->>'Username','')) AS username,
+        COALESCE(NULLIF(payload->>'Roles',''),NULLIF(payload->>'Role',''),NULLIF(payload->>'UserType','')) AS role_text,
+        COALESCE(payload->>'CreatedAt',payload->>'CreatedOn',payload->>'CreationDate',payload->>'RegisterDate',payload->>'RegistrationDate',payload->>'DateCreated',payload->>'CreateDate') AS raw_date
+      FROM legacy_source_data WHERE lower(source_table) LIKE '%.dbo.aspnetusers'
+    )
+    INSERT INTO legacy_customers(legacy_id,name,mobile,email,registered_at,legacy_username,account_type,legacy_source_table)
+    SELECT CASE WHEN length(raw_id)=36 AND substring(raw_id from 9 for 1)='-' AND substring(raw_id from 14 for 1)='-' AND substring(raw_id from 19 for 1)='-' AND substring(raw_id from 24 for 1)='-' AND translate(replace(raw_id,'-',''),'0123456789abcdefABCDEF','')='' THEN raw_id::uuid ELSE (substr(md5(source_table||':'||raw_id),1,8)||'-'||substr(md5(source_table||':'||raw_id),9,4)||'-'||substr(md5(source_table||':'||raw_id),13,4)||'-'||substr(md5(source_table||':'||raw_id),17,4)||'-'||substr(md5(source_table||':'||raw_id),21,12))::uuid END,
+      COALESCE(display_name,''),COALESCE(phone,''),COALESCE(email_address,''),
+      CASE WHEN left(raw_date,6)='/Date(' AND right(raw_date,2)=')/' THEN to_timestamp(regexp_replace(raw_date,'[^0-9-]','','g')::numeric/1000) WHEN raw_date ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}' THEN raw_date::timestamptz WHEN length(raw_date) IN (10,13) AND raw_date ~ '^[0-9]+' THEN to_timestamp(raw_date::numeric/CASE WHEN length(raw_date)=13 THEN 1000 ELSE 1 END) ELSE NULL END,
+      COALESCE(username,''),CASE WHEN lower(COALESCE(role_text,'')) LIKE '%admin%' OR lower(COALESCE(role_text,'')) LIKE '%مدیر%' THEN 'کاربر مدیریتی منتقل‌شده' ELSE 'مشتری / کاربر منتقل‌شده' END,source_table
+    FROM src WHERE raw_id IS NOT NULL AND raw_id<>''
+    ON CONFLICT(legacy_id) DO UPDATE SET name=COALESCE(NULLIF(EXCLUDED.name,''),legacy_customers.name),mobile=COALESCE(NULLIF(EXCLUDED.mobile,''),legacy_customers.mobile),email=COALESCE(NULLIF(EXCLUDED.email,''),legacy_customers.email),registered_at=COALESCE(EXCLUDED.registered_at,legacy_customers.registered_at),legacy_username=COALESCE(NULLIF(EXCLUDED.legacy_username,''),legacy_customers.legacy_username),account_type=COALESCE(NULLIF(EXCLUDED.account_type,''),legacy_customers.account_type),legacy_source_table=COALESCE(EXCLUDED.legacy_source_table,legacy_customers.legacy_source_table)
+  `);
+  await pool.query("ANALYZE legacy_customers");
   await pool.query("ANALYZE loan_requests");
   // Provision a password-only initial superadmin without relying on SMS delivery.
   // The password itself is never stored in source; only a salted scrypt verifier is.
@@ -604,7 +635,7 @@ export async function handleApi(req, res, url) {
       const loanRequestMatch = route.match(new RegExp("^/api/v1/admin/loan-requests/([0-9]+)(?:/(comments|status))?$"));
       if (loanRequestMatch && req.method === "GET" && !loanRequestMatch[2]) {
         const id=loanRequestMatch[1];
-        const q=await pool.query("SELECT id,request_key,source_table,legacy_id,applicant_name,mobile,national_code,status,amount,created_at,imported_at,payload,COALESCE(NULLIF(payload->>'CreatedByName',''),NULLIF(payload->>'CreatorName',''),NULLIF(payload->>'RegisteredBy',''),NULLIF(payload->>'CreatedBy',''),NULLIF(payload->>'UserName',''),NULLIF(payload->>'Username',''),NULLIF(payload->>'AdminName',''),NULLIF(payload->>'OperatorName',''),'نام ثبت‌کننده در منبع موجود نیست') AS registrar FROM loan_requests WHERE id=$1",[id]);
+        const q=await pool.query("SELECT id,request_key,source_table,legacy_id,applicant_name,mobile,national_code,status,amount,created_at,imported_at,payload,COALESCE(NULLIF(payload->>'CreatedByName',''),NULLIF(payload->>'CreatorName',''),NULLIF(payload->>'RegisteredByName',''),NULLIF(payload->>'RegisterByName',''),NULLIF(payload->>'CreatedByUserName',''),NULLIF(payload->>'CreatorUserName',''),NULLIF(payload->>'AdminName',''),NULLIF(payload->>'OperatorName',''),(SELECT COALESCE(NULLIF(u.payload->>'FullName',''),NULLIF(u.payload->>'DisplayName',''),NULLIF(trim(concat_ws(' ',NULLIF(u.payload->>'FirstName',''),NULLIF(u.payload->>'LastName',''))),''),NULLIF(u.payload->>'UserName',''),NULLIF(u.payload->>'Username','')) FROM legacy_source_data u WHERE u.source_table='vamcityc_vamcity_import_20261028.dbo.AspNetUsers' AND u.payload->>'Id'=COALESCE(payload->>'CreatedBy',payload->>'CreatedById',payload->>'CreatorId',payload->>'RegisterUserId') LIMIT 1),NULLIF(payload->>'CreatedBy',''),NULLIF(payload->>'UserName',''),NULLIF(payload->>'Username',''),'نام ثبت‌کننده در منبع موجود نیست') AS registrar FROM loan_requests WHERE id=$1",[id]);
         if(!q.rowCount)return json(res,404,{message:"درخواست پیدا نشد."});
         const comments=await pool.query("SELECT id,author_name,comment,created_at FROM loan_request_comments WHERE loan_request_id=$1 ORDER BY created_at DESC,id DESC LIMIT 200",[id]);
         const history=await pool.query("SELECT id,old_status,new_status,note,changed_by_name,changed_at FROM loan_request_status_history WHERE loan_request_id=$1 ORDER BY changed_at DESC,id DESC LIMIT 100",[id]);
@@ -628,9 +659,10 @@ export async function handleApi(req, res, url) {
         const authorId=Number(admin.sub)||null;
         const author=await pool.query("SELECT COALESCE(NULLIF(full_name,''),NULLIF(username,''),'مدیر سامانه') AS name FROM users WHERE id=$1",[authorId]);
         const name=author.rows[0]?.name||"مدیر سامانه";
+        const prior=await pool.query("SELECT status FROM loan_requests WHERE id=$1",[id]);
+        if(!prior.rowCount)return json(res,404,{message:"درخواست پیدا نشد."});
+        const oldStatus=String(prior.rows[0].status||"");
         const changed=await pool.query("UPDATE loan_requests SET status=$1 WHERE id=$2 RETURNING id,status,payload",[next,id]);
-        if(!changed.rowCount)return json(res,404,{message:"درخواست پیدا نشد."});
-        const oldStatus=String(changed.rows[0].payload?.StatusTitle||changed.rows[0].payload?.StatusName||changed.rows[0].payload?.Status||"");
         await pool.query("INSERT INTO loan_request_status_history(loan_request_id,old_status,new_status,note,changed_by,changed_by_name) VALUES($1,$2,$3,$4,$5,$6)",[id,oldStatus,next,note,authorId,name]);
         await audit(req,"admin.loan_request.status_changed",authorId,{loanRequestId:id,newStatus:next});
         return json(res,200,{data:{id:changed.rows[0].id,status:changed.rows[0].status}});
@@ -650,7 +682,7 @@ export async function handleApi(req, res, url) {
         const filter = where.length ? " WHERE " + where.join(" AND ") : "";
         const count = await pool.query("SELECT COUNT(*)::int AS total FROM loan_requests" + filter, params);
         const pageParams = [...params, pageSize, (page - 1) * pageSize];
-        const rows = await pool.query("SELECT id,applicant_name,mobile,national_code,status,amount,created_at,COALESCE(NULLIF(payload->>'CreatedByName',''),NULLIF(payload->>'CreatorName',''),NULLIF(payload->>'RegisteredBy',''),NULLIF(payload->>'CreatedBy',''),NULLIF(payload->>'UserName',''),NULLIF(payload->>'Username',''),NULLIF(payload->>'AdminName',''),NULLIF(payload->>'OperatorName',''),'نام ثبت‌کننده در منبع موجود نیست') AS registrar FROM loan_requests" + filter + " ORDER BY created_at DESC NULLS LAST, id DESC LIMIT $" + (params.length+1) + " OFFSET $" + (params.length+2), pageParams);
+        const rows = await pool.query("SELECT id,applicant_name,mobile,national_code,status,amount,created_at,COALESCE(NULLIF(payload->>'CreatedByName',''),NULLIF(payload->>'CreatorName',''),NULLIF(payload->>'RegisteredByName',''),NULLIF(payload->>'RegisterByName',''),NULLIF(payload->>'CreatedByUserName',''),NULLIF(payload->>'CreatorUserName',''),NULLIF(payload->>'AdminName',''),NULLIF(payload->>'OperatorName',''),(SELECT COALESCE(NULLIF(u.payload->>'FullName',''),NULLIF(u.payload->>'DisplayName',''),NULLIF(trim(concat_ws(' ',NULLIF(u.payload->>'FirstName',''),NULLIF(u.payload->>'LastName',''))),''),NULLIF(u.payload->>'UserName',''),NULLIF(u.payload->>'Username','')) FROM legacy_source_data u WHERE u.source_table='vamcityc_vamcity_import_20261028.dbo.AspNetUsers' AND u.payload->>'Id'=COALESCE(payload->>'CreatedBy',payload->>'CreatedById',payload->>'CreatorId',payload->>'RegisterUserId') LIMIT 1),NULLIF(payload->>'CreatedBy',''),NULLIF(payload->>'UserName',''),NULLIF(payload->>'Username',''),'نام ثبت‌کننده در منبع موجود نیست') AS registrar FROM loan_requests" + filter + " ORDER BY created_at DESC NULLS LAST, id DESC LIMIT $" + (params.length+1) + " OFFSET $" + (params.length+2), pageParams);
         const summary = await pool.query("SELECT COUNT(*)::int AS total,COUNT(*) FILTER (WHERE lower(status) ~ '(new|pending|در انتظار|جدید|ثبت)')::int AS pending,COUNT(*) FILTER (WHERE lower(status) ~ '(approve|approved|تایید|تأیید|پذیرش)')::int AS approved,COUNT(*) FILTER (WHERE lower(status) ~ '(reject|رد|لغو|cancel)')::int AS rejected,COUNT(*) FILTER (WHERE created_at::date=CURRENT_DATE)::int AS today FROM loan_requests");
         const statuses = await pool.query("SELECT status,COUNT(*)::int AS count FROM loan_requests WHERE status<>'' GROUP BY status ORDER BY count DESC,status LIMIT 100");
         return json(res,200,{data:{rows:rows.rows,total:Number(count.rows[0]?.total)||0,page,pageSize,summary:summary.rows[0],statuses:statuses.rows}});
@@ -664,9 +696,26 @@ export async function handleApi(req, res, url) {
         const q = await pool.query("SELECT id,username,phone,full_name,email,role,is_active,created_at,legacy_source FROM users ORDER BY created_at DESC,id DESC LIMIT 500");
         return json(res, 200, { data: q.rows });
       }
+      if (req.method === "GET" && route === "/api/v1/admin/legacy-customers-page") {
+        const page=Math.max(1,Number.parseInt(url.searchParams.get("page")||"1",10)||1), pageSize=Math.min(100,Math.max(10,Number.parseInt(url.searchParams.get("pageSize")||"50",10)||50)), search=String(url.searchParams.get("q")||"").trim().slice(0,120);
+        const params=[], where=[]; if(search){params.push("%"+search+"%");where.push("(name ILIKE $1 OR mobile ILIKE $1 OR email ILIKE $1 OR customer_code::text ILIKE $1 OR legacy_id::text ILIKE $1 OR legacy_username ILIKE $1 OR affiliate_code ILIKE $1)");}
+        const filter=where.length?" WHERE "+where.join(" AND "):"", count=await pool.query("SELECT COUNT(*)::int AS total FROM legacy_customers"+filter,params);
+        const rows=await pool.query("SELECT legacy_id,name,mobile,email,customer_code,registered_at,expires_at,is_permanent,purchased,affiliate_code,parked_domain,legacy_username,account_type FROM legacy_customers"+filter+" ORDER BY registered_at DESC NULLS LAST,legacy_id LIMIT $"+(params.length+1)+" OFFSET $"+(params.length+2),[...params,pageSize,(page-1)*pageSize]);
+        return json(res,200,{data:{rows:rows.rows,total:count.rows[0].total,page,pageSize}});
+      }
       if (req.method === "GET" && route === "/api/v1/admin/legacy-customers") {
-        const q = await pool.query("SELECT legacy_id,name,mobile,email,customer_code,registered_at,expires_at,is_permanent,purchased,affiliate_code,parked_domain FROM legacy_customers ORDER BY registered_at DESC NULLS LAST");
-        return json(res, 200, { data: q.rows });
+        const search = String(url.searchParams.get("q") || "").trim().slice(0,120);
+        const page = Math.max(1, Number.parseInt(url.searchParams.get("page") || "1",10) || 1);
+        const pageSize = Math.min(100,Math.max(10,Number.parseInt(url.searchParams.get("pageSize") || "50",10) || 50));
+        const params = [];
+        let filter = "";
+        if (search) {
+          params.push("%"+search+"%");
+          filter = " WHERE name ILIKE $1 OR mobile ILIKE $1 OR email ILIKE $1 OR customer_code::text ILIKE $1 OR affiliate_code ILIKE $1";
+        }
+        const totalQ = await pool.query("SELECT COUNT(*)::int AS total FROM legacy_customers"+filter,params);
+        const rowsQ = await pool.query("SELECT legacy_id,name,mobile,email,customer_code,registered_at,expires_at,is_permanent,purchased,affiliate_code,parked_domain FROM legacy_customers"+filter+" ORDER BY registered_at DESC NULLS LAST,legacy_id LIMIT $"+(params.length+1)+" OFFSET $"+(params.length+2),[...params,pageSize,(page-1)*pageSize]);
+        return json(res,200,{data:{rows:rowsQ.rows,total:Number(totalQ.rows[0]?.total)||0,page,pageSize}});
       }
       if (req.method === "GET" && route === "/api/v1/admin/legacy-source-tables") {
         const q = await pool.query(
