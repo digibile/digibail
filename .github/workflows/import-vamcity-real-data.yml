@@ -51,12 +51,33 @@ jobs:
               sleep 10
             done
             [ "$STABLE" -ge 3 ] || { echo "BLOCKED: app container did not stabilize after deploy within 10 minutes"; exit 22; }
-            echo "=== Importing all verified source database tables into PostgreSQL using isolated worker containers ==="
-            node "$ROOT/scripts/import-vamcity-real-data.mjs"
-            echo "=== Backfill the full customer directory into local PostgreSQL ==="
-            $D compose exec -T app node /app/scripts/backfill-legacy-customers.mjs
-            echo "=== Convert recognized legacy loan definitions into the structured admin workspace ==="
-            RECOVERY_PASSWORD="$($D run --rm -v /:/host alpine:3.20 sh -c "sed -n 's/^password=//p' /host/root/digibail-admin-recovery.txt | head -n 1")"
-            printf '%s\n' "$RECOVERY_PASSWORD" | $D compose exec -T app sh -c 'IFS= read -r RECOVERY_PASSWORD; export RECOVERY_PASSWORD; exec node /app/scripts/import-legacy-loan-products.mjs'
-            unset RECOVERY_PASSWORD
-            echo "=== Server-side migration process returned success ==="
+            echo "=== Start import in background so SSH timeout cannot terminate it ==="
+            JOB_DIR="$ROOT/var/migrations"
+            mkdir -p "$JOB_DIR"
+            chmod 700 "$JOB_DIR"
+            if [ -f "$JOB_DIR/vamcity-import.pid" ] && kill -0 "$(cat "$JOB_DIR/vamcity-import.pid")" 2>/dev/null; then
+              echo "IMPORT_ALREADY_RUNNING pid=$(cat "$JOB_DIR/vamcity-import.pid")"
+              exit 0
+            fi
+            rm -f "$JOB_DIR/vamcity-import.status"
+            nohup bash -c '
+              ROOT="/home/digibail/domains/digebail.ir"
+              cd "$ROOT" || exit 30
+              node "$ROOT/scripts/import-vamcity-real-data.mjs"
+              RC=$?
+              if [ "$RC" -eq 0 ]; then
+                if sudo -n docker info >/dev/null 2>&1; then
+                  sudo -n docker compose exec -T app node /app/scripts/backfill-legacy-customers.mjs
+                else
+                  docker compose exec -T app node /app/scripts/backfill-legacy-customers.mjs
+                fi
+                RC=$?
+              fi
+              echo "$RC" > "$ROOT/var/migrations/vamcity-import.status"
+              exit "$RC"
+            ' > "$JOB_DIR/vamcity-import.log" 2>&1 < /dev/null &
+            PID=$!
+            echo "$PID" > "$JOB_DIR/vamcity-import.pid"
+            echo "IMPORT_STARTED_IN_BACKGROUND pid=$PID"
+            echo "Log: $JOB_DIR/vamcity-import.log"
+            echo "Status file appears when import and customer backfill finish."
