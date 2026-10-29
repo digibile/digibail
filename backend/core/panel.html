@@ -157,6 +157,8 @@ body.navopen #navBd{opacity:1;pointer-events:auto}
 .nvx{display:none}aside button.nvx,aside button.dcol{width:auto;display:none}
 @media(max-width:900px){aside button.nvx{display:inline-block;float:left;min-height:40px;padding:0 14px}#tbMenu{display:inline-flex}.dcol{display:none!important}#navBd{display:block}}@media(min-width:901px){aside button.dcol{display:inline-block}}
 @media(min-width:901px){.app.coll{grid-template-columns:64px minmax(0,1fr)}.app.coll aside{padding:8px 4px;overflow-x:hidden}.app.coll aside .grp{display:none}.app.coll aside .brand{font-size:0;padding:0 0 6px}.app.coll aside button.dcol{display:block;width:100%!important;float:none!important}.app.coll aside button{font-size:.7rem;padding:8px 2px;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.app.coll aside .cnt{display:none}}
+
+.tile-link{display:block;text-align:right;color:inherit;font:inherit;cursor:pointer;width:100%;transition:border-color .16s,transform .16s,background .16s}.tile-link:hover{border-color:var(--accent);background:var(--surface2);transform:translateY(-2px)}.tile-link:focus-visible{outline:2px solid var(--accent);outline-offset:3px}.story-pro{width:min(330px,100%);aspect-ratio:9/16;border-radius:26px;padding:28px 24px;position:relative;overflow:hidden;border:1px solid rgba(255,255,255,.22);box-shadow:0 24px 70px rgba(0,0,0,.32);isolation:isolate}.story-pro:before{content:"";position:absolute;width:260px;height:260px;border-radius:50%;border:1px solid rgba(255,255,255,.2);top:22%;inset-inline-end:-150px;box-shadow:0 0 0 28px rgba(255,255,255,.035),0 0 0 56px rgba(255,255,255,.025);z-index:-1}.story-top{display:flex;align-items:center;justify-content:space-between;gap:10px}.slogo{display:flex;align-items:center;gap:8px;font-weight:900;font-size:13px}.slogo small{display:block;font-size:8px;font-weight:500;opacity:.75;margin-top:3px}.smark{display:grid;place-items:center;width:34px;height:34px;border-radius:12px;background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.24);font-size:19px}.story-tag{font-size:8px;border:1px solid rgba(255,255,255,.3);border-radius:99px;padding:6px 8px;white-space:nowrap}.story-content{margin:auto 0;padding:26px 0}.story-kicker{font-size:10px;letter-spacing:.02em;opacity:.82;margin-bottom:16px}.story-pro .sh{font-weight:900;line-height:1.38;letter-spacing:-.04em;overflow-wrap:anywhere}.story-rule{height:4px;width:46px;background:var(--story-accent);border-radius:5px;margin:20px 0}.story-pro .sp{font-size:12px;line-height:1.9;opacity:.9;overflow-wrap:anywhere}.story-bottom{display:grid;gap:14px}.story-pro .scta{border-radius:12px;padding:13px 14px;font-size:11px;font-weight:900;display:flex;align-items:center;justify-content:space-between;gap:12px}.story-foot{font-size:8px;opacity:.78;text-align:center}.story-stage{display:flex;flex-direction:column;align-items:center;gap:18px}.story-results{width:100%;border-top:1px solid var(--line);padding-top:14px}.story-results p{line-height:1.9;overflow-wrap:anywhere}.story-results .pill{display:inline-block;margin:3px}
 </style></head><body>
 
 <header class="topbar" id="topbar">
@@ -238,7 +240,7 @@ const state={view:'dash',sTab:'tpl',cTab:'rules',ent:'LoanApplication',lf:'all',
 /* ---------- helpers ---------- */
 function tbl(cols,rows,open){return `<div class="scroll"><table><thead><tr>${cols.map(c=>`<th>${c[0]}</th>`).join('')}</tr></thead><tbody>${
  rows.map((r,i)=>`<tr ${open?`data-open="${open}:${i}"`:''}>${cols.map(c=>`<td class="${c[2]||''}">${c[1](r,i)}</td>`).join('')}</tr>`).join('')||`<tr><td colspan="${cols.length}" class="empty">موردی برای نمایش نیست.</td></tr>`}</tbody></table></div>`}
-const tiles=a=>`<div class="tiles">${a.map(t=>`<div class="tile"><span>${t[0]}</span><b>${t[1]}</b>${t[2]?`<small class="${t[3]||''}">${t[2]}</small>`:''}</div>`).join('')}</div>`;
+const tiles=a=>`<div class="tiles">${a.map(t=>{const tag=t[4]?'button':'div',attrs=t[4]?` type="button" data-dash-view="${t[4]}" aria-label="مشاهده ${t[0]}"`:'';return `<${tag} class="tile ${t[4]?'tile-link':''}"${attrs}><span>${t[0]}</span><b>${t[1]}</b>${t[2]?`<small class="${t[3]||''}">${t[2]}</small>`:''}</${tag}>`}).join('')}</div>`;
 const head=(t,s,extra='')=>`<div class="top"><div><h2>${t}</h2>${s?`<div class="sub">${s}</div>`:''}</div><div>${extra}</div></div>`;
 const search=ph=>`<input id="q" type="search" placeholder="${ph||'جستجو در جدول'}" aria-label="جستجو">`;
 const needs=()=>Object.values({a:loans.filter(l=>l.st==='pending').length,b:custs.filter(c=>c.kyc==='pending').length}).reduce((a,b)=>a+b,0);
@@ -610,6 +612,56 @@ V.pages=()=>{const p=state.pg;return head('صفحه‌ساز','صفحه‌ی ف�
  <div class="panel"><div class="top" style="margin:0 0 8px"><h3 style="margin:0">پیش‌نمایش زنده</h3><div class="tabs" style="margin:0"><button class="tab" data-b="page:dev:d" aria-selected="${p.dev==='d'}">دسکتاپ</button><button class="tab" data-b="page:dev:m" aria-selected="${p.dev==='m'}">موبایل</button></div></div><div id="pgPv">${pgPreview()}</div></div></div>`};
 function pgRefresh(list){if(list)$('#pgList').innerHTML=pgList();$('#pgPv').innerHTML=pgPreview()}
 
+/* ===================== استوری‌ساز حرفه‌ای ===================== */
+const SBG={plum:['#43217a','#170f2b'],saffron:['#ffd166','#f28c28'],ocean:['#2463eb','#071a40'],mint:['#20a779','#073b37'],rose:['#f43f78','#4b123f'],slate:['#334155','#0f172a']};
+const STPL={
+ discount:{h:'خرید دلخواهت، پرداخت منعطف‌تر',p:'شرایط خرید اقساطی را ببین و متناسب با نیازت انتخاب کن.',cta:'مشاهده شرایط',bg:'ocean',c:'#ffffff'},
+ agent:{h:'رشد کسب‌وکارت را از اینجا شروع کن',p:'به شبکه همکاران دیجی‌بایل پی بپیوند و جزئیات همکاری را ببین.',cta:'شروع همکاری',bg:'plum',c:'#ffffff'},
+ due:{h:'قسطت را به‌موقع مدیریت کن',p:'برای مشاهده جزئیات و پرداخت قسط، وارد حساب کاربری‌ات شو.',cta:'مشاهده اقساط',bg:'mint',c:'#ffffff'},
+ merchant:{h:'فروش اقساطی برای مشتریانت فعال کن',p:'راهکارهای همکاری پذیرندگان را بررسی کن و فروش را ساده‌تر کن.',cta:'درخواست همکاری',bg:'rose',c:'#ffffff'},
+ trust:{h:'شفاف انتخاب کن، مطمئن تصمیم بگیر',p:'شرایط، هزینه‌ها و مدارک موردنیاز را پیش از ثبت درخواست بخوان.',cta:'بررسی شرایط',bg:'slate',c:'#ffffff'}
+};
+state.sb={...STPL.discount,size:'ig',align:'right',fs:31,provider:'openai',campaign:'discount',brief:'برای مخاطبان دیجی‌بایل پی یک استوری حرفه‌ای، روشن و قابل اعتماد بساز. هدف افزایش بازدید صفحه شرایط خرید اقساطی است. هیچ نرخ یا تضمین تأیید تأییدنشده‌ای ادعا نشود.',caption:'',hashtags:[],designNotes:'',ch:{ig:1,tg:1,bale:0,eitaa:0,rubika:0,wa:0}};
+const SZ={ig:'اینستاگرام ۱۰۸۰×۱۹۲۰',tg:'تلگرام ۱۰۸۰×۱۹۲۰',bale:'بله ۱۰۸۰×۱۹۲۰',eitaa:'ایتا ۱۰۸۰×۱۹۲۰',rubika:'روبیکا ۱۰۸۰×۱۹۲۰',wa:'وضعیت واتساپ ۱۰۸۰×۱۹۲۰'};
+function sbPreview(){
+ const s=state.sb,g=SBG[s.bg]||SBG.ocean;
+ return `<div class="story story-pro" style="background:linear-gradient(155deg,${g[0]},${g[1]});color:${s.c};text-align:${s.align};--story-accent:${g[0]}">
+ <div class="story-top"><div class="slogo"><span class="smark">د</span><span>دیجی‌بایل پی<small>خرید و اعتبار، شفاف و منعطف</small></span></div><span class="story-tag">راهنمای انتخاب</span></div>
+ <div class="story-content"><div class="story-kicker">یک انتخاب هوشمندانه</div><div class="sh" style="font-size:${s.fs}px">${esc(s.h)}</div><div class="story-rule"></div><div class="sp">${esc(s.p)}</div></div>
+ <div class="story-bottom"><div class="scta" style="background:${s.c};color:${g[1]}">${esc(s.cta)} <span aria-hidden="true">←</span></div><div class="story-foot">جزئیات و شرایط در وب‌سایت دیجی‌بایل پی</div></div></div>`
+}
+async function sbGenerate(){
+ const s=state.sb;
+ if(!s.brief||s.brief.trim().length<8)throw new Error('شرح کمپین را دقیق‌تر بنویسید.');
+ const b=document.querySelector('[data-b="story:gen"]');if(b){b.disabled=true;b.textContent='در حال تولید…'}
+ try{
+  const r=await api('POST','/api/v1/admin/ai/story',{provider:s.provider,campaign:s.campaign,brief:s.brief});
+  Object.assign(s,{h:r.story.h||s.h,p:r.story.p||s.p,cta:r.story.cta||s.cta,caption:r.story.caption||'',hashtags:r.story.hashtags||[],designNotes:r.story.designNotes||''});
+  render();toast('متن استوری با هوش مصنوعی تولید شد');
+ }finally{const b=document.querySelector('[data-b="story:gen"]');if(b){b.disabled=false;b.textContent='تولید حرفه‌ای با هوش مصنوعی'}}
+}
+function sbExport(){
+ const s=state.sb,g=SBG[s.bg]||SBG.ocean,canvas=document.createElement('canvas');canvas.width=1080;canvas.height=1920;
+ const ctx=canvas.getContext('2d'),grad=ctx.createLinearGradient(0,0,1080,1920);grad.addColorStop(0,g[0]);grad.addColorStop(1,g[1]);ctx.fillStyle=grad;ctx.fillRect(0,0,1080,1920);
+ ctx.globalAlpha=.12;ctx.fillStyle='#ffffff';ctx.beginPath();ctx.arc(1000,160,340,0,Math.PI*2);ctx.fill();ctx.beginPath();ctx.arc(80,1450,260,0,Math.PI*2);ctx.fill();ctx.globalAlpha=1;
+ const rtl=s.align==='right';ctx.direction='rtl';ctx.textAlign=rtl?'right':'center';const x=rtl?940:540;
+ ctx.fillStyle=s.c;ctx.font='700 44px Vazirmatn, Tahoma, sans-serif';ctx.fillText('◈  دیجی‌بایل پی',rtl?940:540,145,rtl?undefined:undefined);
+ ctx.globalAlpha=.85;ctx.font='500 25px Vazirmatn, Tahoma, sans-serif';ctx.fillText('خرید و اعتبار، شفاف و منعطف',x,205);ctx.globalAlpha=1;
+ const wrap=(text,maxWidth,font)=>{ctx.font=font;const words=String(text||'').split(/\s+/);const lines=[];let line='';for(const w of words){const test=line?line+' '+w:w;if(ctx.measureText(test).width>maxWidth&&line){lines.push(line);line=w}else line=test}if(line)lines.push(line);return lines};
+ const titleFont='700 '+Math.round(s.fs*2.5)+'px Vazirmatn, Tahoma, sans-serif',bodyFont='500 42px Vazirmatn, Tahoma, sans-serif';
+ let yy=650;ctx.font=titleFont;ctx.fillStyle=s.c;for(const line of wrap(s.h,850,titleFont)){ctx.fillText(line,x,yy);yy+=Math.round(s.fs*2.5*1.38)}
+ ctx.fillStyle=g[0];ctx.fillRect(rtl?940:115,yy+25,rtl?140:140,8);yy+=100;ctx.font=bodyFont;
+ for(const line of wrap(s.p,850,bodyFont)){ctx.fillText(line,x,yy);yy+=60}
+ const ctaW=Math.min(650,Math.max(320,ctx.measureText(s.cta).width+150)),ctaX=rtl?940-ctaW:540-ctaW/2,ctaY=1500;
+ ctx.fillStyle=s.c;ctx.beginPath();ctx.roundRect(ctaX,ctaY,ctaW,112,30);ctx.fill();ctx.fillStyle=g[1];ctx.font='700 38px Vazirmatn, Tahoma, sans-serif';ctx.textAlign='center';ctx.fillText(s.cta,ctaX+ctaW/2,ctaY+70);
+ ctx.fillStyle=s.c;ctx.globalAlpha=.8;ctx.font='400 25px Vazirmatn, Tahoma, sans-serif';ctx.fillText('جزئیات و شرایط در وب‌سایت دیجی‌بایل پی',540,1790);ctx.globalAlpha=1;
+ canvas.toBlob(blob=>{if(!blob){toast('ساخت فایل تصویر انجام نشد');return}const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='digibail-story-1080x1920.png';a.click();setTimeout(()=>URL.revokeObjectURL(url),1500);},'image/png');
+}
+V.stories=()=>{const s=state.sb;return head('استوری‌ساز هوشمند','ساخت متن تبلیغاتی با مدل‌های هوش مصنوعی و خروجی واقعی PNG در اندازه ۱۰۸۰×۱۹۲۰')+
+ '<div class="panel"><h3>موتور تولید محتوا</h3><div class="cols"><div><label for="sbProvider">ارائه‌دهنده هوش مصنوعی</label><select id="sbProvider" data-b="story:provider" style="width:100%"><option value="openai" '+(s.provider==='openai'?'selected':'')+'>OpenAI</option><option value="gemini" '+(s.provider==='gemini'?'selected':'')+'>Google Gemini</option><option value="anthropic" '+(s.provider==='anthropic'?'selected':'')+'>Anthropic Claude</option></select></div><div><label for="sbCampaign">هدف کمپین</label><select id="sbCampaign" data-b="story:campaign" style="width:100%">'+[['discount','معرفی خرید اقساطی'],['agent','جذب نماینده'],['merchant','جذب پذیرنده'],['due','یادآوری قسط'],['trust','اعتمادسازی']].map(x=>'<option value="'+x[0]+'" '+(s.campaign===x[0]?'selected':'')+'>'+x[1]+'</option>').join('')+'</select></div></div><label for="sbBrief">شرح دقیق کمپین و مخاطب</label><textarea id="sbBrief" data-b="story:brief" rows="4" style="width:100%">'+esc(s.brief)+'</textarea><p class="sub">کلید سرویس فقط روی سرور نگهداری می‌شود. اگر کلید ارائه‌دهنده تنظیم نشده باشد، سیستم خطای واقعی می‌دهد و وانمود نمی‌کند که محتوا را هوش مصنوعی ساخته است.</p><div class="frow"><button class="btn solid" data-b="story:gen">تولید حرفه‌ای با هوش مصنوعی</button><button class="btn" data-b="story:export">دانلود استوری PNG · ۱۰۸۰×۱۹۲۰</button></div></div>'+
+ '<div class="bar">'+Object.keys(STPL).map(k=>'<button class="tab" data-b="story:tpl:'+k+'">'+({discount:'خرید اقساطی',agent:'جذب نماینده',due:'یادآوری قسط',merchant:'جذب پذیرنده',trust:'اعتمادسازی'}[k])+'</button>').join('')+'</div>'+
+ '<div class="cols"><div class="panel"><h3>ویرایش خلاقه</h3><label for="sbH">تیتر اصلی</label><input id="sbH" data-b="story:h" value="'+esc(s.h)+'" style="width:100%"><label for="sbP">متن مکمل</label><textarea id="sbP" data-b="story:p" rows="3" style="width:100%">'+esc(s.p)+'</textarea><label for="sbC">دعوت به اقدام</label><input id="sbC" data-b="story:cta" value="'+esc(s.cta)+'" style="width:100%"><label for="sbF">اندازه تیتر</label><input id="sbF" type="range" min="20" max="38" value="'+s.fs+'" data-b="story:fs"><div class="frow" style="margin-top:10px">'+Object.keys(SBG).map(k=>'<button class="btn" data-b="story:bg:'+k+'" style="background:linear-gradient(160deg,'+SBG[k][0]+','+SBG[k][1]+');color:#fff;min-width:60px">'+({plum:'بنفش',saffron:'زعفرانی',ocean:'آبی',mint:'سبز',rose:'صورتی',slate:'ذغالی'}[k])+'</button>').join('')+'</div><div class="frow" style="margin-top:10px"><button class="tab" data-b="story:al:right" aria-selected="'+(s.align==='right')+'">راست‌چین</button><button class="tab" data-b="story:al:center" aria-selected="'+(s.align==='center')+'">وسط‌چین</button><button class="tab" data-b="story:col:#ffffff">متن سفید</button><button class="tab" data-b="story:col:#2a1a00">متن تیره</button></div><h3 style="margin-top:16px">کانال‌های مقصد</h3><div class="frow">'+Object.keys(SZ).map(k=>'<label class="chk"><input type="checkbox" data-b="story:ch:'+k+'" '+(s.ch[k]?'checked':'')+'> '+SZ[k]+'</label>').join('')+'</div><p><button class="btn" data-b="story:pub">ثبت درخواست انتشار</button></p></div>'+
+ '<div class="panel story-stage"><div id="sbPv">'+sbPreview()+'</div><div class="story-results"><h3>کپشن پیشنهادی</h3><p>'+esc(s.caption||'پس از تولید هوشمند، کپشن کامل و هشتگ‌ها اینجا نمایش داده می‌شوند.')+'</p>'+(s.hashtags?.length?'<p>'+s.hashtags.map(h=>'<span class="pill">'+esc(h)+'</span>').join(' ')+'</p>':'')+(s.designNotes?'<p class="sub">'+esc(s.designNotes)+'</p>':'')+'</div></div></div>'};
 /* ===================== استوری‌ساز ===================== */
 const SBG={plum:['#3b1f6b','#17101f'],saffron:['#ffb629','#e0791a'],ocean:['#1f5fbf','#0e2a52'],mint:['#16805a','#0b2f27']};
 const STPL={discount:{h:'کارمزد اقساط ۳ ماهه صفر شد',p:'تا پایان هفته روی همه‌ی خریدها',cta:'همین حالا بخرید',bg:'saffron',c:'#2a1a00'},agent:{h:'نماینده دیجی‌بایل پی شوید',p:'از هر خرید زیرمجموعه‌هایتان کمیسیون بگیرید',cta:'لینک اختصاصی بگیرید',bg:'plum',c:'#ffffff'},due:{h:'یادآوری قسط',p:'قسط این ماه را از حساب من پرداخت کنید',cta:'پرداخت قسط',bg:'ocean',c:'#ffffff'}};
@@ -663,7 +715,7 @@ const _oc=openCust;openCust=function(i){_oc(i);const c=custs[i];$('#drawer').ins
  <p class="frow"><button class="btn solid" data-sv="cust:${i}">ذخیره</button><button class="btn ${c.blocked?'ok':'bad'}" data-sv="custblock:${i}">${c.blocked?'رفع مسدودی':'مسدود کردن حساب'}</button></p>`)};
 
 /* ===================== رویدادها ===================== */
-function bAct(el,ev){const[k,a,x,y]=el.dataset.b.split(':');const v=el.type==='checkbox'?el.checked:el.value;
+async function bAct(el,ev){const[k,a,x,y]=el.dataset.b.split(':');const v=el.type==='checkbox'?el.checked:el.value;
  if(k==='form'){const f=state.fb;
   if(a==='title'){f.title=v;fbRefresh();return}if(a==='slug'){f.slug=v;$('#fbJs').textContent=fbJson();return}
   if(a==='l'){f.fields[+x][1]=v;fbRefresh();return}if(a==='t'){f.fields[+x][0]=v;fbRefresh();return}if(a==='r'){f.fields[+x][2]=v?1:0;fbRefresh();return}
@@ -684,10 +736,14 @@ function bAct(el,ev){const[k,a,x,y]=el.dataset.b.split(':');const v=el.type==='c
   if(a==='add'){p.blocks.push({t:$('#pgAdd').value,h:BT[$('#pgAdd').value],p:'مورد ۱\nمورد ۲'});pgRefresh(1)}
   if(a==='dev'){p.dev=x;render()}if(a==='pub')toast('صفحه منتشر شد: ghestine.ir/p/'+p.slug+' (نمونه)');return}
  if(k==='story'){const s=state.sb;
-  if(['h','p','cta'].includes(a)){s[a]=v;$('#sbPv').innerHTML=sbPreview();return}if(a==='fs'){s.fs=+v;$('#sbPv').innerHTML=sbPreview();return}
+  if(['h','p','cta'].includes(a)){s[a]=v;if(ev==='input'){const pv=$('#sbPv');if(pv)pv.innerHTML=sbPreview();return}const pv=$('#sbPv');if(pv)pv.innerHTML=sbPreview();return}
+  if(a==='brief'){s.brief=v;return}if(a==='provider'){s.provider=v;return}if(a==='campaign'){s.campaign=v;return}
+  if(a==='fs'){s.fs=+v;const pv=$('#sbPv');if(pv)pv.innerHTML=sbPreview();return}
   if(ev==='input')return;
-  if(a==='tpl'){Object.assign(s,STPL[x]);render();return}if(a==='bg'){s.bg=x;render();return}if(a==='al'){s.align=x;render();return}if(a==='col'){s.c=x+(y||'');render();return}
-  if(a==='ch'){s.ch[x]=v?1:0;return}if(a==='pub'){const n=Object.keys(s.ch).filter(k=>s.ch[k]).length;toast(n?`استوری برای ${fa(n)} کانال ثبت شد (نمونه)`:'حداقل یک کانال انتخاب کنید')}return}
+  if(a==='tpl'){Object.assign(s,STPL[x]);s.campaign=x==='discount'?'discount':x;render();return}if(a==='bg'){s.bg=x;render();return}if(a==='al'){s.align=x;render();return}if(a==='col'){s.c=x+(y||'');render();return}
+  if(a==='ch'){s.ch[x]=v?1:0;return}
+  if(a==='gen'){await sbGenerate();return}if(a==='export'){sbExport();return}
+  if(a==='pub'){const n=Object.keys(s.ch).filter(k=>s.ch[k]).length;toast(n?'درخواست انتشار ثبت شد؛ اتصال و زمان‌بندی کانال‌ها باید از بخش اتصال‌ها تکمیل شود.':'حداقل یک کانال انتخاب کنید')}return}
  if(k==='rep'){const r=state.rb;
   if(a==='ds'){r.ds=v;r.g=Object.keys(DS[v].g)[0];r.f='all';render();return}if(a==='g'){r.g=v;render();return}if(a==='m'){r.m=v;render();return}if(a==='f'){r.f=v;render();return}
   if(ev==='input')return;
@@ -1521,7 +1577,38 @@ V.legacyCustomers=view('legacy-customers',async()=>{const rows=await api('GET','
 V.smsLegacy=view('sms-legacy',async()=>{const rr=await Promise.all([api('GET','/api/v1/admin/sms/templates'),api('GET','/api/v1/admin/sms/logs')]);const r=rr[0],logs=rr[1],items=r.items||[];return head('الگوهای پیامک منتقل‌شده','الگوهای واقعی؛ کلید محرمانه نمایش داده نمی‌شود.')+'<div class="panel"><p>'+(r.configured?'<span class="pill a">کلید پیامک تنظیم شده</span>':'<span class="pill p">ارسال پیامک پیکربندی نشده</span>')+'</p>'+tbl([['عنوان',x=>esc(x.title||'—')],['دسته',x=>esc(x.category||'—')],['وضعیت',x=>esc(String(x.status??'—'))],['الگو',x=>esc(x.pattern||'—')],['پنل مبدا',x=>esc(x.provider_panel||x.providerPanel||'—')]],items)+'</div><div class="panel"><h3>گزارش ارسال پیامک</h3>'+tbl([['زمان',x=>x.created_on?new Date(x.created_on).toLocaleString('fa-IR'):x.created_at?new Date(x.created_at).toLocaleString('fa-IR'):'—'],['گیرنده',x=>esc(x.recipient||x.to||'—')],['وضعیت',x=>esc(x.status||'—')],['شناسه سرویس‌دهنده',x=>esc(x.provider_id||x.provider_message_id||'—')],['خطا',x=>esc(x.error_message||x.error||'—')]],logs)+'</div>'});
 V.betaRequests=view('beta-requests',async()=>{const rows=await api('GET','/api/v1/admin/beta-inquiries');return head('درخواست‌های استعلام بتا','تا اتصال API رسمی بانک رفاه، نتیجه یا مبلغ ساختگی نمایش داده نمی‌شود.')+'<div class="panel">'+tbl([['کد پیگیری',x=>'<code>'+esc(x.reference||'—')+'</code>'],['کاربر',x=>'#'+esc(x.user_id??'—')],['کد ملی',x=>esc(x.national_code||'—')],['وضعیت',x=>esc(x.status||'—')],['توضیح',x=>esc(x.status_note||'—')],['زمان',x=>x.created_at?new Date(x.created_at).toLocaleString('fa-IR'):'—']],rows)+'</div>'});
 V.legacyContracts=view('legacy-contracts',async()=>{const rows=await api('GET','/api/v1/admin/contracts');return head('قراردادهای صادرشده','قراردادهای ثبت‌شده؛ مدیریت قالب‌ها در بخش قراردادها باقی می‌ماند.')+'<div class="panel">'+tbl([['کاربر',x=>'#'+esc(x.user_id??'—')],['عنوان',x=>esc(x.title||'—')],['شماره',x=>esc(x.number||'—')],['وضعیت',x=>esc(x.status||'—')],['تاریخ',x=>x.created_on?new Date(x.created_on).toLocaleString('fa-IR'):'—']],rows)+'</div>'});
-V.dash=view('real-dashboard',async()=>{const rs=await Promise.all([api('GET','/api/v1/admin/users').catch(()=>[]),api('GET','/api/v1/admin/legacy-customers').catch(()=>[]),api('GET','/api/v1/admin/sms/templates').catch(()=>({items:[]})),api('GET','/api/v1/admin/beta-inquiries').catch(()=>[]),api('GET','/api/v1/admin/legacy-source-tables').catch(()=>[]),api('GET','/api/v1/admin/orders').catch(()=>[]),api('GET','/api/v1/admin/virtual-cards').catch(()=>[]),api('GET','/api/v1/admin/ledger/entries').catch(()=>[])]);const rows=v=>Array.isArray(v)?v:Array.isArray(v?.data)?v.data:Array.isArray(v?.items)?v.items:[];const users=rows(rs[0]),customers=rows(rs[1]),sms=rows(rs[2]),beta=rows(rs[3]),legacy=rows(rs[4]),orders=rows(rs[5]),cards=rows(rs[6]),ledger=rows(rs[7]);const total=legacy.reduce((n,t)=>n+(Number(t.row_count)||0),0);return head('داشبورد مدیریت','آمار از API پایگاه فعلی خوانده می‌شود؛ داده‌ی نمونه به‌عنوان آمار واقعی نمایش داده نمی‌شود.')+tiles([['حساب‌های کاربری',nf(users.length)],['مشتریان قدیمی',nf(customers.length)],['الگوهای پیامک',nf(sms.length)],['استعلام‌های بتا',nf(beta.length)],['جدول‌های قدیمی',nf(legacy.length)],['رکوردهای قدیمی',nf(total)],['سفارش‌ها',nf(orders.length)],['کارت‌های مجازی',nf(cards.length)],['اسناد دفتر کل',nf(ledger.length)]])+'<div class="panel"><h3>دسترسی سریع</h3><div class="frow"><button class="btn solid" data-v="legacyData">تمام داده‌های منتقل‌شده</button><button class="btn" data-v="legacyCustomers">مشتریان قدیمی</button><button class="btn" data-v="smsLegacy">الگوهای پیامک</button><button class="btn" data-v="betaRequests">استعلام‌های بتا</button><button class="btn" data-v="legacyContracts">قراردادهای صادرشده</button><button class="btn" data-v="binder">مدارک مشتریان</button><button class="btn" data-v="orders">سفارش‌ها</button><button class="btn" data-v="ledger">دفتر کل</button></div></div><div class="notice" style="padding:12px;border:1px solid var(--line);border-radius:10px">جدول‌های قدیمی به‌صورت محفوظ نمایش داده می‌شوند. برای جدول‌های بدون رکورد، اطلاعات ساختگی ساخته نمی‌شود.</div>'});
+V.dash=view('real-dashboard',async()=>{
+ const rs=await Promise.all([
+  api('GET','/api/v1/admin/users').catch(()=>[]),
+  api('GET','/api/v1/admin/legacy-customers').catch(()=>[]),
+  api('GET','/api/v1/admin/sms/templates').catch(()=>({items:[]})),
+  api('GET','/api/v1/admin/beta-inquiries').catch(()=>[]),
+  api('GET','/api/v1/admin/legacy-source-tables').catch(()=>[]),
+  api('GET','/api/v1/admin/orders').catch(()=>[]),
+  api('GET','/api/v1/admin/virtual-cards').catch(()=>[]),
+  api('GET','/api/v1/admin/ledger/entries').catch(()=>[]),
+  api('GET','/api/v1/admin/loan-products').catch(()=>[])
+ ]);
+ const rows=v=>Array.isArray(v)?v:Array.isArray(v?.data)?v.data:Array.isArray(v?.items)?v.items:[];
+ const users=rows(rs[0]),customers=rows(rs[1]),sms=rows(rs[2]),beta=rows(rs[3]),legacy=rows(rs[4]),orders=rows(rs[5]),cards=rows(rs[6]),ledger=rows(rs[7]),products=rows(rs[8]);
+ const total=legacy.reduce((n,t)=>n+(Number(t.row_count)||0),0),activeProducts=products.filter(p=>p.isActive===true||p.isActive===1).length;
+ return head('داشبورد مدیریت','همه‌ی اعداد از API و پایگاه داده خوانده می‌شوند؛ برای دیدن جزئیات روی هر کارت بزنید.')+
+ tiles([
+  ['حساب‌های کاربری',nf(users.length),'مشاهده فهرست کاربران','','users'],
+  ['مشتریان قدیمی',nf(customers.length),'مشاهده سوابق منتقل‌شده','','legacyCustomers'],
+  ['الگوهای پیامک',nf(sms.length),'مشاهده و مدیریت الگوها','','smsLegacy'],
+  ['استعلام‌های بتا',nf(beta.length),'مشاهده درخواست‌ها','','betaRequests'],
+  ['جدول‌های قدیمی',nf(legacy.length),'مشاهده جدول‌ها و ردیف‌ها','','legacyData'],
+  ['رکوردهای قدیمی',nf(total),'باز کردن داده‌های منتقل‌شده','','legacyData'],
+  ['تعریف‌های وام',nf(products.length),'مشاهده همه تعریف‌های ذخیره‌شده','','products'],
+  ['طرح‌های فعال',nf(activeProducts),'مشاهده وضعیت و ویرایش طرح‌ها','','products'],
+  ['سفارش‌ها',nf(orders.length),'مشاهده سفارش‌ها','','orders'],
+  ['کارت‌های مجازی',nf(cards.length),'مشاهده کارت‌ها','','virtualCards'],
+  ['اسناد دفتر کل',nf(ledger.length),'مشاهده تراکنش‌ها','','ledger']
+ ])+
+ '<div class="panel"><h3>دسترسی سریع</h3><div class="frow"><button class="btn solid" data-v="legacyData">تمام داده‌های منتقل‌شده</button><button class="btn" data-v="loans">درخواست‌های وام</button><button class="btn" data-v="loanDefinition">تعریف وام‌ها</button><button class="btn" data-v="products">طرح‌های وام</button><button class="btn" data-v="legacyCustomers">مشتریان قدیمی</button><button class="btn" data-v="smsLegacy">الگوهای پیامک</button><button class="btn" data-v="betaRequests">استعلام‌های بتا</button><button class="btn" data-v="legacyContracts">قراردادهای صادرشده</button><button class="btn" data-v="binder">مدارک مشتریان</button><button class="btn" data-v="orders">سفارش‌ها</button><button class="btn" data-v="ledger">دفتر کل</button></div></div>'+
+ '<div class="notice" style="padding:12px;border:1px solid var(--line);border-radius:10px">برای جلوگیری از نمایش آمار ساختگی، تعدادها از پاسخ واقعی سرویس‌ها محاسبه شده‌اند. با انتخاب هر کارت، فهرست مربوط باز می‌شود.</div>'
+});
 document.addEventListener('click',ok(async e=>{const t=e.target.closest('[data-legacy-table]'),pg=e.target.closest('[data-legacy-page]');if(t){await loadLegacyTable(t.dataset.legacyTable,0);return}if(pg){await loadLegacyTable(LEGACY.table,Number(pg.dataset.legacyPage)||0);return}}));
 
 /* First sidebar item: inspect only real imported legacy loan/request rows. Never show mock loans as production records. */
