@@ -12,6 +12,7 @@ const ROUTES = new Map([
   ["/login.html", "backend/security/login-v2.html"], ["/register.html", "backend/security/register-v2.html"],
   ["/documents.html", "web/documents.html"], ["/contracts.html", "web/contracts.html"],
   ["/loan-definition.html", "web/loan-definition.html"],
+  ["/loan-requests.html", "web/loan-requests.html"],
   ["/terms.html", "web/terms.html"], ["/privacy.html", "web/privacy.html"],
   ["/profile.html", "web/customer-panel.html"],
   ["/admin.html", "backend/core/panel.html"], ["/management-panel.html", "backend/core/panel.html"],
@@ -67,7 +68,7 @@ const server = http.createServer(async (req, res) => {
     res.writeHead(302, { Location: "/admin.html", "Cache-Control": "no-store" });
     return res.end();
   }
-  if (url.pathname === "/admin.html" || url.pathname === "/management-panel.html" || url.pathname === "/sms-settings.html" || url.pathname === "/loan-definition.html") {
+  if (url.pathname === "/admin.html" || url.pathname === "/management-panel.html" || url.pathname === "/sms-settings.html" || url.pathname === "/loan-definition.html" || url.pathname === "/loan-requests.html") {
     const isAdmin = await verifyAdminSession(req);
     if (!isAdmin) {
       res.writeHead(302, { Location: `/login.html?next=${encodeURIComponent(url.pathname)}`, "Cache-Control": "no-store" });
