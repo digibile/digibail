@@ -17,4 +17,4 @@ COPY --chown=node:node frontend ./frontend
 USER node
 EXPOSE 1631
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 CMD node -e "fetch('http://127.0.0.1:1631/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
-CMD ["node","start.js"]
+CMD ["node","next-server.js"]
