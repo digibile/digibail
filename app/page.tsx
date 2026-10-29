@@ -30,7 +30,7 @@ export default function Home(){
    <div className="hero-photo"><img src="https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=600&q=85" alt="ساعت مچی" loading="lazy"/><span>ساعت و گجت</span></div>
   </div>
   <div className="hero-calc-panel" id="hero-calculator">
-   <div className="hero-calc-title"><span className="hero-calc-mark">٪</span><div><b>محاسبه‌گر اقساط</b><small>{plan?plan.name:"طرح‌های خرید اقساطی"}</small></div><span className="hero-calc-status"><i/> متصل به سامانه</span></div>
+   <div className="hero-calc-title"><span className="hero-calc-mark">٪</span><div><b>محاسبه‌گر اقساط</b><small>{plan?plan.name:"طرح‌های خرید اقساطی"}</small></div><span className={"hero-calc-status "+(err?"is-error":loading?"is-loading":"is-connected")}><i/> {err?"عدم اتصال":loading?"در حال اتصال":"داده‌های سامانه"}</span></div>
    {plan&&calc?<>
     <label className="hero-calc-field"><span><b>مبلغ موردنیاز</b><strong>{money(amount)}</strong></span><input type="range" aria-label="مبلغ موردنیاز" min={min} max={Math.max(min,max)} step={Math.max(1,Math.round((max-min)/150)||1)} value={Math.min(max,Math.max(min,amount))} onChange={e=>setAmount(num(e.target.value,min))}/><span className="hero-calc-limits"><small>{money(min)}</small><small>{money(max)}</small></span></label>
     <label className="hero-calc-field"><span><b>مدت بازپرداخت</b></span><select value={tierIndex} onChange={e=>setTierIndex(Number(e.target.value))}>{tiers.map((t,i)=><option key={i} value={i}>{new Intl.NumberFormat("fa-IR").format(num(t.months??t.m??t.installments,plan.intervalMonths||6))} ماه · نرخ {new Intl.NumberFormat("fa-IR").format(num(t.feePercent??t.fee??t.monthlyRatePercent,num(plan.interestPercent)))}٪</option>)}</select></label>
