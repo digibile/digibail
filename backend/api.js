@@ -43,7 +43,12 @@ export async function migrate() {
     CREATE INDEX IF NOT EXISTS loan_requests_status_created_idx ON loan_requests(status, created_at DESC NULLS LAST);
     CREATE INDEX IF NOT EXISTS loan_requests_mobile_idx ON loan_requests(mobile);
     CREATE INDEX IF NOT EXISTS loan_requests_national_code_idx ON loan_requests(national_code);
-    WITH src AS (
+    WITH status_lookup AS (
+      SELECT payload->>'Id' AS id, payload->>'Title' AS title,
+        ROW_NUMBER() OVER (PARTITION BY payload->>'Id' ORDER BY legacy_id) AS rn
+      FROM legacy_source_data
+      WHERE source_table='vamcityc_vamcity_import_20261028.dbo.LoanRequestStatuses'
+    ), src AS (
       SELECT source_table, legacy_id, payload,
         COALESCE(payload->>'CreatedAt',payload->>'CreatedOn',payload->>'CreationDate',payload->>'DateCreated',payload->>'RequestDate',payload->>'CreateDate',payload->>'Created',payload->>'SubmissionDate',payload->>'InsertDate',payload->>'DateTime') AS raw_date,
         COALESCE(NULLIF(payload->>'FullName',''),NULLIF(payload->>'ApplicantName',''),NULLIF(payload->>'Name',''),NULLIF(payload->>'CustomerName',''),NULLIF(payload->>'UserFullName',''),trim(concat_ws(' ',NULLIF(payload->>'FirstName',''),NULLIF(payload->>'LastName','')))) AS full_name,
@@ -55,7 +60,7 @@ export async function migrate() {
       WHERE source_table ~* '^vamcityc_vamcity_import_[0-9]{8}[.]dbo[.]UserLoanRequests$'
     )
     INSERT INTO loan_requests(request_key,source_table,legacy_id,applicant_name,mobile,national_code,status,amount,created_at,payload)
-    SELECT source_table || ':' || legacy_id,source_table,legacy_id,COALESCE(full_name,''),COALESCE(phone,''),COALESCE(ncode,''),COALESCE(state,''),
+    SELECT source_table || ':' || legacy_id,source_table,legacy_id,COALESCE(full_name,''),COALESCE(phone,''),COALESCE(ncode,''),COALESCE(status_lookup.title,state,''),
       CASE WHEN regexp_replace(raw_amount,'[ ,٬ ]','','g') ~ '^-?[0-9]+([.][0-9]+)?$' THEN regexp_replace(raw_amount,'[ ,٬ ]','','g')::numeric ELSE NULL END,
       CASE
         WHEN raw_date ~ '^/Date\(-?[0-9]+\)/$' THEN to_timestamp(regexp_replace(raw_date,'[^0-9-]','','g')::numeric / 1000)
@@ -64,7 +69,7 @@ export async function migrate() {
         ELSE NULL
       END,
       payload
-    FROM src
+    FROM src LEFT JOIN status_lookup ON status_lookup.id=src.state AND status_lookup.rn=1
     ON CONFLICT(source_table,legacy_id) DO UPDATE SET
       applicant_name=EXCLUDED.applicant_name,mobile=EXCLUDED.mobile,national_code=EXCLUDED.national_code,
       status=EXCLUDED.status,amount=EXCLUDED.amount,created_at=EXCLUDED.created_at,payload=EXCLUDED.payload,imported_at=NOW()
