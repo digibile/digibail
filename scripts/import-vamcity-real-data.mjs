@@ -22,6 +22,17 @@ function docker(args, options = {}) {
   });
 }
 function clean(value) { return String(value ?? "").trim(); }
+function shellQuote(value) { return "'" + String(value).replace(/'/g, "'\\''") + "'"; }
+function targetQuery(query) {
+  const command = 'export PGPASSWORD="$POSTGRES_PASSWORD"; psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1 -At -c ' + shellQuote(query);
+  return clean(docker(["compose", "exec", "-T", "db", "sh", "-lc", command], { cwd: ROOT }));
+}
+function targetCount(sourceTable) {
+  const table = String(sourceTable).replace(/'/g, "''");
+  const value = Number(targetQuery("SELECT COUNT(*) FROM legacy_source_data WHERE source_table='" + table + "'"));
+  if (!Number.isSafeInteger(value) || value < 0) throw new Error("Could not verify existing legacy row count");
+  return value;
+}
 function sql(args) {
   return docker(["exec", SQLC, SQLCMD, "-S", "localhost", "-U", "sa", "-P", SA_PASS, "-C", ...args]);
 }
@@ -87,12 +98,18 @@ try {
     core[key] = queryRows(primary, query, "core " + key);
     console.log("CORE_SOURCE_ROWS_" + key.toUpperCase() + "=" + core[key].length);
   }
-  for (let offset = 0; offset < core.users.length; offset += 500) {
-    const batch = core.users.slice(offset, offset + 500);
-    importInput(tempDir, { users: batch, customers: [], smsPatterns: [] },
-      "users " + (offset + 1) + "-" + (offset + batch.length));
-    if ((offset + batch.length) % 5000 === 0 || offset + batch.length === core.users.length) {
-      console.log("CORE_USERS_IMPORTED=" + (offset + batch.length) + "/" + core.users.length);
+  const importedUserRows = targetCount("vamcityc_vamcity_import_20261028.dbo.AspNetUsers");
+  const modernLegacyUsers = Number(targetQuery("SELECT COUNT(*) FROM users WHERE legacy_source='aspnetusers'"));
+  if (importedUserRows >= core.users.length && modernLegacyUsers > 0) {
+    console.log("SKIP_CORE_USERS_ALREADY_MIGRATED=1 source_rows=" + core.users.length + " raw_rows=" + importedUserRows + " modern_rows=" + modernLegacyUsers);
+  } else {
+    for (let offset = 0; offset < core.users.length; offset += 500) {
+      const batch = core.users.slice(offset, offset + 500);
+      importInput(tempDir, { users: batch, customers: [], smsPatterns: [] },
+        "users " + (offset + 1) + "-" + (offset + batch.length));
+      if ((offset + batch.length) % 5000 === 0 || offset + batch.length === core.users.length) {
+        console.log("CORE_USERS_IMPORTED=" + (offset + batch.length) + "/" + core.users.length);
+      }
     }
   }
   importInput(tempDir, { users: [], customers: core.customers, smsPatterns: core.sms }, "customers and SMS templates");
@@ -127,6 +144,13 @@ try {
       }
       console.log("SOURCE_ROW_COUNT=" + fullName + ":" + rows.length);
       totalSourceRows += rows.length;
+      const alreadyImported = targetCount(sourceTable);
+      if (alreadyImported >= rows.length) {
+        console.log("SKIP_ALREADY_IMPORTED_TABLE=1 TABLE=" + fullName + " source_rows=" + rows.length + " target_rows=" + alreadyImported);
+        totalTables++;
+        continue;
+      }
+      console.log("RESUME_PARTIAL_TABLE=1 TABLE=" + fullName + " source_rows=" + rows.length + " target_rows=" + alreadyImported);
       for (let offset = 0; offset < rows.length; offset += 1000) {
         const batch = rows.slice(offset, offset + 1000).map((payload, i) => ({
           legacyId: String(offset + i + 1),
