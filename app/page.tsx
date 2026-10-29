@@ -51,7 +51,14 @@ export default function Home(){
  </div>
  <div className="footer-disclaimer"><b>توضیح مهم:</b> نمایش طرح‌ها و محاسبات اقساط به‌تنهایی به معنی تأیید درخواست یا تعهد به پرداخت تسهیلات نیست. شرایط نهایی، هزینه‌ها و نتیجه درخواست تابع بررسی و قرارداد رسمی ارائه‌دهنده طرح است.</div>
  <div className="footer-bottom"><span>© تمامی حقوق این وب‌سایت متعلق به دیجی‌بایل است.</span><div><a href="/terms.html">شرایط استفاده</a><a href="/privacy.html">حریم خصوصی</a><a href="/contact.html">تماس با ما</a></div></div>
- </footer></main>;
+ </footer>
+ <nav className="mobile-dock" aria-label="منوی سریع موبایل">
+  <a href="/" aria-label="خانه"><span>⌂</span><small>خانه</small></a>
+  <a href="#plans" aria-label="طرح‌ها"><span>▦</span><small>طرح‌ها</small></a>
+  <a href="#calculator" className="dock-main" aria-label="محاسبه اقساط"><span>٪</span><small>محاسبه</small></a>
+  <a href="/loan-requests.html" aria-label="درخواست‌ها"><span>▤</span><small>درخواست‌ها</small></a>
+  <a href="/login.html" aria-label="حساب کاربری"><span>♙</span><small>حساب من</small></a>
+ </nav></main>;
 }
 function planImage(p:Plan):string{const s=(String(p.name||"")+" "+String(p.title||"")+" "+String(p.description||"")).toLowerCase();if(/موتور|موتورسیکلت/.test(s))return "https://images.unsplash.com/photo-1558981806-ec527fa84c39?auto=format&fit=crop&w=900&q=85";if(/خودرو|ماشین|خرید ماشین|خودرو/.test(s))return "https://images.unsplash.com/photo-1492144534655-ae79c964c9d7?auto=format&fit=crop&w=900&q=85";if(/ساعت|هوشمند/.test(s))return "https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=900&q=85";if(/موبایل|گوشی|تلفن/.test(s))return "https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?auto=format&fit=crop&w=900&q=85";if(/خانه|لوازم|یخچال|تلویزیون|جهیزیه/.test(s))return "https://images.unsplash.com/photo-1555041469-a586c61ea9bc?auto=format&fit=crop&w=900&q=85";return "https://images.unsplash.com/photo-1496181133206-80ce9b88a853?auto=format&fit=crop&w=900&q=85"}
 function labelsFor(p:Plan):string[]{const a=parsed<unknown[]>(p.labels,[]);return Array.isArray(a)?a.map(x=>typeof x==="string"?x:String((x as {name?:string})?.name||"")).filter(Boolean):[]}
