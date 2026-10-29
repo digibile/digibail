@@ -642,6 +642,35 @@ export async function handleApi(req, res, url) {
       await audit(req,"beta.inquiry.created",userId,{reference});
       return json(res,202,{data:{ref:q.rows[0].reference,status:q.rows[0].status,message:q.rows[0].status_note,createdAt:q.rows[0].created_at}});
     }
+    if (route.startsWith("/api/v1/me/loan-applications")) {
+      const userId = authenticatedUserId(req);
+      if (!userId) return json(res, 401, { message: "برای ثبت یا مشاهده درخواست وام وارد حساب شوید." });
+      await pool.query("CREATE TABLE IF NOT EXISTS customer_loan_applications (id BIGSERIAL PRIMARY KEY, reference VARCHAR(32) NOT NULL UNIQUE, user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE, loan_product_id UUID NOT NULL REFERENCES loan_products(id), loan_name TEXT NOT NULL, amount NUMERIC(18,2) NOT NULL CHECK(amount>0), installment_months INTEGER NOT NULL CHECK(installment_months>0), down_payment NUMERIC(18,2) NOT NULL DEFAULT 0, monthly_payment NUMERIC(18,2) NOT NULL DEFAULT 0, status VARCHAR(32) NOT NULL DEFAULT 'Submitted', details JSONB NOT NULL DEFAULT '{}'::jsonb, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW())");
+      if (req.method === "GET" && route === "/api/v1/me/loan-applications") {
+        const q = await pool.query("SELECT id,reference,loan_product_id AS \"loanProductId\",loan_name AS \"loanName\",amount,installment_months AS \"installmentMonths\",down_payment AS \"downPayment\",monthly_payment AS \"monthlyPayment\",status,details,created_at AS \"createdAt\" FROM customer_loan_applications WHERE user_id=$1 ORDER BY created_at DESC", [userId]);
+        return json(res,200,{data:q.rows});
+      }
+      if (req.method === "POST" && route === "/api/v1/me/loan-applications") {
+        const b=await body(req), amount=Number(b.amount), months=Number(b.installmentMonths), productId=String(b.loanProductId||"");
+        if(!/^[0-9a-f-]{36}$/i.test(productId)||!Number.isFinite(amount)||amount<=0||!Number.isInteger(months)||months<1||months>600) return json(res,400,{message:"طرح، مبلغ یا تعداد اقساط معتبر نیست."});
+        const product=await pool.query("SELECT id,name,title,min_amount,max_amount,tiers,is_active,needs_review FROM loan_products WHERE id=$1",[productId]);
+        if(!product.rowCount||!product.rows[0].is_active||product.rows[0].needs_review) return json(res,409,{message:"این طرح برای ثبت درخواست فعال و تأییدشده نیست."});
+        const p=product.rows[0], min=Number(p.min_amount), max=Number(p.max_amount);
+        if(amount<min||amount>max) return json(res,400,{message:"مبلغ درخواستی خارج از بازه مجاز طرح است."});
+        const tiers=Array.isArray(p.tiers)?p.tiers:[], tier=tiers.find(t=>Number(t.months)===months);
+        if(!tier) return json(res,400,{message:"تعداد اقساط انتخابی در تعریف این طرح وجود ندارد."});
+        const down=amount*Math.max(0,Number(tier.downPaymentPercent)||0)/100;
+        const rate=Number(b.interestPercent)||0, method=String(b.interestMethod||"Monthly");
+        const fee=method==="Annual"?amount*rate/100*months/12:method==="Flat"?amount*rate/100:amount*rate/100*months;
+        const monthly=Math.max(0,amount-down+fee)/months;
+        const ref="DBL-"+crypto.randomBytes(5).toString("hex").toUpperCase();
+        const details={interestMethod:method,interestPercent:rate,feePercent:Number(tier.feePercent)||0,source:"customer-portal"};
+        const q=await pool.query("INSERT INTO customer_loan_applications(reference,user_id,loan_product_id,loan_name,amount,installment_months,down_payment,monthly_payment,details) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb) RETURNING id,reference,status,created_at AS \"createdAt\"",[ref,userId,productId,p.title||p.name,amount,months,down,monthly,JSON.stringify(details)]);
+        await audit(req,"loan.application.created",userId,{applicationId:q.rows[0].id,reference:ref,loanProductId:productId,amount,months});
+        return json(res,201,{data:{...q.rows[0],loanName:p.title||p.name,amount,installmentMonths:months,downPayment:down,monthlyPayment:monthly},message:"درخواست در سامانه ثبت شد."});
+      }
+      return json(res,405,{message:"عملیات درخواست وام پشتیبانی نمی‌شود."});
+    }
     if (route.startsWith("/api/v1/me/documents")) {
       const userId = authenticatedUserId(req);
       if (!userId) return json(res, 401, { message: "برای مشاهده مدارک وارد حساب شوید." });
