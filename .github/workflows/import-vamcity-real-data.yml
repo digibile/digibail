@@ -13,7 +13,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: import-vamcity-real-data
+  group: import-vamcity-real-data-recovery-20261029
   cancel-in-progress: false
 
 jobs:
