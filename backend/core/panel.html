@@ -309,44 +309,7 @@ V.dash=()=>head('داشبورد','وضعیت پرتفوی وام در یک نگ�
  <div class="cols"><div class="panel"><h3>وضعیت درخواست‌های وام</h3>${hbars(S.LoanApplication.map(s=>[s[1],loans.filter(l=>l.st===s[0]).length*7+3,'درخواست']),'var(--s1)')}</div>
  <div class="panel"><h3>آخرین فعالیت‌ها</h3><div class="list">${audit.map(a=>`<div><span>${a[0]}: ${a[1]}</span><span>${a[2].slice(-5)}</span></div>`).join('')}</div></div></div>`;
 
-V.loans=()=>{
- const sourceTable='vamcityc_vamcity_import_20261028.dbo.UserLoanRequests';
- const pageSize=100,totalRows=17255;
- const html=head('درخواست‌های وام','فهرست واقعی درخواست‌های منتقل‌شده از پایگاه قدیمی؛ این بخش فعلاً فقط‌خواندنی است')+
- '<div class="panel" id="realLoanRequests"><p class="empty">در حال دریافت درخواست‌های واقعی از پایگاه داده…</p></div>';
- setTimeout(()=>{
-  const root=document.getElementById('realLoanRequests');if(!root)return;
-  const norm=v=>String(v??'').toLowerCase().replace(/[^a-z0-9\u0600-\u06ff]/g,'');
-  const pick=(p,names)=>{const keys=Object.keys(p||{});for(const name of names){const k=keys.find(x=>norm(x)===norm(name));if(k&&p[k]!==null&&p[k]!==undefined&&p[k]!=='')return p[k]}return null};
-  const show=v=>v===null||v===undefined||v===''?'—':esc(typeof v==='object'?JSON.stringify(v):String(v).slice(0,160));
-  const loadPage=async(page)=>{
-   const offset=Math.max(0,Math.min(Math.floor(page),Math.ceil(totalRows/pageSize)-1))*pageSize;
-   root.innerHTML='<p class="empty">در حال دریافت صفحه '+fa(Math.floor(offset/pageSize)+1)+'…</p>';
-   try{
-    const response=await fetch('/api/v1/admin/legacy-source-data?table='+encodeURIComponent(sourceTable)+'&limit='+pageSize+'&offset='+offset,{credentials:'same-origin',cache:'no-store'});
-    const result=await response.json();
-    if(!response.ok)throw new Error(result.message||('HTTP '+response.status));
-    const rows=Array.isArray(result.data)?result.data:[];
-    if(!rows.length){root.innerHTML='<p class="empty">در این صفحه رکوردی پیدا نشد.</p>';return}
-    const bodyRows=rows.map(r=>{
-     const p=r.payload&&typeof r.payload==='object'?r.payload:{};
-     const id=pick(p,['Id','ID','UserLoanRequestId','RequestId','Code'])??r.legacy_id;
-     const user=pick(p,['UserId','ApplicantId','CustomerId','MemberId']);
-     const product=pick(p,['LoanId','LoanProductId','LoanTypeId','ProductId','PlanId']);
-     const amount=pick(p,['Amount','LoanAmount','RequestedAmount','RequestAmount','AmountRequested','مبلغ']);
-     const status=pick(p,['Status','StatusId','LoanRequestStatus','RequestStatus','State']);
-     const created=pick(p,['CreatedAt','CreatedOn','CreateDate','CreatedDate','RequestDate','RegDate','Date']);
-     return '<tr><td class="n">'+show(id)+'</td><td class="n">'+show(user)+'</td><td class="n">'+show(product)+'</td><td class="n">'+show(amount)+'</td><td>'+show(status)+'</td><td class="n">'+show(created)+'</td></tr>';
-    }).join('');
-    const current=Math.floor(offset/pageSize),last=Math.ceil(totalRows/pageSize)-1;
-    root.innerHTML='<div class="bar"><span class="pill a">منبع واقعی: UserLoanRequests</span><span class="sub">صفحه '+fa(current+1)+' از '+fa(last+1)+' · '+fa(rows.length)+' ردیف در این صفحه</span></div><p class="sub">منبع اصلی ۱۷٬۲۵۵ ردیف دارد. داده‌ها از پایگاه منتقل‌شده خوانده می‌شوند؛ تغییر وضعیت پرونده و عملیات پرداخت هنوز به گردش‌کار عملیاتی وصل نشده است.</p><div class="scroll"><table><thead><tr><th>شناسه درخواست</th><th>شناسه متقاضی</th><th>شناسه طرح وام</th><th>مبلغ درخواستی</th><th>وضعیت منبع</th><th>تاریخ ثبت</th></tr></thead><tbody>'+bodyRows+'</tbody></table></div><div class="bar" style="margin-top:12px"><button class="btn" data-real-page="'+(current-1)+'" '+(current===0?'disabled':'')+'>صفحه قبل</button><button class="btn" data-real-page="'+(current+1)+'" '+(current>=last?'disabled':'')+'>صفحه بعد</button></div>';
-    root.querySelectorAll('[data-real-page]').forEach(btn=>{btn.onclick=()=>loadPage(Number(btn.dataset.realPage))});
-   }catch(error){root.innerHTML='<p class="empty">خواندن درخواست‌های واقعی انجام نشد: '+esc(String(error.message||error))+'</p>'}
-  };
-  loadPage(0);
- },0);
- return html;
-};
+V.loans=()=>head('درخواست‌های وام','همه درخواست‌های منتقل‌شده از پایگاه اصلی؛ تاریخ شمسی، فیلتر، جزئیات پرونده، تاریخچه تغییر وضعیت و یادداشت‌ها از دیتابیس داخلی.')+'<div class="panel" style="padding:0;overflow:hidden"><iframe src="/loan-requests.html" title="درخواست‌های وام" loading="lazy" style="display:block;width:100%;height:calc(100vh - 190px);min-height:820px;border:0;background:transparent"></iframe></div>';
 
 V.products=()=>head('محصولات وام','هر پذیرنده می‌تواند چند محصول فعال داشته باشد','<a class="btn" href="/loan-definition.html">تعریف وام‌ها</a> <button class="btn solid" id="addProd">محصول جدید</button>')+
  `<div class="cards">${products.map((p,i)=>`<div class="card"><h3>${p.n}<span class="frow"><button class="btn" data-pe="${i}">ویرایش</button><button class="btn ${p.on?'ok':''}" data-prod="${i}">${p.on?'فعال':'غیرفعال'}</button></span></h3>
