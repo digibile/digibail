@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 12
     steps:
-      - name: Stop duplicate workers, run one idempotent backfill, and verify the production database
+      - name: Stop duplicate workers, restart app cleanly, run one backfill, and verify
         uses: appleboy/ssh-action@v1.2.2
         with:
           host: ${{ secrets.DEPLOY_HOST }}
@@ -25,32 +25,38 @@ jobs:
             ROOT="/home/digibail/domains/digebail.ir"
             cd "$ROOT"
             if sudo -n docker info >/dev/null 2>&1; then D='sudo -n docker'; else D='docker'; fi
-            echo "=== STOP DUPLICATE IDEMPOTENT BACKFILL WORKERS ==="
-            BACKFILL_PIDS="$(ps -eo pid=,comm=,args= | awk -v self="$$" '$1 != self && $2 == "node" && $0 ~ /\/app\/scripts\/backfill-legacy-customers[.]mjs([[:space:]]|$)/ {print $1}')"
-            for pid in $BACKFILL_PIDS; do
+            echo "=== STOP DUPLICATE ONE-OFF BACKFILL CONTAINERS ==="
+            ONEOFFS="$($D ps -a --format '{{.ID}} {{.Names}}' | awk '$2 ~ /^digebailir-app-run-/ {print $1}')"
+            for cid in $ONEOFFS; do
+              CMD="$($D inspect --format '{{json .Config.Cmd}}' "$cid" 2>/dev/null || true)"
+              if printf '%s' "$CMD" | grep -Eq 'backfill-legacy-customers[.]mjs|import-legacy-loan-products[.]mjs'; then
+                echo "STOP_ONEOFF_CONTAINER=$cid"
+                $D rm -f "$cid" >/dev/null 2>&1 || true
+              fi
+            done
+            echo "=== STOP OLD IMPORT WRAPPERS ==="
+            OLD_WRAPPERS="$(ps -eo pid=,comm=,args= | awk -v self="$$" '$1 != self && $2 == "bash" && ($0 ~ /import-vamcity-real-data[.]mjs/ || $0 ~ /import-legacy-loan-products[.]mjs/) {print $1}')"
+            for pid in $OLD_WRAPPERS; do
               case "$pid" in ''|*[!0-9]*) continue;; esac
-              echo "STOP_DUPLICATE_BACKFILL_PID=$pid"
+              echo "STOP_OLD_IMPORT_WRAPPER=$pid"
               kill -TERM "$pid" 2>/dev/null || true
             done
-            COMPOSE_PIDS="$(ps -eo pid=,comm=,args= | awk -v self="$$" '$1 != self && $2 != "bash" && $0 ~ /compose/ && $0 ~ /backfill-legacy-customers[.]mjs/ {print $1}')"
-            for pid in $COMPOSE_PIDS; do
-              case "$pid" in ''|*[!0-9]*) continue;; esac
-              echo "STOP_DUPLICATE_BACKFILL_COMPOSE_PID=$pid"
-              kill -TERM "$pid" 2>/dev/null || true
+            echo "=== RESTART APP TO CLEAR EXEC WORKERS AND RECOVER HEALTH ==="
+            $D compose stop app || true
+            $D compose up -d app
+            HEALTH=0
+            for n in $(seq 1 36); do
+              if curl -fsS --max-time 5 http://127.0.0.1:1631/healthz >/dev/null 2>&1; then HEALTH=1; break; fi
+              sleep 5
             done
-            sleep 3
-            LEFT="$(ps -eo pid=,stat=,comm=,args= | awk -v self="$$" '$1 != self && $3 == "node" && $0 ~ /\/app\/scripts\/backfill-legacy-customers[.]mjs([[:space:]]|$)/ && $2 !~ /^Z/ {print $1}')"
-            for pid in $LEFT; do
-              case "$pid" in ''|*[!0-9]*) continue;; esac
-              echo "FORCE_STOP_BACKFILL_PID=$pid"
-              kill -KILL "$pid" 2>/dev/null || true
-            done
-            sleep 2
-            echo "=== ENSURE NO LIVE DUPLICATE BACKFILL NODE PROCESS REMAINS ==="
-            REMAINING="$(ps -eo pid=,stat=,comm=,args= | awk -v self="$$" '$1 != self && $3 == "node" && $0 ~ /\/app\/scripts\/backfill-legacy-customers[.]mjs([[:space:]]|$)/ && $2 !~ /^Z/ {print $1}')"
-            if [ -n "$REMAINING" ]; then echo "ERROR: live duplicate backfill worker still running: $REMAINING"; exit 30; fi
-            echo "DUPLICATE_BACKFILL_WORKERS=STOPPED"
-            echo "=== RUN ONE BACKFILL AGAINST THE INTERNAL DATABASE ==="
+            if [ "$HEALTH" -ne 1 ]; then
+              $D compose ps || true
+              $D compose logs --tail=100 app db || true
+              echo "ERROR: app did not recover health after clearing duplicate workers."
+              exit 31
+            fi
+            echo "APP_HEALTH_AFTER_RECOVERY=200"
+            echo "=== RUN ONE IDPOTENT BACKFILL ==="
             mkdir -p "$ROOT/var/migrations"
             chmod 700 "$ROOT/var/migrations"
             $D compose run --rm --no-deps -T app node /app/scripts/backfill-legacy-customers.mjs 2>&1 | tee -a "$ROOT/var/migrations/vamcity-import.log"
