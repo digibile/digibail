@@ -661,8 +661,471 @@ export async function handleApi(req, res, url) {
           pool.query("SELECT COUNT(*)::int AS total"+base+filter,params),
           pool.query("SELECT COUNT(*)::int AS total"+base,[]),
           pool.query("SELECT COUNT(*)::int AS total"+base+" AND ("+activeExpr+")",[]),
-          pool.query("SELECT COUNT(*)::int AS total FROM legacy_customers",[]),
-          pool.query("SELECT source_table,legacy_id,COALESCE(NULLIF(payload->>'FullName',''),NULLIF(payload->>'DisplayName',''),NULLIF(payload->>'Name',''),NULLIF(trim(concat_ws(' ',NULLIF(payload->>'FirstName',''),NULLIF(payload->>'LastName',''))),''),NULLIF(payload->>'UserName',''),NULLIF(payload->>'Username',''),'نام ثبت نشده') AS name,COALESCE(NULLIF(payload->>'BusinessName',''),NULLIF(payload->>'BrandName',''),NULLIF(payload->>'CompanyName',''),NULLIF(payload->>'TradeName','')) AS business_name,COALESCE(NULLIF(payload->>'Mobile',''),NULLIF(payload->>'PhoneNumber',''),NULLIF(payload->>'Phone',''),NULLIF(payload->>'CellPhone','')) AS mobile,COALESCE(NULLIF(payload->>'CommissionPercent',''),NULLIF(payload->>'CommissionRate',''),NULLIF(payload->>'SharePercent','')) AS commission_percent,COALESCE(NULLIF(payload->>'LastLoginAt',''),NULLIF(payload->>'LastLoginDate',''),NULLIF(payload->>'LastLogin','')) AS last_login,COALESCE(NULLIF(payload->>'IsActive',''),NULLIF(payload->>'Active',''),NULLIF(payload->>'Enabled',''),NULLIF(payload->>'IsEnabled','')) AS active_raw,COALESCE(NULLIF(payload->>'CustomerCount',''),NULLIF(payload->>'CustomersCount',''),NULLIF(payload->>'TotalCustomers','')) AS customer_count,COALESCE(NULLIF(payload->>'SubAgentsCount',''),NULLIF(payload->>'SubAgentCount',''),NULLIF(payload->>'ChildrenCount','')) AS subagents_count,payload AS raw_payload"+base+filter+" ORDER BY COALESCE(NULLIF(payload->>'CreatedAt',''),NULLIF(payload->>'RegisterDate',''),NULLIF(payload->>'CreatedOn','')) DESC NULLS LAST,legacy_id DESC LIMIT $"+(params.length+1)+" OFFSET $"+(params.length+2),[...params,pageSize,(page-1)*pageSize])
+          pool.query("SELECT source_table,legacy_id,COALESCE(NULLIF(payload->>'FullName',''),NULLIF(payload->>'DisplayName',''),NULLIF(payload->>'Name',''),NULLIF(trim(concat_ws(' ',NULLIF(payload->>'FirstName',''),NULLIF(payload->>'LastName',''))),''),NULLIF(payload->>'UserName',''),NULLIF(payload->>'Username',''),'نام ثبت نشده') AS name,COALESCE(NULLIF(payload->>'BusinessName',''),NULLIF(payload->>'BrandName',''),NULLIF(payload->>'CompanyName',''),NULLIF(payload->>'TradeName','')) AS business_name,COALESCE(NULLIF(payload->>'Mobile',''),NULLIF(payload->>'PhoneNumber',''),NULLIF(payload->>'Phone',''),NULLIF(payload->>'CellPhone','')) AS mobile,COALESCE(NULLIF(payload->>'CommissionPercent',''),NULLIF(payload->>'CommissionRate',''),NULLIF(payload->>'SharePercent','')) AS commission_percent,COALESCE(NULLIF(payload->>'LastLoginAt',''),NULLIF(payload->>'LastLoginDate',''),NULLIF(payload->>'LastLogin','')) AS last_login,COALESCE(NULLIF(payload->>'IsActive',''),NULLIF(payload->>'Active',''),NULLIF(payload->>'Enabled',''),NULLIF(payload->>'IsEnabled','')) AS active_raw,COALESCE(NULLIF(payload->>'CustomerCount',''),NULLIF(payload->>'CustomersCount',''),NULLIF(payload->>'TotalCustomers','')) AS customer_count,COALESCE(NULLIF(payload->>'SubAgentsCount',''),NULLIF(payload->>'SubAgentCount',''),NULLIF(payload->>'ChildrenCount','')) AS subagents_count,(SELECT COUNT(*)::int FROM loan_requests lr WHERE lr.source_table=regexp_replace(legacy_source_data.source_table,'[.]Agents"+base+filter+" ORDER BY COALESCE(NULLIF(payload->>'CreatedAt',''),NULLIF(payload->>'RegisterDate',''),NULLIF(payload->>'CreatedOn','')) DESC NULLS LAST,legacy_id DESC LIMIT $"+(params.length+1)+" OFFSET $"+(params.length+2),[...params,pageSize,(page-1)*pageSize])
+        ]);
+        const mapped=rows.rows.map(r=>({...r,is_active:r.active_raw==null?null:['true','1','yes','active','فعال'].includes(String(r.active_raw).toLowerCase()),commission_percent:r.commission_percent==null?null:Number(r.commission_percent),customer_count:r.customer_count==null?null:Number(r.customer_count),subagents_count:r.subagents_count==null?null:Number(r.subagents_count),loan_requests_count:Number(r.loan_requests_count)||0}));
+        const customerTotal=mapped.reduce((n,r)=>n+(Number.isFinite(r.customer_count)?r.customer_count:0),0);
+        return json(res,200,{data:{rows:mapped,total:Number(count.rows[0]?.total)||0,overallTotal:Number(overall.rows[0]?.total)||0,activeTotal:Number(active.rows[0]?.total)||0,customerTotal:mapped.some(r=>r.customer_count!=null)?customerTotal:null,page,pageSize}});
+      }
+      if (req.method === "GET" && route === "/api/v1/admin/legacy-customers-page") {
+        const page=Math.max(1,Number.parseInt(url.searchParams.get("page")||"1",10)||1), pageSize=Math.min(100,Math.max(10,Number.parseInt(url.searchParams.get("pageSize")||"50",10)||50)), search=String(url.searchParams.get("q")||"").trim().slice(0,120);
+        const params=[], where=[];
+        if(search){params.push("%"+search+"%");where.push("(name ILIKE $"+params.length+" OR mobile ILIKE $"+params.length+" OR email ILIKE $"+params.length+" OR customer_code::text ILIKE $"+params.length+" OR legacy_id::text ILIKE $"+params.length+" OR legacy_username ILIKE $"+params.length+" OR affiliate_code ILIKE $"+params.length+" OR legacy_source_table ILIKE $"+params.length+")");}
+        const from=String(url.searchParams.get("from")||"").trim(), to=String(url.searchParams.get("to")||"").trim();
+        if(from && /^\d{4}-\d{2}-\d{2}$/.test(from)){params.push(from);where.push("registered_at >= $"+params.length+"::date");}
+        if(to && /^\d{4}-\d{2}-\d{2}$/.test(to)){params.push(to);where.push("registered_at < ($"+params.length+"::date + INTERVAL '1 day')");}
+        const filter=where.length?" WHERE "+where.join(" AND "):"";
+        const [count,overall]=await Promise.all([pool.query("SELECT COUNT(*)::int AS total FROM legacy_customers"+filter,params),pool.query("SELECT COUNT(*)::int AS total,MAX(registered_at) AS latest_registration FROM legacy_customers")]);
+        const rows=await pool.query("WITH numbered AS (SELECT legacy_id,name,mobile,email,customer_code,registered_at,expires_at,is_permanent,purchased,affiliate_code,parked_domain,legacy_username,account_type,legacy_source_table,ROW_NUMBER() OVER (ORDER BY registered_at ASC NULLS FIRST,legacy_id ASC) AS customer_number FROM legacy_customers) SELECT legacy_id,name,mobile,email,customer_code,customer_number,registered_at,expires_at,is_permanent,purchased,affiliate_code,parked_domain,legacy_username,account_type,legacy_source_table FROM numbered"+filter+" ORDER BY registered_at DESC NULLS LAST,legacy_id DESC LIMIT $"+(params.length+1)+" OFFSET $"+(params.length+2),[...params,pageSize,(page-1)*pageSize]);
+        return json(res,200,{data:{rows:rows.rows,total:Number(count.rows[0]?.total)||0,overallTotal:Number(overall.rows[0]?.total)||0,latestRegistration:overall.rows[0]?.latest_registration||null,page,pageSize}});
+      }
+      if (req.method === "GET" && route === "/api/v1/admin/legacy-agents-page") {
+        const page=Math.max(1,Number.parseInt(url.searchParams.get("page")||"1",10)||1);
+        const pageSize=Math.min(100,Math.max(10,Number.parseInt(url.searchParams.get("pageSize")||"25",10)||25));
+        const search=String(url.searchParams.get("q")||"").trim().slice(0,120);
+        const status=String(url.searchParams.get("status")||"").trim();
+        const params=[],where=[];
+        if(search){params.push("%"+search+"%");where.push("(name ILIKE $"+params.length+" OR business_name ILIKE $"+params.length+" OR mobile ILIKE $"+params.length+" OR agent_code ILIKE $"+params.length+" OR legacy_id ILIKE $"+params.length+")");}
+        if(status==="active")where.push("is_active IS TRUE");
+        if(status==="inactive")where.push("is_active IS FALSE");
+        const filter=where.length?" WHERE "+where.join(" AND "):"";
+        const base=`WITH agents AS (
+          SELECT s.source_table,s.legacy_id,s.payload,
+            COALESCE(NULLIF(s.payload->>'FullName',''),NULLIF(s.payload->>'DisplayName',''),NULLIF(s.payload->>'Name',''),NULLIF(trim(concat_ws(' ',NULLIF(s.payload->>'FirstName',''),NULLIF(s.payload->>'LastName',''))),''),NULLIF(s.payload->>'UserName',''),NULLIF(s.payload->>'Username',''),'نام ثبت نشده') AS name,
+            COALESCE(NULLIF(s.payload->>'BusinessName',''),NULLIF(s.payload->>'BrandName',''),NULLIF(s.payload->>'CompanyName',''),NULLIF(s.payload->>'ShopName',''),NULLIF(s.payload->>'Title','')) AS business_name,
+            COALESCE(NULLIF(s.payload->>'Mobile',''),NULLIF(s.payload->>'Phone',''),NULLIF(s.payload->>'PhoneNumber',''),NULLIF(s.payload->>'CellPhone','')) AS mobile,
+            COALESCE(NULLIF(s.payload->>'AgentCode',''),NULLIF(s.payload->>'Code',''),NULLIF(s.payload->>'ReferralCode',''),NULLIF(s.payload->>'AffiliateCode',''),s.legacy_id) AS agent_code,
+            COALESCE(NULLIF(s.payload->>'CommissionPercent',''),NULLIF(s.payload->>'FactorPercent',''),NULLIF(s.payload->>'Commission','')) AS commission_percent,
+            COALESCE(NULLIF(s.payload->>'LastLoginAt',''),NULLIF(s.payload->>'LastLogin',''),NULLIF(s.payload->>'LastLoginDate','')) AS last_login,
+            CASE WHEN lower(COALESCE(s.payload->>'IsActive',s.payload->>'Active',s.payload->>'Enabled','')) IN ('false','0','no') OR lower(COALESCE(s.payload->>'Disable','false')) IN ('true','1','yes') THEN FALSE
+                 WHEN lower(COALESCE(s.payload->>'IsActive',s.payload->>'Active',s.payload->>'Enabled','')) IN ('true','1','yes') THEN TRUE ELSE NULL END AS is_active,
+            COALESCE(NULLIF(s.payload->>'ParentAgentId',''),NULLIF(s.payload->>'ParentId',''),NULLIF(s.payload->>'SupervisorId','')) AS parent_id
+          FROM legacy_source_data s
+          WHERE s.source_table LIKE 'vamcityc_%.dbo.Agents'
+        ), enriched AS (
+          SELECT a.*,
+            (SELECT COUNT(*)::int FROM loan_requests lr WHERE lr.payload->>'AgentId'=a.payload->>'Id' OR lr.payload->>'AgentId'=a.legacy_id) AS loan_requests_count,
+            (SELECT COUNT(*)::int FROM agents child WHERE child.parent_id=COALESCE(a.payload->>'Id',a.legacy_id)) AS subagents_count,
+            (SELECT COUNT(*)::int FROM legacy_customers lc WHERE lc.affiliate_code=a.agent_code) AS customers_count
+          FROM agents a
+        )`;
+        const [count,overall,rows,customerTotal]=await Promise.all([
+          pool.query(base+" SELECT COUNT(*)::int AS total FROM enriched"+filter,params),
+          pool.query(base+" SELECT COUNT(*)::int AS total,COUNT(*) FILTER(WHERE is_active IS TRUE)::int AS active_total,COUNT(*) FILTER(WHERE is_active IS FALSE)::int AS inactive_total FROM enriched"),
+          pool.query(base+" SELECT legacy_id,name,business_name,mobile,agent_code,commission_percent,last_login AS last_login_fa,is_active,loan_requests_count,subagents_count,customers_count AS customer_count,payload AS raw_payload FROM enriched"+filter+" ORDER BY name,legacy_id LIMIT $"+(params.length+1)+" OFFSET $"+(params.length+2),[...params,pageSize,(page-1)*pageSize]),
+          pool.query(base+" SELECT COUNT(DISTINCT lc.legacy_id)::int AS total FROM legacy_customers lc WHERE EXISTS(SELECT 1 FROM enriched a WHERE a.agent_code=lc.affiliate_code)")
+        ]);
+        return json(res,200,{data:{rows:rows.rows,total:Number(count.rows[0]?.total)||0,overallTotal:Number(overall.rows[0]?.total)||0,activeTotal:Number(overall.rows[0]?.active_total)||0,inactiveTotal:Number(overall.rows[0]?.inactive_total)||0,customerTotal:Number(customerTotal.rows[0]?.total)||0,page,pageSize}});
+      }
+      if (req.method === "GET" && route === "/api/v1/admin/legacy-customers") {
+        const search = String(url.searchParams.get("q") || "").trim().slice(0,120);
+        const page = Math.max(1, Number.parseInt(url.searchParams.get("page") || "1",10) || 1);
+        const pageSize = Math.min(100,Math.max(10,Number.parseInt(url.searchParams.get("pageSize") || "50",10) || 50));
+        const params = [];
+        let filter = "";
+        if (search) {
+          params.push("%"+search+"%");
+          filter = " WHERE name ILIKE $1 OR mobile ILIKE $1 OR email ILIKE $1 OR customer_code::text ILIKE $1 OR affiliate_code ILIKE $1";
+        }
+        const totalQ = await pool.query("SELECT COUNT(*)::int AS total FROM legacy_customers"+filter,params);
+        const rowsQ = await pool.query("SELECT legacy_id,name,mobile,email,customer_code,registered_at,expires_at,is_permanent,purchased,affiliate_code,parked_domain FROM legacy_customers"+filter+" ORDER BY registered_at DESC NULLS LAST,legacy_id LIMIT $"+(params.length+1)+" OFFSET $"+(params.length+2),[...params,pageSize,(page-1)*pageSize]);
+        return json(res,200,{data:{rows:rowsQ.rows,total:Number(totalQ.rows[0]?.total)||0,page,pageSize}});
+      }
+      if (req.method === "GET" && route === "/api/v1/admin/legacy-source-tables") {
+        const q = await pool.query(
+          "SELECT s.payload->>'sourceTable' AS source_table,COALESCE(d.row_count,0)::int AS row_count FROM legacy_source_data s LEFT JOIN (SELECT source_table,COUNT(*)::int AS row_count FROM legacy_source_data WHERE source_table<>'__legacy_schema__' GROUP BY source_table) d ON d.source_table=s.payload->>'sourceTable' WHERE s.source_table='__legacy_schema__' ORDER BY s.payload->>'sourceTable'"
+        );
+        return json(res, 200, { data: q.rows });
+      }
+      if (req.method === "GET" && route === "/api/v1/admin/legacy-source-data") {
+        const sourceTable = String(url.searchParams.get("table") || "");
+        if (!/^[A-Za-z0-9_.]{1,120}$/.test(sourceTable)) {
+          return json(res, 400, { message: "نوع داده قدیمی معتبر نیست." });
+        }
+        const limit = Math.min(500, Math.max(1, Number.parseInt(url.searchParams.get("limit") || "500", 10) || 500));
+        const offset = Math.max(0, Number.parseInt(url.searchParams.get("offset") || "0", 10) || 0);
+        const q = await pool.query(
+          "SELECT legacy_id,payload,imported_at FROM legacy_source_data WHERE source_table=$1 ORDER BY imported_at DESC,legacy_id LIMIT $2 OFFSET $3",
+          [sourceTable, limit, offset]
+        );
+        return json(res, 200, { data: q.rows });
+      }
+      if (req.method === "GET" && route === "/api/v1/admin/beta-inquiries") {
+        const q = await pool.query("SELECT id,reference,user_id,national_code,status,status_note,created_at FROM beta_inquiries ORDER BY created_at DESC LIMIT 500");
+        return json(res,200,{data:q.rows});
+      }
+      if (req.method === "GET" && route === "/api/v1/admin/documents") {
+        const q = await pool.query("SELECT id,user_id,kind,status,created_on,updated_at,review_note,fields::text AS fields_json,file_name,mime_type FROM customer_documents ORDER BY created_on DESC LIMIT 500");
+        return json(res, 200, { data:q.rows });
+      }
+      if (req.method === "POST" && route === "/api/v1/admin/documents/review") {
+        const b = await body(req); const id = String(b.id || "");
+        const status = String(b.status || "");
+        const note = String(b.note || "").trim().slice(0,2000);
+        if (!/^[0-9a-f-]{36}$/i.test(id) || !["Verified","Rejected","Pending"].includes(status)) return json(res, 400, { message:"شناسه یا وضعیت مدرک معتبر نیست." });
+        const q = await pool.query("UPDATE customer_documents SET status=$1,review_note=$2,updated_at=NOW() WHERE id=$3 RETURNING id,user_id,status", [status,note||null,id]);
+        if (!q.rowCount) return json(res, 404, { message:"مدرک پیدا نشد." });
+        await audit(req,"admin.documents.reviewed",Number(admin.sub)||null,{documentId:id,status});
+        return json(res,200,{ok:true,data:q.rows[0]});
+      }
+      if (req.method === "GET" && route === "/api/v1/admin/contracts") {
+        const q = await pool.query("SELECT id,user_id,title,number,status,expires_at,created_on,signed_at,rejected_at,rejection_note FROM customer_contracts ORDER BY created_on DESC LIMIT 500");
+        return json(res,200,{data:q.rows});
+      }
+      if (req.method === "POST" && route === "/api/v1/admin/contracts/create") {
+        const b = await body(req);
+        const userId = Number(b.userId);
+        const title = String(b.title||"").trim().slice(0,240);
+        const number = String(b.number||"").trim().slice(0,120);
+        const bodyHtml = String(b.bodyHtml||"").trim();
+        const expiresAt = b.expiresAt ? new Date(b.expiresAt) : null;
+        if (!Number.isSafeInteger(userId)||userId<1||!title||!number||!bodyHtml||bodyHtml.length>200000||(expiresAt&&!Number.isFinite(expiresAt.getTime()))) return json(res,400,{message:"اطلاعات قرارداد معتبر نیست."});
+        const owner = await pool.query("SELECT id FROM users WHERE id=$1 AND is_active=TRUE",[userId]);
+        if(!owner.rowCount) return json(res,404,{message:"کاربر فعال پیدا نشد."});
+        const q=await pool.query("INSERT INTO customer_contracts(user_id,title,number,body_html,expires_at) VALUES($1,$2,$3,$4,$5) RETURNING id,title,number,status,created_on",[userId,title,number,bodyHtml,expiresAt?expiresAt.toISOString():null]);
+        await audit(req,"admin.contracts.created",Number(admin.sub)||null,{contractId:q.rows[0].id,userId});
+        return json(res,201,{ok:true,data:q.rows[0]});
+      }
+      if (req.method === "GET" && route === "/api/v1/admin/sms/templates") {
+        const q = await pool.query("SELECT id,legacy_id,title,body,is_system,status,category,provider_panel,is_pattern_base,pattern_base_code,reject_reason,updated_at FROM sms_templates ORDER BY id");
+        return json(res, 200, { data: { items: q.rows, configured: Boolean(KAVENEGAR_API_KEY) } });
+      }
+      if (req.method === "POST" && route === "/api/v1/admin/sms/templates/update") {
+        const b = await body(req); const id = Number(b.id); const title = String(b.title || "").trim(); const text = String(b.body || "").trim();
+        if (!Number.isSafeInteger(id) || id < 1 || !title || title.length > 200 || !text || text.length > 4000) return json(res, 400, { message: "عنوان و متن الگو معتبر نیست." });
+        const q = await pool.query("UPDATE sms_templates SET title=$1,body=$2,status=$3,pattern_base_code=$4,updated_at=NOW() WHERE id=$5 RETURNING id,title,body,status,pattern_base_code", [title,text,Number.isInteger(Number(b.status))?Number(b.status):0,String(b.patternBaseCode||"").slice(0,500)||null,id]);
+        if (!q.rowCount) return json(res, 404, { message: "الگوی پیامک پیدا نشد." });
+        await audit(req, "admin.sms_template.updated", Number(admin.sub), { templateId: id });
+        return json(res, 200, { data: q.rows[0] });
+      }
+      if (req.method === "POST" && route === "/api/v1/admin/sms/test") {
+        const b = await body(req); const phone = String(b.phone || ""); const text = String(b.message || "").trim();
+        if (!phoneOk(phone) || !text || text.length > 1000) return json(res, 400, { message: "شماره موبایل یا متن پیام معتبر نیست." });
+        try {
+          const messageId = await sendSmsText(phone, text);
+          await pool.query("INSERT INTO sms_logs(recipient_masked,status,provider_message_id,created_by) VALUES($1,'sent',$2,$3)", [maskPhone(phone),messageId,Number(admin.sub)||null]);
+          await audit(req, "admin.sms.test.sent", Number(admin.sub), { recipient: maskPhone(phone) });
+          return json(res, 200, { ok: true, message: "درخواست ارسال پیامک به سرویس‌دهنده تحویل شد." });
+        } catch (e) {
+          await pool.query("INSERT INTO sms_logs(recipient_masked,status,error_code,created_by) VALUES($1,'failed',$2,$3)", [maskPhone(phone),String(e.code||"sms_delivery_failed").slice(0,80),Number(admin.sub)||null]).catch(()=>{});
+          throw e;
+        }
+      }
+      if (req.method === "GET" && route === "/api/v1/admin/sms/logs") {
+        const q = await pool.query("SELECT id,template_id,recipient_masked,status,provider_message_id,error_code,created_at FROM sms_logs ORDER BY created_at DESC LIMIT 100");
+        return json(res, 200, { data: q.rows });
+      }
+      return json(res, 404, { message: "مسیر مدیریت پیدا نشد." });
+    }
+    if (req.method === "POST" && route === "/api/v1/beta/inquiry") {
+      const userId = authenticatedUserId(req);
+      if (!userId) return json(res, 401, { message: "برای استعلام ابتدا وارد حساب شوید." });
+      const b = await body(req);
+      const nationalCode = String(b.nationalCode || "").replace(/[۰-۹]/g,d=>"۰۱۲۳۴۵۶۷۸۹".indexOf(d)).replace(/[٠-٩]/g,d=>"٠١٢٣٤٥٦٧٨٩".indexOf(d));
+      if (b.consent !== true) return json(res, 400, { message: "رضایت استعلام بانکی باید تأیید شود." });
+      if (!nationalCodeOk(nationalCode)) return json(res, 400, { message: "کد ملی معتبر نیست." });
+      const user = await pool.query("SELECT national_code FROM users WHERE id=$1 AND is_active=TRUE", [userId]);
+      if (!user.rowCount) return json(res, 401, { message: "حساب کاربری فعال پیدا نشد." });
+      if (String(user.rows[0].national_code || "").trim() !== nationalCode) {
+        return json(res, 400, { message: "کد ملی واردشده با کد ملی ثبت‌شده در حساب یکسان نیست." });
+      }
+      const reference = "BETA-" + crypto.randomBytes(4).toString("hex").toUpperCase();
+      const statusNote = "درخواست و رضایت ثبت شد؛ اتصال API رسمی بانک رفاه تنظیم نشده و استعلام به بانک ارسال نشده است.";
+      const q = await pool.query(
+        "INSERT INTO beta_inquiries(reference,user_id,national_code,status,status_note) VALUES($1,$2,$3,'pending_provider',$4) RETURNING reference,status,status_note,created_at",
+        [reference,userId,nationalCode,statusNote]
+      );
+      await audit(req,"beta.inquiry.created",userId,{reference});
+      return json(res,202,{data:{ref:q.rows[0].reference,status:q.rows[0].status,message:q.rows[0].status_note,createdAt:q.rows[0].created_at}});
+    }
+    if (route.startsWith("/api/v1/me/loan-applications")) {
+      const userId = authenticatedUserId(req);
+      if (!userId) return json(res, 401, { message: "برای ثبت یا مشاهده درخواست وام وارد حساب شوید." });
+      await pool.query("CREATE TABLE IF NOT EXISTS customer_loan_applications (id BIGSERIAL PRIMARY KEY, reference VARCHAR(32) NOT NULL UNIQUE, user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE, loan_product_id UUID NOT NULL REFERENCES loan_products(id), loan_name TEXT NOT NULL, amount NUMERIC(18,2) NOT NULL CHECK(amount>0), installment_months INTEGER NOT NULL CHECK(installment_months>0), down_payment NUMERIC(18,2) NOT NULL DEFAULT 0, monthly_payment NUMERIC(18,2) NOT NULL DEFAULT 0, status VARCHAR(32) NOT NULL DEFAULT 'Submitted', details JSONB NOT NULL DEFAULT '{}'::jsonb, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW())");
+      if (req.method === "GET" && route === "/api/v1/me/loan-applications") {
+        const q = await pool.query("SELECT id,reference,loan_product_id AS \"loanProductId\",loan_name AS \"loanName\",amount,installment_months AS \"installmentMonths\",down_payment AS \"downPayment\",monthly_payment AS \"monthlyPayment\",status,details,created_at AS \"createdAt\" FROM customer_loan_applications WHERE user_id=$1 ORDER BY created_at DESC", [userId]);
+        return json(res,200,{data:q.rows});
+      }
+      if (req.method === "POST" && route === "/api/v1/me/loan-applications") {
+        const b=await body(req), amount=Number(b.amount), months=Number(b.installmentMonths), productId=String(b.loanProductId||"");
+        if(!/^[0-9a-f-]{36}$/i.test(productId)||!Number.isFinite(amount)||amount<=0||!Number.isInteger(months)||months<1||months>600) return json(res,400,{message:"طرح، مبلغ یا تعداد اقساط معتبر نیست."});
+        const product=await pool.query("SELECT id,name,title,min_amount,max_amount,tiers,is_active,needs_review FROM loan_products WHERE id=$1",[productId]);
+        if(!product.rowCount||!product.rows[0].is_active||product.rows[0].needs_review) return json(res,409,{message:"این طرح برای ثبت درخواست فعال و تأییدشده نیست."});
+        const p=product.rows[0], min=Number(p.min_amount), max=Number(p.max_amount);
+        if(amount<min||amount>max) return json(res,400,{message:"مبلغ درخواستی خارج از بازه مجاز طرح است."});
+        const tiers=Array.isArray(p.tiers)?p.tiers:[], tier=tiers.find(t=>Number(t.months)===months);
+        if(!tier) return json(res,400,{message:"تعداد اقساط انتخابی در تعریف این طرح وجود ندارد."});
+        const down=amount*Math.max(0,Number(tier.downPaymentPercent)||0)/100;
+        const rate=Number(b.interestPercent)||0, method=String(b.interestMethod||"Monthly");
+        const fee=method==="Annual"?amount*rate/100*months/12:method==="Flat"?amount*rate/100:amount*rate/100*months;
+        const monthly=Math.max(0,amount-down+fee)/months;
+        const ref="DBL-"+crypto.randomBytes(5).toString("hex").toUpperCase();
+        const details={interestMethod:method,interestPercent:rate,feePercent:Number(tier.feePercent)||0,source:"customer-portal"};
+        const q=await pool.query("INSERT INTO customer_loan_applications(reference,user_id,loan_product_id,loan_name,amount,installment_months,down_payment,monthly_payment,details) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb) RETURNING id,reference,status,created_at AS \"createdAt\"",[ref,userId,productId,p.title||p.name,amount,months,down,monthly,JSON.stringify(details)]);
+        await audit(req,"loan.application.created",userId,{applicationId:q.rows[0].id,reference:ref,loanProductId:productId,amount,months});
+        return json(res,201,{data:{...q.rows[0],loanName:p.title||p.name,amount,installmentMonths:months,downPayment:down,monthlyPayment:monthly},message:"درخواست در سامانه ثبت شد."});
+      }
+      return json(res,405,{message:"عملیات درخواست وام پشتیبانی نمی‌شود."});
+    }
+    if (route.startsWith("/api/v1/me/documents")) {
+      const userId = authenticatedUserId(req);
+      if (!userId) return json(res, 401, { message: "برای مشاهده مدارک وارد حساب شوید." });
+      if (req.method === "GET" && route === "/api/v1/me/documents") {
+        const q = await pool.query(
+          "SELECT id,kind,status,created_on AS \"createdOn\",review_note AS \"reviewNote\",fields::text AS \"fieldsJson\",ocr_text AS \"ocrText\",file_name AS \"fileName\" FROM customer_documents WHERE user_id=$1 ORDER BY created_on DESC",
+          [userId]
+        );
+        return json(res, 200, { data: q.rows });
+      }
+      if (req.method === "POST" && route === "/api/v1/me/documents") {
+        const { fields, file } = await multipartBody(req);
+        const kind = String(fields.kind || "").trim();
+        if (!["کارت ملی","شناسنامه","فیش حقوقی","سایر"].includes(kind)) return json(res, 400, { message: "نوع مدرک معتبر نیست." });
+        if (!file || !file.data.length) return json(res, 400, { message: "فایل مدرک انتخاب نشده است." });
+        if (file.data.length > 6_000_000) return json(res, 413, { message: "حجم عکس حداکثر ۶ مگابایت است." });
+        if (!["image/jpeg","image/png","image/webp"].includes(file.mime)) return json(res, 415, { message: "فقط تصویر JPG، PNG یا WEBP پذیرفته می‌شود." });
+        const safeName = String(file.name || "document").replace(/[\\/\\r\\n\0]/g,"_").slice(0,255) || "document";
+        const q = await pool.query(
+          "INSERT INTO customer_documents(user_id,kind,file_name,mime_type,file_data,fields) VALUES($1,$2,$3,$4,$5,$6::jsonb) RETURNING id",
+          [userId,kind,safeName,file.mime,file.data,JSON.stringify({fields:{fullName:"",nationalCode:""}})]
+        );
+        await audit(req, "documents.uploaded", userId, { documentId:q.rows[0].id, kind, size:file.data.length });
+        return json(res, 201, { ok:true, ocr:false, id:q.rows[0].id });
+      }
+      const fileMatch = route.match(/^\/api\/v1\/me\/documents\/([0-9a-f-]+)\/file$/i);
+      if (req.method === "GET" && fileMatch) {
+        const q = await pool.query("SELECT mime_type,file_data FROM customer_documents WHERE id=$1 AND user_id=$2", [fileMatch[1],userId]);
+        if (!q.rowCount) return json(res, 404, { message: "فایل مدرک پیدا نشد." });
+        res.writeHead(200, { "Content-Type":q.rows[0].mime_type, "Cache-Control":"no-store", "X-Content-Type-Options":"nosniff" });
+        return res.end(q.rows[0].file_data);
+      }
+      const fieldsMatch = route.match(/^\/api\/v1\/me\/documents\/([0-9a-f-]+)\/fields$/i);
+      if (req.method === "PUT" && fieldsMatch) {
+        const b = await body(req);
+        if (!b.fields || typeof b.fields !== "object" || Array.isArray(b.fields)) return json(res, 400, { message: "اطلاعات مدرک معتبر نیست." });
+        const q = await pool.query("UPDATE customer_documents SET fields=$1::jsonb,updated_at=NOW() WHERE id=$2 AND user_id=$3 AND status<>'Verified' RETURNING id", [JSON.stringify(b.fields),fieldsMatch[1],userId]);
+        if (!q.rowCount) return json(res, 404, { message: "مدرک پیدا نشد یا تأیید نهایی شده است." });
+        await audit(req, "documents.fields_updated", userId, { documentId:fieldsMatch[1] });
+        return json(res, 200, { ok:true });
+      }
+      const idMatch = route.match(/^\/api\/v1\/me\/documents\/([0-9a-f-]+)$/i);
+      if (req.method === "DELETE" && idMatch) {
+        const q = await pool.query("DELETE FROM customer_documents WHERE id=$1 AND user_id=$2 AND status='Pending' RETURNING id", [idMatch[1],userId]);
+        if (!q.rowCount) return json(res, 404, { message: "مدرک پیدا نشد یا دیگر قابل حذف نیست." });
+        await audit(req, "documents.deleted", userId, { documentId:idMatch[1] });
+        return json(res, 200, { ok:true });
+      }
+      return json(res, 404, { message: "مسیر مدارک پیدا نشد." });
+    }
+    if (route.startsWith("/api/v1/me/contracts")) {
+      const userId = authenticatedUserId(req);
+      if (!userId) return json(res, 401, { message: "برای مشاهده قراردادها وارد حساب شوید." });
+      if (req.method === "GET" && route === "/api/v1/me/contracts") {
+        const q = await pool.query("SELECT id,title,number,status,expires_at AS \"expiresAt\",created_on AS \"createdOn\" FROM customer_contracts WHERE user_id=$1 ORDER BY created_on DESC", [userId]);
+        return json(res, 200, { data:q.rows });
+      }
+      const htmlMatch = route.match(/^\/api\/v1\/me\/contracts\/([0-9a-f-]+)\/html$/i);
+      if (req.method === "GET" && htmlMatch) {
+        const q = await pool.query("SELECT body_html FROM customer_contracts WHERE id=$1 AND user_id=$2", [htmlMatch[1],userId]);
+        if (!q.rowCount) return json(res, 404, { message: "قرارداد پیدا نشد." });
+        res.writeHead(200, { "Content-Type":"text/html; charset=utf-8", "Cache-Control":"no-store", "Content-Security-Policy":"default-src 'none'; style-src 'unsafe-inline'; img-src data:" });
+        return res.end(q.rows[0].body_html);
+      }
+      const contractMatch = route.match(/^\/api\/v1\/me\/contracts\/([0-9a-f-]+)\/(sign|reject)$/i);
+      if (contractMatch && req.method === "POST") {
+        const action = contractMatch[2].toLowerCase();
+        const b = await body(req);
+        const status = action === "sign" ? "Signed" : "Rejected";
+        const note = action === "reject" ? String(b.note || "").trim().slice(0,2000) : null;
+        const q = await pool.query(
+          "UPDATE customer_contracts SET status=$1,signed_at=CASE WHEN $1='Signed' THEN NOW() ELSE signed_at END,rejected_at=CASE WHEN $1='Rejected' THEN NOW() ELSE rejected_at END,rejection_note=$2,updated_at=NOW() WHERE id=$3 AND user_id=$4 AND status IN ('Presented','AwaitingSignature') AND (expires_at IS NULL OR expires_at>NOW()) RETURNING id",
+          [status,note,contractMatch[1],userId]
+        );
+        if (!q.rowCount) return json(res, 404, { message: "قرارداد پیدا نشد یا دیگر قابل امضا نیست." });
+        await audit(req, action === "sign" ? "contracts.signed" : "contracts.rejected", userId, { contractId:contractMatch[1] });
+        return json(res, 200, { ok:true });
+      }
+      return json(res, 404, { message: "مسیر قراردادها پیدا نشد." });
+    }
+    if (req.method === "POST" && route === "/api/v1/security/password-reset/request") {
+      const b = await body(req); const phone = String(b.phone || ""); const ip = clientIp(req) || "unknown";
+      if (limited("reset:" + ip)) return json(res, 429, { message: "تلاش‌های زیاد؛ کمی بعد دوباره امتحان کنید." });
+      if (!phoneOk(phone)) return json(res, 400, { message: "شماره موبایل معتبر نیست." });
+      if (!await consumeCaptcha(b.captchaId, b.captchaAnswer)) return json(res, 400, { message: "کد امنیتی نامعتبر یا منقضی شده است." });
+      if (OTP_PEPPER.length < 32) return json(res, 503, { message: "تنظیم امنیتی OTP موجود نیست." });
+      const user = await pool.query("SELECT id FROM users WHERE phone=$1 AND is_active=TRUE LIMIT 1", [phone]);
+      if (!user.rowCount) {
+        await audit(req, "auth.password_reset.requested_unknown");
+        resetLimit("reset:" + ip);
+        return json(res, 200, { ok: true, message: "اگر شماره به حساب فعال متصل باشد، کد بازیابی ارسال می‌شود.", expiresIn: 120, resendIn: 60 });
+      }
+      const previous = await pool.query("SELECT resend_at FROM otp_challenges WHERE phone=$1 AND purpose='password_reset' AND consumed_at IS NULL ORDER BY created_at DESC LIMIT 1", [phone]);
+      if (previous.rowCount && new Date(previous.rows[0].resend_at).getTime() > Date.now()) {
+        return json(res, 429, { message: "برای ارسال مجدد کمی صبر کنید.", resendIn: Math.ceil((new Date(previous.rows[0].resend_at).getTime()-Date.now())/1000) });
+      }
+      const code = String(crypto.randomInt(100000,1000000)); const id = crypto.randomUUID();
+      await sendOtp(phone, code);
+      await pool.query("INSERT INTO otp_challenges(id,phone,purpose,code_hash,expires_at,resend_at) VALUES($1,$2,'password_reset',$3,NOW()+INTERVAL '2 minutes',NOW()+INTERVAL '60 seconds')", [id,phone,hash(code,OTP_PEPPER)]);
+      await audit(req, "auth.password_reset.code_sent", user.rows[0].id);
+      resetLimit("reset:" + ip);
+      return json(res, 200, { ok:true, message:"کد بازیابی ارسال شد.", expiresIn:120, resendIn:60 });
+    }
+    if (req.method === "POST" && route === "/api/v1/security/password-reset/confirm") {
+      const b = await body(req); const phone = String(b.phone || ""); const code = String(b.code || ""); const password = String(b.password || "");
+      if (!phoneOk(phone) || !/^\d{6}$/.test(code)) return json(res, 400, { message: "شماره یا کد بازیابی معتبر نیست." });
+      if (password.length < 10 || password.length > 128) return json(res, 400, { message: "رمز جدید باید بین ۱۰ تا ۱۲۸ نویسه باشد." });
+      if (OTP_PEPPER.length < 32) return json(res, 503, { message: "تنظیم امنیتی OTP موجود نیست." });
+      const result = await pool.query("SELECT * FROM otp_challenges WHERE phone=$1 AND purpose='password_reset' AND consumed_at IS NULL AND expires_at>NOW() ORDER BY created_at DESC LIMIT 1", [phone]);
+      if (!result.rowCount) return json(res, 400, { message: "کد منقضی شده یا وجود ندارد." });
+      const challenge = result.rows[0];
+      if (challenge.attempts >= 5) return json(res, 429, { message: "تعداد تلاش مجاز تمام شده است." });
+      if (hash(code,OTP_PEPPER) !== challenge.code_hash) {
+        await pool.query("UPDATE otp_challenges SET attempts=attempts+1 WHERE id=$1", [challenge.id]);
+        return json(res, 400, { message: "کد بازیابی نادرست است." });
+      }
+      const user = await pool.query("SELECT id FROM users WHERE phone=$1 AND is_active=TRUE LIMIT 1", [phone]);
+      if (!user.rowCount) return json(res, 400, { message: "بازیابی برای این حساب ممکن نیست." });
+      const passwordHash = await bcrypt.hash(password,12);
+      await pool.query("BEGIN");
+      try {
+        await pool.query("UPDATE users SET password_hash=$1,updated_at=NOW() WHERE id=$2",[passwordHash,user.rows[0].id]);
+        await pool.query("UPDATE otp_challenges SET consumed_at=NOW() WHERE id=$1",[challenge.id]);
+        await audit(req,"auth.password_reset.completed",user.rows[0].id);
+        await pool.query("COMMIT");
+      } catch(e) { await pool.query("ROLLBACK"); throw e; }
+      return json(res,200,{ok:true,message:"رمز عبور تغییر کرد. اکنون وارد شوید."});
+    }
+    if (req.method === "GET" && route === "/api/v1/security/captcha") {
+      if (CAPTCHA_PEPPER.length < 32) return json(res, 503, { message: "تنظیم امنیتی کپچا موجود نیست." });
+      const value = String(crypto.randomInt(10000, 100000)); const id = crypto.randomUUID();
+      await pool.query("INSERT INTO captcha_challenges(id,answer_hash,expires_at) VALUES($1,$2,NOW()+INTERVAL '5 minutes')", [id, hash(value, CAPTCHA_PEPPER)]);
+      return json(res, 200, { id, image: "data:image/svg+xml;base64," + Buffer.from(captchaSvg(value)).toString("base64") });
+    }
+    if (req.method === "POST" && route === "/api/v1/security/login") {
+      const b = await body(req); const ip = clientIp(req) || "unknown";
+      if (limited("login:" + ip)) return json(res, 429, { message: "تلاش‌های ناموفق زیاد بود. کمی بعد دوباره امتحان کنید." });
+      if (!await consumeCaptcha(b.captchaId, b.captchaAnswer)) return json(res, 400, { message: "کد امنیتی نامعتبر یا منقضی شده است." });
+      const username = String(b.username || "").trim().slice(0, 80);
+      const password = String(b.password || "");
+      // Prefer the exact account name or phone. The legacy "admin" alias is only a fallback,
+      // otherwise it can accidentally select the bootstrap account instead of the real migrated admin.
+      let result = await pool.query(
+        "SELECT id,phone,full_name,username,password_hash,role,is_active FROM users WHERE phone=$1 OR lower(username)=lower($1) ORDER BY CASE WHEN lower(username)=lower($1) THEN 0 ELSE 1 END LIMIT 1",
+        [username]
+      );
+      if (!result.rowCount && username.toLowerCase() === "admin") {
+        result = await pool.query("SELECT id,phone,full_name,username,password_hash,role,is_active FROM users WHERE lower(username)='digibail-admin' LIMIT 1");
+      }
+      if (!result.rowCount || !result.rows[0].is_active) {
+        await audit(req, "auth.login.failed"); return json(res, 401, { message: "نام کاربری یا رمز عبور نادرست است." });
+      }
+      const u = result.rows[0];
+      let passwordValid = await verifyPassword(password, u.password_hash);
+      let verifiedLegacyHash = null;
+      if (!passwordValid) {
+        // If a legacy identity collided with an existing modern username, verify against
+        // the preserved ASP.NET Identity hash and upgrade only after a successful login.
+        const legacy = await pool.query(
+          "SELECT payload->>'PasswordHash' AS password_hash FROM legacy_source_data WHERE source_table LIKE '%AspNetUsers' AND (lower(COALESCE(payload->>'UserName',payload->>'username',''))=lower($1) OR COALESCE(payload->>'Mobile',payload->>'Phone',payload->>'mobile',payload->>'phone','')=$1) ORDER BY imported_at DESC LIMIT 1",
+          [username]
+        );
+        if (legacy.rowCount && legacy.rows[0].password_hash) {
+          verifiedLegacyHash = String(legacy.rows[0].password_hash);
+          passwordValid = await verifyPassword(password, "aspnet:" + verifiedLegacyHash);
+        }
+      }
+      if (!passwordValid) {
+        await audit(req, "auth.login.failed"); return json(res, 401, { message: "نام کاربری یا رمز عبور نادرست است." });
+      }
+      resetLimit("login:" + ip);
+      if (String(u.password_hash).startsWith("aspnet:") || verifiedLegacyHash) {
+        const upgraded = await bcrypt.hash(password, 12);
+        await pool.query("UPDATE users SET password_hash=$1,updated_at=NOW() WHERE id=$2", [upgraded, u.id]);
+      }
+      await audit(req, "auth.login.success", u.id);
+      const token = tokenFor(u);
+      return authJson(res, 200, token, { accessToken: token, user: { id: u.id, phone: u.phone, fullName: u.full_name, role: u.role } });
+    }
+    if (req.method === "POST" && route === "/api/v1/security/otp/request") {
+      const b = await body(req); const phone = String(b.phone || ""); const purpose = b.purpose === "register" ? "register" : "login";
+      if (!phoneOk(phone)) return json(res, 400, { message: "شماره موبایل معتبر نیست." });
+      if (!await consumeCaptcha(b.captchaId, b.captchaAnswer)) return json(res, 400, { message: "کد امنیتی نامعتبر یا منقضی شده است." });
+      const exists = await pool.query("SELECT id FROM users WHERE phone=$1", [phone]);
+      if (purpose === "register" && exists.rowCount) return json(res, 409, { message: "این شماره قبلاً ثبت شده است." });
+      if (purpose === "login" && !exists.rowCount) return json(res, 404, { message: "حسابی با این شماره پیدا نشد." });
+      const previous = await pool.query("SELECT resend_at FROM otp_challenges WHERE phone=$1 AND purpose=$2 AND consumed_at IS NULL ORDER BY created_at DESC LIMIT 1", [phone, purpose]);
+      if (previous.rowCount && new Date(previous.rows[0].resend_at).getTime() > Date.now()) {
+        const seconds = Math.ceil((new Date(previous.rows[0].resend_at).getTime() - Date.now()) / 1000);
+        return json(res, 429, { message: "برای ارسال مجدد کمی صبر کنید.", expiresIn: 120, resendIn: seconds });
+      }
+      if (OTP_PEPPER.length < 32) return json(res, 503, { message: "تنظیم امنیتی OTP موجود نیست." });
+      const code = String(crypto.randomInt(100000, 1000000)); const id = crypto.randomUUID();
+      await sendOtp(phone, code);
+      await pool.query("INSERT INTO otp_challenges(id,phone,purpose,code_hash,expires_at,resend_at) VALUES($1,$2,$3,$4,NOW()+INTERVAL '2 minutes',NOW()+INTERVAL '60 seconds')", [id, phone, purpose, hash(code, OTP_PEPPER)]);
+      await audit(req, "auth.otp.requested", exists.rows[0]?.id || null, { purpose });
+      return json(res, 200, { ok: true, message: "کد ارسال شد", expiresIn: 120, resendIn: 60 });
+    }
+    if (req.method === "GET" && route === "/api/v1/security/otp/status") {
+      const phone = String(url.searchParams.get("phone") || "");
+      const result = await pool.query("SELECT GREATEST(0,EXTRACT(EPOCH FROM (expires_at-NOW())))::int AS expires_in,GREATEST(0,EXTRACT(EPOCH FROM (resend_at-NOW())))::int AS resend_in FROM otp_challenges WHERE phone=$1 AND consumed_at IS NULL ORDER BY created_at DESC LIMIT 1", [phone]);
+      return json(res, 200, { expiresIn: result.rows[0]?.expires_in || 0, resendIn: result.rows[0]?.resend_in || 0 });
+    }
+    if (req.method === "POST" && route === "/api/v1/security/otp/verify") {
+      const b = await body(req); const phone = String(b.phone || ""); const purpose = b.purpose === "register" ? "register" : "login";
+      const result = await pool.query("SELECT * FROM otp_challenges WHERE phone=$1 AND purpose=$2 AND consumed_at IS NULL AND expires_at>NOW() ORDER BY created_at DESC LIMIT 1", [phone, purpose]);
+      if (!result.rowCount) return json(res, 400, { message: "کد منقضی شده یا وجود ندارد." });
+      const challenge = result.rows[0];
+      if (challenge.attempts >= 5) return json(res, 429, { message: "تعداد تلاش مجاز تمام شده است." });
+      if (OTP_PEPPER.length < 32 || hash(String(b.code || ""), OTP_PEPPER) !== challenge.code_hash) {
+        await pool.query("UPDATE otp_challenges SET attempts=attempts+1 WHERE id=$1", [challenge.id]);
+        return json(res, 400, { message: "کد تأیید نادرست است." });
+      }
+      await pool.query("UPDATE otp_challenges SET consumed_at=NOW() WHERE id=$1", [challenge.id]);
+      if (purpose === "register") {
+        if (JWT_SECRET.length < 32) return json(res, 503, { message: "تنظیم امنیتی توکن موجود نیست." });
+        return json(res, 200, { ticket: jwt.sign({ purpose: "register", phone }, JWT_SECRET, { expiresIn: "10m", issuer: "digibail" }) });
+      }
+      const users = await pool.query("SELECT id,phone,full_name,role,is_active FROM users WHERE phone=$1", [phone]);
+      if (!users.rowCount || !users.rows[0].is_active) return json(res, 404, { message: "حسابی با این شماره نیست." });
+      const u = users.rows[0]; await audit(req, "auth.otp.login.success", u.id);
+      const token = tokenFor(u);
+      return authJson(res, 200, token, { accessToken: token, user: { id: u.id, phone: u.phone, fullName: u.full_name, role: u.role } });
+    }
+    if (req.method === "POST" && route === "/api/v1/security/register") {
+      const b = await body(req);
+      if (JWT_SECRET.length < 32) return json(res, 503, { message: "تنظیم امنیتی توکن موجود نیست." });
+      let ticket;
+      try { ticket = jwt.verify(String(b.ticket || ""), JWT_SECRET, { issuer: "digibail" }); }
+      catch { return json(res, 400, { message: "تأیید شماره معتبر نیست؛ دوباره شماره را تأیید کنید." }); }
+      if (ticket.purpose !== "register" || !phoneOk(ticket.phone)) return json(res, 400, { message: "مجوز ثبت‌نام معتبر نیست." });
+      if (!await consumeCaptcha(b.captchaId, b.captchaAnswer)) return json(res, 400, { message: "کد امنیتی نامعتبر یا منقضی شده است." });
+      const fullName = String(b.fullName || "").trim().replace(/\s+/g, " "); const nationalCode = String(b.nationalCode || "");
+      const password = String(b.password || ""); const email = b.email ? String(b.email).trim().slice(0, 254) : null;
+      if (fullName.length < 5 || fullName.length > 160) return json(res, 400, { message: "نام و نام خانوادگی را کامل وارد کنید." });
+      if (!nationalCodeOk(nationalCode)) return json(res, 400, { message: "کد ملی معتبر نیست." });
+      if (password.length < 10 || password.length > 128) return json(res, 400, { message: "رمز عبور باید حداقل ۱۰ نویسه باشد." });
+      const passwordHash = await bcrypt.hash(password, 12);
+      try {
+        const created = await pool.query("INSERT INTO users(phone,full_name,national_code,email,password_hash) VALUES($1,$2,$3,$4,$5) RETURNING id,phone,full_name,role", [ticket.phone, fullName, nationalCode, email, passwordHash]);
+        const u = created.rows[0]; await audit(req, "auth.register.success", u.id);
+        const token = tokenFor(u);
+        return authJson(res, 201, token, { accessToken: token, user: { id: u.id, phone: u.phone, fullName: u.full_name, role: u.role } });
+      } catch (error) {
+        if (error.code === "23505") return json(res, 409, { message: "شماره موبایل یا کد ملی قبلاً ثبت شده است." });
+        throw error;
+      }
+    }
+    if (req.method === "POST" && route === "/api/v1/security/register/ocr") return json(res, 501, { message: "سرویس OCR تا زمان اتصال ارائه‌دهنده و تنظیم کلید محرمانه فعال نیست." });
+    if (route.startsWith("/api/")) return json(res, 404, { message: "مسیر API پیدا نشد." });
+    return false;
+  } catch (error) {
+    const status = error.status || 500;
+    if (status >= 500) console.error("api_error", { route, status, code: error.code || "internal_error" });
+    return json(res, status, { message: status === 500 ? "خطای داخلی سرور." : error.message, code: error.code || undefined });
+  }
+}
+export async function closePool() { await pool.end(); }
+,'.UserLoanRequests') AND lr.payload->>'AgentId'=COALESCE(legacy_source_data.payload->>'Id',legacy_source_data.legacy_id)) AS loan_requests_count,payload AS raw_payload"+base+filter+" ORDER BY COALESCE(NULLIF(payload->>'CreatedAt',''),NULLIF(payload->>'RegisterDate',''),NULLIF(payload->>'CreatedOn','')) DESC NULLS LAST,legacy_id DESC LIMIT $"+(params.length+1)+" OFFSET $"+(params.length+2),[...params,pageSize,(page-1)*pageSize])
         ]);
         const mapped=rows.rows.map(r=>({...r,is_active:r.active_raw==null?null:['true','1','yes','active','فعال'].includes(String(r.active_raw).toLowerCase()),commission_percent:r.commission_percent==null?null:Number(r.commission_percent),customer_count:r.customer_count==null?null:Number(r.customer_count),subagents_count:r.subagents_count==null?null:Number(r.subagents_count),loan_requests_count:null}));
         const customerTotal=mapped.reduce((n,r)=>n+(Number.isFinite(r.customer_count)?r.customer_count:0),0);
