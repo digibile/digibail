@@ -377,6 +377,22 @@ export async function handleApi(req, res, url) {
         if (!candidates.length) return json(res,502,{message:"مدل‌های انتخاب‌شده پاسخ قابل استفاده ندادند؛ کلید، اعتبار حساب و نام مدل را بررسی کنید."});
         return json(res,200,{candidates:candidates,compared:selected.length>1});
       }
+      if (req.method === "POST" && route === "/api/v1/admin/ai/story/audio") {
+        const b = await body(req);
+        if (!aiRateLimit("audio", 5)) return json(res,429,{message:"برای جلوگیری از هزینه ناخواسته، حداکثر ۵ صدای تبلیغاتی در هر ۱۰ دقیقه مجاز است."});
+        const key = process.env.OPENAI_API_KEY || "";
+        if (!key) return json(res,503,{message:"تولید گفتار نیازمند OPENAI_API_KEY در محیط امن سرور است."});
+        const input = String(b.text || "").trim().slice(0,1800);
+        if (input.length < 8) return json(res,400,{message:"متن گویندگی کوتاه یا خالی است."});
+        const voice = ["alloy","ash","coral","echo","fable","onyx","nova","sage","shimmer","marin","cedar"].includes(String(b.voice||"").toLowerCase()) ? String(b.voice).toLowerCase() : "marin";
+        try {
+          const r = await fetch("https://api.openai.com/v1/audio/speech", {method:"POST",signal:AbortSignal.timeout(90000),headers:{"Authorization":"Bearer "+key,"Content-Type":"application/json"},body:JSON.stringify({model:process.env.OPENAI_TTS_MODEL||"gpt-4o-mini-tts",voice,input,instructions:"با فارسی روان و طبیعی، لحن تبلیغاتی حرفه‌ای، مطمئن و گرم صحبت کن. سرعت متوسط، تلفظ واضح و بدون اغراق. فقط متن داده‌شده را بخوان.",response_format:"mp3"})});
+          if (!r.ok) return json(res,502,{message:"سرویس گویندگی پاسخ موفق نداد ("+r.status+")."});
+          const bytes=Buffer.from(await r.arrayBuffer());
+          if(!bytes.length)return json(res,502,{message:"سرویس گویندگی فایل صوتی خالی برگرداند."});
+          return json(res,200,{audioBase64:bytes.toString("base64"),mimeType:"audio/mpeg",voice});
+        } catch(e) { return json(res,502,{message:e?.name==="TimeoutError"?"زمان تولید گویندگی تمام شد؛ دوباره تلاش کنید.":"ارتباط با سرویس گویندگی برقرار نشد."}); }
+      }
       if (req.method === "POST" && route === "/api/v1/admin/ai/story/image") {
         const b = await body(req);
         if (!aiRateLimit("image",4)) return json(res,429,{message:"برای جلوگیری از هزینه‌ی ناخواسته، ۴ تصویر در هر ۱۰ دقیقه مجاز است."});
