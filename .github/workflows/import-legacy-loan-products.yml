@@ -14,7 +14,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: digibail-legacy-loan-definition-import
+  group: digibail-legacy-loan-definition-import-v3
   cancel-in-progress: false
 
 jobs:
