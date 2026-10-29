@@ -85,6 +85,11 @@ jobs:
             const list=(await listResponse.json()).data;
             if(Number(list.total)<20000||list.rows.length!==25)throw new Error("request_list_count_or_page_size_mismatch");
             if(list.rows.some(r=>!r.status||/^[0-9a-f-]{36}$/i.test(r.status)))throw new Error("legacy_status_labels_not_mapped");
+            const detailResponse=await fetch(base+"/api/v1/admin/loan-requests/"+list.rows[0].id,{headers});
+            if(!detailResponse.ok)throw new Error("request_detail_http_"+detailResponse.status);
+            const detail=(await detailResponse.json()).data;
+            if(Number(detail.id)!==Number(list.rows[0].id)||!Array.isArray(detail.comments)||!Array.isArray(detail.history)||!String(detail.registrar||"").trim())throw new Error("request_detail_comments_history_or_registrar_missing");
+            console.log("REQUEST_DETAIL=PASS COMMENTS_HISTORY=PASS REGISTRAR=PASS");
             const status=list.statuses.find(s=>s.status);
             if(status){
               const p=new URLSearchParams({page:"1",pageSize:"25",status:status.status});
