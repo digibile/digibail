@@ -621,7 +621,7 @@ export async function handleApi(req, res, url) {
       }
       if (req.method === "GET" && route === "/api/v1/admin/loan-requests") {
         const page = Math.min(100000, Math.max(1, Number.parseInt(url.searchParams.get("page") || "1", 10) || 1));
-        const pageSize = Math.min(100, Math.max(10, Number.parseInt(url.searchParams.get("pageSize") || "25", 10) || 25));
+        const pageSize = Math.min(250, Math.max(10, Number.parseInt(url.searchParams.get("pageSize") || "25", 10) || 25));
         const search = String(url.searchParams.get("q") || "").trim().slice(0,120);
         const status = String(url.searchParams.get("status") || "").trim().slice(0,120);
         const from = String(url.searchParams.get("from") || "").trim();
