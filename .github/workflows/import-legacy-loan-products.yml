@@ -15,7 +15,7 @@ permissions:
 
 concurrency:
   group: digibail-legacy-loan-definition-import-v3
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   import:
