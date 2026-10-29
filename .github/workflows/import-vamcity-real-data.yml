@@ -7,6 +7,7 @@ on:
       - .github/workflows/import-vamcity-real-data.yml
       - scripts/import-legacy-loan-products.mjs
       - scripts/backfill-legacy-customers.mjs
+      - scripts/import-vamcity-real-data.mjs
   workflow_dispatch:
 
 permissions:
@@ -36,7 +37,7 @@ jobs:
             if sudo -n docker info >/dev/null 2>&1; then D='sudo -n docker'; elif docker info >/dev/null 2>&1; then D='docker'; else echo "BLOCKED: Docker unavailable"; exit 20; fi
             FOUND=0
             for n in $(seq 1 90); do
-              if [ -s "$ROOT/scripts/backfill-legacy-customers.mjs" ] && grep -q "BUSINESS_CUSTOMERS_BACKFILL_ROWS" "$ROOT/scripts/backfill-legacy-customers.mjs" && [ -s "$ROOT/scripts/import-vamcity-real-data.mjs" ] && grep -q "sensitive command details suppressed" "$ROOT/scripts/import-vamcity-real-data.mjs" && grep -q "Isolate the heavy migration process from the live web container" "$ROOT/scripts/import-vamcity-real-data.mjs" && grep -q "diagnostic details filtered" "$ROOT/scripts/import-vamcity-real-data.mjs" && grep -q "error?.stdout" "$ROOT/scripts/import-vamcity-real-data.mjs" && grep -q "error?.message" "$ROOT/scripts/import-vamcity-real-data.mjs" && grep -q "stdout_bytes" "$ROOT/scripts/import-vamcity-real-data.mjs" && grep -q "offset += 500" "$ROOT/scripts/import-vamcity-real-data.mjs" && [ -s "$ROOT/scripts/migrate-legacy-digibail.js" ]; then FOUND=1; break; fi
+              if [ -s "$ROOT/scripts/backfill-legacy-customers.mjs" ] && grep -q "BUSINESS_CUSTOMERS_BACKFILL_ROWS" "$ROOT/scripts/backfill-legacy-customers.mjs" && [ -s "$ROOT/scripts/import-vamcity-real-data.mjs" ] && grep -q "sensitive command details suppressed" "$ROOT/scripts/import-vamcity-real-data.mjs" && grep -q "Isolate the heavy migration process from the live web container" "$ROOT/scripts/import-vamcity-real-data.mjs" && grep -q "diagnostic details filtered" "$ROOT/scripts/import-vamcity-real-data.mjs" && grep -q "error?.stdout" "$ROOT/scripts/import-vamcity-real-data.mjs" && grep -q "error?.message" "$ROOT/scripts/import-vamcity-real-data.mjs" && grep -q "stdout_bytes" "$ROOT/scripts/import-vamcity-real-data.mjs" && grep -q "offset += 500" "$ROOT/scripts/import-vamcity-real-data.mjs" && grep -q "SKIP_ALREADY_IMPORTED_TABLE=1" "$ROOT/scripts/import-vamcity-real-data.mjs" && [ -s "$ROOT/scripts/migrate-legacy-digibail.js" ]; then FOUND=1; break; fi
               sleep 5
             done
             [ "$FOUND" -eq 1 ] || { echo "BLOCKED: importer files not deployed"; exit 21; }
@@ -56,10 +57,29 @@ jobs:
             mkdir -p "$JOB_DIR"
             chmod 700 "$JOB_DIR"
             if [ -f "$JOB_DIR/vamcity-import.pid" ] && kill -0 "$(cat "$JOB_DIR/vamcity-import.pid")" 2>/dev/null; then
-              echo "IMPORT_ALREADY_RUNNING pid=$(cat "$JOB_DIR/vamcity-import.pid")"
-              exit 0
+              OLD_PID="$(cat "$JOB_DIR/vamcity-import.pid")"
+              if [ -f "$JOB_DIR/vamcity-import.status" ] && [ "$(cat "$JOB_DIR/vamcity-import.status")" = "0" ]; then
+                echo "PREVIOUS_IMPORT_ALREADY_FINISHED=1"
+              else
+                echo "STOPPING_SLOW_IDEMPOTENT_REIMPORT pid=$OLD_PID; existing 818k+ legacy rows are preserved"
+                kill_tree() {
+                  local parent="$1" child
+                  for child in $(ps -o pid= --ppid "$parent" 2>/dev/null || true); do kill_tree "$child"; done
+                  kill -TERM "$parent" 2>/dev/null || true
+                }
+                kill_tree "$OLD_PID"
+                for n in $(seq 1 20); do
+                  if ! kill -0 "$OLD_PID" 2>/dev/null; then break; fi
+                  sleep 1
+                done
+                if kill -0 "$OLD_PID" 2>/dev/null; then kill -KILL "$OLD_PID" 2>/dev/null || true; fi
+              fi
             fi
-            rm -f "$JOB_DIR/vamcity-import.status"
+            if [ -s "$JOB_DIR/vamcity-import.log" ]; then
+              cp "$JOB_DIR/vamcity-import.log" "$JOB_DIR/vamcity-import.previous-$(date +%Y%m%d%H%M%S).log"
+              chmod 600 "$JOB_DIR"/vamcity-import.previous-*.log
+            fi
+            rm -f "$JOB_DIR/vamcity-import.pid" "$JOB_DIR/vamcity-import.status"
             nohup bash -c '
               ROOT="/home/digibail/domains/digebail.ir"
               cd "$ROOT" || exit 30
