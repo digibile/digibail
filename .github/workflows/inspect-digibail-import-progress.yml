@@ -43,6 +43,7 @@ jobs:
             $D compose exec -T db sh -lc 'export PGPASSWORD="$POSTGRES_PASSWORD"; psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1 -At' <<'SQL'
             SELECT 'users='||COUNT(*) FROM users;
             SELECT 'legacy_customers='||COUNT(*) FROM legacy_customers;
+            SELECT 'legacy_customers_named='||COUNT(*) FILTER (WHERE trim(COALESCE(name,''))<>'')||'|empty_name='||COUNT(*) FILTER (WHERE trim(COALESCE(name,''))='')||'|with_mobile='||COUNT(*) FILTER (WHERE trim(COALESCE(mobile,''))<>'') FROM legacy_customers;
             SELECT 'sms_templates='||COUNT(*) FROM sms_templates;
             SELECT 'vamcity_preserved_rows='||COUNT(*) FROM legacy_source_data WHERE source_table LIKE 'vamcityc_%';
             SELECT source_table||'|'||COUNT(*) FROM legacy_source_data WHERE source_table LIKE 'vamcityc_%' GROUP BY source_table ORDER BY source_table;
