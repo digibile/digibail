@@ -141,3 +141,4 @@ jobs:
 # Recheck after the latest Next.js release marker deployment attempt.
 # Verify app stability after latest deployment attempt.
 # Final verification after the customer terminology update was deployed.
+# Check latest progress of the ongoing source-database import.
