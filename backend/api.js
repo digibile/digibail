@@ -322,8 +322,20 @@ export async function handleApi(req, res, url) {
         return json(res,200,{imported,skipped,candidateTables:[sourceTable],message:imported?"تعریف‌های واقعی از جدول قدیمی وارد شدند؛ همه غیرفعال و نیازمند بررسی‌اند و در سایت عمومی نمایش داده نمی‌شوند.":"طرح جدیدی برای انتقال پیدا نشد؛ رکوردهای قبلی دست‌نخورده ماندند."});
       }
       if (req.method === "GET" && route === "/api/v1/admin/loan-products") {
-        const q=await pool.query("SELECT * FROM loan_products ORDER BY sort_order,created_at DESC");
-        return json(res,200,q.rows.map(loanRow));
+        const params = url.searchParams;
+        const limit = Math.min(50, Math.max(10, Number.parseInt(params.get("limit") || "20", 10) || 20));
+        const offset = Math.max(0, Number.parseInt(params.get("offset") || "0", 10) || 0);
+        const search = String(params.get("q") || "").trim().slice(0, 120);
+        const method = String(params.get("method") || "").trim();
+        const review = String(params.get("review") || "").trim();
+        const active = String(params.get("active") || "").trim();
+        const where = "WHERE ($1='' OR name ILIKE '%'||$1||'%' OR title ILIKE '%'||$1||'%' OR slug ILIKE '%'||$1||'%' OR COALESCE(legacy_id::text,'') ILIKE '%'||$1||'%') AND ($2='' OR interest_method=$2) AND ($3='' OR needs_review=($3='review')) AND ($4='' OR is_active=($4='active'))";
+        const [rows, count, summary] = await Promise.all([
+          pool.query("SELECT * FROM loan_products " + where + " ORDER BY sort_order,created_at DESC LIMIT $5 OFFSET $6", [search,method,review,active,limit,offset]),
+          pool.query("SELECT COUNT(*)::int AS total FROM loan_products " + where, [search,method,review,active]),
+          pool.query("SELECT COUNT(*)::int AS total, COUNT(*) FILTER (WHERE is_active)::int AS active, COUNT(*) FILTER (WHERE needs_review)::int AS review, COUNT(*) FILTER (WHERE show_in_list)::int AS listed FROM loan_products")
+        ]);
+        return json(res,200,{data:rows.rows.map(loanRow),total:count.rows[0].total,limit,offset,summary:summary.rows[0]});
       }
       if (req.method === "POST" && route === "/api/v1/admin/loan-products") {
         const b=cleanLoanInput(await body(req));
