@@ -38,7 +38,9 @@ jobs:
             done
             rm -f /tmp/digibail-check-body
             echo "=== IMPORT PROCESS ==="
-            ps -eo pid,etime,pcpu,pmem,args | grep -E '[i]mport-vamcity-real-data|[m]igrate-legacy-digibail' | head -n 30 || true
+            if [ -f "$ROOT/var/migrations/vamcity-import.status" ]; then echo "IMPORT_STATUS=$(cat "$ROOT/var/migrations/vamcity-import.status")"; else echo "IMPORT_STATUS=RUNNING_OR_STATUS_PENDING"; fi
+            if [ -f "$ROOT/var/migrations/vamcity-import.log" ]; then tail -n 100 "$ROOT/var/migrations/vamcity-import.log" | sed -E 's/(password|token|secret|authorization|api[_-]?key)[=: ]+[^ ]+/\1=[REDACTED]/Ig'; else echo "IMPORT_LOG=MISSING"; fi
+            ps -eo pid,etime,pcpu,pmem,args | grep -E '[i]mport-vamcity-real-data|[m]igrate-legacy-digibail|[b]ackfill-legacy-customers' | head -n 30 || true
             echo "=== TARGET POSTGRES COUNTS ==="
             $D compose exec -T db sh -lc 'export PGPASSWORD="$POSTGRES_PASSWORD"; psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1 -At' <<'SQL'
             SELECT 'users='||COUNT(*) FROM users;
