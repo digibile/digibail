@@ -83,3 +83,75 @@ footer{padding:32px clamp(20px,6vw,96px);background:#092d40;color:#e9f4f4;border
 .footer-bottom{display:flex;justify-content:space-between;align-items:center;gap:18px;flex-wrap:wrap;margin-top:34px;padding:22px clamp(20px,5.5vw,88px);border-top:1px solid #ffffff1c;color:#91b2bb;font-size:.76rem}.footer-bottom>div{display:flex;gap:20px;flex-wrap:wrap}.footer-bottom a{color:#c1d9de}
 @media(max-width:1100px){.footer-main{grid-template-columns:repeat(3,minmax(0,1fr));gap:30px}.footer-brand,.footer-licenses{grid-column:span 1}}
 @media(max-width:700px){.footer-main{grid-template-columns:repeat(2,minmax(0,1fr));gap:28px 18px;padding:38px 18px 30px}.footer-brand{grid-column:1/-1}.footer-brand>p{max-width:none}.footer-licenses{grid-column:1/-1}.footer-column h3,.footer-licenses h3{font-size:.92rem}.footer-column a{font-size:.8rem}.footer-disclaimer{margin:0 18px;padding:13px;font-size:.72rem}.footer-bottom{margin-top:24px;padding:18px;align-items:flex-start;flex-direction:column}.license-slots>div{min-height:88px}}
+
+
+/* Premium 2026 refinement: cinematic storefront, responsive hierarchy and tactile cards */
+:root{--ink:#092b40;--ocean:#0b3c52;--teal:#087f8c;--mint:#d8f6a4;--mist:#f2f8fa;--line:#d9e7ec;--muted:#607987}
+html{scroll-behavior:smooth;scroll-padding-top:84px}
+body{background:#f5f9fb;color:var(--ink);font-feature-settings:"ss01" on}
+.top{min-height:78px;padding-inline:clamp(20px,5vw,78px);backdrop-filter:blur(16px);background:#ffffffed;border-bottom:1px solid #dce9ee;box-shadow:0 6px 25px #06263808;z-index:20}
+.brand{font-weight:950;letter-spacing:-1.2px;font-size:1.75rem}
+.top nav a{font-weight:750;transition:color .2s}
+.top nav a:hover{color:#0c9ba2}
+.login{border-radius:12px;padding:12px 18px;background:#0a3a50;color:#fff;box-shadow:0 8px 20px #06263820}
+.hero{position:relative;isolation:isolate;overflow:hidden;min-height:650px;padding:clamp(48px,6vw,88px) clamp(20px,6vw,96px);gap:clamp(25px,4vw,68px);background:radial-gradient(ellipse at 76% 16%,#176d7b 0,transparent 37%),radial-gradient(ellipse at 16% 110%,#0c6471 0,transparent 40%),linear-gradient(118deg,#061f32 0%,#0a344a 54%,#092b40 100%)}
+.hero:before{content:"";position:absolute;inset:0;z-index:-1;opacity:.22;background-image:linear-gradient(#d9f5ff0b 1px,transparent 1px),linear-gradient(90deg,#d9f5ff0b 1px,transparent 1px);background-size:42px 42px;mask-image:linear-gradient(90deg,transparent,#000)}
+.hero-copy{max-width:650px;position:relative;z-index:3}
+.eyebrow{display:inline-flex;align-items:center;gap:9px;color:#087f8c;font-weight:850;letter-spacing:.1px}
+.hero .eyebrow{padding:9px 13px;border:1px solid #d7f4f43d;border-radius:99px;background:#ffffff0b;color:#d8f6a4;font-size:.82rem}
+.hero h1{font-size:clamp(2.8rem,5.1vw,5.1rem);line-height:1.22;letter-spacing:-2.3px;color:#fff;font-weight:950;margin:22px 0}
+.hero h1 em{font-style:normal;color:#d8f6a4;text-shadow:0 8px 36px #b5e96720}
+.hero-copy>p{max-width:560px;font-size:1.06rem;line-height:2.15;color:#c4dce3}
+.hero-actions{display:flex;gap:12px;flex-wrap:wrap;margin-top:28px}
+.primary{background:linear-gradient(135deg,#d8f6a4,#bde977);color:#153e35;border:1px solid #eaffc8;box-shadow:0 12px 28px #b8e66a24;font-weight:900}
+.secondary{background:#fff;color:#123f50;border:1px solid #d7e7eb;font-weight:850}
+.hero .secondary{background:#ffffff0c;color:#fff;border-color:#d8f5f34a}
+.hero .trust{display:flex;flex-wrap:wrap;gap:18px;margin-top:30px;color:#d0e6e9}
+.hero .trust span{display:flex;align-items:center;gap:7px}
+.hero .trust span:before{content:"✓";display:grid;place-items:center;width:20px;height:20px;border-radius:50%;background:#d8f6a4;color:#173f35;font-size:.72rem;font-weight:950}
+.hero-products{min-height:510px}
+.product-orbit{width:min(36vw,470px);height:min(36vw,470px);left:5%;top:0;border-color:#c9f6fa33}
+.hero-product{border-radius:24px;background:linear-gradient(145deg,#fff,#eaf2f4);border:1px solid #ffffffa6;box-shadow:0 28px 65px #00111e70}
+.hero-product img{mix-blend-mode:multiply}
+.hero-product-tv{width:55%;height:195px;left:4%;top:6%}
+.hero-product-phone{width:25%;height:158px;right:2%;top:8%}
+.hero-product-laptop{width:44%;height:158px;right:1%;bottom:13%}
+.hero-product-appliance{width:32%;height:168px;left:6%;bottom:17%}
+.hero-calc-card{left:20%;top:34%;width:min(75%,355px);padding:21px;border-radius:22px;box-shadow:0 35px 80px #00111e88}
+.hero-calc-card>strong{font-size:clamp(1.1rem,2vw,1.55rem);font-weight:950;letter-spacing:-.4px}
+.mini-note{border:1px solid #d6f5f15c;box-shadow:0 18px 38px #00111e55;backdrop-filter:blur(12px)}
+.category-strip{padding-block:62px 70px}
+.category-items>a{min-height:154px;padding:22px;border-radius:20px;box-shadow:0 12px 30px #092b4007}
+.category-icon{width:50px;height:50px;border-radius:16px;background:linear-gradient(145deg,#e5f7f4,#d5f1ee);font-size:1.6rem}
+.plans,.calculator,.plan-details{padding:clamp(48px,6vw,88px) clamp(20px,6vw,96px)}
+.section-head{margin-bottom:28px}
+.section-head h2,.category-heading h2{font-weight:950;letter-spacing:-.7px}
+.calc-badge{border:1px solid #c9e7e6;background:#e9f8f4;color:#08717b;border-radius:99px;padding:10px 15px;font-weight:900}
+.plan-tools input,.plan-tools select{min-height:52px;border-radius:14px;border:1px solid #d6e5ea;background:#fff;box-shadow:0 5px 18px #092b4005}
+.plan-grid{gap:20px}
+.plan-card{padding:26px;border-radius:22px;background:linear-gradient(150deg,#fff 0%,#fbfdfd 100%);box-shadow:0 15px 40px #092b4009}
+.plan-card:before{height:5px}
+.plan-card h3{font-size:1.25rem;font-weight:900;letter-spacing:-.25px}
+.plan-metrics{gap:12px}
+.plan-metrics>div{padding:12px;border-radius:13px;background:#f3f8f9;border:1px solid #e6eff1}
+.plan-metrics b{font-size:.91rem}
+.plan-card-bottom{border-top:1px solid #e7eff1;padding-top:15px;margin-top:16px}
+.plan-select{border-radius:12px;padding:12px 15px}
+.calculator{background:linear-gradient(180deg,#edf6f8,#f8fbfc)}
+.controls,.results{border-radius:22px;box-shadow:0 18px 48px #092b4009}
+.controls{padding:clamp(18px,3vw,30px);background:#fff;border:1px solid #dce9ed}
+.controls label{font-weight:800;color:#244a5b}
+.controls input[type=number],.controls select{min-height:48px}
+.results{padding:clamp(18px,3vw,30px);background:#fff}
+.result-primary{padding:24px;background:radial-gradient(ellipse at 95% 0,#167b86,transparent 65%),linear-gradient(130deg,#072c42,#0c5263)}
+.result-primary strong{font-size:clamp(1.6rem,3vw,2.2rem);font-weight:950}
+.result-row{padding-block:14px}
+.detail-grid{gap:18px}
+.detail-panel{padding:24px;border-radius:20px}
+.legacy-links{background:linear-gradient(135deg,#eaf5f6,#f6fafb)}
+.legacy-link-grid a{border-radius:12px;font-weight:800}
+.site-footer{background:#061f30}
+.footer-main{background:radial-gradient(ellipse at 10% 0%,#155468 0,transparent 36%),linear-gradient(120deg,#061f30,#082f43 65%,#062638)}
+@media(min-width:1450px){.hero{padding-inline:max(96px,calc((100vw - 1320px)/2));min-height:700px}.hero-products{min-height:540px}.hero-copy>p{font-size:1.12rem}}
+@media(max-width:900px){.hero{gap:18px}.hero-copy{max-width:none}.hero-products{min-height:410px}.product-orbit{width:360px;height:360px}.category-items{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:560px){.top{padding:12px 16px;min-height:auto;flex-wrap:wrap}.top nav{order:3;width:100%;overflow-x:auto;white-space:nowrap;padding:8px 0 2px;gap:20px}.login{margin-right:auto;padding:9px 12px;font-size:.78rem}.brand{font-size:1.45rem}.hero{padding:38px 18px 45px;gap:6px}.hero h1{font-size:clamp(2.45rem,11vw,3.15rem);line-height:1.27;letter-spacing:-1.3px;margin:18px 0}.hero-copy>p{font-size:.91rem;line-height:2}.hero-actions>*{flex:1;text-align:center;padding:13px 10px}.hero .trust{gap:9px 13px;font-size:.69rem}.hero-products{min-height:325px}.product-orbit{width:285px;height:285px;left:3%;top:5%}.hero-product-tv{height:118px}.hero-product-phone{height:96px}.hero-product-laptop{height:95px}.hero-product-appliance{height:102px}.hero-calc-card{left:17%;top:34%;width:78%;padding:12px;gap:6px}.hero-calc-card>strong{font-size:.98rem}.mini-note{max-width:65%;font-size:.68rem}.category-items{grid-template-columns:repeat(2,minmax(0,1fr))}.category-items>a{min-height:135px;padding:14px}.plans,.calculator,.plan-details{padding:42px 16px}.plan-card{padding:20px;border-radius:18px}.plan-metrics>div{padding:10px}.detail-panel{padding:18px}.section-head h2{font-size:1.55rem}}
