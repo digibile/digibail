@@ -64,6 +64,17 @@ jobs:
               sleep 10
             done
             [ "$STABLE" -ge 3 ] || { echo "BLOCKED: validated app version did not become healthy and stable"; exit 21; }
+            echo "=== Wait for an already-running controlled backfill ==="
+            for n in $(seq 1 60); do
+              if [ -f "$ROOT/var/migrations/vamcity-import.status" ] && [ "$(cat "$ROOT/var/migrations/vamcity-import.status")" = "0" ]; then
+                HISTORY_COUNT="$($D compose exec -T db sh -lc 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1 -Atc "SELECT COUNT(*) FROM loan_request_status_history WHERE legacy_source_table IS NOT NULL"')"
+                if [ -n "$HISTORY_COUNT" ] && [ "$HISTORY_COUNT" -gt 0 ]; then
+                  echo "LEGACY_BACKFILL_ALREADY_COMPLETE=1 history_rows=$HISTORY_COUNT"
+                  exit 0
+                fi
+              fi
+              sleep 10
+            done
             echo "=== Ensure indexed keyset scans so import never rescans the full legacy table ==="
             $D compose exec -T db sh -lc 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1 -c "CREATE INDEX IF NOT EXISTS legacy_source_data_source_table_legacy_id_idx ON legacy_source_data (source_table, legacy_id)"'
             echo "=== Inspect legacy payload field names only; never print borrower values ==="
