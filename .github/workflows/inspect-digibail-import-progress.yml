@@ -25,6 +25,14 @@ jobs:
             ROOT="/home/digibail/domains/digebail.ir"
             cd "$ROOT"
             if sudo -n docker info >/dev/null 2>&1; then D='sudo -n docker'; else D='docker'; fi
+            echo "=== STOP DUPLICATE IDEMPOTENT BACKFILL WORKERS ==="
+            BACKFILL_PIDS="$(ps -eo pid=,comm=,args= | awk '$2 == "node" && $0 ~ /\/app\/scripts\/backfill-legacy-customers[.]mjs([[:space:]]|$)/ {print $1}')"
+            for pid in $BACKFILL_PIDS; do
+              case "$pid" in ''|*[!0-9]*) continue;; esac
+              echo "STOP_DUPLICATE_BACKFILL_PID=$pid"
+              kill -TERM "$pid" 2>/dev/null || true
+            done
+            sleep 4
             echo "=== MIGRATION STATE ==="
             if [ -f "$ROOT/var/migrations/vamcity-import.status" ]; then echo "IMPORT_STATUS=$(cat "$ROOT/var/migrations/vamcity-import.status")"; else echo "IMPORT_STATUS=RUNNING_OR_STATUS_PENDING"; fi
             if [ -f "$ROOT/var/migrations/vamcity-import.log" ]; then tail -n 35 "$ROOT/var/migrations/vamcity-import.log" | sed -E 's/(password|token|secret|authorization|api[_-]?key)[=: ]+[^ ]+/\1=[REDACTED]/Ig'; else echo "IMPORT_LOG=MISSING"; fi
