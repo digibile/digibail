@@ -51,3 +51,5 @@ jobs:
             done
             rm -f /tmp/digibail-verify-body
             echo "MIGRATION_VERIFICATION_COMPLETE=1"
+
+# Final verification after current full legacy backfill.
