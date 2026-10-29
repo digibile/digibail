@@ -1,4 +1,4 @@
-name: Recover and verify Digibail legacy backfill
+name: Diagnose Digibail production health and migration
 on:
   workflow_dispatch:
   push:
@@ -8,82 +8,41 @@ on:
 permissions:
   contents: read
 jobs:
-  recover:
+  diagnose:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 8
     steps:
-      - name: Stop duplicate workers, restart app cleanly, run one backfill, and verify
+      - name: Read-only production diagnostics
         uses: appleboy/ssh-action@v1.2.2
         with:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
-          command_timeout: 10m
+          command_timeout: 7m
           script: |
-            set -euo pipefail
+            set -eu
             ROOT="/home/digibail/domains/digebail.ir"
             cd "$ROOT"
             if sudo -n docker info >/dev/null 2>&1; then D='sudo -n docker'; else D='docker'; fi
-            echo "=== STOP DUPLICATE ONE-OFF BACKFILL CONTAINERS ==="
-            ONEOFFS="$($D ps -a --format '{{.ID}} {{.Names}}' | awk '$2 ~ /^digebailir-app-run-/ {print $1}')"
-            for cid in $ONEOFFS; do
-              CMD="$($D inspect --format '{{json .Config.Cmd}}' "$cid" 2>/dev/null || true)"
-              if printf '%s' "$CMD" | grep -Eq 'backfill-legacy-customers[.]mjs|import-legacy-loan-products[.]mjs'; then
-                echo "STOP_ONEOFF_CONTAINER=$cid"
-                $D rm -f "$cid" >/dev/null 2>&1 || true
-              fi
-            done
-            echo "=== STOP OLD IMPORT WRAPPERS ==="
-            OLD_WRAPPERS="$(ps -eo pid=,comm=,args= | awk -v self="$$" '$1 != self && $2 == "bash" && ($0 ~ /import-vamcity-real-data[.]mjs/ || $0 ~ /import-legacy-loan-products[.]mjs/) {print $1}')"
-            for pid in $OLD_WRAPPERS; do
-              case "$pid" in ''|*[!0-9]*) continue;; esac
-              echo "STOP_OLD_IMPORT_WRAPPER=$pid"
-              kill -TERM "$pid" 2>/dev/null || true
-            done
-            echo "=== RESTART APP TO CLEAR EXEC WORKERS AND RECOVER HEALTH ==="
-            $D compose stop app || true
-            $D compose up -d app
-            HEALTH=0
-            for n in $(seq 1 36); do
-              if curl -fsS --max-time 5 http://127.0.0.1:1631/healthz >/dev/null 2>&1; then HEALTH=1; break; fi
-              sleep 5
-            done
-            if [ "$HEALTH" -ne 1 ]; then
-              $D compose ps || true
-              $D compose logs --tail=100 app db || true
-              echo "ERROR: app did not recover health after clearing duplicate workers."
-              exit 31
-            fi
-            echo "APP_HEALTH_AFTER_RECOVERY=200"
-            echo "=== RUN ONE IDPOTENT BACKFILL ==="
-            mkdir -p "$ROOT/var/migrations"
-            chmod 700 "$ROOT/var/migrations"
-            $D compose run --rm --no-deps -T app node /app/scripts/backfill-legacy-customers.mjs 2>&1 | tee -a "$ROOT/var/migrations/vamcity-import.log"
-            printf '0\n' > "$ROOT/var/migrations/vamcity-import.status"
-            chmod 600 "$ROOT/var/migrations/vamcity-import.status"
-            echo "IMPORT_STATUS=0"
-            echo "=== VERIFY LOCAL DATABASE TOTALS ==="
+            echo "=== APP AND DATABASE CONTAINERS ==="
+            $D compose ps -a
+            echo "=== HEALTH CHECK ==="
+            curl -sS --max-time 8 -i http://127.0.0.1:1631/healthz || true
+            echo "=== APP LOGS ==="
+            $D compose logs --tail=100 app || true
+            echo "=== IMPORT PROCESS STATUS ==="
+            if [ -f "$ROOT/var/migrations/vamcity-import.status" ]; then echo "IMPORT_STATUS=$(cat "$ROOT/var/migrations/vamcity-import.status")"; else echo "IMPORT_STATUS=STATUS_FILE_MISSING"; fi
+            if [ -f "$ROOT/var/migrations/vamcity-import.log" ]; then tail -n 45 "$ROOT/var/migrations/vamcity-import.log" | sed -E 's/(password|token|secret|authorization|api[_-]?key)[=: ]+[^ ]+/\1=[REDACTED]/Ig'; fi
+            echo "=== ACTIVE IMPORT PROCESSES ==="
+            ps -eo pid,ppid,stat,etime,pcpu,args | grep -E '[i]mport-vamcity-real-data|[i]mport-legacy-loan-products|[b]ackfill-legacy-customers' | head -n 30 || true
+            echo "=== DATABASE COUNTS ==="
             $D compose exec -T db sh -lc 'export PGPASSWORD="$POSTGRES_PASSWORD"; psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1 -At' <<'SQL'
             SELECT 'users='||COUNT(*) FROM users;
             SELECT 'legacy_customers='||COUNT(*) FROM legacy_customers;
-            SELECT 'legacy_customers_named='||COUNT(*) FILTER (WHERE trim(COALESCE(name,''))<>'') FROM legacy_customers;
             SELECT 'loan_products='||COUNT(*) FROM loan_products;
             SELECT 'loan_requests='||COUNT(*) FROM loan_requests;
-            SELECT 'loan_request_status_history_total='||COUNT(*) FROM loan_request_status_history;
-            SELECT 'loan_request_status_history_imported='||COUNT(*) FROM loan_request_status_history WHERE legacy_source_table IS NOT NULL;
-            SELECT 'loan_request_comments='||COUNT(*) FROM loan_request_comments;
-            SELECT 'requests_with_registrar='||COUNT(*) FILTER (WHERE NULLIF(payload->>'CreatedByName','') IS NOT NULL) FROM loan_requests;
+            SELECT 'loan_request_status_history='||COUNT(*) FROM loan_request_status_history;
             SELECT 'legacy_source_data_total='||COUNT(*) FROM legacy_source_data WHERE source_table<>'__legacy_schema__';
-            SELECT 'legacy_source_table_count='||COUNT(DISTINCT source_table) FROM legacy_source_data WHERE source_table<>'__legacy_schema__';
-            SELECT 'agent_loans_main='||COUNT(*) FROM legacy_source_data WHERE source_table ~* '^vamcityc_vamcity_import_[0-9]{8}[.]dbo[.]AgentLoans$';
-            SELECT 'agent_loans_secondary='||COUNT(*) FROM legacy_source_data WHERE source_table ~* '^vamcityc_bluvamdb_import_[0-9]{8}[.]dbo[.]AgentLoans$';
-            SELECT 'request_date_range='||COALESCE(MIN(created_at)::text,'none')||'|'||COALESCE(MAX(created_at)::text,'none') FROM loan_requests;
             SQL
-            echo "=== VERIFY PRODUCTION HEALTH AND PAGES ==="
-            for path in /healthz /loan-requests.html /customers.html /agents.html /loan-definition.html; do
-              code="$(curl -sS -o /tmp/digibail-verify-body -w '%{http_code}' --max-time 10 "http://127.0.0.1:1631$path" || true)"
-              echo "PATH=$path HTTP=$code BYTES=$(wc -c </tmp/digibail-verify-body 2>/dev/null || echo 0)"
-            done
-            rm -f /tmp/digibail-verify-body
-            echo "LEGACY_BACKFILL_AND_HEALTH_VERIFICATION_COMPLETE=1"
+            echo "DIAGNOSTICS_COMPLETE=1"
