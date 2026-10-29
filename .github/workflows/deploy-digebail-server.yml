@@ -272,7 +272,7 @@ jobs:
             APP_BODY="$(curl -fsS --max-time 10 http://127.0.0.1:1631/)"
             printf '%s' "$APP_BODY" | head -c 300
             echo
-            if ! printf '%s' "$APP_BODY" | grep -q 'name="digibail-deploy-version" content="c92a8d54f06b1e73d9a4c2018b65f7a2d3e901bc"'; then
+            if ! printf '%s' "$APP_BODY" | grep -q 'name="digibail-deploy-version" content="digibail-premium-reference-20261029"'; then
               echo "ERROR: running app does not contain the expected release marker; refusing to report success."
               exit 28
             fi
@@ -281,7 +281,7 @@ jobs:
             PUBLIC_BODY="$(curl -fsSL --max-time 20 -H 'Cache-Control: no-cache' -H 'Pragma: no-cache' "https://digebail.ir/?deploycheck=$(date +%s)")"
             printf '%s' "$PUBLIC_BODY" | head -c 500
             echo
-            if printf '%s' "$PUBLIC_BODY" | grep -q 'name="digibail-deploy-version" content="c92a8d54f06b1e73d9a4c2018b65f7a2d3e901bc"'; then
+            if printf '%s' "$PUBLIC_BODY" | grep -q 'name="digibail-deploy-version" content="digibail-premium-reference-20261029"'; then
               echo "PUBLIC_DOMAIN_CONTENT_VERIFIED=EXPECTED_RELEASE"
             else
               echo "ERROR: public HTTPS domain is not serving the expected release marker; check DNS/CDN or virtual host routing."
