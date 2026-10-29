@@ -49,6 +49,8 @@ jobs:
             SELECT 'loan_requests_range='||COALESCE(MIN(created_at)::text,'none')||'|'||COALESCE(MAX(created_at)::text,'none') FROM loan_requests;
             SELECT source_table||'|'||COUNT(*) FROM loan_requests GROUP BY source_table ORDER BY source_table;
             SELECT 'loan_request_status='||COALESCE(NULLIF(status,''),'(blank)')||'|'||COUNT(*) FROM loan_requests GROUP BY status ORDER BY COUNT(*) DESC LIMIT 25;
+            SELECT 'legacy_status_fields='||string_agg(DISTINCT k,', ' ORDER BY k) FROM legacy_source_data s CROSS JOIN LATERAL jsonb_object_keys(s.payload) AS x(k) WHERE source_table='vamcityc_vamcity_import_20261028.dbo.LoanRequestStatuses';
+            SELECT 'legacy_status_sample='||legacy_id||'|'||payload::text FROM legacy_source_data WHERE source_table='vamcityc_vamcity_import_20261028.dbo.LoanRequestStatuses' ORDER BY legacy_id LIMIT 20;
             SQL
             echo "=== REQUESTS PAGE HTTP CHECK ==="
             for path in /loan-requests.html /api/v1/admin/loan-requests; do
