@@ -386,3 +386,9 @@ footer{background:#06365f;color:#edf7ff}footer .brand span{color:#66c5ff}
  .mobile-dock a.dock-main{background:linear-gradient(135deg,#0877e8,#0755b8);color:#fff;box-shadow:0 5px 13px #0877e833}
  .mobile-dock a:active{transform:scale(.96)}
 }
+
+/* Digibail Pay mobile dock icon refinement */
+.mobile-dock a>span{display:grid;place-items:center;width:25px;height:25px}
+.mobile-dock a>span svg{display:block;width:22px;height:22px;stroke:currentColor;fill:none}
+.mobile-dock a.dock-main>span svg{width:23px;height:23px}
+@media(max-width:650px){.mobile-dock{padding:8px 8px;gap:4px;border-radius:18px}.mobile-dock a{min-height:49px;gap:4px}.mobile-dock a>small{font-size:.64rem;letter-spacing:-.1px}.mobile-dock a.dock-main{transform:translateY(-3px);min-height:53px;border-radius:14px}.mobile-dock a.dock-main>span{width:28px;height:28px}.mobile-dock a.dock-main>small{font-size:.65rem}}
