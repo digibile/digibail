@@ -139,3 +139,4 @@ jobs:
 
 # Re-run after deployment and customer/request backfill to verify local records.
 # Recheck after the latest Next.js release marker deployment attempt.
+# Verify app stability after latest deployment attempt.
