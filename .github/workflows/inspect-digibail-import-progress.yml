@@ -96,6 +96,12 @@ jobs:
             const dateResponse=await fetch(base+"/api/v1/admin/loan-requests?"+dateParams,{headers});
             const dateData=(await dateResponse.json()).data;
             if(!dateResponse.ok||!dateData.total||dateData.rows.some(r=>!String(r.created_at||"").startsWith("2023-08-02")))throw new Error("date_filter_failed");
+            const customerResponse=await fetch(base+"/api/v1/admin/legacy-customers-page?page=1&pageSize=25",{headers});
+            if(!customerResponse.ok)throw new Error("customer_list_http_"+customerResponse.status);
+            const customerData=(await customerResponse.json()).data;
+            if(Number(customerData.total)<50000||customerData.rows.length!==25||customerData.rows.some(r=>!String(r.name||"").trim()))throw new Error("customer_list_count_or_names_mismatch");
+            console.log("CUSTOMERS_TOTAL="+customerData.total+" PAGE_ROWS="+customerData.rows.length);
+            console.log("CUSTOMER_NAMES=PASS CUSTOMER_PAGINATION=PASS");
             console.log("REQUESTS_PAGE_AUTH=PASS");
             console.log("REQUESTS_TOTAL="+list.total+" PAGE_ROWS="+list.rows.length);
             console.log("STATUS_FILTER=PASS DATE_FILTER=PASS LEGACY_STATUS_LABELS=PASS");
