@@ -81,6 +81,9 @@ export async function migrate() {
   await pool.query(
     "UPDATE users SET role='superadmin',is_active=TRUE,updated_at=NOW() WHERE lower(username)='admin'"
   );
+  // Index the legacy username expression before reconciling the admin role.
+  // Without this index, every application restart scans the entire 818k-row legacy archive.
+  await pool.query("CREATE INDEX IF NOT EXISTS legacy_source_data_aspnet_username_idx ON legacy_source_data (lower(COALESCE(payload->>'UserName',payload->>'username',''))) WHERE source_table LIKE '%AspNetUsers'");
   // Reconcile a legacy administrator whose modern username was normalized during import.
   // Only promote an identity whose preserved legacy role explicitly includes admin.
   await pool.query(
