@@ -38,10 +38,17 @@ jobs:
               echo "STOP_DUPLICATE_BACKFILL_COMPOSE_PID=$pid"
               kill -TERM "$pid" 2>/dev/null || true
             done
-            sleep 5
-            echo "=== ENSURE NO DUPLICATE BACKFILL NODE PROCESS REMAINS ==="
-            REMAINING="$(ps -eo pid=,comm=,args= | awk -v self="$$" '$1 != self && $2 == "node" && $0 ~ /\/app\/scripts\/backfill-legacy-customers[.]mjs([[:space:]]|$)/ {print $1}')"
-            if [ -n "$REMAINING" ]; then echo "ERROR: duplicate backfill worker still running: $REMAINING"; exit 30; fi
+            sleep 3
+            LEFT="$(ps -eo pid=,stat=,comm=,args= | awk -v self="$$" '$1 != self && $3 == "node" && $0 ~ /\/app\/scripts\/backfill-legacy-customers[.]mjs([[:space:]]|$)/ && $2 !~ /^Z/ {print $1}')"
+            for pid in $LEFT; do
+              case "$pid" in ''|*[!0-9]*) continue;; esac
+              echo "FORCE_STOP_BACKFILL_PID=$pid"
+              kill -KILL "$pid" 2>/dev/null || true
+            done
+            sleep 2
+            echo "=== ENSURE NO LIVE DUPLICATE BACKFILL NODE PROCESS REMAINS ==="
+            REMAINING="$(ps -eo pid=,stat=,comm=,args= | awk -v self="$$" '$1 != self && $3 == "node" && $0 ~ /\/app\/scripts\/backfill-legacy-customers[.]mjs([[:space:]]|$)/ && $2 !~ /^Z/ {print $1}')"
+            if [ -n "$REMAINING" ]; then echo "ERROR: live duplicate backfill worker still running: $REMAINING"; exit 30; fi
             echo "DUPLICATE_BACKFILL_WORKERS=STOPPED"
             echo "=== RUN ONE BACKFILL AGAINST THE INTERNAL DATABASE ==="
             mkdir -p "$ROOT/var/migrations"
