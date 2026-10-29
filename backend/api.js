@@ -333,7 +333,8 @@ export async function handleApi(req, res, url) {
           if((imported+skipped)>0&&(imported+skipped)%100===0)console.log("LEGACY_LOAN_IMPORT_PROGRESS="+(imported+skipped)+" imported="+imported+" skipped="+skipped);
           }
         }
-        return json(res,200,{imported,skipped,candidateTables:[sourceTable],message:imported?"تعریف‌های واقعی از جدول قدیمی وارد شدند؛ همه غیرفعال و نیازمند بررسی‌اند و در سایت عمومی نمایش داده نمی‌شوند.":"طرح جدیدی برای انتقال پیدا نشد؛ رکوردهای قبلی دست‌نخورده ماندند."});
+        const statusSync=await pool.query("UPDATE loan_products lp SET is_active=CASE WHEN lower(COALESCE(src.payload->>'Disable','')) IN ('true','1','yes','y') THEN FALSE WHEN lower(COALESCE(src.payload->>'Disable','')) IN ('false','0','no','n') THEN TRUE ELSE lp.is_active END, show_in_list=CASE WHEN lower(COALESCE(src.payload->>'IncludePlan','')) IN ('true','1','yes','y') THEN TRUE WHEN lower(COALESCE(src.payload->>'IncludePlan','')) IN ('false','0','no','n') THEN FALSE ELSE lp.show_in_list END, updated_at=NOW() FROM legacy_source_data src WHERE lp.legacy_source_table=src.source_table AND lp.legacy_id=src.legacy_id AND src.source_table=$1",[sourceTable]);
+        return json(res,200,{imported,skipped,statusSynced:statusSync.rowCount,candidateTables:[sourceTable],message:imported?"تعریف‌های قدیمی وارد شدند و وضعیت فعال/نمایش از رکورد اصلی بازیابی شد.":"رکوردهای موجود بررسی شدند؛ وضعیت فعال/نمایش از داده قدیمی همگام شد."});
       }
       if (req.method === "GET" && route === "/api/v1/admin/loan-products") {
         const params = url.searchParams;
