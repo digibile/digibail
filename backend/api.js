@@ -17,6 +17,9 @@ export async function migrate() {
   const path = await import("node:path");
   const root = path.dirname(fileURLToPath(import.meta.url));
   await pool.query(await readFile(path.join(root, "db", "001_init.sql"), "utf8"));
+  // Existing production databases may still have the original VARCHAR(400) image column.
+  // Persist generated/optimized image data URLs safely without truncation failures.
+  await pool.query("ALTER TABLE loan_products ALTER COLUMN image_url TYPE TEXT");
   // Provision a password-only initial superadmin without relying on SMS delivery.
   // The password itself is never stored in source; only a salted scrypt verifier is.
   await pool.query(
@@ -51,7 +54,8 @@ export function verifySession(token) {
 }
 async function body(req) {
   let raw = "";
-  for await (const chunk of req) { raw += chunk; if (raw.length > 32768) throw Object.assign(new Error("درخواست بیش از حد بزرگ است."), { status: 413 }); }
+  // Loan products can include a compressed image data URL. Keep a bounded 3 MB JSON limit.
+  for await (const chunk of req) { raw += chunk; if (raw.length > 3_000_000) throw Object.assign(new Error("حجم درخواست بیشتر از ۳ مگابایت است؛ تصویر را کوچک‌تر کنید."), { status: 413 }); }
   try { return raw ? JSON.parse(raw) : {}; } catch { throw Object.assign(new Error("ساختار JSON معتبر نیست."), { status: 400 }); }
 }
 async function multipartBody(req, limit = 6_200_000) {
@@ -246,7 +250,7 @@ export async function handleApi(req, res, url) {
     }
     if (req.method === "GET" && (route === "/api/v1/loan-products" || /^\/api\/v1\/loan-products\/[^/]+$/.test(route))) {
       const slug = route === "/api/v1/loan-products" ? null : decodeURIComponent(route.slice("/api/v1/loan-products/".length));
-      const publicColumns = "slug,name,title,description,badge,min_amount,max_amount,interval_days,tiers,conditions,documents,is_active,sort_order,show_in_list,interest_method,interest_percent,image_url";
+      const publicColumns = "slug,name,title,description,badge,min_amount,max_amount,interval_days,tiers,conditions,documents,is_active,sort_order,show_in_list,interest_method,interest_percent,late_daily_coef,early_daily_coef,image_url,full_description_html,labels,operational_costs,send_reminders";
       const q = slug
         ? await pool.query("SELECT " + publicColumns + " FROM loan_products WHERE slug=$1 AND is_active=TRUE AND show_in_list=TRUE LIMIT 1", [slug])
         : await pool.query("SELECT " + publicColumns + " FROM loan_products WHERE is_active=TRUE AND show_in_list=TRUE ORDER BY sort_order,created_at DESC");
