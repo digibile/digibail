@@ -301,8 +301,10 @@ export async function handleApi(req, res, url) {
         let imported=0,skipped=0;
         let lastLegacyId=null;
         while(true){
-          // Keyset pagination avoids a full table rescan for every legacy row.
-          const q=await pool.query("SELECT source_table,legacy_id,payload FROM legacy_source_data WHERE source_table=$1 AND ($2::text IS NULL OR legacy_id>$2) ORDER BY legacy_id LIMIT 100",[sourceTable,lastLegacyId]);
+          // Process exactly one legacy payload per query. Imported legacy payloads can be large;
+          // keeping even a 100-row batch in Node memory caused the production container to be OOM-killed (exit 137).
+          // Keyset pagination makes this resumable: ON CONFLICT DO NOTHING safely skips rows already imported.
+          const q=await pool.query("SELECT source_table,legacy_id,payload FROM legacy_source_data WHERE source_table=$1 AND ($2::text IS NULL OR legacy_id>$2) ORDER BY legacy_id LIMIT 1",[sourceTable,lastLegacyId]);
           if(!q.rowCount)break;
           for(const row of q.rows){
           lastLegacyId=row.legacy_id;
@@ -328,6 +330,7 @@ export async function handleApi(req, res, url) {
           const conditions={};
           let costs=[];try{const rawCosts=pick(p,["CostsJson","OperationalCostsJson","OperationalCosts"]);const parsed=typeof rawCosts==="string"?JSON.parse(rawCosts):rawCosts;if(Array.isArray(parsed))costs=parsed.map(c=>({title:String(c.title??c.Title??c.name??c.Name??"هزینه").slice(0,100),percent:num(c.percent??c.Percent??c.value??c.Value??c.amount??c.Amount)??0,months:num(c.months??c.Months)??null}))}catch{}const intervalDays=num(pick(p,["IntervalDays","InstallmentIntervalDays","فاصله اقساط"]))??0;const lateCoef=num(pick(p,["DelayPercent","LateDailyCoef","LatePenaltyDailyCoefficient"]))??0;const earlyCoef=num(pick(p,["EarlyPercent","EarlyDailyCoef","EarlyPaymentDailyCoefficient"]))??0;const ins=await pool.query("INSERT INTO loan_products(slug,name,title,description,badge,min_amount,max_amount,interval_days,tiers,conditions,documents,is_active,sort_order,interest_method,interest_percent,late_daily_coef,early_daily_coef,show_in_list,send_reminders,labels,full_description_html,operational_costs,legacy_source_table,legacy_id,legacy_payload,needs_review) VALUES($1,$2,$3,$4,'',$5,$6,$7,$8::jsonb,$9::jsonb,'[]'::jsonb,FALSE,$10,$11,$12,$13,$14,FALSE,FALSE,'[]'::jsonb,$15,$16::jsonb,$17,$18,$19::jsonb,TRUE) ON CONFLICT DO NOTHING RETURNING id",[stableSlug,name,title,description,min,max,intervalDays,JSON.stringify(tiers),JSON.stringify(conditions),1000+imported,method,rate??0,lateCoef,earlyCoef,safeHtml(pick(p,["PlanHtml","FullDescriptionHtml"])),JSON.stringify(costs),sourceTable,row.legacy_id,JSON.stringify(Object.fromEntries(["Title","Code","DelayPercent","EarlyPercent","ProfitPercent","MaxAmount","MaxMonthGap","AllowedInstallments","CostsJson","Disable","DisableText","IncludePlan","PlanTitle","PlanShortDescription","HasSponsore","DefaultSponsoreCheckoutDays","LoanProfitType"].filter(k=>p[k]!==undefined).map(k=>[k,p[k]])))]);
           if(ins.rowCount)imported++;else skipped++;
+          if((imported+skipped)>0&&(imported+skipped)%100===0)console.log("LEGACY_LOAN_IMPORT_PROGRESS="+(imported+skipped)+" imported="+imported+" skipped="+skipped);
           }
         }
         return json(res,200,{imported,skipped,candidateTables:[sourceTable],message:imported?"تعریف‌های واقعی از جدول قدیمی وارد شدند؛ همه غیرفعال و نیازمند بررسی‌اند و در سایت عمومی نمایش داده نمی‌شوند.":"طرح جدیدی برای انتقال پیدا نشد؛ رکوردهای قبلی دست‌نخورده ماندند."});
