@@ -1,4 +1,4 @@
-name: Verify Digibail legacy data migration
+name: Recover and verify Digibail legacy backfill
 on:
   workflow_dispatch:
   push:
@@ -8,12 +8,12 @@ on:
 permissions:
   contents: read
 jobs:
-  verify:
+  recover:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 12
     steps:
-      - name: Verify import progress, internal database totals, history fields, and production pages
+      - name: Stop duplicate workers, run one idempotent backfill, and verify the production database
         uses: appleboy/ssh-action@v1.2.2
         with:
           host: ${{ secrets.DEPLOY_HOST }}
@@ -21,47 +21,56 @@ jobs:
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           command_timeout: 10m
           script: |
-            set -eu
+            set -euo pipefail
             ROOT="/home/digibail/domains/digebail.ir"
             cd "$ROOT"
             if sudo -n docker info >/dev/null 2>&1; then D='sudo -n docker'; else D='docker'; fi
             echo "=== STOP DUPLICATE IDEMPOTENT BACKFILL WORKERS ==="
-            BACKFILL_PIDS="$(ps -eo pid=,comm=,args= | awk '$2 == "node" && $0 ~ /\/app\/scripts\/backfill-legacy-customers[.]mjs([[:space:]]|$)/ {print $1}')"
+            BACKFILL_PIDS="$(ps -eo pid=,comm=,args= | awk -v self="$$" '$1 != self && $2 == "node" && $0 ~ /\/app\/scripts\/backfill-legacy-customers[.]mjs([[:space:]]|$)/ {print $1}')"
             for pid in $BACKFILL_PIDS; do
               case "$pid" in ''|*[!0-9]*) continue;; esac
               echo "STOP_DUPLICATE_BACKFILL_PID=$pid"
               kill -TERM "$pid" 2>/dev/null || true
             done
-            sleep 4
-            echo "=== MIGRATION STATE ==="
-            if [ -f "$ROOT/var/migrations/vamcity-import.status" ]; then echo "IMPORT_STATUS=$(cat "$ROOT/var/migrations/vamcity-import.status")"; else echo "IMPORT_STATUS=RUNNING_OR_STATUS_PENDING"; fi
-            if [ -f "$ROOT/var/migrations/vamcity-import.log" ]; then tail -n 35 "$ROOT/var/migrations/vamcity-import.log" | sed -E 's/(password|token|secret|authorization|api[_-]?key)[=: ]+[^ ]+/\1=[REDACTED]/Ig'; else echo "IMPORT_LOG=MISSING"; fi
-            ps -eo pid,etime,pcpu,pmem,args | grep -E '[i]mport-vamcity-real-data|[m]igrate-legacy-digibail|[b]ackfill-legacy-customers' | head -n 20 || true
-            echo "=== TARGET POSTGRES TOTALS ==="
+            COMPOSE_PIDS="$(ps -eo pid=,comm=,args= | awk -v self="$$" '$1 != self && $2 != "bash" && $0 ~ /compose/ && $0 ~ /backfill-legacy-customers[.]mjs/ {print $1}')"
+            for pid in $COMPOSE_PIDS; do
+              case "$pid" in ''|*[!0-9]*) continue;; esac
+              echo "STOP_DUPLICATE_BACKFILL_COMPOSE_PID=$pid"
+              kill -TERM "$pid" 2>/dev/null || true
+            done
+            sleep 5
+            echo "=== ENSURE NO DUPLICATE BACKFILL NODE PROCESS REMAINS ==="
+            REMAINING="$(ps -eo pid=,comm=,args= | awk -v self="$$" '$1 != self && $2 == "node" && $0 ~ /\/app\/scripts\/backfill-legacy-customers[.]mjs([[:space:]]|$)/ {print $1}')"
+            if [ -n "$REMAINING" ]; then echo "ERROR: duplicate backfill worker still running: $REMAINING"; exit 30; fi
+            echo "DUPLICATE_BACKFILL_WORKERS=STOPPED"
+            echo "=== RUN ONE BACKFILL AGAINST THE INTERNAL DATABASE ==="
+            mkdir -p "$ROOT/var/migrations"
+            chmod 700 "$ROOT/var/migrations"
+            $D compose run --rm --no-deps -T app node /app/scripts/backfill-legacy-customers.mjs 2>&1 | tee -a "$ROOT/var/migrations/vamcity-import.log"
+            printf '0\n' > "$ROOT/var/migrations/vamcity-import.status"
+            chmod 600 "$ROOT/var/migrations/vamcity-import.status"
+            echo "IMPORT_STATUS=0"
+            echo "=== VERIFY LOCAL DATABASE TOTALS ==="
             $D compose exec -T db sh -lc 'export PGPASSWORD="$POSTGRES_PASSWORD"; psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1 -At' <<'SQL'
             SELECT 'users='||COUNT(*) FROM users;
-            SELECT 'users_legacy='||COUNT(*) FROM users WHERE legacy_source='aspnetusers';
             SELECT 'legacy_customers='||COUNT(*) FROM legacy_customers;
             SELECT 'legacy_customers_named='||COUNT(*) FILTER (WHERE trim(COALESCE(name,''))<>'') FROM legacy_customers;
             SELECT 'loan_products='||COUNT(*) FROM loan_products;
             SELECT 'loan_requests='||COUNT(*) FROM loan_requests;
-            SELECT 'loan_request_status_history='||COUNT(*) FROM loan_request_status_history;
+            SELECT 'loan_request_status_history_total='||COUNT(*) FROM loan_request_status_history;
+            SELECT 'loan_request_status_history_imported='||COUNT(*) FROM loan_request_status_history WHERE legacy_source_table IS NOT NULL;
             SELECT 'loan_request_comments='||COUNT(*) FROM loan_request_comments;
+            SELECT 'requests_with_registrar='||COUNT(*) FILTER (WHERE NULLIF(payload->>'CreatedByName','') IS NOT NULL) FROM loan_requests;
             SELECT 'legacy_source_data_total='||COUNT(*) FROM legacy_source_data WHERE source_table<>'__legacy_schema__';
             SELECT 'legacy_source_table_count='||COUNT(DISTINCT source_table) FROM legacy_source_data WHERE source_table<>'__legacy_schema__';
-            SELECT source_table||'|'||COUNT(*) FROM legacy_source_data WHERE source_table<>'__legacy_schema__' AND source_table ~* '(agent|representative|loan|customer|merchant|sponsor|installment|contract|payment|commission|userloan|aspnetusers)' GROUP BY source_table ORDER BY source_table;
-            SELECT 'REQUEST_DATE_RANGE='||COALESCE(MIN(created_at)::text,'none')||'|'||COALESCE(MAX(created_at)::text,'none') FROM loan_requests;
-            SELECT 'HISTORY_FIELDS='||COALESCE(string_agg(DISTINCT k,', ' ORDER BY k),'none') FROM legacy_source_data s CROSS JOIN LATERAL jsonb_object_keys(s.payload) AS x(k) WHERE source_table ~* '[.]UserLoanRequestStatusHistories$';
-            SELECT 'HISTORY_SAMPLE='||payload::text FROM legacy_source_data WHERE source_table ~* '[.]UserLoanRequestStatusHistories$' ORDER BY legacy_id LIMIT 1;
-            SELECT 'AGENT_FIELDS='||COALESCE(string_agg(DISTINCT k,', ' ORDER BY k),'none') FROM legacy_source_data s CROSS JOIN LATERAL jsonb_object_keys(s.payload) AS x(k) WHERE source_table ~* '[.]Agents$';
-            SELECT 'REQUEST_STATUS_FIELDS='||COALESCE(string_agg(DISTINCT k,', ' ORDER BY k),'none') FROM legacy_source_data s CROSS JOIN LATERAL jsonb_object_keys(s.payload) AS x(k) WHERE source_table ~* '[.]LoanRequestStatuses$';
+            SELECT 'agent_loans_main='||COUNT(*) FROM legacy_source_data WHERE source_table ~* '^vamcityc_vamcity_import_[0-9]{8}[.]dbo[.]AgentLoans$';
+            SELECT 'agent_loans_secondary='||COUNT(*) FROM legacy_source_data WHERE source_table ~* '^vamcityc_bluvamdb_import_[0-9]{8}[.]dbo[.]AgentLoans$';
+            SELECT 'request_date_range='||COALESCE(MIN(created_at)::text,'none')||'|'||COALESCE(MAX(created_at)::text,'none') FROM loan_requests;
             SQL
-            echo "=== PRODUCTION ROUTES ==="
+            echo "=== VERIFY PRODUCTION HEALTH AND PAGES ==="
             for path in /healthz /loan-requests.html /customers.html /agents.html /loan-definition.html; do
               code="$(curl -sS -o /tmp/digibail-verify-body -w '%{http_code}' --max-time 10 "http://127.0.0.1:1631$path" || true)"
               echo "PATH=$path HTTP=$code BYTES=$(wc -c </tmp/digibail-verify-body 2>/dev/null || echo 0)"
             done
             rm -f /tmp/digibail-verify-body
-            echo "MIGRATION_VERIFICATION_COMPLETE=1"
-
-# Check health after the latest release and request-history migration.
+            echo "LEGACY_BACKFILL_AND_HEALTH_VERIFICATION_COMPLETE=1"
