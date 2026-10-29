@@ -2,6 +2,38 @@ import { Pool } from "pg";
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL, max: 2, connectionTimeoutMillis: 5000 });
 try {
+  const requestResult = await pool.query(`    WITH status_lookup AS (
+      SELECT replace(source_table,'.LoanRequestStatuses','.UserLoanRequests') AS request_source,
+        payload->>'Id' AS id, payload->>'Title' AS title,
+        ROW_NUMBER() OVER (PARTITION BY replace(source_table,'.LoanRequestStatuses','.UserLoanRequests'),payload->>'Id' ORDER BY legacy_id) AS rn
+      FROM legacy_source_data
+      WHERE source_table ~* '^vamcityc_(vamcity|bluvamdb)_import_[0-9]{8}[.]dbo[.]LoanRequestStatuses$'
+    ), src AS (
+      SELECT source_table, legacy_id, payload,
+        COALESCE(payload->>'CreatedAt',payload->>'CreatedOn',payload->>'CreationDate',payload->>'DateCreated',payload->>'RequestDate',payload->>'CreateDate',payload->>'Created',payload->>'SubmissionDate',payload->>'InsertDate',payload->>'DateTime',payload->>'RequestDate') AS raw_date,
+        COALESCE(NULLIF(payload->>'FullName',''),NULLIF(payload->>'ApplicantName',''),NULLIF(payload->>'Name',''),NULLIF(payload->>'CustomerName',''),NULLIF(payload->>'UserFullName',''),trim(concat_ws(' ',NULLIF(payload->>'FirstName',''),NULLIF(payload->>'LastName','')))) AS full_name,
+        COALESCE(payload->>'Mobile',payload->>'PhoneNumber',payload->>'Phone',payload->>'UserMobile',payload->>'CellPhone',payload->>'ContactNumber','') AS phone,
+        COALESCE(payload->>'NationalCode',payload->>'NationalId',payload->>'NationalID',payload->>'NCode',payload->>'IdentityCode','') AS ncode,
+        COALESCE(payload->>'StatusTitle',payload->>'StatusName',payload->>'LoanRequestStatus',payload->>'LoanRequestStatusTitle',payload->>'Status',payload->>'State',payload->>'LoanStatus',payload->>'StatusId',payload->>'LoanRequestStatusId','') AS state,
+        COALESCE(payload->>'Amount',payload->>'LoanAmount',payload->>'RequestedAmount',payload->>'RequestAmount',payload->>'LoanRequestedAmount',payload->>'Price','') AS raw_amount
+      FROM legacy_source_data
+      WHERE source_table ~* '^vamcityc_(vamcity|bluvamdb)_import_[0-9]{8}[.]dbo[.]UserLoanRequests$'
+    )
+    INSERT INTO loan_requests(request_key,source_table,legacy_id,applicant_name,mobile,national_code,status,amount,created_at,payload)
+    SELECT source_table || ':' || legacy_id,source_table,legacy_id,COALESCE(full_name,''),COALESCE(phone,''),COALESCE(ncode,''),COALESCE(status_lookup.title,state,''),
+      CASE WHEN regexp_replace(raw_amount,'[ ,٬ ]','','g') ~ '^-?[0-9]+([.][0-9]+)?$' THEN regexp_replace(raw_amount,'[ ,٬ ]','','g')::numeric ELSE NULL END,
+      CASE
+        WHEN raw_date ~ '^/Date\(-?[0-9]+\)/$' THEN to_timestamp(regexp_replace(raw_date,'[^0-9-]','','g')::numeric / 1000)
+        WHEN raw_date ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}' THEN raw_date::timestamptz
+        WHEN raw_date ~ '^[0-9]{10,13}$' THEN to_timestamp(raw_date::numeric / CASE WHEN length(raw_date)=13 THEN 1000 ELSE 1 END)
+        ELSE NULL
+      END,
+      payload
+    FROM src LEFT JOIN status_lookup ON status_lookup.request_source=src.source_table AND status_lookup.id=src.state AND status_lookup.rn=1
+    ON CONFLICT(source_table,legacy_id) DO UPDATE SET
+      applicant_name=EXCLUDED.applicant_name,mobile=EXCLUDED.mobile,national_code=EXCLUDED.national_code,
+      status=EXCLUDED.status,amount=EXCLUDED.amount,created_at=EXCLUDED.created_at,payload=EXCLUDED.payload,imported_at=NOW()`);
+  console.log("LOAN_REQUESTS_BACKFILL_ROWS=" + Number(requestResult.rowCount || 0));
   const result = await pool.query(`
     WITH src AS (
       SELECT source_table,legacy_id,payload,COALESCE(NULLIF(payload->>'Id',''),legacy_id) AS raw_id,
@@ -32,7 +64,7 @@ try {
     ON CONFLICT(legacy_id) DO UPDATE SET name=COALESCE(NULLIF(EXCLUDED.name,''),legacy_customers.name),mobile=COALESCE(NULLIF(EXCLUDED.mobile,''),legacy_customers.mobile),email=COALESCE(NULLIF(EXCLUDED.email,''),legacy_customers.email),registered_at=COALESCE(EXCLUDED.registered_at,legacy_customers.registered_at),legacy_username=COALESCE(NULLIF(EXCLUDED.legacy_username,''),legacy_customers.legacy_username),account_type=COALESCE(NULLIF(EXCLUDED.account_type,''),legacy_customers.account_type),legacy_source_table=COALESCE(EXCLUDED.legacy_source_table,legacy_customers.legacy_source_table)`);
   await pool.query("ANALYZE legacy_customers");
   const count = await pool.query("SELECT COUNT(*)::int AS total FROM legacy_customers");
-  console.log("LEGACY_CUSTOMER_BACKFILL_COMPLETE=1");
+  console.log("LEGACY_RECORD_BACKFILL_COMPLETE=1");
   console.log("LEGACY_CUSTOMERS_TOTAL=" + Number(count.rows[0]?.total || 0));
   console.log("LEGACY_CUSTOMER_UPSERT_ROWS=" + Number(result.rowCount || 0));
 } catch (error) {
