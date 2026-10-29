@@ -136,3 +136,5 @@ jobs:
             if [ -s /root/digibail-admin-recovery.txt ]; then stat -c 'RECOVERY_FILE_PRESENT=1 MODE=%a OWNER=%U:%G SIZE=%s' /root/digibail-admin-recovery.txt; else echo "RECOVERY_FILE_PRESENT=0"; fi
             echo "MIGRATION_PROGRESS_INSPECTION_COMPLETE=1"
             echo "READ_ONLY_VALIDATION_COMPLETED=1"
+
+# Re-run after deployment and customer/request backfill to verify local records.
