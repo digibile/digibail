@@ -17,7 +17,7 @@
 <div class="workspace">
 <section class="stats" id="stats"></section>
 <section class="panel" id="users"><h2>حساب‌های کاربری</h2><div class="table-wrap"><table><thead><tr><th>نام</th><th>نام کاربری</th><th>موبایل</th><th>نقش</th><th>وضعیت</th><th>ایجاد</th></tr></thead><tbody id="usersRows"></tbody></table></div></section>
-<section class="panel hidden" id="customers"><h2>رکوردهای مشتری قدیمی</h2><p class="muted">این اطلاعات از پایگاه قبلی نگهداری می‌شود. رکوردی که موبایل و رمز نداشته باشد، حساب ورود فعال محسوب نمی‌شود.</p><div class="table-wrap"><table><thead><tr><th>نام</th><th>موبایل</th><th>ایمیل</th><th>کد مشتری</th><th>وضعیت خرید</th><th>انقضا</th></tr></thead><tbody id="customerRows"></tbody></table></div></section>
+<section class="panel hidden" id="customers"><h2>فهرست کامل مشتریان منتقل‌شده</h2><p class="muted">جست‌وجو و صفحه‌بندی مستقیم از پایگاه داده داخلی انجام می‌شود؛ کل فهرست ده‌ها هزارنفری یک‌جا به مرورگر ارسال نمی‌شود.</p><form id="customerFilter" class="formrow"><input id="customerQ" type="search" placeholder="جست‌وجو بر اساس نام، موبایل، ایمیل، کد مشتری یا شناسه"><select id="customerPageSize"><option value="25">۲۵ ردیف</option><option value="50" selected>۵۰ ردیف</option><option value="100">۱۰۰ ردیف</option></select><button class="btn primary" type="submit">جست‌وجو</button><button class="btn secondary" id="customerClear" type="button">پاک‌کردن</button></form><p class="muted" id="customerMeta">در حال دریافت مشتریان…</p><div class="table-wrap"><table><thead><tr><th>ردیف</th><th>نام مشتری</th><th>موبایل</th><th>ایمیل</th><th>کد مشتری</th><th>نام کاربری</th><th>وضعیت خرید</th><th>تاریخ ثبت شمسی</th><th>انقضا شمسی</th></tr></thead><tbody id="customerRows"><tr><td colspan="9">در حال بارگذاری…</td></tr></tbody></table></div><div class="formrow" style="display:flex;align-items:center;justify-content:space-between"><button class="btn secondary" id="customerPrev" type="button" disabled>صفحه قبل</button><span id="customerPageInfo">—</span><button class="btn secondary" id="customerNext" type="button" disabled>صفحه بعد</button></div></section>
 <section class="panel hidden" id="templates"><h2>الگوهای پیامک منتقل‌شده</h2><div id="smsConfig" class="notice"></div><div class="grid" id="templateRows"></div></section>
 <section class="panel hidden" id="logs"><h2>آخرین گزارش‌های ارسال</h2><div class="table-wrap"><table><thead><tr><th>زمان</th><th>گیرنده</th><th>وضعیت</th><th>کد سرویس‌دهنده</th><th>خطا</th></tr></thead><tbody id="logRows"></tbody></table></div></section>
 <section class="panel hidden" id="legacyplans"><h2>داده‌های واقعی طرح و گردش پرونده از سامانه قبلی</h2><p class="muted">رکوردهای اصلی بدون تبدیل یا حدس‌زدن فیلدها نگهداری شده‌اند تا بررسی و اتصال به فرم‌های جدید با حفظ مقادیر واقعی انجام شود.</p><div class="grid"><div class="template"><h3>برنامه‌های خرید مشتری</h3><div id="purchasePlanRows"></div></div><div class="template"><h3>وضعیت‌های درخواست وام</h3><div id="loanStatusRows"></div></div></div></section>
@@ -50,14 +50,14 @@ const esc=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&
 function notify(s){const n=$("#notice");n.textContent=s;n.classList.remove("hidden");}
 async function api(path,body){const r=await fetch(path,{method:body?"POST":"GET",credentials:"same-origin",headers:body?{"Content-Type":"application/json"}:{},body:body?JSON.stringify(body):undefined});const j=await r.json().catch(()=>({}));if(r.status===401||r.status===403){location.href="/login.html?next=%2Fadmin";throw new Error("برای ورود به مدیریت، وارد حساب مدیر شوید.");}if(!r.ok)throw new Error(j.message||"خطا در دریافت اطلاعات");return j.data??j;}
 const fmt=d=>d?new Date(d).toLocaleDateString("fa-IR"):"-";
-let legacyOffset=0, legacyRows=[];
+let legacyOffset=0, legacyRows=[];let customerPage=1,customerTotal=0,customerLoading=false;
 async function load(){
 try{
-const [sum,users,customers,templateResult,logs,purchasePlans,loanStatuses,documents,contracts,betaInquiries,legacyTables]=await Promise.all([api("/api/v1/admin/summary"),api("/api/v1/admin/users"),api("/api/v1/admin/legacy-customers"),api("/api/v1/admin/sms/templates"),api("/api/v1/admin/sms/logs"),api("/api/v1/admin/legacy-source-data?table=CustomerPurchasePlan"),api("/api/v1/admin/legacy-source-data?table=LoanRequestStatuses"),api("/api/v1/admin/documents"),api("/api/v1/admin/contracts"),api("/api/v1/admin/beta-inquiries"),api("/api/v1/admin/legacy-source-tables")]);
+const [sum,users,templateResult,logs,purchasePlans,loanStatuses,documents,contracts,betaInquiries,legacyTables]=await Promise.all([api("/api/v1/admin/summary"),api("/api/v1/admin/users"),api("/api/v1/admin/sms/templates"),api("/api/v1/admin/sms/logs"),api("/api/v1/admin/legacy-source-data?table=CustomerPurchasePlan"),api("/api/v1/admin/legacy-source-data?table=LoanRequestStatuses"),api("/api/v1/admin/documents"),api("/api/v1/admin/contracts"),api("/api/v1/admin/beta-inquiries"),api("/api/v1/admin/legacy-source-tables")]);
 const templates=templateResult.items||[];
 $("#stats").innerHTML=[["همه حساب‌ها",sum.users],["مدیران",sum.admins],["مشتریان قدیمی",sum.legacy_customers],["الگوهای پیامک",sum.sms_templates],["گزارش ارسال",sum.sms_logs]].map(x=>'<div class="stat"><small>'+esc(x[0])+'</small><strong>'+esc(x[1])+'</strong></div>').join("");
 $("#usersRows").innerHTML=users.map(u=>'<tr><td>'+esc(u.full_name)+'</td><td>'+esc(u.username||"-")+'</td><td>'+esc(u.phone||"ثبت نشده")+'</td><td><span class="pill">'+esc(u.role)+'</span></td><td>'+ (u.is_active?"فعال":"غیرفعال")+'</td><td>'+fmt(u.created_at)+'</td></tr>').join("")||'<tr><td colspan="6">حسابی ثبت نشده است.</td></tr>';
-$("#customerRows").innerHTML=customers.map(u=>'<tr><td>'+esc(u.name||"-")+'</td><td>'+esc(u.mobile||"ثبت نشده")+'</td><td>'+esc(u.email||"-")+'</td><td>'+esc(u.customer_code??"-")+'</td><td>'+ (u.purchased?"خرید داشته":"-")+'</td><td>'+fmt(u.expires_at)+'</td></tr>').join("")||'<tr><td colspan="6">رکوردی نیست.</td></tr>';
+await loadCustomers();
 $("#smsConfig").textContent=templateResult.configured?"کلید سرویس پیامک تنظیم شده است.":"کلید کاوه‌نگار هنوز در تنظیمات محرمانه سرور ثبت نشده؛ الگوها منتقل شده‌اند اما ارسال فعال نیست.";
 $("#templateRows").innerHTML=templates.map(t=>'<form class="template" data-id="'+t.id+'"><strong>الگوی قدیمی #'+esc(t.id)+'</strong><label>عنوان</label><input name="title" maxlength="200" value="'+esc(t.title)+'" required><label>متن الگو</label><textarea name="body" maxlength="4000" required>'+esc(t.body)+'</textarea><label>وضعیت عددی</label><input name="status" type="number" value="'+esc(t.status)+'"><label>کد الگوی سرویس‌دهنده</label><input name="patternBaseCode" value="'+esc(t.pattern_base_code||"")+'"><p><button class="btn primary" type="submit">ذخیره الگو</button></p></form>').join("")||"<p>الگویی منتقل نشده است.</p>";
 $("#logRows").innerHTML=logs.map(l=>'<tr><td>'+fmt(l.created_at)+'</td><td>'+esc(l.recipient_masked||"-")+'</td><td>'+esc(l.status)+'</td><td>'+esc(l.provider_message_id||"-")+'</td><td>'+esc(l.error_code||"-")+'</td></tr>').join("")||'<tr><td colspan="5">گزارشی ثبت نشده است.</td></tr>';
@@ -73,6 +73,27 @@ $("#betaRows").innerHTML=betaInquiries.map(x=>'<tr><td>'+esc(x.reference)+'</td>
 }catch(e){notify(e.message);}
 }
 
+async function loadCustomers(){
+ if(customerLoading)return;customerLoading=true;
+ $("#customerRows").innerHTML='<tr><td colspan="9">در حال دریافت فهرست از دیتابیس داخلی…</td></tr>';
+ try{
+  const p=new URLSearchParams({page:String(customerPage),pageSize:String(Number($("#customerPageSize").value)||50)});
+  const q=$("#customerQ").value.trim();if(q)p.set("q",q);
+  const d=await api("/api/v1/admin/legacy-customers-page?"+p.toString());
+  customerTotal=Number(d.total)||0;
+  $("#customerRows").innerHTML=(d.rows||[]).map(u=>'<tr><td>'+esc(u.customer_number||"—")+'</td><td><strong>'+esc(u.name||"نام ثبت نشده")+'</strong><div class="muted">'+esc(u.account_type||"")+'</div></td><td dir="ltr" style="text-align:right">'+esc(u.mobile||"ثبت نشده")+'</td><td>'+esc(u.email||"—")+'</td><td>'+esc(u.customer_code??"—")+'</td><td>'+esc(u.legacy_username||"—")+'</td><td>'+(u.purchased?"خرید داشته": "ثبت نشده")+'</td><td>'+esc(fmt(u.registered_at))+'</td><td>'+esc(fmt(u.expires_at))+'</td></tr>').join("")||'<tr><td colspan="9">مشتری‌ای با این مشخصات پیدا نشد.</td></tr>';
+  const pages=Math.max(1,Math.ceil(customerTotal/(Number($("#customerPageSize").value)||50)));
+  $("#customerMeta").textContent="نتیجه فیلتر: "+customerTotal.toLocaleString("fa-IR")+" مشتری · کل رکوردهای داخلی: "+Number(d.overallTotal||0).toLocaleString("fa-IR");
+  $("#customerPageInfo").textContent="صفحه "+customerPage.toLocaleString("fa-IR")+" از "+pages.toLocaleString("fa-IR")+" · "+(customerTotal?((customerPage-1)*(Number($("#customerPageSize").value)||50)+1):0).toLocaleString("fa-IR")+" تا "+Math.min(customerPage*(Number($("#customerPageSize").value)||50),customerTotal).toLocaleString("fa-IR");
+  $("#customerPrev").disabled=customerPage<=1;$("#customerNext").disabled=customerPage>=pages;
+ }catch(e){$("#customerRows").innerHTML='<tr><td colspan="9">'+esc(e.message||"خطا در دریافت مشتریان")+'</td></tr>'}
+ finally{customerLoading=false}
+}
+$("#customerFilter").addEventListener("submit",e=>{e.preventDefault();customerPage=1;loadCustomers()});
+$("#customerPageSize").addEventListener("change",()=>{customerPage=1;loadCustomers()});
+$("#customerClear").addEventListener("click",()=>{$("#customerQ").value="";$("#customerPageSize").value="50";customerPage=1;loadCustomers()});
+$("#customerPrev").addEventListener("click",()=>{if(customerPage>1){customerPage--;loadCustomers()}});
+$("#customerNext").addEventListener("click",()=>{customerPage++;loadCustomers()});
 async function loadLegacyTable(append=false){
  const table=$("#legacyTableSelect").value;
  if(!table)return;
