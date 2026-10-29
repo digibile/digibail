@@ -656,9 +656,9 @@ export async function handleApi(req, res, url) {
         if(from && /^\d{4}-\d{2}-\d{2}$/.test(from)){params.push(from);where.push("registered_at >= $"+params.length+"::date");}
         if(to && /^\d{4}-\d{2}-\d{2}$/.test(to)){params.push(to);where.push("registered_at < ($"+params.length+"::date + INTERVAL '1 day')");}
         const filter=where.length?" WHERE "+where.join(" AND "):"";
-        const [count,overall]=await Promise.all([pool.query("SELECT COUNT(*)::int AS total FROM legacy_customers"+filter,params),pool.query("SELECT COUNT(*)::int AS total FROM legacy_customers")]);
+        const [count,overall]=await Promise.all([pool.query("SELECT COUNT(*)::int AS total FROM legacy_customers"+filter,params),pool.query("SELECT COUNT(*)::int AS total,MAX(registered_at) AS latest_registration FROM legacy_customers")]);
         const rows=await pool.query("WITH numbered AS (SELECT legacy_id,name,mobile,email,customer_code,registered_at,expires_at,is_permanent,purchased,affiliate_code,parked_domain,legacy_username,account_type,legacy_source_table,ROW_NUMBER() OVER (ORDER BY registered_at ASC NULLS FIRST,legacy_id ASC) AS customer_number FROM legacy_customers) SELECT legacy_id,name,mobile,email,customer_code,customer_number,registered_at,expires_at,is_permanent,purchased,affiliate_code,parked_domain,legacy_username,account_type,legacy_source_table FROM numbered"+filter+" ORDER BY registered_at DESC NULLS LAST,legacy_id DESC LIMIT $"+(params.length+1)+" OFFSET $"+(params.length+2),[...params,pageSize,(page-1)*pageSize]);
-        return json(res,200,{data:{rows:rows.rows,total:Number(count.rows[0]?.total)||0,overallTotal:Number(overall.rows[0]?.total)||0,page,pageSize}});
+        return json(res,200,{data:{rows:rows.rows,total:Number(count.rows[0]?.total)||0,overallTotal:Number(overall.rows[0]?.total)||0,latestRegistration:overall.rows[0]?.latest_registration||null,page,pageSize}});
       }
       if (req.method === "GET" && route === "/api/v1/admin/legacy-customers") {
         const search = String(url.searchParams.get("q") || "").trim().slice(0,120);
