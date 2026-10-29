@@ -66,6 +66,8 @@ jobs:
             [ "$STABLE" -ge 3 ] || { echo "BLOCKED: validated app version did not become healthy and stable"; exit 21; }
             echo "=== Ensure indexed keyset scans so import never rescans the full legacy table ==="
             $D compose exec -T db sh -lc 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1 -c "CREATE INDEX IF NOT EXISTS legacy_source_data_source_table_legacy_id_idx ON legacy_source_data (source_table, legacy_id)"'
+            echo "=== Inspect legacy payload field names only; never print borrower values ==="
+            $D compose exec -T db sh -lc 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1 -Atc "SELECT '\''legacy_payload_types='\''||COALESCE(string_agg(payload_type||'\''='\''||n::text, '\''; '\'' ORDER BY payload_type), '\''none'\'') FROM (SELECT jsonb_typeof(payload) AS payload_type,COUNT(*) AS n FROM legacy_source_data WHERE source_table ~* '\''^vamcityc_vamcity_import_[0-9]{8}[.]dbo[.]Loans'\'' GROUP BY jsonb_typeof(payload)) t; SELECT '\''legacy_payload_keys='\''||COALESCE(string_agg(k, '\'', '\'' ORDER BY k), '\''none'\'') FROM (SELECT DISTINCT jsonb_object_keys(payload) AS k FROM legacy_source_data WHERE source_table ~* '\''^vamcityc_vamcity_import_[0-9]{8}[.]dbo[.]Loans'\'' AND jsonb_typeof(payload)='\''object'\'') keys;"'
             echo "=== Run isolated one-off importer; one source row per query, live API remains untouched ==="
             $D compose run --rm --no-deps app node scripts/import-legacy-loan-products.mjs
             echo "=== Verify loan product totals without exposing customer data ==="
