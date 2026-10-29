@@ -138,3 +138,4 @@ jobs:
             echo "READ_ONLY_VALIDATION_COMPLETED=1"
 
 # Re-run after deployment and customer/request backfill to verify local records.
+# Recheck after the latest Next.js release marker deployment attempt.
