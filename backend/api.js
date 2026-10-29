@@ -10,6 +10,7 @@ const CAPTCHA_PEPPER = process.env.CAPTCHA_PEPPER || "";
 const BRAND_NAME = process.env.BRAND_NAME || "دیجی‌بایل پی";
 const KAVENEGAR_API_KEY = process.env.KAVENEGAR_API_KEY || "";
 const KAVENEGAR_TEMPLATE = process.env.KAVENEGAR_TEMPLATE || "";
+const AI_STORY_RATE = new Map();
 
 export async function migrate() {
   const { readFile } = await import("node:fs/promises");
@@ -298,6 +299,99 @@ export async function handleApi(req, res, url) {
           return json(res, 502, { message: e?.name === "TimeoutError" ? "زمان پاسخ هوش مصنوعی تمام شد؛ دوباره تلاش کنید." : "پاسخ هوش مصنوعی قابل پردازش نبود؛ دوباره تولید کنید." });
         }
       }
+
+      const aiRateLimit = (kind, max) => {
+        const key = String(admin.sub || admin.username || "admin") + ":" + kind;
+        const now = Date.now(), old = AI_STORY_RATE.get(key);
+        const slot = !old || now - old.started > 600000 ? { started: now, count: 0 } : old;
+        if (slot.count >= max) return false;
+        slot.count += 1; AI_STORY_RATE.set(key, slot); return true;
+      };
+      const ensureAiStories = async () => {
+        await pool.query("CREATE TABLE IF NOT EXISTS ai_story_assets (id BIGSERIAL PRIMARY KEY, created_by BIGINT NOT NULL, title TEXT NOT NULL, status VARCHAR(20) NOT NULL DEFAULT 'draft', payload JSONB NOT NULL DEFAULT '{}'::jsonb, image_data TEXT, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW())");
+        await pool.query("CREATE INDEX IF NOT EXISTS ix_ai_story_assets_owner_created ON ai_story_assets(created_by, created_at DESC)");
+      };
+      const parseAiStory = (raw) => {
+        let txt = String(raw || "").replace(new RegExp(String.fromCharCode(96), "g"), "").trim();
+        const start = txt.indexOf("{"), end = txt.lastIndexOf("}");
+        if (start >= 0 && end > start) txt = txt.slice(start, end + 1);
+        const o = JSON.parse(txt);
+        return { title:String(o.title || "").slice(0,160), body:String(o.body || "").slice(0,700), cta:String(o.cta || "").slice(0,100), caption:String(o.caption || "").slice(0,1200), hashtags:Array.isArray(o.hashtags)?o.hashtags.slice(0,12).map(x=>String(x).slice(0,50)).join(" "):String(o.hashtags || "").slice(0,400), visualPrompt:String(o.visualPrompt || "").slice(0,1800) };
+      };
+      const callStoryProvider = async (provider, key, prompt) => {
+        let response, raw = "";
+        if (provider === "openai") {
+          response = await fetch("https://api.openai.com/v1/chat/completions", { method:"POST", signal:AbortSignal.timeout(45000), headers:{"Authorization":"Bearer "+key,"Content-Type":"application/json"}, body:JSON.stringify({model:process.env.OPENAI_TEXT_MODEL||process.env.OPENAI_MODEL||"gpt-4.1-mini",temperature:0.8,response_format:{type:"json_object"},messages:[{role:"system",content:"You are a senior Persian-language advertising creative director. Return valid JSON only with title, body, cta, caption, hashtags (array), visualPrompt. Write polished natural Persian. Never invent financial rates, guaranteed approvals, bank partnerships, or claims not supplied by the user. visualPrompt describes a premium vertical 9:16 background image with no text, no logos, no watermark."},{role:"user",content:prompt}]}) });
+          const j = await response.json().catch(() => ({}));
+          if (!response.ok) throw new Error("OpenAI پاسخ موفق نداد (" + response.status + ")");
+          raw = j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content;
+        } else if (provider === "gemini") {
+          response = await fetch("https://generativelanguage.googleapis.com/v1beta/models/" + encodeURIComponent(process.env.GEMINI_TEXT_MODEL||process.env.GEMINI_MODEL||"gemini-2.5-flash") + ":generateContent?key=" + encodeURIComponent(key), { method:"POST", signal:AbortSignal.timeout(45000), headers:{"Content-Type":"application/json"}, body:JSON.stringify({systemInstruction:{parts:[{text:"You are a senior Persian-language advertising creative director. Return valid JSON only with title, body, cta, caption, hashtags (array), visualPrompt. Write polished natural Persian. Never invent financial rates, guaranteed approvals, bank partnerships, or claims not supplied by the user. visualPrompt describes a premium vertical 9:16 background image with no text, no logos, no watermark."}]},contents:[{role:"user",parts:[{text:prompt}]}],generationConfig:{responseMimeType:"application/json",temperature:0.8}}) });
+          const j = await response.json().catch(() => ({}));
+          if (!response.ok) throw new Error("Gemini پاسخ موفق نداد (" + response.status + ")");
+          raw = (j.candidates && j.candidates[0] && j.candidates[0].content && j.candidates[0].content.parts || []).map(x => x.text || "").join("");
+        } else if (provider === "anthropic") {
+          response = await fetch("https://api.anthropic.com/v1/messages", { method:"POST", signal:AbortSignal.timeout(45000), headers:{"x-api-key":key,"anthropic-version":"2023-06-01","Content-Type":"application/json"}, body:JSON.stringify({model:process.env.ANTHROPIC_TEXT_MODEL||process.env.ANTHROPIC_MODEL||"claude-sonnet-4-20250514",max_tokens:1200,temperature:0.8,system:"You are a senior Persian-language advertising creative director. Return valid JSON only with title, body, cta, caption, hashtags (array), visualPrompt. Write polished natural Persian. Never invent financial rates, guaranteed approvals, bank partnerships, or claims not supplied by the user. visualPrompt describes a premium vertical 9:16 background image with no text, no logos, no watermark.",messages:[{role:"user",content:prompt}]}) });
+          const j = await response.json().catch(() => ({}));
+          if (!response.ok) throw new Error("Anthropic پاسخ موفق نداد (" + response.status + ")");
+          raw = (j.content || []).filter(x => x.type === "text").map(x => x.text || "").join("");
+        } else throw new Error("ارائه‌دهنده‌ی هوش مصنوعی معتبر نیست.");
+        const p = parseAiStory(raw);
+        if (!p.title || !p.body || !p.cta) throw new Error("پاسخ مدل ناقص بود؛ دوباره تولید کنید.");
+        return { provider:provider, title:p.title, body:p.body, cta:p.cta, caption:p.caption, hashtags:p.hashtags, visualPrompt:p.visualPrompt };
+      };
+      if (req.method === "GET" && route === "/api/v1/admin/ai/stories") {
+        await ensureAiStories();
+        const q = await pool.query("SELECT id,title,status,created_at,payload,(image_data IS NOT NULL) AS has_image FROM ai_story_assets WHERE created_by=$1 ORDER BY created_at DESC LIMIT 30", [Number(admin.sub)]);
+        return json(res,200,{data:q.rows.map(x=>({id:x.id,title:x.title,status:x.status,created_at:x.created_at,story:x.payload,hasImage:x.has_image}))});
+      }
+      if (req.method === "GET" && /^\/api\/v1\/admin\/ai\/stories\/[0-9]+$/.test(route)) {
+        await ensureAiStories();
+        const q = await pool.query("SELECT id,title,status,created_at,payload,image_data FROM ai_story_assets WHERE id=$1 AND created_by=$2 LIMIT 1", [route.split("/").pop(), Number(admin.sub)]);
+        if (!q.rowCount) return json(res,404,{message:"استوری ذخیره‌شده پیدا نشد."});
+        return json(res,200,{id:q.rows[0].id,title:q.rows[0].title,status:q.rows[0].status,created_at:q.rows[0].created_at,story:q.rows[0].payload,imageData:q.rows[0].image_data||""});
+      }
+      if (req.method === "POST" && route === "/api/v1/admin/ai/stories") {
+        const b = await body(req), s = b.story && typeof b.story === "object" ? b.story : b;
+        const clean = {goal:String(s.goal||"").slice(0,240),audience:String(s.audience||"").slice(0,240),offer:String(s.offer||"").slice(0,500),tone:String(s.tone||"professional").slice(0,80),provider:String(s.provider||"auto").slice(0,40),platform:String(s.platform||"instagram").slice(0,40),title:String(s.title||s.h||"").slice(0,160),body:String(s.body||s.p||"").slice(0,700),cta:String(s.cta||"").slice(0,100),caption:String(s.caption||"").slice(0,1200),hashtags:String(s.hashtags||"").slice(0,400),visualPrompt:String(s.visualPrompt||"").slice(0,1800),theme:String(s.theme||s.bg||"plum").slice(0,40)};
+        const title = String(b.title || clean.title || "استوری تبلیغاتی").trim().slice(0,160) || "استوری تبلیغاتی";
+        const status = b.status === "ready" ? "ready" : "draft";
+        const imageData = typeof b.imageData === "string" && /^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(b.imageData) && b.imageData.length <= 2600000 ? b.imageData : null;
+        await ensureAiStories();
+        const q = await pool.query("INSERT INTO ai_story_assets(created_by,title,status,payload,image_data) VALUES($1,$2,$3,$4::jsonb,$5) RETURNING id,created_at", [Number(admin.sub),title,status,JSON.stringify(clean),imageData]);
+        return json(res,201,{id:q.rows[0].id,title:title,status:status,created_at:q.rows[0].created_at,hasImage:Boolean(imageData)});
+      }
+      if (req.method === "POST" && route === "/api/v1/admin/ai/story/generate") {
+        const b = await body(req);
+        if (!aiRateLimit("text",12)) return json(res,429,{message:"برای جلوگیری از هزینه‌ی ناخواسته، ۱۲ تولید در هر ۱۰ دقیقه مجاز است."});
+        const provider = String(b.provider || "auto").toLowerCase();
+        const keys = {openai:process.env.OPENAI_API_KEY||"",gemini:process.env.GEMINI_API_KEY||"",anthropic:process.env.ANTHROPIC_API_KEY||""};
+        const available = Object.keys(keys).filter(k=>keys[k]);
+        if (!available.length) return json(res,503,{message:"کلید هوش مصنوعی روی سرور تنظیم نشده است. یکی از OPENAI_API_KEY، GEMINI_API_KEY یا ANTHROPIC_API_KEY را در فایل محیطی سرور تنظیم کنید."});
+        const selected = provider === "compare" ? available : provider === "auto" ? [available[0]] : [provider];
+        if (selected.some(k=>!keys[k])) return json(res,503,{message:"کلید ارائه‌دهنده‌ی انتخاب‌شده روی سرور تنظیم نشده است."});
+        const f = {goal:String(b.goal||"معرفی خدمات").slice(0,240),audience:String(b.audience||"مخاطبان عمومی").slice(0,240),offer:String(b.offer||"شرایط مالی مشخصی ارائه نشده؛ هیچ عدد یا وعده‌ای نساز").slice(0,500),tone:String(b.tone||"professional").slice(0,80),platform:String(b.platform||"instagram").slice(0,40)};
+        const prompt = "برای برند دیجی‌بایل، یک استوری تبلیغاتی فارسی حرفه‌ای بساز. هدف کمپین: " + f.goal + ". مخاطب: " + f.audience + ". پیشنهاد یا شرایط واقعی که کاربر داده: " + f.offer + ". لحن: " + f.tone + ". بستر: " + f.platform + ". متن کوتاه، خوانا، جذاب و مناسب موبایل باشد. CTA کوتاه و روشن باشد. کپشن و هشتگ‌ها را هم تولید کن. فقط JSON با فیلدهای title, body, cta, caption, hashtags, visualPrompt برگردان. هیچ نرخ، تضمین تأیید وام، شراکت بانکی یا مزیت تأییدنشده‌ای را اختراع نکن.";
+        const results = await Promise.allSettled(selected.map(k=>callStoryProvider(k,keys[k],prompt)));
+        const candidates = results.filter(x=>x.status==="fulfilled").map(x=>x.value);
+        if (!candidates.length) return json(res,502,{message:"مدل‌های انتخاب‌شده پاسخ قابل استفاده ندادند؛ کلید، اعتبار حساب و نام مدل را بررسی کنید."});
+        return json(res,200,{candidates:candidates,compared:selected.length>1});
+      }
+      if (req.method === "POST" && route === "/api/v1/admin/ai/story/image") {
+        const b = await body(req);
+        if (!aiRateLimit("image",4)) return json(res,429,{message:"برای جلوگیری از هزینه‌ی ناخواسته، ۴ تصویر در هر ۱۰ دقیقه مجاز است."});
+        const key = process.env.OPENAI_API_KEY || "";
+        if (!key) return json(res,503,{message:"ساخت تصویر نیازمند OPENAI_API_KEY در فایل محیطی سرور است."});
+        const prompt = String(b.prompt||"").trim().slice(0,1800);
+        if (!prompt) return json(res,400,{message:"توضیح تصویر خالی است."});
+        const imageResponse = await fetch("https://api.openai.com/v1/images/generations", {method:"POST",signal:AbortSignal.timeout(90000),headers:{"Authorization":"Bearer "+key,"Content-Type":"application/json"},body:JSON.stringify({model:process.env.OPENAI_IMAGE_MODEL||"gpt-image-1",prompt:"Create a premium advertising background image for a Persian fintech brand. Vertical 9:16 composition, elegant editorial art direction, strong focal point, refined lighting, high-quality commercial photography or 3D illustration. No text, no letters, no logo, no watermark. Visual direction: "+prompt,size:"1024x1536",quality:"high",output_format:"png",n:1})});
+        const imageJson = await imageResponse.json().catch(()=>({}));
+        if (!imageResponse.ok) return json(res,502,{message:"سرویس ساخت تصویر پاسخ نداد ("+imageResponse.status+")."});
+        const b64 = imageJson.data && imageJson.data[0] && imageJson.data[0].b64_json;
+        if (!b64) return json(res,502,{message:"سرویس تصویر خروجی قابل استفاده نداد."});
+        return json(res,200,{imageData:"data:image/png;base64,"+b64});
+      }
+
       const loanShape = (p) => ({ id:p.slug,name:p.name,description:p.description,badge:p.badge,isActive:p.is_active,minAmount:Number(p.min_amount),maxAmount:Number(p.max_amount),intervalMonths:intervalMonthsFromStored(p.interval_days),intervalDays:intervalMonthsFromStored(p.interval_days),tiers:p.tiers,conditions:p.conditions,documents:p.documents,title:p.title||p.name,imageUrl:p.image_url,fullDescriptionHtml:p.full_description_html,labels:p.labels,operationalCosts:p.operational_costs,interestMethod:p.interest_method,interestPercent:Number(p.interest_percent),lateDailyCoef:Number(p.late_daily_coef),earlyDailyCoef:Number(p.early_daily_coef),showInList:p.show_in_list,sendReminders:p.send_reminders });
       const loanRow = (p) => ({ id:p.id,shape:loanShape(p),isActive:p.is_active,sortOrder:p.sort_order,showInList:p.show_in_list,sendReminders:p.send_reminders,legacySourceTable:p.legacy_source_table,legacyId:p.legacy_id,needsReview:Boolean(p.needs_review) });
       const cleanLoanInput = (b) => {
