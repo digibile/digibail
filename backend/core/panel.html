@@ -265,11 +265,36 @@ V.dash=()=>head('داشبورد','وضعیت پرتفوی وام در یک نگ�
  <div class="cols"><div class="panel"><h3>وضعیت درخواست‌های وام</h3>${hbars(S.LoanApplication.map(s=>[s[1],loans.filter(l=>l.st===s[0]).length*7+3,'درخواست']),'var(--s1)')}</div>
  <div class="panel"><h3>آخرین فعالیت‌ها</h3><div class="list">${audit.map(a=>`<div><span>${a[0]}: ${a[1]}</span><span>${a[2].slice(-5)}</span></div>`).join('')}</div></div></div>`;
 
-V.loans=()=>{const chips=[['all','همه']].concat(S.LoanApplication.map(s=>[s[0],s[1]]));
- const rows=loans.filter(l=>state.lf==='all'||l.st===state.lf);
- return head('درخواست‌های وام','برای دیدن جزئیات و تغییر وضعیت روی هر ردیف بزنید')+
- `<div class="panel"><div class="bar">${chips.map(c=>`<button class="tab" data-lf="${c[0]}" aria-selected="${state.lf===c[0]}">${c[1]}</button>`).join('')}${search('جستجوی نام یا شماره')}</div>`+
- tbl([['کد',l=>fa(l.id),'n'],['مشتری',l=>esc(l.name)],['پذیرنده',l=>esc(l.merchant)],['مبلغ',l=>M(l.amount/1e6),'n'],['مدت',l=>fa(l.months)+' ماه'],['امتیاز',l=>fa(l.score),'n'],['وضعیت',l=>pill('LoanApplication',l.st)],['تاریخ',l=>l.date,'n']],rows.map(l=>l),'loan')+'</div>'};
+V.loans=()=>{
+ const html=head('درخواست‌های وام','فهرست واقعی درخواست‌های منتقل‌شده از پایگاه قدیمی؛ داده‌ها در این صفحه فقط‌خواندنی هستند')+
+ '<div class="panel" id="realLoanRequests"><p class="empty">در حال دریافت درخواست‌های واقعی از پایگاه داده…</p></div>';
+ setTimeout(async()=>{
+  const root=document.getElementById('realLoanRequests');if(!root)return;
+  try{
+   const sourceTable='vamcityc_vamcity_import_20261028.dbo.UserLoanRequests';
+   const response=await fetch('/api/v1/admin/legacy-source-data?table='+encodeURIComponent(sourceTable)+'&limit=100&offset=0',{credentials:'same-origin',cache:'no-store'});
+   const result=await response.json();
+   if(!response.ok)throw new Error(result.message||('HTTP '+response.status));
+   const rows=Array.isArray(result.data)?result.data:[];
+   const norm=v=>String(v??'').toLowerCase().replace(/[^a-z0-9\u0600-\u06ff]/g,'');
+   const pick=(p,names)=>{const keys=Object.keys(p||{});for(const name of names){const k=keys.find(x=>norm(x)===norm(name));if(k&&p[k]!==null&&p[k]!==undefined&&p[k]!=='')return p[k]}return null};
+   const show=v=>v===null||v===undefined||v===''?'—':esc(typeof v==='object'?JSON.stringify(v):String(v).slice(0,160));
+   if(!rows.length){root.innerHTML='<p class="empty">در جدول اصلی درخواست وام رکوردی پیدا نشد.</p>';return}
+   const bodyRows=rows.map(r=>{
+    const p=r.payload&&typeof r.payload==='object'?r.payload:{};
+    const id=pick(p,['Id','ID','UserLoanRequestId','RequestId','Code'])??r.legacy_id;
+    const user=pick(p,['UserId','ApplicantId','CustomerId','MemberId']);
+    const product=pick(p,['LoanId','LoanProductId','LoanTypeId','ProductId','PlanId']);
+    const amount=pick(p,['Amount','LoanAmount','RequestedAmount','RequestAmount','AmountRequested','مبلغ']);
+    const status=pick(p,['Status','StatusId','LoanRequestStatus','RequestStatus','State']);
+    const created=pick(p,['CreatedAt','CreatedOn','CreateDate','CreatedDate','RequestDate','RegDate','Date']);
+    return '<tr><td class="n">'+show(id)+'</td><td class="n">'+show(user)+'</td><td class="n">'+show(product)+'</td><td class="n">'+show(amount)+'</td><td>'+show(status)+'</td><td class="n">'+show(created)+'</td></tr>';
+   }).join('');
+   root.innerHTML='<div class="bar"><span class="pill a">منبع واقعی: UserLoanRequests</span><span class="sub">نمایش ۱۰۰ ردیف نخست از ۱۷٬۲۵۵ ردیف منبع اصلی</span></div><p class="sub">این رکوردها از داده‌های منتقل‌شده خوانده می‌شوند. وضعیت پرونده و عملیات پرداخت در این صفحه هنوز تغییر داده نمی‌شود تا اتصال گردش‌کار عملیاتی جداگانه بررسی شود.</p><div class="scroll"><table><thead><tr><th>شناسه درخواست</th><th>شناسه متقاضی</th><th>شناسه طرح وام</th><th>مبلغ درخواستی</th><th>وضعیت منبع</th><th>تاریخ ثبت</th></tr></thead><tbody>'+bodyRows+'</tbody></table></div>';
+  }catch(error){root.innerHTML='<p class="empty">خواندن درخواست‌های واقعی انجام نشد: '+esc(String(error.message||error))+'</p>'}
+ },0);
+ return html;
+};
 
 V.products=()=>head('محصولات وام','هر پذیرنده می‌تواند چند محصول فعال داشته باشد','<a class="btn" href="/loan-definition.html">تعریف وام‌ها</a> <button class="btn solid" id="addProd">محصول جدید</button>')+
  `<div class="cards">${products.map((p,i)=>`<div class="card"><h3>${p.n}<span class="frow"><button class="btn" data-pe="${i}">ویرایش</button><button class="btn ${p.on?'ok':''}" data-prod="${i}">${p.on?'فعال':'غیرفعال'}</button></span></h3>
