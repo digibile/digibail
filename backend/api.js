@@ -106,6 +106,31 @@ export async function migrate() {
         COALESCE(payload->>'CreatedAt',payload->>'CreatedOn',payload->>'CreationDate',payload->>'RegisterDate',payload->>'RegistrationDate',payload->>'DateCreated',payload->>'CreateDate') AS raw_date
       FROM legacy_source_data
       WHERE source_table ~* '^[a-z0-9_]*[.]dbo[.]AspNetUsers  await pool.query("ANALYZE loan_requests");
+  // Preserve the complete old ASP.NET account directory in the local customer database.
+  // This migration is repeatable and never deletes source or existing customer records.
+  await pool.query(`
+    ALTER TABLE legacy_customers ADD COLUMN IF NOT EXISTS legacy_username TEXT;
+    ALTER TABLE legacy_customers ADD COLUMN IF NOT EXISTS account_type TEXT NOT NULL DEFAULT 'مشتری / کاربر منتقل‌شده';
+    ALTER TABLE legacy_customers ADD COLUMN IF NOT EXISTS legacy_source_table TEXT;
+    CREATE INDEX IF NOT EXISTS legacy_customers_username_idx ON legacy_customers(legacy_username);
+    WITH src AS (
+      SELECT source_table, legacy_id, payload, COALESCE(NULLIF(payload->>'Id',''),legacy_id) AS raw_id,
+        COALESCE(NULLIF(payload->>'FullName',''),NULLIF(payload->>'DisplayName',''),NULLIF(payload->>'Name',''),NULLIF(trim(concat_ws(' ',NULLIF(payload->>'FirstName',''),NULLIF(payload->>'LastName',''))),''),NULLIF(payload->>'UserName',''),NULLIF(payload->>'Username',''),NULLIF(payload->>'Email','')) AS display_name,
+        COALESCE(NULLIF(payload->>'PhoneNumber',''),NULLIF(payload->>'Mobile',''),NULLIF(payload->>'Phone',''),NULLIF(payload->>'CellPhone','')) AS phone,
+        COALESCE(NULLIF(payload->>'Email',''),NULLIF(payload->>'EmailAddress','')) AS email_address,
+        COALESCE(NULLIF(payload->>'UserName',''),NULLIF(payload->>'Username','')) AS username,
+        COALESCE(NULLIF(payload->>'Roles',''),NULLIF(payload->>'Role',''),NULLIF(payload->>'UserType','')) AS role_text,
+        COALESCE(payload->>'CreatedAt',payload->>'CreatedOn',payload->>'CreationDate',payload->>'RegisterDate',payload->>'RegistrationDate',payload->>'DateCreated',payload->>'CreateDate') AS raw_date
+      FROM legacy_source_data WHERE source_table='vamcityc_vamcity_import_20261028.dbo.AspNetUsers'
+    )
+    INSERT INTO legacy_customers(legacy_id,name,mobile,email,registered_at,legacy_username,account_type,legacy_source_table)
+    SELECT raw_id::uuid,COALESCE(display_name,''),COALESCE(phone,''),COALESCE(email_address,''),
+      CASE WHEN raw_date ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}' THEN raw_date::timestamptz WHEN left(raw_date,6)='/Date(' AND right(raw_date,2)=')/' THEN to_timestamp(regexp_replace(raw_date,'[^0-9-]','','g')::numeric/1000) WHEN length(raw_date) IN (10,13) AND raw_date ~ '^[0-9]+' THEN to_timestamp(raw_date::numeric/CASE WHEN length(raw_date)=13 THEN 1000 ELSE 1 END) ELSE NULL END,
+      COALESCE(username,''),CASE WHEN lower(COALESCE(role_text,'')) LIKE '%admin%' THEN 'کاربر مدیریتی منتقل‌شده' ELSE 'مشتری / کاربر منتقل‌شده' END,source_table
+    FROM src WHERE length(raw_id)=36 AND raw_id ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'
+    ON CONFLICT(legacy_id) DO UPDATE SET name=COALESCE(NULLIF(EXCLUDED.name,''),legacy_customers.name),mobile=COALESCE(NULLIF(EXCLUDED.mobile,''),legacy_customers.mobile),email=COALESCE(NULLIF(EXCLUDED.email,''),legacy_customers.email),registered_at=COALESCE(EXCLUDED.registered_at,legacy_customers.registered_at),legacy_username=COALESCE(NULLIF(EXCLUDED.legacy_username,''),legacy_customers.legacy_username),account_type=COALESCE(NULLIF(EXCLUDED.account_type,''),legacy_customers.account_type),legacy_source_table=COALESCE(EXCLUDED.legacy_source_table,legacy_customers.legacy_source_table);
+    ANALYZE legacy_customers;
+  `);
   // Provision a password-only initial superadmin without relying on SMS delivery.
   // The password itself is never stored in source; only a salted scrypt verifier is.
   await pool.query(
