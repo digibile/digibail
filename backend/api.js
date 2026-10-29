@@ -337,7 +337,7 @@ export async function handleApi(req, res, url) {
       }
       if (req.method === "GET" && route === "/api/v1/admin/loan-products") {
         const params = url.searchParams;
-        const limit = Math.min(50, Math.max(10, Number.parseInt(params.get("limit") || "20", 10) || 20));
+        const limit = Math.min(50, Math.max(10, Number.parseInt(params.get("limit") || "10", 10) || 10));
         const offset = Math.max(0, Number.parseInt(params.get("offset") || "0", 10) || 0);
         const search = String(params.get("q") || "").trim().slice(0, 120);
         const method = String(params.get("method") || "").trim();
