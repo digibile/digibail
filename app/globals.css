@@ -314,3 +314,20 @@ footer{background:#06365f;color:#edf7ff}footer .brand span{color:#66c5ff}
 @media(max-width:1000px){.category-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.category-tile{height:205px}.tile-home{grid-column:span 2}.benefits{grid-template-columns:repeat(5,minmax(0,1fr));padding-inline:16px}.benefits>div{padding-inline:5px}.benefits small{font-size:.68rem}.brand-promo{grid-template-columns:1fr 1fr}.promo-image{height:250px}}
 @media(max-width:650px){.hero{background-image:linear-gradient(180deg,rgba(5,37,56,.86),rgba(5,37,56,.74)),url("https://images.unsplash.com/photo-1555041469-a586c61ea9bc?auto=format&fit=crop&w=1000&q=85");background-position:center;min-height:0}.hero:after{width:260px;height:260px;left:-80px;top:48%;box-shadow:0 0 0 28px #ffffff08,0 0 0 60px #ffffff05}.visual{min-height:260px}.floating-card{width:100%;min-height:220px}.benefits{grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;padding:17px 12px}.benefits>div{border-left:0;border-bottom:1px solid #e4eeee;padding:10px 4px}.benefits>div:nth-child(n+4){border-bottom:0}.benefits b{font-size:.78rem}.benefits small{font-size:.67rem}.benefit-icon{width:38px;height:38px}.showcase-heading{align-items:flex-start;flex-direction:column}.category-showcase,.steps-section{padding:38px 16px}.category-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.category-tile{height:185px}.tile-home{grid-column:span 2;height:210px}.category-tile span{right:12px;bottom:13px}.category-tile b{font-size:.9rem}.category-tile small{font-size:.69rem}.brand-promo{grid-template-columns:1fr;padding:35px 18px;gap:24px}.promo-image{height:210px;transform:none}.promo-copy h2{font-size:1.8rem}.steps-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.steps-grid article{padding:15px}.steps-grid p{font-size:.76rem}}
 @media(min-width:1400px){.category-tile{height:250px}.hero{min-height:630px}}
+
+/* Reliable image stacking and graceful loading states */
+.hero-product-scene{isolation:isolate;background:#dcecf2}
+.hero-product-scene:before{z-index:0;pointer-events:none}
+.scene-label{z-index:2}
+.scene-products{z-index:2}
+.scene-products img{display:block;min-width:0;min-height:0;background:#d8e8ee}
+.category-tile{isolation:isolate;background:#173e50}
+.category-tile img{z-index:0}
+.category-tile:after{z-index:1;pointer-events:none}
+.category-tile span{z-index:2}
+.plan-photo{position:relative;width:100%;height:180px;overflow:hidden;border-radius:14px;background:linear-gradient(135deg,#d8edf2,#e8f7ef);margin-bottom:16px}
+.plan-photo img{display:block;width:100%;height:100%;object-fit:cover;transition:transform .35s}
+.plan-card:hover .plan-photo img{transform:scale(1.04)}
+.plan-photo>span{position:absolute;right:12px;top:12px;background:#062f46d9;color:#fff;border:1px solid #ffffff45;border-radius:999px;padding:6px 10px;font-size:.72rem;font-weight:800;backdrop-filter:blur(8px)}
+.plan-photo.image-unavailable:after{content:"دیجی‌بایل | طرح خرید اقساطی";position:absolute;inset:0;display:grid;place-items:center;color:#0c5865;font-weight:900;background:linear-gradient(135deg,#dceff0,#f4f9f7)}
+@media(max-width:560px){.plan-photo{height:200px}.scene-products{inset:auto 9px 9px;height:40%;gap:6px}.scene-products img{border-width:2px}}
