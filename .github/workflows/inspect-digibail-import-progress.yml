@@ -58,6 +58,46 @@ jobs:
               echo "PATH=$path HTTP=$code BYTES=$(wc -c </tmp/digibail-request-check 2>/dev/null || echo 0)"
             done
             rm -f /tmp/digibail-request-check
+            echo "=== AUTHENTICATED REQUEST LIST AND FILTER SMOKE TEST ==="
+            RECOVERY_PASSWORD="$($D run --rm -v /:/host alpine:3.20 sh -c "sed -n 's/^password=//p' /host/root/digibail-admin-recovery.txt | head -n 1")"
+            export RECOVERY_PASSWORD
+            node --input-type=module <<'NODE'
+            const base="http://127.0.0.1:1631";
+            const password=process.env.RECOVERY_PASSWORD||"";
+            const c=await fetch(base+"/api/v1/security/captcha");
+            if(!c.ok)throw new Error("captcha_http_"+c.status);
+            const challenge=await c.json();
+            const svg=Buffer.from(String(challenge.image||"").split(",")[1]||"","base64").toString("utf8");
+            const match=svg.match(/<text[^>]*>([0-9]{5})<\\/text>/);
+            if(!challenge.id||!match)throw new Error("captcha_parse_failed");
+            const login=await fetch(base+"/api/v1/security/login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({username:"digibail-recovery",password,captchaId:challenge.id,captchaAnswer:match[1]})});
+            const cookie=String(login.headers.get("set-cookie")||"").split(";")[0];
+            if(!login.ok||!cookie.startsWith("db_session="))throw new Error("admin_login_http_"+login.status);
+            const page=await fetch(base+"/loan-requests.html",{headers:{Cookie:cookie}});
+            const html=await page.text();
+            if(!page.ok||!html.includes("همهٔ درخواست‌ها"))throw new Error("requests_page_http_"+page.status);
+            const headers={Cookie:cookie};
+            const listResponse=await fetch(base+"/api/v1/admin/loan-requests?page=1&pageSize=25",{headers});
+            if(!listResponse.ok)throw new Error("request_list_http_"+listResponse.status);
+            const list=(await listResponse.json()).data;
+            if(Number(list.total)!==17255||list.rows.length!==25)throw new Error("request_list_count_or_page_size_mismatch");
+            if(list.rows.some(r=>!r.status||/^[0-9a-f-]{36}$/i.test(r.status)))throw new Error("legacy_status_labels_not_mapped");
+            const status=list.statuses.find(s=>s.status);
+            if(status){
+              const p=new URLSearchParams({page:"1",pageSize:"25",status:status.status});
+              const filtered=await fetch(base+"/api/v1/admin/loan-requests?"+p,{headers});
+              const data=(await filtered.json()).data;
+              if(!filtered.ok||Number(data.total)!==Number(status.count))throw new Error("status_filter_mismatch");
+            }
+            const dateParams=new URLSearchParams({page:"1",pageSize:"25",from:"2023-08-02",to:"2023-08-02"});
+            const dateResponse=await fetch(base+"/api/v1/admin/loan-requests?"+dateParams,{headers});
+            const dateData=(await dateResponse.json()).data;
+            if(!dateResponse.ok||!dateData.total||dateData.rows.some(r=>!String(r.created_at||"").startsWith("2023-08-02")))throw new Error("date_filter_failed");
+            console.log("REQUESTS_PAGE_AUTH=PASS");
+            console.log("REQUESTS_TOTAL="+list.total+" PAGE_ROWS="+list.rows.length);
+            console.log("STATUS_FILTER=PASS DATE_FILTER=PASS LEGACY_STATUS_LABELS=PASS");
+            NODE
+            unset RECOVERY_PASSWORD
             echo "=== SOURCE DATABASE STATUS ==="
             SQLC="vamcity-stage-sql"
             if $D inspect "$SQLC" >/dev/null 2>&1; then
