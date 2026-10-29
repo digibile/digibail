@@ -68,3 +68,115 @@
 @media(prefers-reduced-motion:reduce) {
  .db-home *, .db-home *:before, .db-home *:after { scroll-behavior:auto!important; animation:none!important; transition:none!important; }
 }
+
+
+/* Premium visual pass: stronger editorial hierarchy, product photography and mobile controls. */
+.db-home .top { position:relative; z-index:20; display:flex; align-items:center; justify-content:space-between; gap:22px; }
+.db-home .brand { display:inline-flex; align-items:center; gap:3px; white-space:nowrap; text-decoration:none; }
+.db-home .top nav { display:flex; align-items:center; flex-wrap:wrap; }
+.db-home .login { white-space:nowrap; transition:transform .2s ease,background .2s ease; }
+.db-home .login:hover { background:#08788a; transform:translateY(-1px); }
+.db-home .hero { isolation:isolate; }
+.db-home .hero-copy { max-width:650px; }
+.db-home .hero-copy h1 { text-wrap:balance; }
+.db-home .hero-copy p { max-width:48ch; }
+.db-home .visual { min-width:0; }
+.db-home .hero-stage { align-items:stretch; }
+.db-home .hero-photo-grid { grid-template-areas:"main phone" "main laptop"; }
+.db-home .hero-photo-main { grid-area:main; }
+.db-home .hero-photo:nth-child(2) { grid-area:phone; }
+.db-home .hero-photo:nth-child(3) { grid-area:laptop; }
+.db-home .hero-photo:nth-child(4) { display:none; }
+.db-home .hero-photo { position:relative; overflow:hidden; min-width:0; background:#163f52; }
+.db-home .hero-photo img { width:100%; height:100%; min-height:0; display:block; transition:transform .55s cubic-bezier(.2,.7,.2,1); }
+.db-home .hero-photo:hover img,.db-home .category-tile:hover img { transform:scale(1.055); }
+.db-home .hero-photo:after { content:""; position:absolute; inset:35% 0 0; background:linear-gradient(transparent,#031923bd); pointer-events:none; }
+.db-home .hero-photo span { z-index:2; font-size:.86rem; font-weight:900; }
+.db-home .hero-calc-panel { align-self:center; min-width:0; background:#fff; color:#14384a; }
+.db-home .hero-calc-title { gap:11px; }
+.db-home .hero-calc-status { white-space:nowrap; }
+.db-home .hero-calc-field input[type=range] { accent-color:#087f8c; cursor:pointer; }
+.db-home .hero-calc-field select { width:100%; min-height:44px; border:1px solid #d9e6eb; border-radius:10px; padding:8px 12px; color:#173d4e; background:#f8fbfc; font:inherit; }
+.db-home .hero-calc-total > div { min-width:0; }
+.db-home .hero-calc-total b { overflow-wrap:anywhere; font-variant-numeric:tabular-nums; }
+.db-home .benefits { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:12px; padding:22px clamp(18px,5vw,76px); background:#fff; }
+.db-home .benefits>div { min-width:0; }
+.db-home .benefit-icon { display:grid; place-items:center; width:42px; height:42px; border-radius:13px; background:#e9f7f6; color:#087f8c; font-size:1.2rem; }
+.db-home .category-showcase { padding-block:76px; }
+.db-home .showcase-heading { align-items:end; gap:20px; }
+.db-home .showcase-heading h2,.db-home .steps-section h2,.db-home .home-plan-entry h2 { letter-spacing:-.6px; }
+.db-home .category-grid { grid-template-columns:repeat(6,minmax(0,1fr)); gap:16px; }
+.db-home .category-tile { grid-column:span 2; min-width:0; height:260px; }
+.db-home .category-tile:first-child,.db-home .category-tile:nth-child(4) { grid-column:span 3; }
+.db-home .category-tile img { width:100%; height:100%; display:block; transition:transform .55s cubic-bezier(.2,.7,.2,1); }
+.db-home .category-tile span { z-index:2; }
+.db-home .category-tile b { font-size:1.08rem; }
+.db-home .brand-promo { overflow:hidden; border-radius:26px; }
+.db-home .promo-image img { width:100%; height:100%; min-height:300px; display:block; }
+.db-home .steps-grid article { border:1px solid #e2edf0; box-shadow:0 12px 28px #10394a0a; transition:transform .2s ease,box-shadow .2s ease; }
+.db-home .steps-grid article:hover { transform:translateY(-4px); box-shadow:0 18px 34px #10394a16; }
+.db-home .site-footer a { text-underline-offset:4px; }
+.db-home .mobile-dock { display:none; }
+@media(max-width:1180px) {
+ .db-home .top nav { gap:12px; }
+ .db-home .top nav a { font-size:.78rem; }
+ .db-home .benefits { grid-template-columns:repeat(3,minmax(0,1fr)); }
+ .db-home .category-grid { grid-template-columns:repeat(6,minmax(0,1fr)); }
+}
+@media(max-width:900px) {
+ .db-home .top nav { display:none; }
+ .db-home .hero-stage { grid-template-columns:minmax(0,1fr); }
+ .db-home .hero-photo-grid { min-height:340px; grid-template-rows:minmax(220px,1fr) minmax(150px,.7fr); }
+ .db-home .hero-calc-panel { width:100%; }
+ .db-home .benefits { grid-template-columns:repeat(2,minmax(0,1fr)); }
+ .db-home .category-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+ .db-home .category-tile,.db-home .category-tile:first-child,.db-home .category-tile:nth-child(4) { grid-column:span 1; height:230px; }
+ .db-home .category-tile:first-child { grid-column:span 2; }
+}
+@media(max-width:700px) {
+ .db-home { padding-bottom:88px; }
+ .db-home .top { min-height:64px; }
+ .db-home .login { padding:10px 12px; font-size:.78rem; }
+ .db-home .hero { gap:28px; }
+ .db-home .hero-copy h1 { line-height:1.35; }
+ .db-home .hero-stage { gap:14px; }
+ .db-home .hero-photo-grid { min-height:300px; grid-template-columns:1.1fr .9fr; grid-template-rows:repeat(2,minmax(130px,1fr)); }
+ .db-home .hero-photo-main { grid-row:span 2; }
+ .db-home .hero-photo:nth-child(2),.db-home .hero-photo:nth-child(3) { grid-column:auto; grid-row:auto; }
+ .db-home .hero-photo span { inset:auto 10px 10px; font-size:.72rem; }
+ .db-home .hero-calc-panel { padding:16px; border-radius:18px; }
+ .db-home .hero-calc-title { align-items:flex-start; }
+ .db-home .hero-calc-status { font-size:.65rem; }
+ .db-home .hero-calc-total { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
+ .db-home .hero-calc-total b { font-size:1rem; }
+ .db-home .benefits { padding:20px 15px; gap:10px; }
+ .db-home .benefits>div { display:grid; grid-template-columns:38px minmax(0,1fr); column-gap:10px; align-items:center; }
+ .db-home .benefit-icon { grid-row:span 2; width:38px; height:38px; }
+ .db-home .benefits b { font-size:.78rem; }
+ .db-home .benefits small { font-size:.68rem; line-height:1.6; }
+ .db-home .category-showcase { padding-block:48px; }
+ .db-home .showcase-heading { align-items:start; flex-direction:column; }
+ .db-home .category-grid { gap:10px; }
+ .db-home .category-tile,.db-home .category-tile:first-child,.db-home .category-tile:nth-child(4) { height:185px; min-height:185px; }
+ .db-home .category-tile:first-child { height:220px; }
+ .db-home .category-tile b { font-size:.9rem; }
+ .db-home .category-tile small { font-size:.72rem; }
+ .db-home .brand-promo { display:grid; grid-template-columns:minmax(0,1fr); }
+ .db-home .promo-image { order:-1; max-height:230px; overflow:hidden; }
+ .db-home .promo-image img { min-height:230px; max-height:230px; }
+ .db-home .steps-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+ .db-home .mobile-dock { position:fixed; display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); inset:auto 10px max(10px,env(safe-area-inset-bottom)); padding:8px 5px; gap:2px; background:#fff; border-radius:20px; box-shadow:0 10px 35px #052b3d35; backdrop-filter:blur(18px); }
+ .db-home .mobile-dock a { display:flex; min-width:0; flex-direction:column; align-items:center; justify-content:center; gap:4px; color:#597482; text-decoration:none; border-radius:13px; padding:5px 2px; }
+ .db-home .mobile-dock a>span { display:grid; place-items:center; width:32px; height:30px; border-radius:10px; }
+ .db-home .mobile-dock svg { width:22px; height:22px; display:block; }
+ .db-home .mobile-dock small { font-size:.65rem; font-weight:800; white-space:nowrap; }
+ .db-home .mobile-dock a.dock-main { color:#fff; }
+ .db-home .mobile-dock a.dock-main>span { width:42px; height:38px; margin-top:-17px; background:#087f8c; box-shadow:0 5px 14px #087f8c45; border:3px solid #fff; }
+ .db-home .mobile-dock a.dock-main small { color:#087f8c; }
+ .db-home .footer-bottom { padding-bottom:10px; }
+}
+@media(max-width:380px) {
+ .db-home .hero-calc-status { display:none; }
+ .db-home .category-tile,.db-home .category-tile:first-child,.db-home .category-tile:nth-child(4) { height:165px; min-height:165px; }
+ .db-home .steps-grid { grid-template-columns:minmax(0,1fr); }
+}
