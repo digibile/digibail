@@ -299,9 +299,13 @@ export async function handleApi(req, res, url) {
         const bool=(v)=>v===true||v===1||String(v).toLowerCase()==="true"||String(v)==="1";
         const safeHtml=(v)=>String(v||"").slice(0,50000).replace(/<\s*(script|style|iframe|object|embed|form|meta|link)[^>]*>[\s\S]*?<\/\s*\1\s*>/gi,"").replace(/<\s*(script|style|iframe|object|embed|form|meta|link)[^>]*\/?\s*>/gi,"").replace(/\s+on[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi,"").replace(/(href|src)\s*=\s*(['"])\s*javascript:[\s\S]*?\2/gi,"$1=\"#\"");
         let imported=0,skipped=0;
-        for(let offset=0;offset<totalRows;offset+=1){
-          const q=await pool.query("SELECT source_table,legacy_id,payload FROM legacy_source_data WHERE source_table=$1 ORDER BY legacy_id LIMIT 1 OFFSET $2",[sourceTable,offset]);
+        let lastLegacyId=null;
+        while(true){
+          // Keyset pagination avoids a full table rescan for every legacy row.
+          const q=await pool.query("SELECT source_table,legacy_id,payload FROM legacy_source_data WHERE source_table=$1 AND ($2::text IS NULL OR legacy_id>$2) ORDER BY legacy_id LIMIT 100",[sourceTable,lastLegacyId]);
+          if(!q.rowCount)break;
           for(const row of q.rows){
+          lastLegacyId=row.legacy_id;
           const p=row.payload&&typeof row.payload==="object"?row.payload:{};
           const name=String(pick(p,["Title","Name","LoanName","LoanTitle","نام وام","عنوان وام"])||"").trim().slice(0,120);
           const title=String(pick(p,["PlanTitle","Title","Name","عنوان طرح","عنوان"])||name).trim().slice(0,160);
