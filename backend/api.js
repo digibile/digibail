@@ -46,6 +46,7 @@ export async function migrate() {
     CREATE INDEX IF NOT EXISTS loan_requests_status_created_idx ON loan_requests(status, created_at DESC NULLS LAST);
     CREATE INDEX IF NOT EXISTS loan_requests_mobile_idx ON loan_requests(mobile);
     CREATE INDEX IF NOT EXISTS loan_requests_national_code_idx ON loan_requests(national_code);
+    CREATE INDEX IF NOT EXISTS loan_requests_source_idx ON loan_requests(source_table, legacy_id);
     WITH status_lookup AS (
       SELECT replace(source_table,'.LoanRequestStatuses','.UserLoanRequests') AS request_source,
         payload->>'Id' AS id, payload->>'Title' AS title,
