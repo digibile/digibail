@@ -1,4 +1,4 @@
-name: Diagnose Digibail production health and migration
+name: Diagnose Digibail migration locks and app startup
 on:
   workflow_dispatch:
   push:
@@ -11,38 +11,30 @@ jobs:
   diagnose:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    timeout-minutes: 6
     steps:
-      - name: Read-only production diagnostics
+      - name: Inspect database locks and backend startup
         uses: appleboy/ssh-action@v1.2.2
         with:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
-          command_timeout: 7m
+          command_timeout: 5m
           script: |
             set -eu
             ROOT="/home/digibail/domains/digebail.ir"
             cd "$ROOT"
             if sudo -n docker info >/dev/null 2>&1; then D='sudo -n docker'; else D='docker'; fi
-            echo "=== APP AND DATABASE CONTAINERS ==="
+            echo "=== CONTAINER STATE ==="
             $D compose ps -a
-            echo "=== HEALTH CHECK ==="
-            curl -sS --max-time 8 -i http://127.0.0.1:1631/healthz || true
-            echo "=== APP LOGS ==="
-            $D compose logs --tail=100 app || true
-            echo "=== IMPORT PROCESS STATUS ==="
+            echo "=== HEALTH ==="
+            curl -sS --max-time 5 -i http://127.0.0.1:1631/healthz || true
+            echo "=== ACTIVE POSTGRES SESSIONS AND LOCK WAITS ==="
+            $D compose exec -T db sh -lc 'export PGPASSWORD="$POSTGRES_PASSWORD"; psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1 -P pager=off -c "SELECT pid,usename,state,wait_event_type,wait_event,round(extract(epoch FROM (now()-query_start))::numeric,1) AS seconds,left(query,180) AS query FROM pg_stat_activity WHERE datname=current_database() AND pid<>pg_backend_pid() ORDER BY query_start NULLS LAST LIMIT 25;"'
+            echo "=== BLOCKED SESSIONS ==="
+            $D compose exec -T db sh -lc 'export PGPASSWORD="$POSTGRES_PASSWORD"; psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1 -P pager=off -c "SELECT a.pid,pg_blocking_pids(a.pid) AS blockers,a.wait_event_type,a.wait_event,left(a.query,160) AS query FROM pg_stat_activity a WHERE cardinality(pg_blocking_pids(a.pid))>0;"'
+            echo "=== APP LOG TAIL ==="
+            $D compose logs --tail=35 app || true
+            echo "=== IMPORT STATUS ==="
             if [ -f "$ROOT/var/migrations/vamcity-import.status" ]; then echo "IMPORT_STATUS=$(cat "$ROOT/var/migrations/vamcity-import.status")"; else echo "IMPORT_STATUS=STATUS_FILE_MISSING"; fi
-            if [ -f "$ROOT/var/migrations/vamcity-import.log" ]; then tail -n 45 "$ROOT/var/migrations/vamcity-import.log" | sed -E 's/(password|token|secret|authorization|api[_-]?key)[=: ]+[^ ]+/\1=[REDACTED]/Ig'; fi
-            echo "=== ACTIVE IMPORT PROCESSES ==="
-            ps -eo pid,ppid,stat,etime,pcpu,args | grep -E '[i]mport-vamcity-real-data|[i]mport-legacy-loan-products|[b]ackfill-legacy-customers' | head -n 30 || true
-            echo "=== DATABASE COUNTS ==="
-            $D compose exec -T db sh -lc 'export PGPASSWORD="$POSTGRES_PASSWORD"; psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1 -At' <<'SQL'
-            SELECT 'users='||COUNT(*) FROM users;
-            SELECT 'legacy_customers='||COUNT(*) FROM legacy_customers;
-            SELECT 'loan_products='||COUNT(*) FROM loan_products;
-            SELECT 'loan_requests='||COUNT(*) FROM loan_requests;
-            SELECT 'loan_request_status_history='||COUNT(*) FROM loan_request_status_history;
-            SELECT 'legacy_source_data_total='||COUNT(*) FROM legacy_source_data WHERE source_table<>'__legacy_schema__';
-            SQL
-            echo "DIAGNOSTICS_COMPLETE=1"
+            echo "DIAGNOSTIC_COMPLETE=1"
