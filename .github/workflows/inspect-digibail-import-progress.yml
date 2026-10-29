@@ -44,7 +44,18 @@ jobs:
             SELECT 'sms_templates='||COUNT(*) FROM sms_templates;
             SELECT 'vamcity_preserved_rows='||COUNT(*) FROM legacy_source_data WHERE source_table LIKE 'vamcityc_%';
             SELECT source_table||'|'||COUNT(*) FROM legacy_source_data WHERE source_table LIKE 'vamcityc_%' GROUP BY source_table ORDER BY source_table;
+            SELECT 'loan_requests='||COUNT(*) FROM loan_requests;
+            SELECT 'loan_requests_with_date='||COUNT(*) FILTER (WHERE created_at IS NOT NULL)||'|without_date='||COUNT(*) FILTER (WHERE created_at IS NULL) FROM loan_requests;
+            SELECT 'loan_requests_range='||COALESCE(MIN(created_at)::text,'none')||'|'||COALESCE(MAX(created_at)::text,'none') FROM loan_requests;
+            SELECT source_table||'|'||COUNT(*) FROM loan_requests GROUP BY source_table ORDER BY source_table;
+            SELECT 'loan_request_status='||COALESCE(NULLIF(status,''),'(blank)')||'|'||COUNT(*) FROM loan_requests GROUP BY status ORDER BY COUNT(*) DESC LIMIT 25;
             SQL
+            echo "=== REQUESTS PAGE HTTP CHECK ==="
+            for path in /loan-requests.html /api/v1/admin/loan-requests; do
+              code="$(curl -sS -o /tmp/digibail-request-check -w '%{http_code}' --max-time 10 "http://127.0.0.1:1631$path" || true)"
+              echo "PATH=$path HTTP=$code BYTES=$(wc -c </tmp/digibail-request-check 2>/dev/null || echo 0)"
+            done
+            rm -f /tmp/digibail-request-check
             echo "=== SOURCE DATABASE STATUS ==="
             SQLC="vamcity-stage-sql"
             if $D inspect "$SQLC" >/dev/null 2>&1; then
