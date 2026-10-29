@@ -1624,7 +1624,7 @@ V.dash=view('real-dashboard',async()=>{
  return head('داشبورد مدیریت','همه‌ی اعداد از API و پایگاه داده خوانده می‌شوند؛ برای دیدن جزئیات روی هر کارت بزنید.')+
  tiles([
   ['حساب‌های کاربری',nf(users.length),'مشاهده فهرست کاربران','','users'],
-  ['مشتریان قدیمی',nf(customerCount),'مشاهده سوابق منتقل‌شده','','legacyCustomers'],
+  ['مشتریان',nf(customerCount),'مشاهده سوابق منتقل‌شده','','legacyCustomers'],
   ['الگوهای پیامک',nf(sms.length),'مشاهده و مدیریت الگوها','','smsLegacy'],
   ['استعلام‌های بتا',nf(beta.length),'مشاهده درخواست‌ها','','betaRequests'],
   ['جدول‌های قدیمی',nf(legacy.length),'مشاهده جدول‌ها و ردیف‌ها','','legacyData'],
@@ -1635,7 +1635,7 @@ V.dash=view('real-dashboard',async()=>{
   ['کارت‌های مجازی',nf(cards.length),'مشاهده کارت‌ها','','virtualCards'],
   ['اسناد دفتر کل',nf(ledger.length),'مشاهده تراکنش‌ها','','ledger']
  ])+
- '<div class="panel"><h3>دسترسی سریع</h3><div class="frow"><button class="btn solid" data-v="legacyData">تمام داده‌های منتقل‌شده</button><button class="btn" data-v="loans">درخواست‌های وام</button><button class="btn" data-v="loanDefinition">تعریف وام‌ها</button><button class="btn" data-v="products">طرح‌های وام</button><button class="btn" data-v="legacyCustomers">مشتریان قدیمی</button><button class="btn" data-v="smsLegacy">الگوهای پیامک</button><button class="btn" data-v="betaRequests">استعلام‌های بتا</button><button class="btn" data-v="legacyContracts">قراردادهای صادرشده</button><button class="btn" data-v="binder">مدارک مشتریان</button><button class="btn" data-v="orders">سفارش‌ها</button><button class="btn" data-v="ledger">دفتر کل</button></div></div>'+
+ '<div class="panel"><h3>دسترسی سریع</h3><div class="frow"><button class="btn solid" data-v="legacyData">تمام داده‌های منتقل‌شده</button><button class="btn" data-v="loans">درخواست‌های وام</button><button class="btn" data-v="loanDefinition">تعریف وام‌ها</button><button class="btn" data-v="products">طرح‌های وام</button><button class="btn" data-v="legacyCustomers">مشتریان</button><button class="btn" data-v="smsLegacy">الگوهای پیامک</button><button class="btn" data-v="betaRequests">استعلام‌های بتا</button><button class="btn" data-v="legacyContracts">قراردادهای صادرشده</button><button class="btn" data-v="binder">مدارک مشتریان</button><button class="btn" data-v="orders">سفارش‌ها</button><button class="btn" data-v="ledger">دفتر کل</button></div></div>'+
  '<div class="notice" style="padding:12px;border:1px solid var(--line);border-radius:10px">برای جلوگیری از نمایش آمار ساختگی، تعدادها از پاسخ واقعی سرویس‌ها محاسبه شده‌اند. با انتخاب هر کارت، فهرست مربوط باز می‌شود.</div>'
 });
 document.addEventListener('click',ok(async e=>{const d=e.target.closest('[data-dash-view]');if(d){state.view=d.dataset.dashView;render();window.scrollTo(0,0);return}const t=e.target.closest('[data-legacy-table]'),pg=e.target.closest('[data-legacy-page]');if(t){await loadLegacyTable(t.dataset.legacyTable,0);return}if(pg){await loadLegacyTable(LEGACY.table,Number(pg.dataset.legacyPage)||0);return}}));
@@ -1712,7 +1712,7 @@ V.dash=view('real-dashboard-drilldown',async function(){
   ['طرح‌های وام فعال',nf(active),'products','active','فقط طرح‌های فعال'],
   ['طرح‌های نیازمند بازبینی',nf(review),'products','review','رکوردهای علامت‌خورده برای بررسی'],
   ['حساب‌های کاربری',nf(users.length),'users','','مشاهده حساب‌های واقعی'],
-  ['مشتریان قدیمی',nf(customers.length),'legacyCustomers','','سوابق منتقل‌شده'],
+  ['مشتریان',nf(customers.length),'legacyCustomers','','سوابق منتقل‌شده'],
   ['الگوهای پیامک',nf(sms.length),'smsLegacy','','الگوها و گزارش ارسال'],
   ['استعلام‌های بتا',nf(beta.length),'betaRequests','','فهرست درخواست‌ها'],
   ['جدول‌های قدیمی',nf(legacy.length),'legacyData','','انتخاب جدول و مشاهده رکوردها'],
@@ -1723,7 +1723,7 @@ V.dash=view('real-dashboard-drilldown',async function(){
  ];
  return head('داشبورد مدیریت','تمام شمارنده‌ها از API واقعی خوانده می‌شوند؛ روی هر عدد بزنید تا فهرست همان داده‌ها باز شود.')+
   '<div class="dash-grid">'+items.map(x=>drillCard(x[0],x[1],x[2],x[3],x[4])).join('')+'</div>'+
-  '<div class="panel"><h3>دسترسی سریع</h3><div class="frow"><button class="btn solid" data-dash-view="products" data-dash-filter="all">همه‌ی تعریف‌های وام</button><button class="btn" data-dash-view="products" data-dash-filter="active">طرح‌های فعال</button><button class="btn" data-dash-view="legacyData">تمام داده‌های منتقل‌شده</button><button class="btn" data-dash-view="legacyCustomers">مشتریان قدیمی</button><button class="btn" data-dash-view="smsLegacy">الگوهای پیامک</button><button class="btn" data-dash-view="betaRequests">استعلام‌های بتا</button><button class="btn" data-dash-view="orders">سفارش‌ها</button><button class="btn" data-dash-view="ledger">دفتر کل</button><button class="btn" data-dash-view="stories">استودیو هوشمند استوری</button></div></div>'+
+  '<div class="panel"><h3>دسترسی سریع</h3><div class="frow"><button class="btn solid" data-dash-view="products" data-dash-filter="all">همه‌ی تعریف‌های وام</button><button class="btn" data-dash-view="products" data-dash-filter="active">طرح‌های فعال</button><button class="btn" data-dash-view="legacyData">تمام داده‌های منتقل‌شده</button><button class="btn" data-dash-view="legacyCustomers">مشتریان</button><button class="btn" data-dash-view="smsLegacy">الگوهای پیامک</button><button class="btn" data-dash-view="betaRequests">استعلام‌های بتا</button><button class="btn" data-dash-view="orders">سفارش‌ها</button><button class="btn" data-dash-view="ledger">دفتر کل</button><button class="btn" data-dash-view="stories">استودیو هوشمند استوری</button></div></div>'+
   '<div class="notice" style="padding:12px;border:1px solid var(--line);border-radius:10px">اعداد به صفحات فهرست وصل شده‌اند؛ فهرست تعریف‌های وام با صفحه‌بندی ۱۶تایی شروع می‌شود. هیچ رکورد نمونه‌ای به آمار واقعی اضافه نمی‌شود.</div>';
 });
 state.productFilter=state.productFilter||'all';state.productSearch=state.productSearch||'';state.productPage=state.productPage||1;state.productPageSize=state.productPageSize||16;
