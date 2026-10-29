@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
+import "./homepage.css";
 type Tier={months?:number;m?:number;installments?:number;feePercent?:number;fee?:number;monthlyRatePercent?:number;downPaymentPercent?:number;down?:number};
 type Plan={id:string;name:string;title?:string;description?:string;badge?:string;minAmount?:number;maxAmount?:number;intervalMonths?:number;intervalDays?:number;tiers?:Tier[]|string;conditions?:Record<string,unknown>|string;documents?:unknown[]|string;imageUrl?:string;fullDescriptionHtml?:string;labels?:unknown[]|string;operationalCosts?:unknown[]|string;interestMethod?:string;interestPercent?:number};
 const money=(n:number)=>new Intl.NumberFormat("fa-IR",{maximumFractionDigits:0}).format(Math.max(0,Math.round(n)))+" تومان";
@@ -17,7 +18,7 @@ export default function Home(){
  const visible=useMemo(()=>{const q=query.trim().toLocaleLowerCase("fa");const arr=plans.filter(p=>[p.name,p.title,p.description,p.badge].some(v=>String(v||"").toLocaleLowerCase("fa").includes(q)));if(sort==="amount")arr.sort((a,b)=>num(a.maxAmount)-num(b.maxAmount));if(sort==="name")arr.sort((a,b)=>String(a.name).localeCompare(String(b.name),"fa"));return arr},[plans,query,sort]);
  const conditions=plan?parsed<Record<string,unknown>>(plan.conditions,{}):{},docs=plan?parsed<unknown[]>(plan.documents,[]):[],costs=plan?parsed<unknown[]>(plan.operationalCosts,[]):[],labels=plan?parsed<unknown[]>(plan.labels,[]):[];
  function choose(p:Plan){setSelected(p.id);setAmount(num(p.minAmount));setTierIndex(0);document.getElementById("calculator")?.scrollIntoView({behavior:"smooth",block:"start"})}
- return <main>
+ return <main className="db-home">
  <header className="top"><a className="brand" href="/">دیجی‌بایل<span>پی</span></a><nav><a href="/plans">طرح‌های خرید اقساطی</a><a href="#calculator">محاسبه اقساط</a><a href="#how-it-works">مراحل استفاده</a><a href="/faq.html">سؤالات متداول</a></nav><a className="login" href="/login.html">ورود / ثبت‌نام <b>←</b></a></header>
  <section className="hero">
  <div className="hero-copy"><div className="eyebrow"><i/> خرید اقساطی، ساده‌تر از همیشه</div><h1>خرید آسان،<br/><em>اقساطی مطمئن</em></h1><p>از میان طرح‌های ثبت‌شده در دیجی‌بایل انتخاب کن، شرایط و مدارک را ببین و قبل از ثبت درخواست، مبلغ اقساط را شفاف بررسی کن.</p><div className="hero-actions"><a className="primary" href="/plans">مشاهده طرح‌های وام <b>←</b></a><a className="secondary" href="/loan-requests.html">ثبت درخواست وام</a></div><div className="trust"><span>طرح‌های ثبت‌شده</span><span>محاسبه شفاف اقساط</span><span>پشتیبانی در مسیر درخواست</span></div></div>
