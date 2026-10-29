@@ -68,7 +68,7 @@ jobs:
             if(!c.ok)throw new Error("captcha_http_"+c.status);
             const challenge=await c.json();
             const svg=Buffer.from(String(challenge.image||"").split(",")[1]||"","base64").toString("utf8");
-            const match=svg.match(/<text[^>]*>([0-9]{5})<\\/text>/);
+            const match=svg.match(/<text[^>]*>([0-9]{5})<[/]text>/);
             if(!challenge.id||!match)throw new Error("captcha_parse_failed");
             const login=await fetch(base+"/api/v1/security/login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({username:"digibail-recovery",password,captchaId:challenge.id,captchaAnswer:match[1]})});
             const cookie=String(login.headers.get("set-cookie")||"").split(";")[0];
