@@ -180,3 +180,58 @@
  .db-home .category-tile,.db-home .category-tile:first-child,.db-home .category-tile:nth-child(4) { height:165px; min-height:165px; }
  .db-home .steps-grid { grid-template-columns:minmax(0,1fr); }
 }
+
+
+/* Final approved reference match: richer product collage and more usable mobile navigation. */
+.db-home .hero-photo-grid {
+  grid-template-areas: "main phone" "main laptop" "main watch";
+  grid-template-rows: repeat(3, minmax(125px, 1fr));
+  min-height: 510px;
+  gap: 12px;
+}
+.db-home .hero-photo-main { grid-area: main; }
+.db-home .hero-photo:nth-child(2) { grid-area: phone; }
+.db-home .hero-photo:nth-child(3) { grid-area: laptop; }
+.db-home .hero-photo:nth-child(4) { display: block; grid-area: watch; }
+.db-home .hero-photo span { padding: 8px 10px; border-radius: 9px; background: #0625369c; backdrop-filter: blur(8px); }
+.db-home .hero-photo img { object-position: center; }
+.db-home .hero-calc-panel { border-top: 4px solid #c9f36b; }
+.db-home .hero-calc-title { align-items: center; }
+.db-home .hero-calc-mark { width: 44px; height: 44px; flex-basis: 44px; }
+.db-home .category-tile { isolation: isolate; }
+.db-home .category-tile:focus-visible { outline: 3px solid #087f8c; outline-offset: 3px; }
+.db-home .mobile-dock { padding: 9px 7px; border: 1px solid #d8e7e9; }
+.db-home .mobile-dock a { min-height: 54px; touch-action: manipulation; }
+.db-home .mobile-dock a:not(.dock-main):active { background: #eaf7f6; color: #087f8c; }
+.db-home .mobile-dock a.dock-main > span { width: 46px; height: 43px; border-radius: 14px; }
+.db-home .mobile-dock svg { stroke-linecap: round; stroke-linejoin: round; }
+@media (min-width: 1200px) {
+  .db-home .hero { grid-template-columns: minmax(0,.84fr) minmax(0,1.16fr); gap: clamp(34px,4vw,68px); }
+  .db-home .hero-stage { grid-template-columns: minmax(0,1fr) minmax(310px,.82fr); gap: 20px; }
+  .db-home .hero-photo-grid { min-height: 540px; }
+  .db-home .hero-copy h1 { font-size: clamp(3.1rem,4.6vw,4.8rem); }
+}
+@media (max-width: 900px) {
+  .db-home .hero-photo-grid { min-height: 430px; }
+}
+@media (max-width: 700px) {
+  .db-home .hero-photo-grid {
+    min-height: 340px;
+    grid-template-areas: "main phone" "main laptop" "main watch";
+    grid-template-rows: repeat(3, minmax(95px,1fr));
+    gap: 8px;
+  }
+  .db-home .hero-photo-main { grid-area: main; grid-row: auto; }
+  .db-home .hero-photo:nth-child(2) { grid-area: phone; }
+  .db-home .hero-photo:nth-child(3) { grid-area: laptop; }
+  .db-home .hero-photo:nth-child(4) { display: block; grid-area: watch; }
+  .db-home .hero-photo span { right: 7px; bottom: 7px; font-size: .66rem; padding: 5px 7px; }
+  .db-home .mobile-dock { inset: auto 8px max(8px,env(safe-area-inset-bottom)); grid-template-columns: repeat(5,minmax(0,1fr)); }
+  .db-home .mobile-dock small { font-size: .67rem; }
+  .db-home .mobile-dock svg { width: 23px; height: 23px; }
+  .db-home .hero-calc-total b { font-size: clamp(.76rem,3.3vw,1rem); }
+}
+@media (max-width: 380px) {
+  .db-home .hero-photo-grid { min-height: 300px; grid-template-rows: repeat(3,minmax(82px,1fr)); }
+  .db-home .mobile-dock small { font-size: .59rem; }
+}
