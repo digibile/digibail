@@ -451,9 +451,8 @@ function initCampaignStudio(){
  btn.disabled=true;msg('در حال ساخت گویندگی فارسی و موسیقی پس‌زمینه…');
  try{
   var speechText=[title,s.d||'شرایط و مدارک این طرح را با دقت بررسی کنید.','برای مشاهده جزئیات و ثبت درخواست، به وب‌سایت دیجی‌بایل پی مراجعه کنید.'].join('. ');
-  var ar=await fetch('/api/v1/admin/ai/story/audio',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'same-origin',body:JSON.stringify({text:speechText,voice:'marin'})});
-  var aj=await ar.json().catch(function(){return{}});
-  if(!ar.ok||!aj.audioBase64)throw new Error(aj.message||'گویندگی آماده نشد. تنظیم OPENAI_API_KEY و دسترسی مدیر را بررسی کنید.');
+  var aj=await loanApi('POST','/api/v1/admin/ai/story/audio',{text:speechText,voice:'marin'});
+  if(!aj||!aj.audioBase64)throw new Error('سرویس گویندگی فایل صوتی برنگرداند. تنظیم OPENAI_API_KEY را بررسی کنید.');
   var bin=atob(aj.audioBase64),bytes=new Uint8Array(bin.length);for(var bi=0;bi<bin.length;bi++)bytes[bi]=bin.charCodeAt(bi);
   var AudioCtx=window.AudioContext||window.webkitAudioContext;if(!AudioCtx)throw new Error('مرورگر از میکس صدای ویدئو پشتیبانی نمی‌کند.');
   audioCtx=new AudioCtx();await audioCtx.resume();
