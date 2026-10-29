@@ -22,7 +22,7 @@
 *{box-sizing:border-box}
 body{background:var(--bg);color:var(--fg);font-family:var(--f-body);line-height:1.7;margin:0;direction:rtl;text-align:right;
   padding-inline:max(16px,env(safe-area-inset-left,0px)) max(16px,env(safe-area-inset-right,0px));padding-block:16px}
-.app{display:grid;grid-template-columns:230px minmax(0,1fr);gap:20px;max-width:1320px;margin:0 auto}
+.app{display:grid;grid-template-columns:230px minmax(0,1fr);gap:20px;width:100%;max-width:none;margin:0;padding-inline:clamp(10px,1.4vw,22px)}
 aside{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:12px;align-self:start;position:sticky;top:84px;max-height:calc(100vh - 100px);overflow:auto}
 .brand{font-weight:900;font-size:1.2rem;padding:6px 10px 8px}
 .grp{color:var(--muted);font-size:.75rem;padding:12px 10px 4px}
@@ -113,7 +113,7 @@ pre.code{display:block;direction:ltr;text-align:left;padding:12px;overflow:auto;
 .slogo{font-weight:900}.sh{font-weight:900;line-height:1.5}.sp{margin-top:8px;font-size:.85rem;opacity:.9}.scta{text-align:center;padding:10px;border-radius:12px;font-weight:700}
 @media(max-width:900px){.doc{grid-template-columns:1fr}}
 body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:16;background:var(--bg)}
-.topbar{position:sticky;top:env(safe-area-inset-top,0px);z-index:15;display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:8px 12px;max-width:1320px;margin:0 auto 16px}
+.topbar{position:sticky;top:env(safe-area-inset-top,0px);z-index:15;display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:8px 12px;width:100%;max-width:none;margin:0 auto 16px}
 .tb-brand{font-weight:900;white-space:nowrap}.tb-search{position:relative;flex:1;min-width:180px}.tb-search input{width:100%}
 #gres{position:absolute;inset-inline:0;top:100%;margin-top:6px;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:6px;z-index:30;display:grid}
 #gres button{font:inherit;color:var(--fg);background:none;border:0;text-align:right;padding:6px 8px;border-radius:8px;cursor:pointer}#gres button:hover{background:var(--surface2)}
