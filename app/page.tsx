@@ -21,7 +21,26 @@ export default function Home(){
  <header className="top"><a className="brand" href="/">دیجی‌بایل<span>پی</span></a><nav><a href="/plans">طرح‌های خرید اقساطی</a><a href="#calculator">محاسبه اقساط</a><a href="#how-it-works">مراحل استفاده</a><a href="/faq.html">سؤالات متداول</a></nav><a className="login" href="/login.html">ورود / ثبت‌نام <b>←</b></a></header>
  <section className="hero">
  <div className="hero-copy"><div className="eyebrow"><i/> خرید اقساطی، ساده‌تر از همیشه</div><h1>خرید آسان،<br/><em>اقساطی مطمئن</em></h1><p>از میان طرح‌های ثبت‌شده در دیجی‌بایل انتخاب کن، شرایط و مدارک را ببین و قبل از ثبت درخواست، مبلغ اقساط را شفاف بررسی کن.</p><div className="hero-actions"><a className="primary" href="/plans">مشاهده طرح‌های وام <b>←</b></a><a className="secondary" href="/loan-requests.html">ثبت درخواست وام</a></div><div className="trust"><span>طرح‌های ثبت‌شده</span><span>محاسبه شفاف اقساط</span><span>پشتیبانی در مسیر درخواست</span></div></div>
- <aside className="visual"><div className="hero-product-scene" role="img" aria-label="تصویر محصولات دیجیتال و لوازم خانگی برای خرید اقساطی"><div className="scene-label"><span>انتخاب هوشمندانه</span><b>از خانه تا تکنولوژی</b></div><div className="scene-products"><img src="https://images.unsplash.com/photo-1593359677879-a4bb92f829d1?auto=format&fit=crop&w=500&q=85" alt="تلویزیون هوشمند" /><img src="https://images.unsplash.com/photo-1496181133206-80ce9b88a853?auto=format&fit=crop&w=500&q=85" alt="لپ‌تاپ" /><img src="https://images.unsplash.com/photo-1606220945770-b5b6c2c55bf1?auto=format&fit=crop&w=500&q=85" alt="هدفون و لوازم دیجیتال" /></div></div><div className="floating-card"><div className="card-top"><span>محاسبه سریع اقساط</span><span className="chip">DB+</span></div><div className="card-label">{plan?plan.name:"طرح‌های خرید اقساطی"}</div><strong>{calc?money(calc.monthly):"طرح فعال در دسترس نیست"}</strong><div className="card-bottom"><span>قسط ماهانه برآوردی</span><span>{calc?new Intl.NumberFormat("fa-IR").format(calc.months)+" ماه":"طرح ثبت‌شده"}</span></div><a className="scene-cta" href="#calculator">محاسبه جزئیات ←</a></div></aside></section>
+ <aside className="visual">
+ <div className="hero-stage">
+  <div className="hero-photo-grid" aria-label="تصاویر محصولات خرید اقساطی">
+   <div className="hero-photo hero-photo-main"><img src="https://images.unsplash.com/photo-1555041469-a586c61ea9bc?auto=format&fit=crop&w=1100&q=90" alt="فضای نشیمن و مبلمان خانه" fetchPriority="high"/><span>خانه و لوازم خانگی</span></div>
+   <div className="hero-photo"><img src="https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?auto=format&fit=crop&w=600&q=85" alt="گوشی هوشمند" loading="lazy"/><span>موبایل</span></div>
+   <div className="hero-photo"><img src="https://images.unsplash.com/photo-1496181133206-80ce9b88a853?auto=format&fit=crop&w=600&q=85" alt="لپ‌تاپ" loading="lazy"/><span>کالای دیجیتال</span></div>
+   <div className="hero-photo"><img src="https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=600&q=85" alt="ساعت مچی" loading="lazy"/><span>ساعت و گجت</span></div>
+  </div>
+  <div className="hero-calc-panel" id="hero-calculator">
+   <div className="hero-calc-title"><span className="hero-calc-mark">٪</span><div><b>محاسبه‌گر اقساط</b><small>{plan?plan.name:"طرح‌های خرید اقساطی"}</small></div><span className="hero-calc-status"><i/> متصل به سامانه</span></div>
+   {plan&&calc?<>
+    <label className="hero-calc-field"><span><b>مبلغ موردنیاز</b><strong>{money(amount)}</strong></span><input type="range" aria-label="مبلغ موردنیاز" min={min} max={Math.max(min,max)} step={Math.max(1,Math.round((max-min)/150)||1)} value={Math.min(max,Math.max(min,amount))} onChange={e=>setAmount(num(e.target.value,min))}/><span className="hero-calc-limits"><small>{money(min)}</small><small>{money(max)}</small></span></label>
+    <label className="hero-calc-field"><span><b>مدت بازپرداخت</b></span><select value={tierIndex} onChange={e=>setTierIndex(Number(e.target.value))}>{tiers.map((t,i)=><option key={i} value={i}>{new Intl.NumberFormat("fa-IR").format(num(t.months??t.m??t.installments,plan.intervalMonths||6))} ماه · نرخ {new Intl.NumberFormat("fa-IR").format(num(t.feePercent??t.fee??t.monthlyRatePercent,num(plan.interestPercent)))}٪</option>)}</select></label>
+    <div className="hero-calc-total"><div><small>قسط ماهانه برآوردی</small><b>{money(calc.monthly)}</b></div><div><small>مجموع بازپرداخت</small><b>{money(calc.total)}</b></div></div>
+    <a className="hero-calc-button" href="#calculator">بررسی جزئیات و شرایط <span>←</span></a>
+   </>:<div className="hero-calc-empty">{loading?"در حال دریافت طرح‌های ثبت‌شده…":err||"برای محاسبه، طرح فعال باید از سامانه دریافت شود."}</div>}
+   <small className="hero-calc-disclaimer">برآورد اولیه است؛ مبلغ قطعی طبق شرایط و قرارداد رسمی تعیین می‌شود.</small>
+  </div>
+ </div>
+</aside></section>
 
  
  <section className="benefits" aria-label="مزایای دیجی‌بایل"><div><span className="benefit-icon">♧</span><b>پشتیبانی حرفه‌ای</b><small>همراهی در مسیر درخواست</small></div><div><span className="benefit-icon">▦</span><b>تنوع طرح‌ها</b><small>مقایسه شرایط در یک نگاه</small></div><div><span className="benefit-icon">♙</span><b>شفافیت شرایط</b><small>جزئیات پیش از اقدام</small></div><div><span className="benefit-icon">ϟ</span><b>فرآیند ساده</b><small>دسترسی سریع به مراحل</small></div><div><span className="benefit-icon">✓</span><b>اطلاعات قابل بررسی</b><small>نمایش بر پایه داده سامانه</small></div></section>
