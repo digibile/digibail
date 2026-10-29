@@ -12,7 +12,7 @@ COPY --chown=node:node scripts/import-legacy-loan-products.mjs ./scripts/import-
 COPY --chown=node:node scripts/backfill-legacy-customers.mjs ./scripts/backfill-legacy-customers.mjs
 COPY --chown=node:node web ./web
 COPY --chown=node:node app ./app
-RUN npm run build
+RUN npm run build && chown -R node:node .next
 COPY --chown=node:node frontend ./frontend
 USER node
 EXPOSE 1631
