@@ -650,10 +650,15 @@ export async function handleApi(req, res, url) {
       }
       if (req.method === "GET" && route === "/api/v1/admin/legacy-customers-page") {
         const page=Math.max(1,Number.parseInt(url.searchParams.get("page")||"1",10)||1), pageSize=Math.min(100,Math.max(10,Number.parseInt(url.searchParams.get("pageSize")||"50",10)||50)), search=String(url.searchParams.get("q")||"").trim().slice(0,120);
-        const params=[], where=[]; if(search){params.push("%"+search+"%");where.push("(name ILIKE $1 OR mobile ILIKE $1 OR email ILIKE $1 OR customer_code::text ILIKE $1 OR legacy_id::text ILIKE $1 OR legacy_username ILIKE $1 OR affiliate_code ILIKE $1)");}
-        const filter=where.length?" WHERE "+where.join(" AND "):"", count=await pool.query("SELECT COUNT(*)::int AS total FROM legacy_customers"+filter,params);
-        const rows=await pool.query("SELECT legacy_id,name,mobile,email,customer_code,registered_at,expires_at,is_permanent,purchased,affiliate_code,parked_domain,legacy_username,account_type FROM legacy_customers"+filter+" ORDER BY registered_at DESC NULLS LAST,legacy_id LIMIT $"+(params.length+1)+" OFFSET $"+(params.length+2),[...params,pageSize,(page-1)*pageSize]);
-        return json(res,200,{data:{rows:rows.rows,total:count.rows[0].total,page,pageSize}});
+        const params=[], where=[];
+        if(search){params.push("%"+search+"%");where.push("(name ILIKE $"+params.length+" OR mobile ILIKE $"+params.length+" OR email ILIKE $"+params.length+" OR customer_code::text ILIKE $"+params.length+" OR legacy_id::text ILIKE $"+params.length+" OR legacy_username ILIKE $"+params.length+" OR affiliate_code ILIKE $"+params.length+" OR legacy_source_table ILIKE $"+params.length+")");}
+        const from=String(url.searchParams.get("from")||"").trim(), to=String(url.searchParams.get("to")||"").trim();
+        if(from && /^\\d{4}-\\d{2}-\\d{2}$/.test(from)){params.push(from);where.push("registered_at >= $"+params.length+"::date");}
+        if(to && /^\\d{4}-\\d{2}-\\d{2}$/.test(to)){params.push(to);where.push("registered_at < ($"+params.length+"::date + INTERVAL '1 day')");}
+        const filter=where.length?" WHERE "+where.join(" AND "):"";
+        const count=await pool.query("SELECT COUNT(*)::int AS total FROM legacy_customers"+filter,params);
+        const rows=await pool.query("WITH numbered AS (SELECT legacy_id,name,mobile,email,customer_code,registered_at,expires_at,is_permanent,purchased,affiliate_code,parked_domain,legacy_username,account_type,legacy_source_table,ROW_NUMBER() OVER (ORDER BY registered_at ASC NULLS FIRST,legacy_id ASC) AS customer_number FROM legacy_customers) SELECT legacy_id,name,mobile,email,customer_code,customer_number,registered_at,expires_at,is_permanent,purchased,affiliate_code,parked_domain,legacy_username,account_type,legacy_source_table FROM numbered"+filter+" ORDER BY registered_at DESC NULLS LAST,legacy_id DESC LIMIT $"+(params.length+1)+" OFFSET $"+(params.length+2),[...params,pageSize,(page-1)*pageSize]);
+        return json(res,200,{data:{rows:rows.rows,total:Number(count.rows[0]?.total)||0,page,pageSize}});
       }
       if (req.method === "GET" && route === "/api/v1/admin/legacy-customers") {
         const search = String(url.searchParams.get("q") || "").trim().slice(0,120);
