@@ -1317,9 +1317,7 @@ CREATE TABLE `HangFire__AggregatedCounter` (
   PRIMARY KEY (`Key`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE
-  `__raw_ExpireAt` VARCHAR(40) NULL COMMENT 'Exact original SQL Server temporal value',
-  `__raw_ExpireAt` VARCHAR(40) NULL COMMENT 'Exact original SQL Server temporal value' `HangFire__Counter` (
+CREATE TABLE `HangFire__Counter` (
   `Key` VARCHAR(50) NOT NULL,
   `Value` INT NOT NULL,
   `ExpireAt` DATETIME(3) NULL,
@@ -1400,9 +1398,7 @@ CREATE TABLE `HangFire__Set` (
   PRIMARY KEY (`Key`, `Value`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE `HangFire
-  `__raw_ExpireAt` VARCHAR(40) NULL COMMENT 'Exact original SQL Server temporal value',
-  `__raw_ExpireAt` VARCHAR(40) NULL COMMENT 'Exact original SQL Server temporal value'__State` (
+CREATE TABLE `HangFire__State` (
   `Id` BIGINT NOT NULL AUTO_INCREMENT,
   `JobId` BIGINT NOT NULL,
   `Name` VARCHAR(10) NOT NULL,
