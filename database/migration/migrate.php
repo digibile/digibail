@@ -88,8 +88,8 @@ function bcpJson(string $docker,string $container,string $password,string $dbNam
     $err=stream_get_contents($pipes[2]); fclose($pipes[2]);
     $rc=proc_close($p);
     if($rc!==0) stopNow('BCP failed for '.$dbName.': '.trim($err));
-    // BCP inserts hard line wraps into long JSON rows; FOR JSON already escapes source newlines.
-    $raw=str_replace(["\\r","\\n"],"",$raw);
+    // BCP inserts hard line wraps into long JSON rows; FOR JSON already escapes source newlines. REMOVE_BCP_CRLF_FIX
+    $raw=str_replace(["\r","\n"],"",$raw);
     $raw=sanitizeJsonControlChars($raw);
     $data=json_decode($raw,true,512,JSON_BIGINT_AS_STRING);
     if(!is_array($data) || json_last_error()!==JSON_ERROR_NONE) {
