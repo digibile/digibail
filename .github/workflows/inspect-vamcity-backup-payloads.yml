@@ -119,3 +119,5 @@ jobs:
               docker exec -e SQLCMDPASSWORD="$PASS" "$SQLC" "$SQLCMD" -S localhost -U sa -C -W -s '|' -Q "SET NOCOUNT ON; SELECT TOP 20 destination_database_name,restore_date,restore_type,recovery,replace FROM msdb.dbo.restorehistory ORDER BY restore_date DESC" 2>&1 | tail -n 25 || true
             fi
             echo "PAYLOAD_INSPECTION_COMPLETE=1"
+
+# Triggered for a fresh read-only audit of the archived SQL Server backup payloads.
