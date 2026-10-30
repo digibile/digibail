@@ -30,7 +30,7 @@ jobs:
             ROOT="/home/digibail/domains/digebail.ir"
             echo "=== WAIT FOR MAIN BRANCH DEPLOY SYNC ==="
             for i in $(seq 1 30); do
-              if grep -q 'BCP may wrap very long nvarchar(max) JSON result rows' "$ROOT/database/migration/migrate.php"; then break; fi
+              if grep -q 'function sanitizeJsonControlChars' "$ROOT/database/migration/migrate.php"; then break; fi
               sleep 5
             done
             grep -q 'BCP may wrap very long nvarchar(max) JSON result rows' "$ROOT/database/migration/migrate.php"
