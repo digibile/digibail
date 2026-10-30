@@ -1,10 +1,9 @@
 -- VamCity SQL Server to MariaDB schema conversion
--- Generated from restored SQL Server backups. Source customer data is excluded.
--- Target: MariaDB 10.6+ / MySQL 8.0-compatible DDL where noted.
--- Non-dbo SQL Server schemas map to <schema>__<table>.
--- datetime2/datetime/time(7) exact source values are retained in __raw_<column> fields.
--- SQL Server filtered indexes are represented as normal indexes; filtered unique IS NOT NULL semantics are retained.
--- SQL Server INCLUDE columns are added to covering indexes.
+-- Generated from restored SQL Server backups. Customer records are excluded.
+-- MariaDB 10.6+ / MySQL 8.0-compatible DDL where noted.
+-- Non-dbo schemas map to <schema>__<table>.
+-- Exact SQL Server datetime2/datetime/time(7) values are retained in __raw_<column> fields.
+-- Filtered indexes are approximated as ordinary indexes; SQL Server INCLUDE columns use covering indexes.
 
 SET NAMES utf8mb4;
 SET FOREIGN_KEY_CHECKS=0;
@@ -1327,7 +1326,8 @@ CREATE TABLE `HangFire__Counter` (
   `ExpireAt` DATETIME(3) NULL,
   `__raw_ExpireAt` VARCHAR(40) NULL COMMENT 'Exact original SQL Server temporal value',
   `Id` BIGINT NOT NULL AUTO_INCREMENT,
-  PRIMARY KEY (`Key`, `Id`)
+  PRIMARY KEY (`Key`, `Id`),
+  KEY `IX_auto_Id` (`Id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE `HangFire__Hash` (
@@ -1365,7 +1365,8 @@ CREATE TABLE `HangFire__JobQueue` (
   `Queue` VARCHAR(25) NOT NULL,
   `FetchedAt` DATETIME(3) NULL,
   `__raw_FetchedAt` VARCHAR(40) NULL COMMENT 'Exact original SQL Server temporal value',
-  PRIMARY KEY (`Queue`, `Id`)
+  PRIMARY KEY (`Queue`, `Id`),
+  KEY `IX_auto_Id` (`Id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE `HangFire__List` (
@@ -1374,7 +1375,8 @@ CREATE TABLE `HangFire__List` (
   `Value` LONGTEXT NULL,
   `ExpireAt` DATETIME(3) NULL,
   `__raw_ExpireAt` VARCHAR(40) NULL COMMENT 'Exact original SQL Server temporal value',
-  PRIMARY KEY (`Key`, `Id`)
+  PRIMARY KEY (`Key`, `Id`),
+  KEY `IX_auto_Id` (`Id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE `HangFire__Schema` (
@@ -1407,7 +1409,8 @@ CREATE TABLE `HangFire__State` (
   `CreatedAt` DATETIME(3) NOT NULL,
   `__raw_CreatedAt` VARCHAR(40) NOT NULL COMMENT 'Exact original SQL Server temporal value',
   `Data` LONGTEXT NULL,
-  PRIMARY KEY (`JobId`, `Id`)
+  PRIMARY KEY (`JobId`, `Id`),
+  KEY `IX_auto_Id` (`Id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE INDEX `IX_AffiliateCommissions_PurchaseId` ON `AffiliateCommissions` (`PurchaseId`); -- SQL Server filter: NULL
@@ -1601,7 +1604,6 @@ CREATE INDEX `IX_HangFire_Server_LastHeartbeat` ON `HangFire__Server` (`LastHear
 CREATE INDEX `IX_HangFire_Set_ExpireAt` ON `HangFire__Set` (`ExpireAt`); -- SQL Server filter: ([ExpireAt] IS NOT NULL)
 CREATE INDEX `IX_HangFire_Set_Score` ON `HangFire__Set` (`Key`, `Score`); -- SQL Server filter: NULL
 CREATE INDEX `IX_HangFire_State_CreatedAt` ON `HangFire__State` (`CreatedAt`); -- SQL Server filter: NULL
-
 ALTER TABLE `AffiliateCommissions` ADD CONSTRAINT `FK_AffiliateCommissions_AspNetUsers_UserId` FOREIGN KEY (`UserId`) REFERENCES `AspNetUsers` (`Id`) ON DELETE CASCADE ON UPDATE RESTRICT;
 ALTER TABLE `AffiliateCommissions` ADD CONSTRAINT `FK_AffiliateCommissions_Purchases_PurchaseId` FOREIGN KEY (`PurchaseId`) REFERENCES `Purchases` (`Id`) ON DELETE RESTRICT ON UPDATE RESTRICT;
 ALTER TABLE `AgentFactorItem` ADD CONSTRAINT `FK_AgentFactorItem_AgentFactors_AgentFactorId` FOREIGN KEY (`AgentFactorId`) REFERENCES `AgentFactors` (`Id`) ON DELETE RESTRICT ON UPDATE RESTRICT;
@@ -2568,7 +2570,8 @@ CREATE TABLE `HangFire__Counter` (
   `ExpireAt` DATETIME(3) NULL,
   `__raw_ExpireAt` VARCHAR(40) NULL COMMENT 'Exact original SQL Server temporal value',
   `Id` BIGINT NOT NULL AUTO_INCREMENT,
-  PRIMARY KEY (`Key`, `Id`)
+  PRIMARY KEY (`Key`, `Id`),
+  KEY `IX_auto_Id` (`Id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE `HangFire__Hash` (
@@ -2606,7 +2609,8 @@ CREATE TABLE `HangFire__JobQueue` (
   `Queue` VARCHAR(25) NOT NULL,
   `FetchedAt` DATETIME(3) NULL,
   `__raw_FetchedAt` VARCHAR(40) NULL COMMENT 'Exact original SQL Server temporal value',
-  PRIMARY KEY (`Queue`, `Id`)
+  PRIMARY KEY (`Queue`, `Id`),
+  KEY `IX_auto_Id` (`Id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE `HangFire__List` (
@@ -2615,7 +2619,8 @@ CREATE TABLE `HangFire__List` (
   `Value` LONGTEXT NULL,
   `ExpireAt` DATETIME(3) NULL,
   `__raw_ExpireAt` VARCHAR(40) NULL COMMENT 'Exact original SQL Server temporal value',
-  PRIMARY KEY (`Key`, `Id`)
+  PRIMARY KEY (`Key`, `Id`),
+  KEY `IX_auto_Id` (`Id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE `HangFire__Schema` (
@@ -2648,7 +2653,8 @@ CREATE TABLE `HangFire__State` (
   `CreatedAt` DATETIME(3) NOT NULL,
   `__raw_CreatedAt` VARCHAR(40) NOT NULL COMMENT 'Exact original SQL Server temporal value',
   `Data` LONGTEXT NULL,
-  PRIMARY KEY (`JobId`, `Id`)
+  PRIMARY KEY (`JobId`, `Id`),
+  KEY `IX_auto_Id` (`Id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE INDEX `IX_AffiliateCommissions_PurchaseId` ON `AffiliateCommissions` (`PurchaseId`); -- SQL Server filter: NULL
@@ -2756,7 +2762,6 @@ CREATE INDEX `IX_HangFire_Server_LastHeartbeat` ON `HangFire__Server` (`LastHear
 CREATE INDEX `IX_HangFire_Set_ExpireAt` ON `HangFire__Set` (`ExpireAt`); -- SQL Server filter: ([ExpireAt] IS NOT NULL)
 CREATE INDEX `IX_HangFire_Set_Score` ON `HangFire__Set` (`Key`, `Score`); -- SQL Server filter: NULL
 CREATE INDEX `IX_HangFire_State_CreatedAt` ON `HangFire__State` (`CreatedAt`); -- SQL Server filter: NULL
-
 ALTER TABLE `AffiliateCommissions` ADD CONSTRAINT `FK_AffiliateCommissions_AspNetUsers_UserId` FOREIGN KEY (`UserId`) REFERENCES `AspNetUsers` (`Id`) ON DELETE CASCADE ON UPDATE RESTRICT;
 ALTER TABLE `AffiliateCommissions` ADD CONSTRAINT `FK_AffiliateCommissions_Purchases_PurchaseId` FOREIGN KEY (`PurchaseId`) REFERENCES `Purchases` (`Id`) ON DELETE RESTRICT ON UPDATE RESTRICT;
 ALTER TABLE `AgentLoanAuthorizationItem` ADD CONSTRAINT `FK_AgentLoanAuthorizationItem_AuthorizationItem_Aut_f9f85199` FOREIGN KEY (`AuthorizationItemId`) REFERENCES `AuthorizationItem` (`Id`) ON DELETE RESTRICT ON UPDATE RESTRICT;
@@ -3001,7 +3006,6 @@ CREATE INDEX `IX_AspNetUserRoles_RoleId` ON `OnlineMoneyTransfer__AspNetUserRole
 CREATE INDEX `EmailIndex` ON `OnlineMoneyTransfer__AspNetUsers` (`NormalizedEmail`); -- SQL Server filter: NULL
 CREATE INDEX `IX_RefreshToken_UserId` ON `OnlineMoneyTransfer__RefreshToken` (`UserId`); -- SQL Server filter: NULL
 CREATE INDEX `IX_Transfer_ClientId` ON `OnlineMoneyTransfer__Transfer` (`ClientId`); -- SQL Server filter: NULL
-
 ALTER TABLE `OnlineMoneyTransfer__AspNetRoleClaims` ADD CONSTRAINT `FK_AspNetRoleClaims_AspNetRoles_RoleId` FOREIGN KEY (`RoleId`) REFERENCES `OnlineMoneyTransfer__AspNetRoles` (`Id`) ON DELETE CASCADE ON UPDATE RESTRICT;
 ALTER TABLE `OnlineMoneyTransfer__AspNetUserClaims` ADD CONSTRAINT `FK_AspNetUserClaims_AspNetUsers_UserId` FOREIGN KEY (`UserId`) REFERENCES `OnlineMoneyTransfer__AspNetUsers` (`Id`) ON DELETE CASCADE ON UPDATE RESTRICT;
 ALTER TABLE `OnlineMoneyTransfer__AspNetUserLogins` ADD CONSTRAINT `FK_AspNetUserLogins_AspNetUsers_UserId` FOREIGN KEY (`UserId`) REFERENCES `OnlineMoneyTransfer__AspNetUsers` (`Id`) ON DELETE CASCADE ON UPDATE RESTRICT;
