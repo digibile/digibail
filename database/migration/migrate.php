@@ -70,7 +70,11 @@ function bcpJson(string $docker,string $container,string $password,string $dbNam
     $rc=proc_close($p);
     if($rc!==0) stopNow('BCP failed for '.$dbName.': '.trim($err));
     $data=json_decode($raw,true,512,JSON_BIGINT_AS_STRING);
-    if(!is_array($data) || json_last_error()!==JSON_ERROR_NONE) stopNow('Invalid BCP JSON for '.$dbName.': '.json_last_error_msg());
+    if(!is_array($data) || json_last_error()!==JSON_ERROR_NONE) {
+        $controls=[];
+        for($i=0,$n=strlen($raw);$i<$n;$i++){ $o=ord($raw[$i]); if($o<32 && !in_array($o,[9,10,13],true)) $controls[]=['offset'=>$i,'byte'=>$o]; if(count($controls)>=8) break; }
+        stopNow('Invalid BCP JSON for '.$dbName.': '.json_last_error_msg().' bytes='.strlen($raw).' controls='.json_encode($controls).' start='.json_encode(substr($raw,0,160)));
+    }
     return $data;
 }
 function metadata(string $docker,string $container,string $password,string $source): array {
