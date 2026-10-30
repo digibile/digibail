@@ -17,5 +17,4 @@ return [
         'vamcityc_transferDb_import_20261028' => 'vamcitydigibilepay_transferdb',
     ],
     'batch_size' => 500,
-    'create_database' => false,
 ];
