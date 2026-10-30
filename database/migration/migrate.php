@@ -6,6 +6,7 @@ declare(strict_types=1);
  * The schema is created from the reviewed schema-main/bluvamdb/transfer SQL files.
  * Source rows are streamed from SQL Server BCP as JSON and inserted directly into MariaDB.
  * No customer records are written to disk or committed to GitHub.
+ * SQL Server source snapshots remain read-only throughout this process.
  *
  * Usage:
  *   php database/migration/migrate.php --dry-run
