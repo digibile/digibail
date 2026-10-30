@@ -32,8 +32,12 @@ jobs:
             echo "=== ORIGINAL BACKUP ==="
             if [ ! -s "$ARCHIVE" ]; then
               echo "BACKUP_NOT_FOUND=$ARCHIVE"
-              echo "CANDIDATE_ARCHIVES:"
-              find /home/roofixo/domains/roofixo.ir -maxdepth 7 -type f -iname '*vamcity*' -printf '%p | %s bytes | %TY-%Tm-%Td %TH:%TM\\n' 2>/dev/null | head -n 150 || true
+              echo "CANDIDATE_VAMCITY_FILES_UNDER_HOME:"
+              find /home -type f -iname '*vamcity*' -printf '%p | %s bytes | %TY-%Tm-%Td %TH:%TM\\n' 2>/dev/null | head -n 200 || true
+              echo "ROOFIXO_DOMAIN_DIRECTORIES:"
+              find /home/roofixo/domains/roofixo.ir -maxdepth 3 -type d -printf '%p\\n' 2>/dev/null | head -n 100 || true
+              echo "RECENT_ZIP_ARCHIVES_UNDER_ROOFIXO:"
+              find /home/roofixo -type f -iname '*.zip' -printf '%p | %s bytes | %TY-%Tm-%Td %TH:%TM\\n' 2>/dev/null | head -n 100 || true
               exit 31
             fi
             stat -c 'PATH=%n SIZE_BYTES=%s MODIFIED=%y OWNER=%U:%G MODE=%a' "$ARCHIVE"
