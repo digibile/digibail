@@ -38,6 +38,8 @@ jobs:
             echo "=== PHP SYNTAX ==="
             php -l "$ROOT/database/migration/migrate.php"
             php -l "$ROOT/database/migration/config.example.php"
+echo "=== MIGRATION DRY RUN (READ ONLY) ==="
+php "$ROOT/database/migration/migrate.php" --dry-run
             echo "=== MYSQL COLLATIONS ==="
             mysql --batch --skip-column-names -e "SHOW COLLATION WHERE Collation LIKE 'utf8mb4%as_ci' OR Collation LIKE 'utf8mb4%bin';" | head -n 25
             echo "=== CURRENT DISK ==="
