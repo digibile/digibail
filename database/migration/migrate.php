@@ -25,9 +25,9 @@ $container = 'vamcity-stage-sql';
 $batchSize = 500;
 
 $sources = [
+    // The reference database is intentionally limited to the primary VamCity SQL Server database.
+    // BlueVam and TransferDb remain isolated until their application dependencies are reviewed.
     ['source'=>'vamcityc_vamcity_import_20261028','target'=>'vamcitydigibilepay','schema'=>'schema-main.sql'],
-    ['source'=>'vamcityc_bluvamdb_import_20261028','target'=>'vamcitydigibilepay_bluvamdb','schema'=>'schema-bluvamdb.sql'],
-    ['source'=>'vamcityc_transferDb_import_20261028','target'=>'vamcitydigibilepay_transferdb','schema'=>'schema-transfer.sql'],
 ];
 
 function logLine(string $s): void { echo '['.date('H:i:s').'] '.$s.PHP_EOL; }
@@ -238,7 +238,8 @@ if(!$execute){logLine('DRY RUN COMPLETE. No data or target schema was changed.')
 
 foreach($sources as $s){
     $source=$s['source'];
-    $target=$config['targets'][$source]??$s['target'];
+    // Enforce one canonical target; config.php cannot redirect imports to parallel databases.
+    $target='vamcitydigibilepay';
     if(!preg_match('/^[A-Za-z0-9_]+$/',$target)) stopNow('Invalid database name in config.php: '.$target);
     $db=targetConnect($config['mysql'],$target);
     $m=$allMeta[$source];
