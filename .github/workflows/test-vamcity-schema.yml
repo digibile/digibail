@@ -38,18 +38,18 @@ jobs:
           MYSQL_PWD: vamcity_schema_test
         run: |
           set -euo pipefail
-          mysql -h 127.0.0.1 -uroot -e "CREATE DATABASE vamcitydigibilepay CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"
-          mysql -h 127.0.0.1 -uroot -e "CREATE DATABASE vamcitydigibilepay_bluvamdb CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"
-          mysql -h 127.0.0.1 -uroot -e "CREATE DATABASE vamcitydigibilepay_transferdb CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"
-          mysql -h 127.0.0.1 -uroot vamcitydigibilepay < database/mysql/schema-main.sql
-          mysql -h 127.0.0.1 -uroot vamcitydigibilepay_bluvamdb < database/mysql/schema-bluvamdb.sql
-          mysql -h 127.0.0.1 -uroot vamcitydigibilepay_transferdb < database/mysql/schema-transfer.sql
+          mysql --skip-ssl -h 127.0.0.1 -uroot -e "CREATE DATABASE vamcitydigibilepay CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"
+          mysql --skip-ssl -h 127.0.0.1 -uroot -e "CREATE DATABASE vamcitydigibilepay_bluvamdb CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"
+          mysql --skip-ssl -h 127.0.0.1 -uroot -e "CREATE DATABASE vamcitydigibilepay_transferdb CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"
+          mysql --skip-ssl -h 127.0.0.1 -uroot vamcitydigibilepay < database/mysql/schema-main.sql
+          mysql --skip-ssl -h 127.0.0.1 -uroot vamcitydigibilepay_bluvamdb < database/mysql/schema-bluvamdb.sql
+          mysql --skip-ssl -h 127.0.0.1 -uroot vamcitydigibilepay_transferdb < database/mysql/schema-transfer.sql
       - name: Verify tables, foreign keys and temporal fidelity columns
         env:
           MYSQL_PWD: vamcity_schema_test
         run: |
           set -euo pipefail
-          mysql -h 127.0.0.1 -uroot --batch --skip-column-names -e "
+          mysql --skip-ssl -h 127.0.0.1 -uroot --batch --skip-column-names -e "
           SELECT table_schema,COUNT(*) FROM information_schema.tables
           WHERE table_type='BASE TABLE' AND table_schema IN ('vamcitydigibilepay','vamcitydigibilepay_bluvamdb','vamcitydigibilepay_transferdb')
           GROUP BY table_schema ORDER BY table_schema;
