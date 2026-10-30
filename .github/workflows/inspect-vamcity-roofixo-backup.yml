@@ -33,7 +33,7 @@ jobs:
             if [ ! -s "$ARCHIVE" ]; then
               echo "BACKUP_NOT_FOUND=$ARCHIVE"
               echo "CANDIDATE_ARCHIVES:"
-              find /home/roofixo/domains/roofixo.ir -maxdepth 5 -type f \\( -iname '*vamcity*.zip' -o -iname '*.bak' -o -iname '*.7z' \\) -printf '%p | %s bytes | %TY-%Tm-%Td %TH:%TM\n' 2>/dev/null | head -n 100 || true
+              find /home/roofixo/domains/roofixo.ir -maxdepth 7 -type f -iname '*vamcity*' -printf '%p | %s bytes | %TY-%Tm-%Td %TH:%TM\\n' 2>/dev/null | head -n 150 || true
               exit 31
             fi
             stat -c 'PATH=%n SIZE_BYTES=%s MODIFIED=%y OWNER=%U:%G MODE=%a' "$ARCHIVE"
