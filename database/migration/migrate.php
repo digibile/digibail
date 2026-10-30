@@ -58,6 +58,24 @@ function getSourcePassword(string $docker,string $container): string {
     if($r!==0 || $p==='') stopNow('SQL Server source credential is unavailable inside its container.');
     return $p;
 }
+function sanitizeJsonControlChars(string $json): string {
+    $out=''; $inString=false; $escaped=false;
+    $length=strlen($json);
+    for($i=0;$i<$length;$i++){
+        $ch=$json[$i]; $ord=ord($ch);
+        if($inString){
+            if($escaped){$out.=$ch;$escaped=false;continue;}
+            if($ch==='\\\\'){$out.=$ch;$escaped=true;continue;}
+            if($ch==='"'){$out.=$ch;$inString=false;continue;}
+            if($ord<32){$out.=sprintf('\\\\u%04x',$ord);continue;}
+            $out.=$ch; continue;
+        }
+        if($ch==='"')$inString=true;
+        $out.=$ch;
+    }
+    return $out;
+}
+
 function bcpJson(string $docker,string $container,string $password,string $dbName,string $query): array {
     $inner='exec 3>&1; exec /opt/mssql-tools18/bin/bcp "$1" queryout /dev/fd/3 -c -C 65001 -u -S localhost -U sa -P "$BCP_PASS" -d "$2" 1>&2';
     $cmd=$docker.' exec -e BCP_PASS='.escapeshellarg($password).' '.escapeshellarg($container)
@@ -70,8 +88,7 @@ function bcpJson(string $docker,string $container,string $password,string $dbNam
     $err=stream_get_contents($pipes[2]); fclose($pipes[2]);
     $rc=proc_close($p);
     if($rc!==0) stopNow('BCP failed for '.$dbName.': '.trim($err));
-    // BCP may wrap very long nvarchar(max) JSON result rows at line boundaries; JSON strings escape embedded newlines.
-    $raw=str_replace(["\\r","\\n"],"",$raw);
+    $raw=sanitizeJsonControlChars($raw);
     $data=json_decode($raw,true,512,JSON_BIGINT_AS_STRING);
     if(!is_array($data) || json_last_error()!==JSON_ERROR_NONE) {
         $controls=[];
