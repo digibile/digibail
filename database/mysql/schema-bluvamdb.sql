@@ -787,7 +787,7 @@ CREATE TABLE `HangFire__Counter` (
   `Id` BIGINT NOT NULL AUTO_INCREMENT,
   PRIMARY KEY (`Key`, `Id`)
 ) ENGINE=InnoDB DEFAULT
-  `__raw_ExpireAt` VARCHAR(40) NULL COMMENT 'Exact original SQL Server temporal value'
+  `__raw_ExpireAt` VARCHAR(40) NULL COMMENT 'Exact original SQL Server temporal value',
   `__raw_ExpireAt` VARCHAR(40) NULL COMMENT 'Exact original SQL Server temporal value' CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE `HangFire__Hash` (
@@ -864,7 +864,7 @@ CREATE TABLE `HangFire__State` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE INDEX `IX_AffiliateCommissions
-  `__raw_CreatedAt` VARCHAR(40) NOT NULL COMMENT 'Exact original SQL Server temporal value'
+  `__raw_CreatedAt` VARCHAR(40) NOT NULL COMMENT 'Exact original SQL Server temporal value',
   `__raw_CreatedAt` VARCHAR(40) NOT NULL COMMENT 'Exact original SQL Server temporal value'_PurchaseId` ON `AffiliateCommissions` (`PurchaseId`); -- SQL Server filter: NULL
 CREATE INDEX `IX_AffiliateCommissions_UserId` ON `AffiliateCommissions` (`UserId`); -- SQL Server filter: NULL
 CREATE INDEX `IX_AgentLoanAuthorizationItem_AuthorizationItemId` ON `AgentLoanAuthorizationItem` (`AuthorizationItemId`); -- SQL Server filter: NULL
