@@ -39,7 +39,7 @@ jobs:
             OUT="$($D exec "$C" "$BCP" "SELECT (SELECT * FROM dbo.__EFMigrationsHistory t FOR JSON PATH, INCLUDE_NULL_VALUES)" queryout /dev/stdout -c -C 65001 -u -S localhost -U sa -P "$PASS" -d vamcityc_vamcity_import_20261028 2>/dev/null)"
             RC=$?
             set -e
-            printf '%s' "$OUT" | python3 -c 'import sys,json; s=sys.stdin.read(); rows=json.loads(s); print("JSON_ARRAY_VALID",isinstance(rows,list),"ROWS",len(rows))'
+            printf '%s' "$OUT" | python3 -c 'import sys,json; s=sys.stdin.read(); print("BYTES",len(s),"LINES",[(len(x),x[:24],x[-24:]) for x in s.splitlines()]); z="".join(s.splitlines()); rows=json.loads(z); print("JSON_ARRAY_VALID",isinstance(rows,list),"ROWS",len(rows))'
             echo "BCP_RC=$RC"
             unset PASS OUT
             echo "STREAMING_EXPORT_VALIDATION_COMPLETE=1"
