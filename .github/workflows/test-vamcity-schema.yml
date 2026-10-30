@@ -34,6 +34,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: Install MariaDB client
         run: sudo apt-get update && sudo apt-get install -y mariadb-client
+      - name: Validate migration PHP syntax
+        run: php -l database/migration/migrate.php && php -l database/migration/config.example.php
       - name: Import each schema into a clean MariaDB 10.6 instance
         env:
           MYSQL_PWD: vamcity_schema_test
