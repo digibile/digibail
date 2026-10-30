@@ -9,6 +9,7 @@ on:
       - database/mysql/schema-bluvamdb.sql
       - database/mysql/schema-transfer.sql
       - .github/workflows/test-vamcity-schema.yml
+      - .github/workflows/test-vamcity-schema.yml
   workflow_dispatch:
 
 permissions:
