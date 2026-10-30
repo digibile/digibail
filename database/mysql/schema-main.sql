@@ -65,7 +65,8 @@ CREATE TABLE `AgentFactors` (
   `Commission` DECIMAL(18,2) NOT NULL DEFAULT 0.0,
   `MemberPurchaseId` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NULL,
   `AgentFactorOnlinePaymentMethod` INT NOT NULL DEFAULT 0,
-  PRIMARY KEY (`Id`)
+  PRIMARY KEY (`Id`),
+  KEY `IX_auto_Code` (`Code`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE `AgentLoanAuthorizationItem` (
@@ -580,7 +581,8 @@ CREATE TABLE `Customers` (
   `Code` INT NOT NULL AUTO_INCREMENT,
   `AffCode` VARCHAR(10) NULL,
   `ParkDomain` VARCHAR(50) NULL,
-  PRIMARY KEY (`Id`)
+  PRIMARY KEY (`Id`),
+  KEY `IX_auto_Code` (`Code`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE `EmzameContractAuthorizationItems` (
@@ -782,7 +784,8 @@ CREATE TABLE `MemberPurchases` (
   `AgentFactorId` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NULL,
   `SepehrJson` LONGTEXT NULL,
   `ZibalJson` LONGTEXT NULL,
-  PRIMARY KEY (`Id`)
+  PRIMARY KEY (`Id`),
+  KEY `IX_auto_Code` (`Code`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE `OffDate` (
@@ -950,7 +953,8 @@ CREATE TABLE `ThirdPersonAssuranceAuthorizationItems` (
   `Comment` LONGTEXT NULL,
   `Tag` LONGTEXT NULL,
   `CustomerId` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
-  PRIMARY KEY (`Id`)
+  PRIMARY KEY (`Id`),
+  KEY `IX_auto_Code` (`Code`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE `TicketResponses` (
@@ -986,7 +990,8 @@ CREATE TABLE `Tickets` (
   `CustomerId` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NULL,
   `LastModifiedAt` DATETIME(6) NULL,
   `__raw_LastModifiedAt` VARCHAR(40) NULL COMMENT 'Exact SQL Server datetime2 source value',
-  PRIMARY KEY (`Id`)
+  PRIMARY KEY (`Id`),
+  KEY `IX_auto_Code` (`Code`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE `UserLoanContact` (
@@ -1069,7 +1074,8 @@ CREATE TABLE `UserLoanPayments` (
   `Discount` DECIMAL(18,2) NOT NULL DEFAULT 0.0,
   `LastGuarantorOverDueSmsDate` DATETIME(6) NULL,
   `__raw_LastGuarantorOverDueSmsDate` VARCHAR(40) NULL COMMENT 'Exact SQL Server datetime2 source value',
-  PRIMARY KEY (`Id`)
+  PRIMARY KEY (`Id`),
+  KEY `IX_auto_Code` (`Code`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE `UserLoanProduct` (
@@ -1108,7 +1114,8 @@ CREATE TABLE `UserLoanRequestAuthorizationItems` (
   `Code` INT NOT NULL AUTO_INCREMENT,
   `Tag` LONGTEXT NULL,
   `EmzameContractAuthorizationItemId` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NULL,
-  PRIMARY KEY (`Id`)
+  PRIMARY KEY (`Id`),
+  KEY `IX_auto_Code` (`Code`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE `UserLoanRequestProduct` (
@@ -1155,7 +1162,8 @@ CREATE TABLE `UserLoanRequests` (
   `SponsorId` BIGINT NULL,
   `UserLoanSponsorStatus` INT NOT NULL DEFAULT 0,
   `ChargeTypeTitle` VARCHAR(50) NULL,
-  PRIMARY KEY (`Id`)
+  PRIMARY KEY (`Id`),
+  KEY `IX_auto_Code` (`Code`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE `UserLoanRequestSponsorHistory` (
@@ -1224,7 +1232,8 @@ CREATE TABLE `UserLoans` (
   `Discount` DECIMAL(18,2) NOT NULL DEFAULT 0.0,
   `IsCanceled` TINYINT(1) NOT NULL DEFAULT 0,
   `SecondaryCode` VARCHAR(25) NULL,
-  PRIMARY KEY (`Id`)
+  PRIMARY KEY (`Id`),
+  KEY `IX_auto_Code` (`Code`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE `UserLoanSponsoreDueDate` (
