@@ -45,7 +45,7 @@ jobs:
             done
             echo "=== BCP UNICODE JSON STREAM TEST ==="
             $D exec "$SQLC" /opt/mssql-tools18/bin/bcp "SELECT Id,Code,Title FROM [vamcityc_vamcity_import_20261028].dbo.[Loans] ORDER BY (SELECT NULL) OFFSET 0 ROWS FETCH NEXT 2 ROWS ONLY FOR JSON PATH, INCLUDE_NULL_VALUES" queryout /tmp/vamcity-bcp-test.json -w -u -S localhost -U sa -P "$PASS" 2>&1 | tail -n 8 || true
-            $D exec "$SQLC" cat /tmp/vamcity-bcp-test.json 2>/dev/null | python3 -c 'import sys,json; s=sys.stdin.buffer.read().decode("utf-16le").lstrip("\\ufeff").strip(); x=json.loads(s); assert len(x)==2; print("BCP_UNICODE_JSON_PARSE_OK rows="+str(len(x)))' || true
+            $D exec "$SQLC" cat /tmp/vamcity-bcp-test.json 2>/dev/null | python3 -c 'import sys,json; s=sys.stdin.buffer.read().decode("utf-8-sig").strip(); x=json.loads(s); assert len(x)==2; print("BCP_UNICODE_JSON_PARSE_OK rows="+str(len(x)))' || true
             $D exec "$SQLC" rm -f /tmp/vamcity-bcp-test.json
             unset PASS
             echo "=== SPACE ==="
