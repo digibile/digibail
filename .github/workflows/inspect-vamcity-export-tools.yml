@@ -35,6 +35,12 @@ jobs:
             PASS="$($D exec "$SQLC" printenv MSSQL_SA_PASSWORD 2>/dev/null || true)"
             [ -n "$PASS" ] || PASS="$($D exec "$SQLC" printenv SA_PASSWORD 2>/dev/null || true)"
             $D exec -e SQLCMDPASSWORD="$PASS" "$SQLC" "$SQLCMD" -S localhost -U sa -C -Q "SELECT @@VERSION;" 2>&1 | tail -n 8
+            echo "=== DATABASE FILE SIZES AND LARGEST TABLES ==="
+            for DB in vamcityc_vamcity_import_20261028 vamcityc_bluvamdb_import_20261028 vamcityc_transferDb_import_20261028; do
+              echo "-- DATABASE=$DB --"
+              $D exec -e SQLCMDPASSWORD="$PASS" "$SQLC" "$SQLCMD" -S localhost -U sa -C -W -s '|' -Q "SET NOCOUNT ON; SELECT DB_NAME(database_id),SUM(size)*8.0/1024 AS allocated_mb FROM sys.master_files WHERE database_id=DB_ID(N'$DB') GROUP BY database_id;" 2>&1 | tail -n 5
+              $D exec -e SQLCMDPASSWORD="$PASS" "$SQLC" "$SQLCMD" -S localhost -U sa -C -W -s '|' -d "$DB" -Q "SET NOCOUNT ON; SELECT TOP 15 s.name+'.'+t.name AS table_name,SUM(ps.row_count) AS rows_count,SUM(ps.reserved_page_count)*8.0/1024 AS reserved_mb,SUM(ps.used_page_count)*8.0/1024 AS used_mb FROM sys.dm_db_partition_stats ps JOIN sys.tables t ON t.object_id=ps.object_id JOIN sys.schemas s ON s.schema_id=t.schema_id WHERE ps.index_id IN (0,1) GROUP BY s.name,t.name ORDER BY SUM(ps.reserved_page_count) DESC;" 2>&1 | tail -n 22
+            done
             unset PASS
             echo "=== SPACE ==="
             df -h /home /tmp
