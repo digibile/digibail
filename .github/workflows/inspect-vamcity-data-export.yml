@@ -36,7 +36,7 @@ jobs:
             [ -n "$PASS" ] || PASS="$($D exec "$SQLC" printenv SA_PASSWORD 2>/dev/null || true)"
             [ -n "$SQLCMD" ] && [ -n "$PASS" ] || { echo "SQL_ACCESS_UNAVAILABLE"; exit 51; }
             BASE="/home/digibail/domains/digebail.ir/var/migrations"
-            OUT="$BASE/vamcity-private-json-export-20261030-v2"
+            OUT="$BASE/vamcity-private-json-export-20261030-v3"
             if [ -e "$OUT" ]; then echo "EXPORT_ALREADY_EXISTS=$OUT"; exit 52; fi
             mkdir -p "$OUT"
             chmod 700 "$OUT"
@@ -66,12 +66,12 @@ jobs:
                 QUOTED_DB="$(printf '%s' "$DB" | sed 's/]/]]/g')"
                 QUOTED_SCHEMA="$(printf '%s' "$SCHEMA" | sed 's/]/]]/g')"
                 QUOTED_TABLE="$(printf '%s' "$TABLE" | sed 's/]/]]/g')"
-                QUERY="SELECT * FROM [$QUOTED_DB].[$QUOTED_SCHEMA].[$QUOTED_TABLE] FOR JSON PATH, INCLUDE_NULL_VALUES"
+                QUERY="DECLARE @j nvarchar(max); SET @j=(SELECT * FROM [$QUOTED_DB].[$QUOTED_SCHEMA].[$QUOTED_TABLE] FOR JSON PATH, INCLUDE_NULL_VALUES); WITH N AS (SELECT TOP ((LEN(@j)+999)/1000) ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) AS n FROM sys.all_objects a CROSS JOIN sys.all_objects b) SELECT SUBSTRING(@j,(n-1)*1000+1,1000) FROM N ORDER BY n"
                 echo "EXPORT_TABLE=$DB.$SCHEMA.$TABLE EXPECTED_ROWS=$EXPECTED"
-                $D exec "$SQLC" "$BCP" "$QUERY" queryout "$TMP" -c -C 65001 -y 0 -u -S localhost -U sa -P "$PASS" >/dev/null
+                $D exec "$SQLC" "$BCP" "$QUERY" queryout "$TMP" -w -u -S localhost -U sa -P "$PASS" >/dev/null
                 $D exec "$SQLC" cat "$TMP" | gzip -c > "$FILE"
                 $D exec "$SQLC" rm -f "$TMP"
-                ACTUAL="$(gzip -cd "$FILE" | python3 -c 'import json,sys; x=json.load(sys.stdin); print(len(x))')"
+                ACTUAL="$(gzip -cd "$FILE" | python3 -c 'import json,sys; raw=sys.stdin.buffer.read().decode("utf-16"); payload="".join(raw.splitlines()); x=json.loads(payload); print(len(x))')"
                 [ "$ACTUAL" = "$EXPECTED" ] || { echo "ROW_COUNT_MISMATCH=$DB.$SCHEMA.$TABLE expected=$EXPECTED actual=$ACTUAL"; exit 54; }
                 BYTES="$(stat -c %s "$FILE")"
                 HASH="$(sha256sum "$FILE" | awk '{print $1}')"
