@@ -3,22 +3,22 @@
 > استخراج فقط از متادیتای بکاپ‌های SQL Server بازیابی‌شده در محیط ایزوله انجام شده است. هیچ رکورد شخصی یا مالی در این سند درج نشده و هیچ دیتابیس عملیاتی تغییر نکرده است.
 
 **مخزن:** `digibile/digibail`  
-**اجرای بررسی:** `40982494929`  
-**وضعیت استخراج متادیتا:** موفق
+**اجرای استخراج متادیتا:** `40982494929`  
+**وضعیت:** موفق
 
 ## وام و کاربران اصلی
 
-- نام دیتابیس: `vamcityc_vamcity_import_20261028`
-- جدول‌ها: **89**
-- ستون‌ها: **958**
+- دیتابیس: `vamcityc_vamcity_import_20261028`
+- جدول‌ها: **88**
+- ستون‌ها: **957**
 - رکوردها: **531,172**
-- کلیدهای اصلی/یکتا: **89** نام قید، 101 ستون کلید
-- روابط کلید خارجی: **189** نام قید، 189 ستون رابطه
-- ایندکس‌ها: **284** نام ایندکس، 298 ردیف ستون ایندکس
-- View/Procedure/Function/Trigger سطح جدول: **0**
-- Check constraint: **0**
-- Sequence/نوع کاربری: **0**
-- Trigger سطح دیتابیس: **0**
+- قیود PK/Unique: **88** نام قید، 100 ستون کلید
+- قیود FK: **188** نام قید، 188 ستون رابطه
+- ایندکس‌ها: **283** نام ایندکس، 297 ردیف ستون ایندکس
+- View/Procedure/Function/Trigger: **0**
+- Check constraints: **0**
+- Sequences/User types: **0**
+- Database triggers: **0**
 
 ### جدول‌ها و تعداد رکورد
 
@@ -112,7 +112,6 @@
 | HangFire | Server | 1 |
 | HangFire | Set | 4 |
 | HangFire | State | 2824 |
-|  |
 
 ### تمام ستون‌ها
 
@@ -1075,7 +1074,6 @@
 | HangFire | State | 4 | Reason | nvarchar | 100 | 0 | 0 | 1 | 0 | 0 | NULL | NULL |
 | HangFire | State | 5 | CreatedAt | datetime | 8 | 23 | 3 | 0 | 0 | 0 | NULL | NULL |
 | HangFire | State | 6 | Data | nvarchar | -1 | 0 | 0 | 1 | 0 | 0 | NULL | NULL |
-|  |
 
 ### کلیدهای اصلی و یکتا
 
@@ -1181,7 +1179,6 @@
 | HangFire | Set | PK_HangFire_Set | PRIMARY_KEY_CONSTRAINT | Value | 2 |
 | HangFire | State | PK_HangFire_State | PRIMARY_KEY_CONSTRAINT | JobId | 1 |
 | HangFire | State | PK_HangFire_State | PRIMARY_KEY_CONSTRAINT | Id | 2 |
-|  |
 
 ### کلیدهای خارجی
 
@@ -1375,7 +1372,6 @@
 | dbo | Withdraws | FK_Withdraws_UserLoans_UserLoanId | UserLoanId | dbo | UserLoans | Id | 1 | NO_ACTION | NO_ACTION | 0 | 0 |
 | HangFire | JobParameter | FK_HangFire_JobParameter_Job | JobId | HangFire | Job | Id | 1 | CASCADE | CASCADE | 0 | 0 |
 | HangFire | State | FK_HangFire_State_Job | JobId | HangFire | Job | Id | 1 | CASCADE | CASCADE | 0 | 0 |
-|  |
 
 ### ایندکس‌ها
 
@@ -1678,31 +1674,30 @@
 | HangFire | State | IX_HangFire_State_CreatedAt | NONCLUSTERED | 0 | 0 | 0 | 0 | 0 | NULL | 1 | 0 | CreatedAt |
 | HangFire | State | PK_HangFire_State | CLUSTERED | 1 | 1 | 0 | 0 | 0 | NULL | 1 | 0 | JobId |
 | HangFire | State | PK_HangFire_State | CLUSTERED | 1 | 1 | 0 | 0 | 0 | NULL | 2 | 0 | Id |
-|  |
 
-### اشیای اجرایی، قیود بررسی و توالی‌ها
+### سایر اشیا
 
-**View/Procedure/Function/Trigger:** موردی گزارش نشد.
+**View/Procedure/Function/Trigger:** _موردی ثبت نشده است._
 
-**Check constraints:** موردی گزارش نشد.
+**Check constraints:** _موردی ثبت نشده است._
 
-**Sequences/User types:** موردی گزارش نشد.
+**Sequences/User types:** _موردی ثبت نشده است._
 
-**Database triggers:** موردی گزارش نشد.
+**Database triggers:** _موردی ثبت نشده است._
 
 ## پایگاه جانبی BlueVam
 
-- نام دیتابیس: `vamcityc_bluvamdb_import_20261028`
-- جدول‌ها: **57**
-- ستون‌ها: **573**
+- دیتابیس: `vamcityc_bluvamdb_import_20261028`
+- جدول‌ها: **56**
+- ستون‌ها: **572**
 - رکوردها: **286,597**
-- کلیدهای اصلی/یکتا: **57** نام قید، 68 ستون کلید
-- روابط کلید خارجی: **100** نام قید، 100 ستون رابطه
-- ایندکس‌ها: **164** نام ایندکس، 177 ردیف ستون ایندکس
-- View/Procedure/Function/Trigger سطح جدول: **0**
-- Check constraint: **0**
-- Sequence/نوع کاربری: **0**
-- Trigger سطح دیتابیس: **0**
+- قیود PK/Unique: **56** نام قید، 67 ستون کلید
+- قیود FK: **99** نام قید، 99 ستون رابطه
+- ایندکس‌ها: **163** نام ایندکس، 176 ردیف ستون ایندکس
+- View/Procedure/Function/Trigger: **0**
+- Check constraints: **0**
+- Sequences/User types: **0**
+- Database triggers: **0**
 
 ### جدول‌ها و تعداد رکورد
 
@@ -1764,7 +1759,6 @@
 | HangFire | Server | 0 |
 | HangFire | Set | 0 |
 | HangFire | State | 0 |
-|  |
 
 ### تمام ستون‌ها
 
@@ -2342,7 +2336,6 @@
 | HangFire | State | 4 | Reason | nvarchar | 100 | 0 | 0 | 1 | 0 | 0 | NULL | NULL |
 | HangFire | State | 5 | CreatedAt | datetime | 8 | 23 | 3 | 0 | 0 | 0 | NULL | NULL |
 | HangFire | State | 6 | Data | nvarchar | -1 | 0 | 0 | 1 | 0 | 0 | NULL | NULL |
-|  |
 
 ### کلیدهای اصلی و یکتا
 
@@ -2415,7 +2408,6 @@
 | HangFire | Set | PK_HangFire_Set | PRIMARY_KEY_CONSTRAINT | Value | 2 |
 | HangFire | State | PK_HangFire_State | PRIMARY_KEY_CONSTRAINT | JobId | 1 |
 | HangFire | State | PK_HangFire_State | PRIMARY_KEY_CONSTRAINT | Id | 2 |
-|  |
 
 ### کلیدهای خارجی
 
@@ -2520,7 +2512,6 @@
 | dbo | Withdraws | FK_Withdraws_UserLoans_UserLoanId | UserLoanId | dbo | UserLoans | Id | 1 | NO_ACTION | NO_ACTION | 0 | 0 |
 | HangFire | JobParameter | FK_HangFire_JobParameter_Job | JobId | HangFire | Job | Id | 1 | CASCADE | CASCADE | 0 | 0 |
 | HangFire | State | FK_HangFire_State_Job | JobId | HangFire | Job | Id | 1 | CASCADE | CASCADE | 0 | 0 |
-|  |
 
 ### ایندکس‌ها
 
@@ -2702,31 +2693,30 @@
 | HangFire | State | IX_HangFire_State_CreatedAt | NONCLUSTERED | 0 | 0 | 0 | 0 | 0 | NULL | 1 | 0 | CreatedAt |
 | HangFire | State | PK_HangFire_State | CLUSTERED | 1 | 1 | 0 | 0 | 0 | NULL | 1 | 0 | JobId |
 | HangFire | State | PK_HangFire_State | CLUSTERED | 1 | 1 | 0 | 0 | 0 | NULL | 2 | 0 | Id |
-|  |
 
-### اشیای اجرایی، قیود بررسی و توالی‌ها
+### سایر اشیا
 
-**View/Procedure/Function/Trigger:** موردی گزارش نشد.
+**View/Procedure/Function/Trigger:** _موردی ثبت نشده است._
 
-**Check constraints:** موردی گزارش نشد.
+**Check constraints:** _موردی ثبت نشده است._
 
-**Sequences/User types:** موردی گزارش نشد.
+**Sequences/User types:** _موردی ثبت نشده است._
 
-**Database triggers:** موردی گزارش نشد.
+**Database triggers:** _موردی ثبت نشده است._
 
 ## انتقال وجه
 
-- نام دیتابیس: `vamcityc_transferDb_import_20261028`
-- جدول‌ها: **13**
-- ستون‌ها: **79**
+- دیتابیس: `vamcityc_transferDb_import_20261028`
+- جدول‌ها: **12**
+- ستون‌ها: **78**
 - رکوردها: **29**
-- کلیدهای اصلی/یکتا: **13** نام قید، 17 ستون کلید
-- روابط کلید خارجی: **9** نام قید، 9 ستون رابطه
-- ایندکس‌ها: **23** نام ایندکس، 27 ردیف ستون ایندکس
-- View/Procedure/Function/Trigger سطح جدول: **0**
-- Check constraint: **0**
-- Sequence/نوع کاربری: **0**
-- Trigger سطح دیتابیس: **0**
+- قیود PK/Unique: **12** نام قید، 16 ستون کلید
+- قیود FK: **8** نام قید، 8 ستون رابطه
+- ایندکس‌ها: **22** نام ایندکس، 26 ردیف ستون ایندکس
+- View/Procedure/Function/Trigger: **0**
+- Check constraints: **0**
+- Sequences/User types: **0**
+- Database triggers: **0**
 
 ### جدول‌ها و تعداد رکورد
 
@@ -2744,7 +2734,6 @@
 | OnlineMoneyTransfer | RefreshToken | 1 |
 | OnlineMoneyTransfer | Settings | 0 |
 | OnlineMoneyTransfer | Transfer | 23 |
-|  |
 
 ### تمام ستون‌ها
 
@@ -2828,7 +2817,6 @@
 | OnlineMoneyTransfer | Transfer | 13 | EFardaJson | nvarchar | -1 | 0 | 0 | 1 | 0 | 0 | NULL | NULL |
 | OnlineMoneyTransfer | Transfer | 14 | RequestFromIp | nvarchar | 50 | 0 | 0 | 1 | 0 | 0 | NULL | NULL |
 | OnlineMoneyTransfer | Transfer | 15 | ClientId | uniqueidentifier | 16 | 0 | 0 | 0 | 0 | 0 | NULL | NULL |
-|  |
 
 ### کلیدهای اصلی و یکتا
 
@@ -2850,7 +2838,6 @@
 | OnlineMoneyTransfer | RefreshToken | PK_RefreshToken | PRIMARY_KEY_CONSTRAINT | Id | 1 |
 | OnlineMoneyTransfer | Settings | PK_Settings | PRIMARY_KEY_CONSTRAINT | Id | 1 |
 | OnlineMoneyTransfer | Transfer | PK_Transfer | PRIMARY_KEY_CONSTRAINT | Id | 1 |
-|  |
 
 ### کلیدهای خارجی
 
@@ -2864,7 +2851,6 @@
 | OnlineMoneyTransfer | AspNetUserTokens | FK_AspNetUserTokens_AspNetUsers_UserId | UserId | OnlineMoneyTransfer | AspNetUsers | Id | 1 | CASCADE | NO_ACTION | 0 | 0 |
 | OnlineMoneyTransfer | RefreshToken | FK_RefreshToken_AspNetUsers_UserId | UserId | OnlineMoneyTransfer | AspNetUsers | Id | 1 | CASCADE | NO_ACTION | 0 | 0 |
 | OnlineMoneyTransfer | Transfer | FK_Transfer_Client_ClientId | ClientId | OnlineMoneyTransfer | Client | Id | 1 | CASCADE | NO_ACTION | 0 | 0 |
-|  |
 
 ### ایندکس‌ها
 
@@ -2896,23 +2882,22 @@
 | OnlineMoneyTransfer | Settings | PK_Settings | CLUSTERED | 1 | 1 | 0 | 0 | 0 | NULL | 1 | 0 | Id |
 | OnlineMoneyTransfer | Transfer | IX_Transfer_ClientId | NONCLUSTERED | 0 | 0 | 0 | 0 | 0 | NULL | 1 | 0 | ClientId |
 | OnlineMoneyTransfer | Transfer | PK_Transfer | CLUSTERED | 1 | 1 | 0 | 0 | 0 | NULL | 1 | 0 | Id |
-|  |
 
-### اشیای اجرایی، قیود بررسی و توالی‌ها
+### سایر اشیا
 
-**View/Procedure/Function/Trigger:** موردی گزارش نشد.
+**View/Procedure/Function/Trigger:** _موردی ثبت نشده است._
 
-**Check constraints:** موردی گزارش نشد.
+**Check constraints:** _موردی ثبت نشده است._
 
-**Sequences/User types:** موردی گزارش نشد.
+**Sequences/User types:** _موردی ثبت نشده است._
 
-**Database triggers:** موردی گزارش نشد.
+**Database triggers:** _موردی ثبت نشده است._
 
-## محدودیت و ملاحظات
+## ملاحظات مهاجرت
 
-- فایل بکاپ قدیمی `vamcityc_aqayevamdb_2026-10-11_15-51-44.zip` در مسیر قبلی `/home/roofixo/domains/roofixo.ir/public_html` وجود نداشت؛ جست‌وجوی `/home` سه بکاپ جدیدتر در مسیر `digebail.ir` پیدا کرد.
-- دیتابیس آزمایشی `vamcity_stage` با ۸۸ جدول و ۱٬۶۹۱ رکورد، با بکاپ اصلی یکسان نیست و مبنای مهاجرت قرار نمی‌گیرد.
-- در مقایسه ساختار، تفاوت‌هایی بین دیتابیس آزمایشی و بکاپ اصلی ثبت شده؛ از جمله ستون‌های جدیدتر در `AppSettings`, `AgentLoans`, `UserLoanPayments`, `UserLoanRequests`, `Assurances` و `MemberPurchases`. مبنای تبدیل باید نسخه اصلی واردشده از بکاپ باشد.
-- این سند فهرست کامل متادیتای جدول‌ها، ستون‌ها، کلیدها و ایندکس‌ها را پوشش می‌دهد. برای تبدیل دقیق کد تعریف Viewها/رویه‌ها/توابع/Triggerها باید تعریف خود اشیا نیز جداگانه استخراج شود؛ در بررسی حاضر هیچ شیئی از این گروه‌ها گزارش نشد.
-- داده‌های واقعی مشتریان، احراز هویت، درخواست‌ها و پرداخت‌ها نباید در مخزن عمومی GitHub ذخیره شوند. خروجی داده باید در مسیر خصوصی و کنترل‌شده سرور یا artifact خصوصی نگهداری شود.
-- هنوز تبدیل MySQL یا استقرار دیتابیس مقصد انجام نشده است.
+- فایل بکاپ قدیمی `vamcityc_aqayevamdb_2026-10-11_15-51-44.zip` در مسیر قبلی Roofixo موجود نبود؛ جست‌وجوی `/home` سه بکاپ جدیدتر را در مسیر `digebail.ir` یافت.
+- دیتابیس آزمایشی `vamcity_stage` با ۸۸ جدول و ۱٬۶۹۱ رکورد با بکاپ اصلی یکسان نیست و مبنای مهاجرت نیست.
+- در مقایسه، اختلاف‌هایی بین دیتابیس آزمایشی و بکاپ اصلی در ستون‌های `Assurances`, `AgentLoans`, `UserLoanPayments`, `UserLoanRequests`, `AppSettings` و `MemberPurchases` ثبت شده است.
+- هیچ View، Stored Procedure، Function، Trigger، Check Constraint یا Sequence در خروجی متادیتای این سه دیتابیس گزارش نشد؛ این مورد باید با بررسی سورس برنامه و تاریخچه مهاجرت‌ها تطبیق داده شود.
+- داده‌های واقعی کاربران، احراز هویت، درخواست و پرداخت نباید در مخزن عمومی GitHub قرار گیرند. خروجی داده باید در مسیر خصوصی سرور یا artifact خصوصی باقی بماند.
+- هنوز تبدیل MySQL و استقرار مقصد انجام نشده است.
