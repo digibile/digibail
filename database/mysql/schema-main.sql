@@ -282,7 +282,7 @@ CREATE TABLE `AppSettings` (
   `InquiryPersonInfoInRegister` TINYINT(1) NOT NULL DEFAULT 0,
   `InquiryPostalAddressInRegister` TINYINT(1) NOT NULL DEFAULT 0,
   `EmzameConfigJson` LONGTEXT NULL,
-  `__raw_DueDatedRememberEmailTime` VARCHAR(40) NULL COMMENT 'Exact original SQL Server temporal value'
+  `__raw_DueDatedRememberEmailTime` VARCHAR(40) NULL COMMENT 'Exact original SQL Server temporal value',
   `OverDueDayGapPeriod` INT NOT NULL DEFAULT 0,
   `HafezPayamConfigJson` LONGTEXT NULL,
   `NewLoanRequestNotificationSmsPatternId` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NULL,
@@ -1320,7 +1320,7 @@ CREATE TABLE `HangFire__AggregatedCounter` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE
-  `__raw_ExpireAt` VARCHAR(40) NULL COMMENT 'Exact original SQL Server temporal value'
+  `__raw_ExpireAt` VARCHAR(40) NULL COMMENT 'Exact original SQL Server temporal value',
   `__raw_ExpireAt` VARCHAR(40) NULL COMMENT 'Exact original SQL Server temporal value' `HangFire__Counter` (
   `Key` VARCHAR(50) NOT NULL,
   `Value` INT NOT NULL,
@@ -1370,7 +1370,7 @@ CREATE TABLE `HangFire__JobQueue` (
 
 CREATE TABLE `HangFire__List` (
   `I
-  `__raw_FetchedAt` VARCHAR(40) NULL COMMENT 'Exact original SQL Server temporal value'
+  `__raw_FetchedAt` VARCHAR(40) NULL COMMENT 'Exact original SQL Server temporal value',
   `__raw_FetchedAt` VARCHAR(40) NULL COMMENT 'Exact original SQL Server temporal value'd` BIGINT NOT NULL AUTO_INCREMENT,
   `Key` VARCHAR(50) NOT NULL,
   `Value` LONGTEXT NULL,
@@ -1392,8 +1392,8 @@ CREATE TABLE `HangFire__Server` (
   PRIMARY KEY (`Id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-  `__raw_LastHeartbeat` VARCHAR(40) NOT NULL COMMENT 'Exact original SQL Server temporal value'
-  `__raw_LastHeartbeat` VARCHAR(40) NOT NULL COMMENT 'Exact original SQL Server temporal value'
+  `__raw_LastHeartbeat` VARCHAR(40) NOT NULL COMMENT 'Exact original SQL Server temporal value',
+  `__raw_LastHeartbeat` VARCHAR(40) NOT NULL COMMENT 'Exact original SQL Server temporal value',
 CREATE TABLE `HangFire__Set` (
   `Key` VARCHAR(50) NOT NULL,
   `Score` DOUBLE NOT NULL,
@@ -1403,7 +1403,7 @@ CREATE TABLE `HangFire__Set` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE `HangFire
-  `__raw_ExpireAt` VARCHAR(40) NULL COMMENT 'Exact original SQL Server temporal value'
+  `__raw_ExpireAt` VARCHAR(40) NULL COMMENT 'Exact original SQL Server temporal value',
   `__raw_ExpireAt` VARCHAR(40) NULL COMMENT 'Exact original SQL Server temporal value'__State` (
   `Id` BIGINT NOT NULL AUTO_INCREMENT,
   `JobId` BIGINT NOT NULL,
