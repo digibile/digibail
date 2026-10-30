@@ -36,7 +36,7 @@ jobs:
             [ -n "$PASS" ] || PASS="$($D exec "$SQLC" printenv SA_PASSWORD 2>/dev/null || true)"
             [ -n "$SQLCMD" ] && [ -n "$PASS" ] || { echo "SQL_ACCESS_UNAVAILABLE"; exit 51; }
             BASE="/home/digibail/domains/digebail.ir/var/migrations"
-            OUT="$BASE/vamcity-private-json-export-20261030"
+            OUT="$BASE/vamcity-private-json-export-20261030-v2"
             if [ -e "$OUT" ]; then echo "EXPORT_ALREADY_EXISTS=$OUT"; exit 52; fi
             mkdir -p "$OUT"
             chmod 700 "$OUT"
@@ -68,7 +68,7 @@ jobs:
                 QUOTED_TABLE="$(printf '%s' "$TABLE" | sed 's/]/]]/g')"
                 QUERY="SELECT * FROM [$QUOTED_DB].[$QUOTED_SCHEMA].[$QUOTED_TABLE] FOR JSON PATH, INCLUDE_NULL_VALUES"
                 echo "EXPORT_TABLE=$DB.$SCHEMA.$TABLE EXPECTED_ROWS=$EXPECTED"
-                $D exec "$SQLC" "$BCP" "$QUERY" queryout "$TMP" -c -C 65001 -u -S localhost -U sa -P "$PASS" >/dev/null
+                $D exec "$SQLC" "$BCP" "$QUERY" queryout "$TMP" -c -C 65001 -y 0 -u -S localhost -U sa -P "$PASS" >/dev/null
                 $D exec "$SQLC" cat "$TMP" | gzip -c > "$FILE"
                 $D exec "$SQLC" rm -f "$TMP"
                 ACTUAL="$(gzip -cd "$FILE" | python3 -c 'import json,sys; x=json.load(sys.stdin); print(len(x))')"
