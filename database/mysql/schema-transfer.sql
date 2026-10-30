@@ -13,11 +13,9 @@ SET FOREIGN_KEY_CHECKS=0;
 
 -- ============================================================
 -- Source: vamcityc_transferDb_import_20261028
--- Target: vamcitydigibilepay_transferdb
+-- Target database: vamcitydigibilepay_transferdb (create/select it in DirectAdmin or cPanel before import)
 -- Tables: 12; columns: 78; source rows: 29
 -- ============================================================
-CREATE DATABASE IF NOT EXISTS `vamcitydigibilepay_transferdb` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-USE `vamcitydigibilepay_transferdb`;
 
 CREATE TABLE `OnlineMoneyTransfer____EFMigrationsHistory` (
   `MigrationId` VARCHAR(75) NOT NULL,
