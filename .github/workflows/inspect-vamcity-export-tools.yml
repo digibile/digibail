@@ -43,10 +43,10 @@ jobs:
               $D exec -e SQLCMDPASSWORD="$PASS" "$SQLC" "$SQLCMD" -S localhost -U sa -C -W -s '|' -Q "SET NOCOUNT ON; SELECT DB_NAME(database_id),SUM(size)*8.0/1024 AS allocated_mb FROM sys.master_files WHERE database_id=DB_ID(N'$DB') GROUP BY database_id;" 2>&1 | tail -n 5
               $D exec -e SQLCMDPASSWORD="$PASS" "$SQLC" "$SQLCMD" -S localhost -U sa -C -W -s '|' -d "$DB" -Q "SET NOCOUNT ON; SELECT TOP 15 s.name+'.'+t.name AS table_name,SUM(ps.row_count) AS rows_count,SUM(ps.reserved_page_count)*8.0/1024 AS reserved_mb,SUM(ps.used_page_count)*8.0/1024 AS used_mb FROM sys.dm_db_partition_stats ps JOIN sys.tables t ON t.object_id=ps.object_id JOIN sys.schemas s ON s.schema_id=t.schema_id WHERE ps.index_id IN (0,1) GROUP BY s.name,t.name ORDER BY SUM(ps.reserved_page_count) DESC;" 2>&1 | tail -n 22
             done
-            echo "=== BCP UNICODE JSON STREAM TEST ==="
-            $D exec "$SQLC" /opt/mssql-tools18/bin/bcp "SELECT * FROM [vamcityc_vamcity_import_20261028].dbo.[__EFMigrationsHistory] FOR JSON PATH, INCLUDE_NULL_VALUES" queryout /tmp/vamcity-bcp-test.json -w -a 65535 -u -S localhost -U sa -P "$PASS" 2>&1 | tail -n 8 || true
-            $D exec "$SQLC" cat /tmp/vamcity-bcp-test.json 2>/dev/null | python3 -c 'import sys,json; s=sys.stdin.buffer.read().decode("utf-16").strip(); x=json.loads(s); assert len(x)==2; print("BCP_UNICODE_JSON_PARSE_OK rows="+str(len(x)))' || true
-            $D exec "$SQLC" rm -f /tmp/vamcity-bcp-test.json
+            echo "=== SQLCMD UNTRUNCATED JSON STREAM TEST ==="
+            $D exec "$SQLC" "$SQLCMD" -S localhost -U sa -C -b -y 0 -w 65535 -s '|' -Q "SET NOCOUNT ON; SELECT * FROM [vamcityc_vamcity_import_20261028].dbo.[__EFMigrationsHistory] FOR JSON PATH, INCLUDE_NULL_VALUES;" -o /tmp/vamcity-sqlcmd-test.out
+            $D exec "$SQLC" cat /tmp/vamcity-sqlcmd-test.out | python3 -c 'import sys,json; lines=sys.stdin.read().splitlines(); payload="".join(lines[2:]).strip(); x=json.loads(payload); assert len(x)==225; print("SQLCMD_JSON_PARSE_OK rows="+str(len(x))+" lines="+str(len(lines)))'
+            $D exec "$SQLC" rm -f /tmp/vamcity-sqlcmd-test.out
             unset PASS
             echo "=== SPACE ==="
             df -h /home /tmp
