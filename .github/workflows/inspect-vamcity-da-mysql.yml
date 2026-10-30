@@ -27,7 +27,7 @@ jobs:
             if sudo -n docker info >/dev/null 2>&1; then D='sudo -n docker'; else D='docker'; fi
             IMAGE="$($D inspect vamcity-stage-sql --format '{{.Config.Image}}')"
             echo "=== DIRECTADMIN MYSQL CONFIG METADATA ==="
-            $D run --rm --entrypoint /bin/sh -v /:/host:ro "$IMAGE" -c '
+            $D run --rm --user 0:0 --entrypoint /bin/sh -v /:/host:ro "$IMAGE" -c '
               for f in /host/usr/local/directadmin/conf/mysql.conf /host/usr/local/directadmin/conf/mysql.conf.d; do
                 if [ -f "$f" ]; then
                   echo "CONFIG_FILE_PRESENT=$f"
