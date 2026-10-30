@@ -28,8 +28,10 @@ jobs:
           node --input-type=module <<'NODE'
           import fs from 'node:fs';
           const sql = fs.readFileSync('database/mysql/vamcitydigibilepay.sql', 'utf8');
-          const tables = [...sql.matchAll(/CREATE\\s+TABLE\\s+`([^`]+)`/gi)].map(x => x[1]);
-          const expected = { main: 88, bluvamdb: 56, transferdb: 12 };
+          const tables = sql.split('\n')
+            .filter(line => line.startsWith('CREATE TABLE `'))
+            .map(line => line.slice('CREATE TABLE `'.length, line.indexOf('`', 'CREATE TABLE `'.length)));
+          const expected = { main: 88, bluvamdb: 56, transfer: 12 };
           if (tables.length !== 156 || new Set(tables).size !== 156) {
             throw new Error('Expected 156 unique tables, got ' + tables.length);
           }
