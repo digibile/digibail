@@ -13,11 +13,9 @@ SET FOREIGN_KEY_CHECKS=0;
 
 -- ============================================================
 -- Source: vamcityc_vamcity_import_20261028
--- Target: vamcitydigibilepay
+-- Target database: vamcitydigibilepay (create/select it in DirectAdmin or cPanel before import)
 -- Tables: 88; columns: 957; source rows: 531172
 -- ============================================================
-CREATE DATABASE IF NOT EXISTS `vamcitydigibilepay` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-USE `vamcitydigibilepay`;
 
 CREATE TABLE `__EFMigrationsHistory` (
   `MigrationId` VARCHAR(75) NOT NULL,
