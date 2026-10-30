@@ -331,7 +331,8 @@ CREATE TABLE `Customers` (
   `Code` INT NOT NULL AUTO_INCREMENT,
   `AffCode` VARCHAR(10) NULL,
   `ParkDomain` VARCHAR(50) NULL,
-  PRIMARY KEY (`Id`)
+  PRIMARY KEY (`Id`),
+  KEY `IX_auto_Code` (`Code`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE `Expenses` (
@@ -464,7 +465,8 @@ CREATE TABLE `MemberPurchases` (
   `IPGParsianJson` LONGTEXT NULL,
   `CreatorUserId` BIGINT NULL,
   `SadadJson` LONGTEXT NULL,
-  PRIMARY KEY (`Id`)
+  PRIMARY KEY (`Id`),
+  KEY `IX_auto_Code` (`Code`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE `OffDate` (
@@ -602,7 +604,8 @@ CREATE TABLE `UserLoanPayments` (
   `SentDueDateSms` TINYINT(1) NOT NULL DEFAULT 0,
   `InstallmentAmount` DECIMAL(18,2) NOT NULL DEFAULT 0.0,
   `SentOverDueDateSms` TINYINT(1) NOT NULL DEFAULT 0,
-  PRIMARY KEY (`Id`)
+  PRIMARY KEY (`Id`),
+  KEY `IX_auto_Code` (`Code`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE `UserLoanRequestAuthorizationItemAttachments` (
@@ -658,7 +661,8 @@ CREATE TABLE `UserLoanRequests` (
   `ChargeType` INT NOT NULL DEFAULT 0,
   `SponsoreAmount` DECIMAL(18,2) NOT NULL DEFAULT 0.0,
   `LockedBy` LONGTEXT NULL,
-  PRIMARY KEY (`Id`)
+  PRIMARY KEY (`Id`),
+  KEY `IX_auto_Code` (`Code`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE `UserLoanRequestStatusHistories` (
@@ -706,7 +710,8 @@ CREATE TABLE `UserLoans` (
   `DepositChargeDueDate` DATETIME(6) NULL,
   `__raw_DepositChargeDueDate` VARCHAR(40) NULL COMMENT 'Exact SQL Server datetime2 source value',
   `PreDepositAmount` DECIMAL(18,2) NOT NULL DEFAULT 0.0,
-  PRIMARY KEY (`Id`)
+  PRIMARY KEY (`Id`),
+  KEY `IX_auto_Code` (`Code`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE `UserLoanSponsoreDueDate` (
