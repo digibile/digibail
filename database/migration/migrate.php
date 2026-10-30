@@ -9,6 +9,7 @@ declare(strict_types=1);
  * SQL Server source snapshots remain read-only throughout this process.
  * All imported rows are checkpointed by source table for safe restart.
  * Dry-run probes source metadata only; it never connects to or writes the target database.
+ * FINAL_JSON_DIAGNOSTICS_NO_RECORD_VALUES
  *
  * Usage:
  *   php database/migration/migrate.php --dry-run
@@ -104,6 +105,7 @@ function bcpJson(string $docker,string $container,string $password,string $dbNam
 function metadata(string $docker,string $container,string $password,string $source): array {
     $q=[
       'tables'=>"SELECT s.name schema_name,t.name table_name,COALESCE(SUM(p.rows),0) row_count FROM sys.tables t JOIN sys.schemas s ON s.schema_id=t.schema_id LEFT JOIN sys.partitions p ON p.object_id=t.object_id AND p.index_id IN (0,1) WHERE t.is_ms_shipped=0 GROUP BY s.name,t.name ORDER BY s.name,t.name FOR JSON PATH",
+      'dbinfo'=>"SELECT DB_NAME() source_database,CONVERT(nvarchar(128),DATABASEPROPERTYEX(DB_NAME(),'Collation')) source_collation,name file_name,type_desc,CAST(size*8.0/1024 AS decimal(18,2)) size_mb FROM sys.database_files FOR JSON PATH",
       'columns'=>"SELECT s.name schema_name,t.name table_name,c.column_id ordinal,c.name column_name,ty.name data_type,c.max_length,c.precision,c.scale,c.is_nullable,c.is_identity,c.is_computed,dc.definition default_definition FROM sys.tables t JOIN sys.schemas s ON s.schema_id=t.schema_id JOIN sys.columns c ON c.object_id=t.object_id JOIN sys.types ty ON ty.user_type_id=c.user_type_id LEFT JOIN sys.default_constraints dc ON dc.object_id=c.default_object_id WHERE t.is_ms_shipped=0 ORDER BY s.name,t.name,c.column_id FOR JSON PATH",
       'keys'=>"SELECT s.name schema_name,t.name table_name,i.name key_name,i.type_desc,i.is_primary_key,i.is_unique_constraint,c.name column_name,ic.key_ordinal FROM sys.indexes i JOIN sys.tables t ON t.object_id=i.object_id JOIN sys.schemas s ON s.schema_id=t.schema_id JOIN sys.index_columns ic ON ic.object_id=i.object_id AND ic.index_id=i.index_id JOIN sys.columns c ON c.object_id=t.object_id AND c.column_id=ic.column_id WHERE (i.is_primary_key=1 OR i.is_unique_constraint=1) AND ic.is_included_column=0 ORDER BY s.name,t.name,i.name,ic.key_ordinal FOR JSON PATH",
       'indexes'=>"SELECT s.name schema_name,t.name table_name,i.name index_name,i.type_desc,i.is_unique,i.is_primary_key,i.is_unique_constraint,i.is_disabled,i.has_filter,i.filter_definition,ic.key_ordinal,ic.is_included_column,c.name column_name,ic.is_descending_key,ic.index_column_id FROM sys.indexes i JOIN sys.tables t ON t.object_id=i.object_id JOIN sys.schemas s ON s.schema_id=t.schema_id JOIN sys.index_columns ic ON ic.object_id=i.object_id AND ic.index_id=i.index_id JOIN sys.columns c ON c.object_id=t.object_id AND c.column_id=ic.column_id WHERE i.index_id>0 AND i.name IS NOT NULL ORDER BY s.name,t.name,i.name,ic.key_ordinal,ic.index_column_id FOR JSON PATH",
@@ -228,7 +230,9 @@ foreach($sources as $s){
     $m=metadata($docker,$container,$sourcePassword,$s['source']);
     $allMeta[$s['source']]=$m;
     $rows=array_sum(array_map(fn($t)=>(int)$t['row_count'],$m['tables']));
-    logLine($s['source'].' => '.$s['target'].' | tables='.count($m['tables']).' | columns='.count($m['columns']).' | rows='.$rows);
+    $dbInfo=$m['dbinfo'][0]??[];
+    $fileMb=array_sum(array_map(fn($x)=>(float)($x['size_mb']??0),$m['dbinfo']));
+    logLine($s['source'].' => '.$s['target'].' | tables='.count($m['tables']).' | columns='.count($m['columns']).' | rows='.$rows.' | collation='.($dbInfo['source_collation']??'unknown').' | filesMB='.$fileMb);
 }
 if(!$execute){logLine('DRY RUN COMPLETE. No data or target schema was changed.');exit(0);}
 
