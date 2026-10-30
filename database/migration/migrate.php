@@ -7,6 +7,7 @@ declare(strict_types=1);
  * Source rows are streamed from SQL Server BCP as JSON and inserted directly into MariaDB.
  * No customer records are written to disk or committed to GitHub.
  * SQL Server source snapshots remain read-only throughout this process.
+ * All imported rows are checkpointed by source table for safe restart.
  *
  * Usage:
  *   php database/migration/migrate.php --dry-run
