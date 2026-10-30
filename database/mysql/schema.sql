@@ -1,7 +1,9 @@
 -- VamCity SQL Server to MariaDB schema conversion
 -- Generated from restored SQL Server backups. Source customer data is not included.
 -- Target MariaDB 10.6+ / MySQL 8.0-compatible where noted.
--- Selective temporal shadow columns preserve exact SQL Server datetime2/datetime/time(7) values.
+-- SQL Server schemas other than dbo are mapped to <schema>__<table> names.
+-- Exact datetime2/datetime/time(7) source strings are retained in __raw_<column> companion fields.
+-- Filtered indexes and INCLUDE columns are represented by equivalent/covering MariaDB indexes.
 
 SET NAMES utf8mb4;
 SET FOREIGN_KEY_CHECKS=0;
