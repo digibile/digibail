@@ -43,10 +43,9 @@ jobs:
               $D exec -e SQLCMDPASSWORD="$PASS" "$SQLC" "$SQLCMD" -S localhost -U sa -C -W -s '|' -Q "SET NOCOUNT ON; SELECT DB_NAME(database_id),SUM(size)*8.0/1024 AS allocated_mb FROM sys.master_files WHERE database_id=DB_ID(N'$DB') GROUP BY database_id;" 2>&1 | tail -n 5
               $D exec -e SQLCMDPASSWORD="$PASS" "$SQLC" "$SQLCMD" -S localhost -U sa -C -W -s '|' -d "$DB" -Q "SET NOCOUNT ON; SELECT TOP 15 s.name+'.'+t.name AS table_name,SUM(ps.row_count) AS rows_count,SUM(ps.reserved_page_count)*8.0/1024 AS reserved_mb,SUM(ps.used_page_count)*8.0/1024 AS used_mb FROM sys.dm_db_partition_stats ps JOIN sys.tables t ON t.object_id=ps.object_id JOIN sys.schemas s ON s.schema_id=t.schema_id WHERE ps.index_id IN (0,1) GROUP BY s.name,t.name ORDER BY SUM(ps.reserved_page_count) DESC;" 2>&1 | tail -n 22
             done
-            echo "=== BCP JSON STREAM TEST (NO ROW CONTENT LOGGED) ==="
-            $D exec "$SQLC" /opt/mssql-tools18/bin/bcp "SELECT Id,Code,Title FROM [vamcityc_vamcity_import_20261028].dbo.[Loans] ORDER BY (SELECT NULL) OFFSET 0 ROWS FETCH NEXT 2 ROWS ONLY FOR JSON PATH, INCLUDE_NULL_VALUES" queryout /tmp/vamcity-bcp-test.json -c -C 65001 -u -S localhost -U sa -P "$PASS" 2>&1 | tail -n 8 || true
-            $D exec "$SQLC" ls -l /tmp/vamcity-bcp-test.json 2>&1 || true
-            $D exec "$SQLC" cat /tmp/vamcity-bcp-test.json 2>/dev/null | python3 -c 'import json,sys; x=json.load(sys.stdin); assert len(x)==2; print("BCP_JSON_PARSE_OK rows="+str(len(x)))' || true
+            echo "=== BCP UNICODE JSON STREAM TEST ==="
+            $D exec "$SQLC" /opt/mssql-tools18/bin/bcp "SELECT Id,Code,Title FROM [vamcityc_vamcity_import_20261028].dbo.[Loans] ORDER BY (SELECT NULL) OFFSET 0 ROWS FETCH NEXT 2 ROWS ONLY FOR JSON PATH, INCLUDE_NULL_VALUES" queryout /tmp/vamcity-bcp-test.json -w -u -S localhost -U sa -P "$PASS" 2>&1 | tail -n 8 || true
+            $D exec "$SQLC" cat /tmp/vamcity-bcp-test.json 2>/dev/null | python3 -c 'import sys,json; s=sys.stdin.buffer.read().decode("utf-16le").lstrip("\\ufeff").strip(); x=json.loads(s); assert len(x)==2; print("BCP_UNICODE_JSON_PARSE_OK rows="+str(len(x)))' || true
             $D exec "$SQLC" rm -f /tmp/vamcity-bcp-test.json
             unset PASS
             echo "=== SPACE ==="
