@@ -1,23 +1,17 @@
 -- VamCity SQL Server to MariaDB schema conversion
--- Generated from restored SQL Server backup metadata on 2026-10-30.
--- Source records are NOT included in this public repository.
--- Target engine: MariaDB 10.6+ / MySQL 8.0 compatible DDL where noted.
--- All tables use utf8mb4. Schema names other than dbo are preserved as <schema>__<table>.
--- datetime2(7) uses DATETIME(6) plus __raw_<column> to retain the original 7th fractional digit and year 0001 values.
--- SQL Server filtered indexes are represented as ordinary indexes; unique filtered IS NOT NULL indexes remain semantically compatible because MySQL allows multiple NULL values.
--- SQL Server included index columns are represented by additional non-unique covering indexes when present.
+-- Generated from restored SQL Server backups. Source customer data is not included.
+-- Target MariaDB 10.6+ / MySQL 8.0-compatible where noted.
+-- Selective temporal shadow columns preserve exact SQL Server datetime2/datetime/time(7) values.
 
 SET NAMES utf8mb4;
 SET FOREIGN_KEY_CHECKS=0;
 
-
--- ============================================================
--- Source: vamcityc_vamcity_import_20261028
--- Target: vamcitydigibilepay
--- Tables: 88; columns: 957; source rows: 531172
--- ============================================================
 CREATE DATABASE IF NOT EXISTS `vamcitydigibilepay` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 USE `vamcitydigibilepay`;
+-- Source: vamcityc_vamcity_import_20261028
+-- Target database: vamcitydigibilepay (create/select it in DirectAdmin or cPanel before import)
+-- Tables: 88; columns: 957; source rows: 531172
+-- ============================================================
 
 CREATE TABLE `__EFMigrationsHistory` (
   `MigrationId` VARCHAR(75) NOT NULL,
@@ -179,7 +173,8 @@ CREATE TABLE `AppSettings` (
   `OverDueDaysCount` INT NOT NULL DEFAULT 0,
   `SepTerminalId` LONGTEXT NULL,
   `DashboardSettingsJson` LONGTEXT NULL,
-  `BeforeDueDaysCount` INT NOT NULL DEFAULT 0,
+  `BeforeDueDaysCount` INT NOT NULL DEFAULT 
+  `__raw_DueDatedRememberSmsTime` VARCHAR(40) NULL COMMENT 'Exact original SQL Server temporal value'0,
   `IsDueDateSmsActive` TINYINT(1) NOT NULL DEFAULT 0,
   `IsRememberSmsActive` TINYINT(1) NOT NULL DEFAULT 0,
   `OverDueDayRemeberOnce` TINYINT(1) NOT NULL DEFAULT 0,
@@ -275,11 +270,13 @@ CREATE TABLE `AppSettings` (
   `BaleConfigJson` LONGTEXT NULL,
   `ThirdPersonDigitalSignCompleteSmsPatternId` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NULL,
   `ThirdPersonDigitalSignLinkSmsPatternId` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NULL,
-  `ThirdPersonDigitalSignOtpSmsPatternId` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NULL,
+  `ThirdPersonDigitalSignOtpSmsPatternId` CHAR(36) CHARACTER SET a
+  `__raw_DailyReportEmailTime` VARCHAR(40) NULL COMMENT 'Exact original SQL Server temporal value'scii COLLATE ascii_bin NULL,
   `InquiryBankInRegister` TINYINT(1) NOT NULL DEFAULT 0,
   `InquiryPersonInfoInRegister` TINYINT(1) NOT NULL DEFAULT 0,
   `InquiryPostalAddressInRegister` TINYINT(1) NOT NULL DEFAULT 0,
   `EmzameConfigJson` LONGTEXT NULL,
+  `__raw_DueDatedRememberEmailTime` VARCHAR(40) NULL COMMENT 'Exact original SQL Server temporal value',
   `OverDueDayGapPeriod` INT NOT NULL DEFAULT 0,
   `HafezPayamConfigJson` LONGTEXT NULL,
   `NewLoanRequestNotificationSmsPatternId` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NULL,
@@ -1316,7 +1313,9 @@ CREATE TABLE `HangFire__AggregatedCounter` (
   PRIMARY KEY (`Key`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE `HangFire__Counter` (
+CREATE TABLE
+  `__raw_ExpireAt` VARCHAR(40) NULL COMMENT 'Exact original SQL Server temporal value',
+  `__raw_ExpireAt` VARCHAR(40) NULL COMMENT 'Exact original SQL Server temporal value' `HangFire__Counter` (
   `Key` VARCHAR(50) NOT NULL,
   `Value` INT NOT NULL,
   `ExpireAt` DATETIME(3) NULL,
@@ -1346,7 +1345,11 @@ CREATE TABLE `HangFire__Job` (
 
 CREATE TABLE `HangFire__JobParameter` (
   `JobId` BIGINT NOT NULL,
-  `Name` VARCHAR(20) NOT NULL,
+  `Name` VA
+  `__raw_CreatedAt` VARCHAR(40) NOT NULL COMMENT 'Exact original S
+  `__raw_ExpireAt` VARCHAR(40) NULL COMMENT 'Exact original SQL Server temporal value'QL Server temporal value'
+  `__raw_CreatedAt` VARCHAR(40) NOT NULL COMMENT 'Exact original S
+  `__raw_ExpireAt` VARCHAR(40) NULL COMMENT 'Exact original SQL Server temporal value'QL Server temporal value'RCHAR(20) NOT NULL,
   `Value` LONGTEXT NULL,
   PRIMARY KEY (`JobId`, `Name`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -1360,7 +1363,9 @@ CREATE TABLE `HangFire__JobQueue` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE `HangFire__List` (
-  `Id` BIGINT NOT NULL AUTO_INCREMENT,
+  `I
+  `__raw_FetchedAt` VARCHAR(40) NULL COMMENT 'Exact original SQL Server temporal value',
+  `__raw_FetchedAt` VARCHAR(40) NULL COMMENT 'Exact original SQL Server temporal value'd` BIGINT NOT NULL AUTO_INCREMENT,
   `Key` VARCHAR(50) NOT NULL,
   `Value` LONGTEXT NULL,
   `ExpireAt` DATETIME(3) NULL,
@@ -1370,7 +1375,9 @@ CREATE TABLE `HangFire__List` (
 CREATE TABLE `HangFire__Schema` (
   `Version` INT NOT NULL,
   PRIMARY KEY (`Version`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=
+  `__raw_ExpireAt` VARCHAR(40) NULL COMMENT 'Exact original SQL Server temporal value'u
+  `__raw_ExpireAt` VARCHAR(40) NULL COMMENT 'Exact original SQL Server temporal value'tf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE `HangFire__Server` (
   `Id` VARCHAR(100) NOT NULL,
@@ -1379,6 +1386,8 @@ CREATE TABLE `HangFire__Server` (
   PRIMARY KEY (`Id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+  `__raw_LastHeartbeat` VARCHAR(40) NOT NULL COMMENT 'Exact original SQL Server temporal value',
+  `__raw_LastHeartbeat` VARCHAR(40) NOT NULL COMMENT 'Exact original SQL Server temporal value',
 CREATE TABLE `HangFire__Set` (
   `Key` VARCHAR(50) NOT NULL,
   `Score` DOUBLE NOT NULL,
@@ -1387,7 +1396,9 @@ CREATE TABLE `HangFire__Set` (
   PRIMARY KEY (`Key`, `Value`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE `HangFire__State` (
+CREATE TABLE `HangFire
+  `__raw_ExpireAt` VARCHAR(40) NULL COMMENT 'Exact original SQL Server temporal value',
+  `__raw_ExpireAt` VARCHAR(40) NULL COMMENT 'Exact original SQL Server temporal value'__State` (
   `Id` BIGINT NOT NULL AUTO_INCREMENT,
   `JobId` BIGINT NOT NULL,
   `Name` VARCHAR(10) NOT NULL,
@@ -1781,12 +1792,14 @@ ALTER TABLE `HangFire__State` ADD CONSTRAINT `FK_HangFire_State_Job` FOREIGN KEY
 
 
 -- ============================================================
--- Source: vamcityc_bluvamdb_import_20261028
--- Target: vamcitydigibilepay_bluvamdb
--- Tables: 56; columns: 572; source rows: 286597
--- ============================================================
+
+
 CREATE DATABASE IF NOT EXISTS `vamcitydigibilepay_bluvamdb` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 USE `vamcitydigibilepay_bluvamdb`;
+-- Source: vamcityc_bluvamdb_import_20261028
+-- Target database: vamcitydigibilepay_bluvamdb (create/select it in DirectAdmin or cPanel before import)
+-- Tables: 56; columns: 572; source rows: 286597
+-- ============================================================
 
 CREATE TABLE `__EFMigrationsHistory` (
   `MigrationId` VARCHAR(75) NOT NULL,
@@ -2555,7 +2568,9 @@ CREATE TABLE `HangFire__Counter` (
   `ExpireAt` DATETIME(3) NULL,
   `Id` BIGINT NOT NULL AUTO_INCREMENT,
   PRIMARY KEY (`Key`, `Id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT
+  `__raw_ExpireAt` VARCHAR(40) NULL COMMENT 'Exact original SQL Server temporal value',
+  `__raw_ExpireAt` VARCHAR(40) NULL COMMENT 'Exact original SQL Server temporal value' CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE `HangFire__Hash` (
   `Key` VARCHAR(50) NOT NULL,
@@ -2630,7 +2645,9 @@ CREATE TABLE `HangFire__State` (
   PRIMARY KEY (`JobId`, `Id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE INDEX `IX_AffiliateCommissions_PurchaseId` ON `AffiliateCommissions` (`PurchaseId`); -- SQL Server filter: NULL
+CREATE INDEX `IX_AffiliateCommissions
+  `__raw_CreatedAt` VARCHAR(40) NOT NULL COMMENT 'Exact original SQL Server temporal value',
+  `__raw_CreatedAt` VARCHAR(40) NOT NULL COMMENT 'Exact original SQL Server temporal value'_PurchaseId` ON `AffiliateCommissions` (`PurchaseId`); -- SQL Server filter: NULL
 CREATE INDEX `IX_AffiliateCommissions_UserId` ON `AffiliateCommissions` (`UserId`); -- SQL Server filter: NULL
 CREATE INDEX `IX_AgentLoanAuthorizationItem_AuthorizationItemId` ON `AgentLoanAuthorizationItem` (`AuthorizationItemId`); -- SQL Server filter: NULL
 CREATE INDEX `IX_AgentLoanAuthorizationItem_CustomerId` ON `AgentLoanAuthorizationItem` (`CustomerId`); -- SQL Server filter: NULL
@@ -2839,12 +2856,14 @@ ALTER TABLE `HangFire__State` ADD CONSTRAINT `FK_HangFire_State_Job` FOREIGN KEY
 
 
 -- ============================================================
--- Source: vamcityc_transferDb_import_20261028
--- Target: vamcitydigibilepay_transferdb
--- Tables: 12; columns: 78; source rows: 29
--- ============================================================
+
+
 CREATE DATABASE IF NOT EXISTS `vamcitydigibilepay_transferdb` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 USE `vamcitydigibilepay_transferdb`;
+-- Source: vamcityc_transferDb_import_20261028
+-- Target database: vamcitydigibilepay_transferdb (create/select it in DirectAdmin or cPanel before import)
+-- Tables: 12; columns: 78; source rows: 29
+-- ============================================================
 
 CREATE TABLE `OnlineMoneyTransfer____EFMigrationsHistory` (
   `MigrationId` VARCHAR(75) NOT NULL,
@@ -2996,5 +3015,6 @@ ALTER TABLE `OnlineMoneyTransfer__AspNetUserRoles` ADD CONSTRAINT `FK_AspNetUser
 ALTER TABLE `OnlineMoneyTransfer__AspNetUserTokens` ADD CONSTRAINT `FK_AspNetUserTokens_AspNetUsers_UserId` FOREIGN KEY (`UserId`) REFERENCES `OnlineMoneyTransfer__AspNetUsers` (`Id`) ON DELETE CASCADE ON UPDATE RESTRICT;
 ALTER TABLE `OnlineMoneyTransfer__RefreshToken` ADD CONSTRAINT `FK_RefreshToken_AspNetUsers_UserId` FOREIGN KEY (`UserId`) REFERENCES `OnlineMoneyTransfer__AspNetUsers` (`Id`) ON DELETE CASCADE ON UPDATE RESTRICT;
 ALTER TABLE `OnlineMoneyTransfer__Transfer` ADD CONSTRAINT `FK_Transfer_Client_ClientId` FOREIGN KEY (`ClientId`) REFERENCES `OnlineMoneyTransfer__Client` (`Id`) ON DELETE CASCADE ON UPDATE RESTRICT;
+
 
 SET FOREIGN_KEY_CHECKS=1;
