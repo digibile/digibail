@@ -91,9 +91,11 @@ function bcpJson(string $docker,string $container,string $password,string $dbNam
     $raw=sanitizeJsonControlChars($raw);
     $data=json_decode($raw,true,512,JSON_BIGINT_AS_STRING);
     if(!is_array($data) || json_last_error()!==JSON_ERROR_NONE) {
-        $controls=[];
-        for($i=0,$n=strlen($raw);$i<$n;$i++){ $o=ord($raw[$i]); if($o<32 && !in_array($o,[9,10,13],true)) $controls[]=['offset'=>$i,'byte'=>$o]; if(count($controls)>=8) break; }
-        stopNow('Invalid BCP JSON for '.$dbName.': '.json_last_error_msg().' bytes='.strlen($raw).' controls='.json_encode($controls).' start='.json_encode(substr($raw,0,160)));
+        $spec=[0=>['pipe','r'],1=>['pipe','w'],2=>['pipe','w']];
+        $py=proc_open("python3 -c 'import sys,json; s=sys.stdin.read();\ntry: json.loads(s); print(\"PY_JSON_OK\")\nexcept json.JSONDecodeError as e: print(\"PY_JSON_ERROR\",e.msg,\"line\",e.lineno,\"column\",e.colno,\"offset\",e.pos,\"near\",repr(s[max(0,e.pos-70):e.pos+70]))'",$spec,$pp);
+        $diag='';
+        if(is_resource($py)){fwrite($pp[0],$raw);fclose($pp[0]);$diag=stream_get_contents($pp[1]);fclose($pp[1]);fclose($pp[2]);proc_close($py);}
+        stopNow('Invalid BCP JSON for '.$dbName.': '.json_last_error_msg().' bytes='.strlen($raw).' '.$diag);
     }
     return $data;
 }
