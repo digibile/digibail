@@ -65,9 +65,9 @@ function sanitizeJsonControlChars(string $json): string {
         $ch=$json[$i]; $ord=ord($ch);
         if($inString){
             if($escaped){$out.=$ch;$escaped=false;continue;}
-            if($ch==='\\\\'){$out.=$ch;$escaped=true;continue;}
+            if($ch==='\\'){$out.=$ch;$escaped=true;continue;}
             if($ch==='"'){$out.=$ch;$inString=false;continue;}
-            if($ord<32){$out.=sprintf('\\\\u%04x',$ord);continue;}
+            if($ord<32){$out.=sprintf('\\u%04x',$ord);continue;}
             $out.=$ch; continue;
         }
         if($ch==='"')$inString=true;
