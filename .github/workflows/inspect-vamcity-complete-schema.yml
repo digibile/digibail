@@ -37,7 +37,7 @@ jobs:
             dump_query() {
               DB="$1"; LABEL="$2"; QUERY="$3"
               echo "=== $LABEL DATABASE=$DB ==="
-              $D exec -e SQLCMDPASSWORD="$PASS" "$SQLC" "$SQLCMD" -S localhost -U sa -C -b -h -1 -W -s '|' -w 65535 -y 0 -d "$DB" -Q "SET NOCOUNT ON; $QUERY" 2>&1
+              $D exec -e SQLCMDPASSWORD="$PASS" "$SQLC" "$SQLCMD" -S localhost -U sa -C -b -h -1 -s '|' -w 65535 -y 0 -d "$DB" -Q "SET NOCOUNT ON; $QUERY" 2>&1
             }
             for DB in vamcityc_vamcity_import_20261028 vamcityc_bluvamdb_import_20261028 vamcityc_transferDb_import_20261028; do
               $D exec -e SQLCMDPASSWORD="$PASS" "$SQLC" "$SQLCMD" -S localhost -U sa -C -b -h -1 -W -s '|' -Q "SET NOCOUNT ON; SELECT name FROM sys.databases WHERE name=N'$DB' AND state_desc='ONLINE';" | grep -Fx "$DB" >/dev/null || { echo "DATABASE_MISSING=$DB"; exit 42; }
