@@ -30,6 +30,8 @@ jobs:
             for x in python3 python3-pip mysql mariadb mysqldump bcp sqlcmd 7z unzip gzip; do command -v "$x" 2>/dev/null || true; done
             echo "=== SQL CONTAINER CAPABILITIES ==="
             $D exec "$SQLC" sh -lc 'for x in bcp sqlcmd python3 python mysql mariadb; do command -v "$x" 2>/dev/null || true; done; ls -l /opt/mssql-tools18/bin /opt/mssql-tools/bin 2>/dev/null || true'
+            echo "=== BCP HELP OPTIONS ==="
+            $D exec "$SQLC" /opt/mssql-tools18/bin/bcp -? 2>&1 | head -n 90 || true
             echo "=== SQL SERVER VERSION ==="
             SQLCMD="$($D exec "$SQLC" sh -lc 'command -v /opt/mssql-tools18/bin/sqlcmd || command -v /opt/mssql-tools/bin/sqlcmd || command -v sqlcmd' 2>/dev/null | head -n 1)"
             PASS="$($D exec "$SQLC" printenv MSSQL_SA_PASSWORD 2>/dev/null || true)"
