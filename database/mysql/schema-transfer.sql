@@ -1,21 +1,9 @@
--- VamCity SQL Server to MariaDB schema conversion
--- Generated from restored SQL Server backup metadata on 2026-10-30.
--- Source records are NOT included in this public repository.
--- Target engine: MariaDB 10.6+ / MySQL 8.0 compatible DDL where noted.
--- All tables use utf8mb4. Schema names other than dbo are preserved as <schema>__<table>.
--- datetime2(7) uses DATETIME(6) plus __raw_<column> to retain the original 7th fractional digit and year 0001 values.
--- SQL Server filtered indexes are represented as ordinary indexes; unique filtered IS NOT NULL indexes remain semantically compatible because MySQL allows multiple NULL values.
--- SQL Server included index columns are represented by additional non-unique covering indexes when present.
+-- Source: vamcityc_transferDb_import_20261028
+-- Target database: vamcitydigibilepay_transferdb (create/select this database before importing)
+-- Tables: 12; columns: 78; rows: 29
 
 SET NAMES utf8mb4;
 SET FOREIGN_KEY_CHECKS=0;
-
-
--- ============================================================
--- Source: vamcityc_transferDb_import_20261028
--- Target database: vamcitydigibilepay_transferdb (create/select it in DirectAdmin or cPanel before import)
--- Tables: 12; columns: 78; source rows: 29
--- ============================================================
 
 CREATE TABLE `OnlineMoneyTransfer____EFMigrationsHistory` (
   `MigrationId` VARCHAR(75) NOT NULL,
@@ -112,12 +100,12 @@ CREATE TABLE `OnlineMoneyTransfer__RefreshToken` (
   `Id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
   `UserId` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
   `Token` VARCHAR(225) NULL,
-  `Expires` DATETIME(6) NOT NULL,
-  `__raw_Expires` VARCHAR(40) NULL COMMENT 'Exact SQL Server datetime2 source value',
-  `Created` DATETIME(6) NOT NULL,
-  `__raw_Created` VARCHAR(40) NULL COMMENT 'Exact SQL Server datetime2 source value',
+  `Expires` DATETIME(6) NULL,
+  `__raw_Expires` VARCHAR(40) NOT NULL COMMENT 'Exact original SQL Server temporal value',
+  `Created` DATETIME(6) NULL,
+  `__raw_Created` VARCHAR(40) NOT NULL COMMENT 'Exact original SQL Server temporal value',
   `Revoked` DATETIME(6) NULL,
-  `__raw_Revoked` VARCHAR(40) NULL COMMENT 'Exact SQL Server datetime2 source value',
+  `__raw_Revoked` VARCHAR(40) NULL COMMENT 'Exact original SQL Server temporal value',
   PRIMARY KEY (`Id`),
   UNIQUE KEY `IX_RefreshToken_Token` (`Token`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -133,14 +121,14 @@ CREATE TABLE `OnlineMoneyTransfer__Settings` (
 CREATE TABLE `OnlineMoneyTransfer__Transfer` (
   `Id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
   `Amount` DECIMAL(18,2) NOT NULL,
-  `CreateDate` DATETIME(6) NOT NULL,
-  `__raw_CreateDate` VARCHAR(40) NULL COMMENT 'Exact SQL Server datetime2 source value',
+  `CreateDate` DATETIME(6) NULL,
+  `__raw_CreateDate` VARCHAR(40) NOT NULL COMMENT 'Exact original SQL Server temporal value',
   `From` VARCHAR(25) NULL,
   `To` VARCHAR(25) NULL,
   `ToName` LONGTEXT NULL,
   `OTP` VARCHAR(5) NULL,
-  `OTPGenerateDateTime` DATETIME(6) NOT NULL,
-  `__raw_OTPGenerateDateTime` VARCHAR(40) NULL COMMENT 'Exact SQL Server datetime2 source value',
+  `OTPGenerateDateTime` DATETIME(6) NULL,
+  `__raw_OTPGenerateDateTime` VARCHAR(40) NOT NULL COMMENT 'Exact original SQL Server temporal value',
   `TransferStep` INT NOT NULL,
   `ClientTraceNumber` VARCHAR(25) NULL,
   `Cif` VARCHAR(25) NULL,
