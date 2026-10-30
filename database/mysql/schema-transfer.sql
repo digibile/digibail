@@ -1,6 +1,5 @@
 -- Source: vamcityc_transferDb_import_20261028
--- Target database: vamcitydigibilepay_transferdb (create/select this database before importing)
--- Tables: 12; columns: 78; rows: 29
+-- Target database: vamcitydigibilepay_transferdb (create/select before import)
 
 SET NAMES utf8mb4;
 SET FOREIGN_KEY_CHECKS=0;
@@ -146,7 +145,6 @@ CREATE INDEX `IX_AspNetUserRoles_RoleId` ON `OnlineMoneyTransfer__AspNetUserRole
 CREATE INDEX `EmailIndex` ON `OnlineMoneyTransfer__AspNetUsers` (`NormalizedEmail`); -- SQL Server filter: NULL
 CREATE INDEX `IX_RefreshToken_UserId` ON `OnlineMoneyTransfer__RefreshToken` (`UserId`); -- SQL Server filter: NULL
 CREATE INDEX `IX_Transfer_ClientId` ON `OnlineMoneyTransfer__Transfer` (`ClientId`); -- SQL Server filter: NULL
-
 ALTER TABLE `OnlineMoneyTransfer__AspNetRoleClaims` ADD CONSTRAINT `FK_AspNetRoleClaims_AspNetRoles_RoleId` FOREIGN KEY (`RoleId`) REFERENCES `OnlineMoneyTransfer__AspNetRoles` (`Id`) ON DELETE CASCADE ON UPDATE RESTRICT;
 ALTER TABLE `OnlineMoneyTransfer__AspNetUserClaims` ADD CONSTRAINT `FK_AspNetUserClaims_AspNetUsers_UserId` FOREIGN KEY (`UserId`) REFERENCES `OnlineMoneyTransfer__AspNetUsers` (`Id`) ON DELETE CASCADE ON UPDATE RESTRICT;
 ALTER TABLE `OnlineMoneyTransfer__AspNetUserLogins` ADD CONSTRAINT `FK_AspNetUserLogins_AspNetUsers_UserId` FOREIGN KEY (`UserId`) REFERENCES `OnlineMoneyTransfer__AspNetUsers` (`Id`) ON DELETE CASCADE ON UPDATE RESTRICT;
