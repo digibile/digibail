@@ -1,0 +1,51 @@
+name: Validate VamCity Linux database package
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [migration/vamcity-linux-cpanel-directadmin]
+    paths:
+      - "database/mysql/**"
+      - "scripts/build-vamcity-unified-schema.mjs"
+      - ".github/workflows/validate-vamcity-linux.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  validate-schema:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Build one-database schema
+        run: node scripts/build-vamcity-unified-schema.mjs
+      - name: Verify table totals and one target database
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const sql = fs.readFileSync('database/mysql/vamcitydigibilepay.sql', 'utf8');
+          const tables = [...sql.matchAll(/CREATE\\s+TABLE\\s+`([^`]+)`/gi)].map(x => x[1]);
+          const expected = { main: 88, bluvamdb: 56, transferdb: 12 };
+          if (tables.length !== 156 || new Set(tables).size !== 156) {
+            throw new Error('Expected 156 unique tables, got ' + tables.length);
+          }
+          if (!sql.includes('CREATE DATABASE IF NOT EXISTS `vamcitydigibilepay`')) {
+            throw new Error('Unified target database declaration missing');
+          }
+          if (/CREATE DATABASE IF NOT EXISTS `vamcitydigibilepay_(bluvamdb|transferdb)`/i.test(sql)) {
+            throw new Error('Side source databases must not be created');
+          }
+          const counts = {
+            main: tables.filter(x => !x.startsWith('bluvamdb__') && !x.startsWith('transferdb__')).length,
+            bluvamdb: tables.filter(x => x.startsWith('bluvamdb__')).length,
+            transfer: tables.filter(x => x.startsWith('transferdb__')).length
+          };
+          if (counts.main !== expected.main || counts.bluvamdb !== expected.bluvamdb || counts.transfer !== expected.transfer) {
+            throw new Error('Unexpected source table distribution: ' + JSON.stringify(counts));
+          }
+          console.log(JSON.stringify({ database: 'vamcitydigibilepay', tables: tables.length, counts }));
+          NODE
