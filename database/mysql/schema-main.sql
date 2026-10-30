@@ -1,21 +1,9 @@
--- VamCity SQL Server to MariaDB schema conversion
--- Generated from restored SQL Server backup metadata on 2026-10-30.
--- Source records are NOT included in this public repository.
--- Target engine: MariaDB 10.6+ / MySQL 8.0 compatible DDL where noted.
--- All tables use utf8mb4. Schema names other than dbo are preserved as <schema>__<table>.
--- datetime2(7) uses DATETIME(6) plus __raw_<column> to retain the original 7th fractional digit and year 0001 values.
--- SQL Server filtered indexes are represented as ordinary indexes; unique filtered IS NOT NULL indexes remain semantically compatible because MySQL allows multiple NULL values.
--- SQL Server included index columns are represented by additional non-unique covering indexes when present.
+-- Source: vamcityc_vamcity_import_20261028
+-- Target database: vamcitydigibilepay (create/select this database before importing)
+-- Tables: 88; columns: 957; rows: 531172
 
 SET NAMES utf8mb4;
 SET FOREIGN_KEY_CHECKS=0;
-
-
--- ============================================================
--- Source: vamcityc_vamcity_import_20261028
--- Target database: vamcitydigibilepay (create/select it in DirectAdmin or cPanel before import)
--- Tables: 88; columns: 957; source rows: 531172
--- ============================================================
 
 CREATE TABLE `__EFMigrationsHistory` (
   `MigrationId` VARCHAR(75) NOT NULL,
@@ -27,8 +15,8 @@ CREATE TABLE `AffiliateCommissions` (
   `Id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
   `Amount` INT NOT NULL,
   `PaidToUser` INT NOT NULL,
-  `Date` DATETIME(6) NOT NULL,
-  `__raw_Date` VARCHAR(40) NULL COMMENT 'Exact SQL Server datetime2 source value',
+  `Date` DATETIME(6) NULL,
+  `__raw_Date` VARCHAR(40) NOT NULL COMMENT 'Exact original SQL Server temporal value',
   `Description` VARCHAR(250) NULL,
   `UserId` BIGINT NOT NULL,
   `PurchaseId` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
@@ -52,8 +40,8 @@ CREATE TABLE `AgentFactors` (
   `UserCode` VARCHAR(5) NULL,
   `MemberId` BIGINT NOT NULL,
   `AgentId` BIGINT NULL,
-  `CreateAt` DATETIME(6) NOT NULL,
-  `__raw_CreateAt` VARCHAR(40) NULL COMMENT 'Exact SQL Server datetime2 source value',
+  `CreateAt` DATETIME(6) NULL,
+  `__raw_CreateAt` VARCHAR(40) NOT NULL COMMENT 'Exact original SQL Server temporal value',
   `CheckoutType` INT NOT NULL,
   `Amount` DECIMAL(18,2) NOT NULL,
   `Description` VARCHAR(500) NULL,
@@ -61,7 +49,7 @@ CREATE TABLE `AgentFactors` (
   `AdminAcceptStatus` INT NOT NULL,
   `CustomerId` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
   `CheckoutRequestDateTime` DATETIME(6) NULL,
-  `__raw_CheckoutRequestDateTime` VARCHAR(40) NULL COMMENT 'Exact SQL Server datetime2 source value',
+  `__raw_CheckoutRequestDateTime` VARCHAR(40) NOT NULL DEFAULT '0001-01-01T00:00:00.0000000' COMMENT 'Exact original SQL Server temporal value',
   `Commission` DECIMAL(18,2) NOT NULL DEFAULT 0.0,
   `MemberPurchaseId` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NULL,
   `AgentFactorOnlinePaymentMethod` INT NOT NULL DEFAULT 0,
@@ -106,8 +94,8 @@ CREATE TABLE `AgentMetaData` (
   `CustomerId` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
   `Status` INT NOT NULL,
   `RejectReason` LONGTEXT NULL,
-  `LastAdminChangeDateTime` DATETIME(6) NOT NULL,
-  `__raw_LastAdminChangeDateTime` VARCHAR(40) NULL COMMENT 'Exact SQL Server datetime2 source value',
+  `LastAdminChangeDateTime` DATETIME(6) NULL,
+  `__raw_LastAdminChangeDateTime` VARCHAR(40) NOT NULL COMMENT 'Exact original SQL Server temporal value',
   `CheckedBy` VARCHAR(50) NULL,
   `ThumbnailFileName` LONGTEXT NULL,
   `JavazKasbFileName` LONGTEXT NULL,
@@ -129,8 +117,8 @@ CREATE TABLE `AgentMetaData` (
 
 CREATE TABLE `AppEmails` (
   `Id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
-  `Date` DATETIME(6) NOT NULL,
-  `__raw_Date` VARCHAR(40) NULL COMMENT 'Exact SQL Server datetime2 source value',
+  `Date` DATETIME(6) NULL,
+  `__raw_Date` VARCHAR(40) NOT NULL COMMENT 'Exact original SQL Server temporal value',
   `Text` LONGTEXT NULL,
   `AppEmailType` INT NOT NULL,
   `To` VARCHAR(25) NULL,
@@ -145,8 +133,8 @@ CREATE TABLE `AppEmails` (
 
 CREATE TABLE `AppInquirys` (
   `Id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
-  `Date` DATETIME(6) NOT NULL,
-  `__raw_Date` VARCHAR(40) NULL COMMENT 'Exact SQL Server datetime2 source value',
+  `Date` DATETIME(6) NULL,
+  `__raw_Date` VARCHAR(40) NOT NULL COMMENT 'Exact original SQL Server temporal value',
   `InquiryPanel` INT NOT NULL,
   `AppInquiryType` INT NOT NULL,
   `Price` DECIMAL(18,2) NOT NULL,
@@ -170,6 +158,7 @@ CREATE TABLE `AppSettings` (
   `ZarinpalMerchantCode` VARCHAR(100) NULL,
   `DueDateRememberSmsPatternId` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NULL,
   `DueDatedRememberSmsTime` TIME(6) NULL,
+  `__raw_DueDatedRememberSmsTime` VARCHAR(40) NULL COMMENT 'Exact original SQL Server temporal value',
   `SmsCredit` INT NOT NULL DEFAULT 0,
   `ThanksPaymentSmsPatternId` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NULL,
   `AppendToWhichInstallment` INT NOT NULL DEFAULT 0,
@@ -178,8 +167,7 @@ CREATE TABLE `AppSettings` (
   `OverDueDaysCount` INT NOT NULL DEFAULT 0,
   `SepTerminalId` LONGTEXT NULL,
   `DashboardSettingsJson` LONGTEXT NULL,
-  `BeforeDueDaysCount` INT NOT NULL DEFAULT 
-  `__raw_DueDatedRememberSmsTime` VARCHAR(40) NULL COMMENT 'Exact original SQL Server temporal value'0,
+  `BeforeDueDaysCount` INT NOT NULL DEFAULT 0,
   `IsDueDateSmsActive` TINYINT(1) NOT NULL DEFAULT 0,
   `IsRememberSmsActive` TINYINT(1) NOT NULL DEFAULT 0,
   `OverDueDayRemeberOnce` TINYINT(1) NOT NULL DEFAULT 0,
@@ -228,9 +216,11 @@ CREATE TABLE `AppSettings` (
   `BeforeDueDateEmailPatternId` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NULL,
   `BeforeDueDaysCount_Email` INT NOT NULL DEFAULT 0,
   `DailyReportEmailTime` TIME(6) NULL,
+  `__raw_DailyReportEmailTime` VARCHAR(40) NULL COMMENT 'Exact original SQL Server temporal value',
   `DefaultEmailPanel` INT NOT NULL DEFAULT 0,
   `DueDateRememberEmailPatternId` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NULL,
   `DueDatedRememberEmailTime` TIME(6) NULL,
+  `__raw_DueDatedRememberEmailTime` VARCHAR(40) NULL COMMENT 'Exact original SQL Server temporal value',
   `EmailConfigJson` LONGTEXT NULL,
   `IsDailyReportEmailActive` TINYINT(1) NOT NULL DEFAULT 0,
   `IsDueDateEmailActive` TINYINT(1) NOT NULL DEFAULT 0,
@@ -275,13 +265,11 @@ CREATE TABLE `AppSettings` (
   `BaleConfigJson` LONGTEXT NULL,
   `ThirdPersonDigitalSignCompleteSmsPatternId` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NULL,
   `ThirdPersonDigitalSignLinkSmsPatternId` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NULL,
-  `ThirdPersonDigitalSignOtpSmsPatternId` CHAR(36) CHARACTER SET a
-  `__raw_DailyReportEmailTime` VARCHAR(40) NULL COMMENT 'Exact original SQL Server temporal value'scii COLLATE ascii_bin NULL,
+  `ThirdPersonDigitalSignOtpSmsPatternId` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NULL,
   `InquiryBankInRegister` TINYINT(1) NOT NULL DEFAULT 0,
   `InquiryPersonInfoInRegister` TINYINT(1) NOT NULL DEFAULT 0,
   `InquiryPostalAddressInRegister` TINYINT(1) NOT NULL DEFAULT 0,
   `EmzameConfigJson` LONGTEXT NULL,
-  `__raw_DueDatedRememberEmailTime` VARCHAR(40) NULL COMMENT 'Exact original SQL Server temporal value',
   `OverDueDayGapPeriod` INT NOT NULL DEFAULT 0,
   `HafezPayamConfigJson` LONGTEXT NULL,
   `NewLoanRequestNotificationSmsPatternId` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NULL,
@@ -296,8 +284,8 @@ CREATE TABLE `AppSettings` (
 
 CREATE TABLE `AppSms` (
   `Id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
-  `Date` DATETIME(6) NOT NULL,
-  `__raw_Date` VARCHAR(40) NULL COMMENT 'Exact SQL Server datetime2 source value',
+  `Date` DATETIME(6) NULL,
+  `__raw_Date` VARCHAR(40) NOT NULL COMMENT 'Exact original SQL Server temporal value',
   `Text` TEXT NULL,
   `Price` DECIMAL(18,2) NOT NULL,
   `AppSmsType` INT NOT NULL,
@@ -360,8 +348,8 @@ CREATE TABLE `AspNetUsers` (
   `Gender` TINYINT(1) NOT NULL,
   `Address` LONGTEXT NULL,
   `Mobile` LONGTEXT NULL,
-  `LastLoginDate` DATETIME(6) NOT NULL,
-  `__raw_LastLoginDate` VARCHAR(40) NULL COMMENT 'Exact SQL Server datetime2 source value',
+  `LastLoginDate` DATETIME(6) NULL,
+  `__raw_LastLoginDate` VARCHAR(40) NOT NULL COMMENT 'Exact original SQL Server temporal value',
   `IsActive` TINYINT(1) NOT NULL,
   `NationalCode` LONGTEXT NULL,
   `TotalSavedMoney` DECIMAL(18,2) NOT NULL,
@@ -381,11 +369,11 @@ CREATE TABLE `AspNetUsers` (
   `LockoutEnabled` TINYINT(1) NOT NULL,
   `AccessFailedCount` INT NOT NULL,
   `RegDate` DATETIME(6) NULL,
-  `__raw_RegDate` VARCHAR(40) NULL COMMENT 'Exact SQL Server datetime2 source value',
+  `__raw_RegDate` VARCHAR(40) NOT NULL DEFAULT '0001-01-01T00:00:00.0000000' COMMENT 'Exact original SQL Server temporal value',
   `LastLoginDate2` DATETIME(6) NULL,
-  `__raw_LastLoginDate2` VARCHAR(40) NULL COMMENT 'Exact SQL Server datetime2 source value',
+  `__raw_LastLoginDate2` VARCHAR(40) NOT NULL DEFAULT '0001-01-01T00:00:00.0000000' COMMENT 'Exact original SQL Server temporal value',
   `RegDate2` DATETIME(6) NULL,
-  `__raw_RegDate2` VARCHAR(40) NULL COMMENT 'Exact SQL Server datetime2 source value',
+  `__raw_RegDate2` VARCHAR(40) NOT NULL DEFAULT '0001-01-01T00:00:00.0000000' COMMENT 'Exact original SQL Server temporal value',
   `Familiar1FirstName` LONGTEXT NULL,
   `Familiar1LastName` LONGTEXT NULL,
   `Familiar1Mobile` LONGTEXT NULL,
@@ -412,7 +400,7 @@ CREATE TABLE `AspNetUsers` (
   `AgentMetaDataId` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NULL,
   `WalletIsLock` TINYINT(1) NOT NULL DEFAULT 0,
   `BirthDate` DATETIME(6) NULL,
-  `__raw_BirthDate` VARCHAR(40) NULL COMMENT 'Exact SQL Server datetime2 source value',
+  `__raw_BirthDate` VARCHAR(40) NULL COMMENT 'Exact original SQL Server temporal value',
   `ReliabilityId` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NULL,
   `UserCode` VARCHAR(25) NULL,
   PRIMARY KEY (`Id`),
@@ -429,8 +417,8 @@ CREATE TABLE `AspNetUserTokens` (
 
 CREATE TABLE `AssuranceChequeItem` (
   `Id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
-  `DueDate` DATETIME(6) NOT NULL,
-  `__raw_DueDate` VARCHAR(40) NULL COMMENT 'Exact SQL Server datetime2 source value',
+  `DueDate` DATETIME(6) NULL,
+  `__raw_DueDate` VARCHAR(40) NOT NULL COMMENT 'Exact original SQL Server temporal value',
   `FileName` VARCHAR(25) NULL,
   `ChequeNumber` VARCHAR(10) NULL,
   `SayadiId` VARCHAR(12) NULL,
@@ -473,7 +461,7 @@ CREATE TABLE `Assurances` (
   `PersonNationalCode` VARCHAR(10) NULL,
   `PersonalCode` VARCHAR(25) NULL,
   `ReturnDateTime` DATETIME(6) NULL,
-  `__raw_ReturnDateTime` VARCHAR(40) NULL COMMENT 'Exact SQL Server datetime2 source value',
+  `__raw_ReturnDateTime` VARCHAR(40) NOT NULL DEFAULT '0001-01-01T00:00:00.0000000' COMMENT 'Exact original SQL Server temporal value',
   `ReturnedToPerson` VARCHAR(25) NULL,
   `MobileVerified` TINYINT(1) NOT NULL DEFAULT 0,
   `PersonMobile` VARCHAR(25) NULL,
@@ -510,8 +498,8 @@ CREATE TABLE `Consultants` (
   `Description` VARCHAR(500) NULL,
   `IsSeen` TINYINT(1) NOT NULL,
   `CallResult` VARCHAR(500) NULL,
-  `SaveDate` DATETIME(6) NOT NULL,
-  `__raw_SaveDate` VARCHAR(40) NULL COMMENT 'Exact SQL Server datetime2 source value',
+  `SaveDate` DATETIME(6) NULL,
+  `__raw_SaveDate` VARCHAR(40) NOT NULL COMMENT 'Exact original SQL Server temporal value',
   PRIMARY KEY (`Id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -529,8 +517,8 @@ CREATE TABLE `Contacts` (
 CREATE TABLE `CustomerMarketerCommissions` (
   `Id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
   `Amount` DECIMAL(18,2) NOT NULL,
-  `Date` DATETIME(6) NOT NULL,
-  `__raw_Date` VARCHAR(40) NULL COMMENT 'Exact SQL Server datetime2 source value',
+  `Date` DATETIME(6) NULL,
+  `__raw_Date` VARCHAR(40) NOT NULL COMMENT 'Exact original SQL Server temporal value',
   `Description` VARCHAR(250) NULL,
   `MarketerId` BIGINT NOT NULL,
   `UserLoanId` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
@@ -546,18 +534,18 @@ CREATE TABLE `CustomerOrders` (
   `Description` VARCHAR(500) NULL,
   `IsSeen` TINYINT(1) NOT NULL,
   `CallResult` VARCHAR(500) NULL,
-  `SaveDate` DATETIME(6) NOT NULL,
-  `__raw_SaveDate` VARCHAR(40) NULL COMMENT 'Exact SQL Server datetime2 source value',
+  `SaveDate` DATETIME(6) NULL,
+  `__raw_SaveDate` VARCHAR(40) NOT NULL COMMENT 'Exact original SQL Server temporal value',
   `CustomerId` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
   PRIMARY KEY (`Id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE `CustomerPurchasePlan` (
   `Id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
-  `StartDate` DATETIME(6) NOT NULL,
-  `__raw_StartDate` VARCHAR(40) NULL COMMENT 'Exact SQL Server datetime2 source value',
-  `EndDate` DATETIME(6) NOT NULL,
-  `__raw_EndDate` VARCHAR(40) NULL COMMENT 'Exact SQL Server datetime2 source value',
+  `StartDate` DATETIME(6) NULL,
+  `__raw_StartDate` VARCHAR(40) NOT NULL COMMENT 'Exact original SQL Server temporal value',
+  `EndDate` DATETIME(6) NULL,
+  `__raw_EndDate` VARCHAR(40) NOT NULL COMMENT 'Exact original SQL Server temporal value',
   `MaxLoanCount` INT NOT NULL,
   `RemainLoanCount` INT NOT NULL,
   `CustomerId` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
@@ -572,10 +560,10 @@ CREATE TABLE `Customers` (
   `Email` LONGTEXT NULL,
   `FirstLoginDone` TINYINT(1) NOT NULL,
   `InitPassword` LONGTEXT NULL,
-  `RegDate` DATETIME(6) NOT NULL,
-  `__raw_RegDate` VARCHAR(40) NULL COMMENT 'Exact SQL Server datetime2 source value',
-  `ExpireDate` DATETIME(6) NOT NULL,
-  `__raw_ExpireDate` VARCHAR(40) NULL COMMENT 'Exact SQL Server datetime2 source value',
+  `RegDate` DATETIME(6) NULL,
+  `__raw_RegDate` VARCHAR(40) NOT NULL COMMENT 'Exact original SQL Server temporal value',
+  `ExpireDate` DATETIME(6) NULL,
+  `__raw_ExpireDate` VARCHAR(40) NOT NULL COMMENT 'Exact original SQL Server temporal value',
   `Permanent` TINYINT(1) NOT NULL DEFAULT 0,
   `Purchased` TINYINT(1) NOT NULL DEFAULT 0,
   `Code` INT NOT NULL AUTO_INCREMENT,
@@ -605,18 +593,18 @@ CREATE TABLE `Expenses` (
   `SavedBy` LONGTEXT NULL,
   `Title` LONGTEXT NULL,
   `Comment` LONGTEXT NULL,
-  `CostDate` DATETIME(6) NOT NULL,
-  `__raw_CostDate` VARCHAR(40) NULL COMMENT 'Exact SQL Server datetime2 source value',
-  `SaveDate` DATETIME(6) NOT NULL,
-  `__raw_SaveDate` VARCHAR(40) NULL COMMENT 'Exact SQL Server datetime2 source value',
+  `CostDate` DATETIME(6) NULL,
+  `__raw_CostDate` VARCHAR(40) NOT NULL COMMENT 'Exact original SQL Server temporal value',
+  `SaveDate` DATETIME(6) NULL,
+  `__raw_SaveDate` VARCHAR(40) NOT NULL COMMENT 'Exact original SQL Server temporal value',
   `CustomerId` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL DEFAULT '2a18f1fc-57fe-482c-8003-b6ba13b12996',
   PRIMARY KEY (`Id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE `IceReport` (
   `Id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
-  `Date` DATETIME(6) NOT NULL,
-  `__raw_Date` VARCHAR(40) NULL COMMENT 'Exact SQL Server datetime2 source value',
+  `Date` DATETIME(6) NULL,
+  `__raw_Date` VARCHAR(40) NOT NULL COMMENT 'Exact original SQL Server temporal value',
   `Result` VARCHAR(10) NULL,
   `Price` DECIMAL(18,2) NOT NULL,
   `Url` VARCHAR(250) NULL,
@@ -642,8 +630,8 @@ CREATE TABLE `InquirySettings` (
 
 CREATE TABLE `IranValidityReport` (
   `Id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
-  `Date` DATETIME(6) NOT NULL,
-  `__raw_Date` VARCHAR(40) NULL COMMENT 'Exact SQL Server datetime2 source value',
+  `Date` DATETIME(6) NULL,
+  `__raw_Date` VARCHAR(40) NOT NULL COMMENT 'Exact original SQL Server temporal value',
   `Result` VARCHAR(10) NULL,
   `Price` DECIMAL(18,2) NOT NULL,
   `Url` VARCHAR(250) NULL,
@@ -748,10 +736,10 @@ CREATE TABLE `MemberAuthorizationItems` (
   `Id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
   `MemberId` BIGINT NOT NULL,
   `AuthorizationItemId` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
-  `CreateDate` DATETIME(6) NOT NULL,
-  `__raw_CreateDate` VARCHAR(40) NULL COMMENT 'Exact SQL Server datetime2 source value',
-  `LastChangeDate` DATETIME(6) NOT NULL,
-  `__raw_LastChangeDate` VARCHAR(40) NULL COMMENT 'Exact SQL Server datetime2 source value',
+  `CreateDate` DATETIME(6) NULL,
+  `__raw_CreateDate` VARCHAR(40) NOT NULL COMMENT 'Exact original SQL Server temporal value',
+  `LastChangeDate` DATETIME(6) NULL,
+  `__raw_LastChangeDate` VARCHAR(40) NOT NULL COMMENT 'Exact original SQL Server temporal value',
   `LastChangeBy` VARCHAR(50) NULL,
   `MemberDescription` LONGTEXT NULL,
   `AdminDescription` VARCHAR(500) NULL,
@@ -768,8 +756,8 @@ CREATE TABLE `MemberPurchases` (
   `UserId` BIGINT NOT NULL,
   `UserLoanPaymentId` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NULL,
   `Amount` DECIMAL(18,2) NOT NULL,
-  `StartDate` DATETIME(6) NOT NULL,
-  `__raw_StartDate` VARCHAR(40) NULL COMMENT 'Exact SQL Server datetime2 source value',
+  `StartDate` DATETIME(6) NULL,
+  `__raw_StartDate` VARCHAR(40) NOT NULL COMMENT 'Exact original SQL Server temporal value',
   `Description` VARCHAR(100) NULL,
   `IsPaymentSuccess` TINYINT(1) NOT NULL,
   `SepJson` LONGTEXT NULL,
@@ -790,8 +778,8 @@ CREATE TABLE `MemberPurchases` (
 
 CREATE TABLE `OffDate` (
   `Id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
-  `Date` DATETIME(6) NOT NULL,
-  `__raw_Date` VARCHAR(40) NULL COMMENT 'Exact SQL Server datetime2 source value',
+  `Date` DATETIME(6) NULL,
+  `__raw_Date` VARCHAR(40) NOT NULL COMMENT 'Exact original SQL Server temporal value',
   `Title` VARCHAR(50) NULL,
   `CustomerId` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
   PRIMARY KEY (`Id`)
@@ -800,14 +788,14 @@ CREATE TABLE `OffDate` (
 CREATE TABLE `OnlineMoneyTransfer` (
   `Id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
   `Amount` DECIMAL(18,2) NOT NULL,
-  `SaveDate` DATETIME(6) NOT NULL,
-  `__raw_SaveDate` VARCHAR(40) NULL COMMENT 'Exact SQL Server datetime2 source value',
+  `SaveDate` DATETIME(6) NULL,
+  `__raw_SaveDate` VARCHAR(40) NOT NULL COMMENT 'Exact original SQL Server temporal value',
   `OnlineMoneyTransferStep` INT NOT NULL,
   `From` VARCHAR(25) NULL,
   `To` VARCHAR(25) NULL,
   `OTP` VARCHAR(5) NULL,
-  `OTPGenerateDateTime` DATETIME(6) NOT NULL,
-  `__raw_OTPGenerateDateTime` VARCHAR(40) NULL COMMENT 'Exact SQL Server datetime2 source value',
+  `OTPGenerateDateTime` DATETIME(6) NULL,
+  `__raw_OTPGenerateDateTime` VARCHAR(40) NOT NULL COMMENT 'Exact original SQL Server temporal value',
   `OurTraceNumber` VARCHAR(25) NULL,
   `Cif` VARCHAR(25) NULL,
   `IsSuccess` TINYINT(1) NOT NULL,
@@ -845,8 +833,8 @@ CREATE TABLE `Purchases` (
   `UserId` BIGINT NOT NULL,
   `CustomerId` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
   `Amount` DECIMAL(18,2) NOT NULL,
-  `StartDate` DATETIME(6) NOT NULL,
-  `__raw_StartDate` VARCHAR(40) NULL COMMENT 'Exact SQL Server datetime2 source value',
+  `StartDate` DATETIME(6) NULL,
+  `__raw_StartDate` VARCHAR(40) NOT NULL COMMENT 'Exact original SQL Server temporal value',
   `Description` VARCHAR(100) NULL,
   `ZarinPalAuthority` VARCHAR(25) NULL,
   `ZarinPalRefId` LONGTEXT NULL,
@@ -898,8 +886,8 @@ CREATE TABLE `SmsPatterns` (
 CREATE TABLE `SubAgentTransactions` (
   `Id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
   `Amount` DECIMAL(18,2) NOT NULL,
-  `SaveDate` DATETIME(6) NOT NULL,
-  `__raw_SaveDate` VARCHAR(40) NULL COMMENT 'Exact SQL Server datetime2 source value',
+  `SaveDate` DATETIME(6) NULL,
+  `__raw_SaveDate` VARCHAR(40) NOT NULL COMMENT 'Exact original SQL Server temporal value',
   `PaymentMethod` INT NOT NULL,
   `IsWithdraw` TINYINT(1) NOT NULL,
   `Description` VARCHAR(250) NULL,
@@ -947,8 +935,8 @@ CREATE TABLE `ThirdPersonAssuranceAuthorizationItems` (
   `UserLoanId` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NULL,
   `UserId` BIGINT NULL,
   `IsSigned` TINYINT(1) NOT NULL,
-  `LastChangeDate` DATETIME(6) NOT NULL,
-  `__raw_LastChangeDate` VARCHAR(40) NULL COMMENT 'Exact SQL Server datetime2 source value',
+  `LastChangeDate` DATETIME(6) NULL,
+  `__raw_LastChangeDate` VARCHAR(40) NOT NULL COMMENT 'Exact original SQL Server temporal value',
   `AuthorizationItemId` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
   `Comment` LONGTEXT NULL,
   `Tag` LONGTEXT NULL,
@@ -959,8 +947,8 @@ CREATE TABLE `ThirdPersonAssuranceAuthorizationItems` (
 
 CREATE TABLE `TicketResponses` (
   `Id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
-  `CreatedAt` DATETIME(6) NOT NULL,
-  `__raw_CreatedAt` VARCHAR(40) NULL COMMENT 'Exact SQL Server datetime2 source value',
+  `CreatedAt` DATETIME(6) NULL,
+  `__raw_CreatedAt` VARCHAR(40) NOT NULL COMMENT 'Exact original SQL Server temporal value',
   `Description` LONGTEXT NULL,
   `FileName` VARCHAR(50) NULL,
   `FromAdmin` TINYINT(1) NOT NULL,
@@ -975,8 +963,8 @@ CREATE TABLE `TicketResponses` (
 CREATE TABLE `Tickets` (
   `Id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
   `Code` INT NOT NULL AUTO_INCREMENT,
-  `CreatedAt` DATETIME(6) NOT NULL,
-  `__raw_CreatedAt` VARCHAR(40) NULL COMMENT 'Exact SQL Server datetime2 source value',
+  `CreatedAt` DATETIME(6) NULL,
+  `__raw_CreatedAt` VARCHAR(40) NOT NULL COMMENT 'Exact original SQL Server temporal value',
   `Title` VARCHAR(125) NULL,
   `Status` INT NOT NULL,
   `Role` INT NOT NULL,
@@ -989,7 +977,7 @@ CREATE TABLE `Tickets` (
   `UserLoanRequestId` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NULL,
   `CustomerId` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NULL,
   `LastModifiedAt` DATETIME(6) NULL,
-  `__raw_LastModifiedAt` VARCHAR(40) NULL COMMENT 'Exact SQL Server datetime2 source value',
+  `__raw_LastModifiedAt` VARCHAR(40) NOT NULL DEFAULT '0001-01-01T00:00:00.0000000' COMMENT 'Exact original SQL Server temporal value',
   PRIMARY KEY (`Id`),
   KEY `IX_auto_Code` (`Code`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -999,8 +987,8 @@ CREATE TABLE `UserLoanContact` (
   `UserLoanId` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
   `ContactId` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
   `Share` DECIMAL(18,2) NOT NULL,
-  `DueDate` DATETIME(6) NOT NULL,
-  `__raw_DueDate` VARCHAR(40) NULL COMMENT 'Exact SQL Server datetime2 source value',
+  `DueDate` DATETIME(6) NULL,
+  `__raw_DueDate` VARCHAR(40) NOT NULL COMMENT 'Exact original SQL Server temporal value',
   `CustomerId` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
   `UserLoanId1` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NULL,
   PRIMARY KEY (`Id`)
@@ -1011,8 +999,8 @@ CREATE TABLE `UserLoanPaymentOthers` (
   `UserLoanPaymentId` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
   `Amount` DECIMAL(18,2) NOT NULL,
   `SavedBy` VARCHAR(25) NULL,
-  `SaveDate` DATETIME(6) NOT NULL,
-  `__raw_SaveDate` VARCHAR(40) NULL COMMENT 'Exact SQL Server datetime2 source value',
+  `SaveDate` DATETIME(6) NULL,
+  `__raw_SaveDate` VARCHAR(40) NOT NULL COMMENT 'Exact original SQL Server temporal value',
   `PaymentMethod` INT NOT NULL,
   `IsGoldCheckouted` TINYINT(1) NOT NULL,
   `GoldWeight` DOUBLE NOT NULL,
@@ -1025,10 +1013,10 @@ CREATE TABLE `UserLoanPaymentOthers` (
 CREATE TABLE `UserLoanPaymentRequests` (
   `Id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
   `UserLoanPaymentId` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
-  `RequestDate` DATETIME(6) NOT NULL,
-  `__raw_RequestDate` VARCHAR(40) NULL COMMENT 'Exact SQL Server datetime2 source value',
-  `PaymentDate` DATETIME(6) NOT NULL,
-  `__raw_PaymentDate` VARCHAR(40) NULL COMMENT 'Exact SQL Server datetime2 source value',
+  `RequestDate` DATETIME(6) NULL,
+  `__raw_RequestDate` VARCHAR(40) NOT NULL COMMENT 'Exact original SQL Server temporal value',
+  `PaymentDate` DATETIME(6) NULL,
+  `__raw_PaymentDate` VARCHAR(40) NOT NULL COMMENT 'Exact original SQL Server temporal value',
   `Amount` DECIMAL(18,2) NOT NULL,
   `MemberDescription` LONGTEXT NULL,
   `AdminDescription` LONGTEXT NULL,
@@ -1036,8 +1024,8 @@ CREATE TABLE `UserLoanPaymentRequests` (
   `PaymentMethod` INT NOT NULL,
   `TrackNumber` VARCHAR(25) NULL,
   `AdminAcceptorId` BIGINT NULL,
-  `AdminAcceptDate` DATETIME(6) NOT NULL,
-  `__raw_AdminAcceptDate` VARCHAR(40) NULL COMMENT 'Exact SQL Server datetime2 source value',
+  `AdminAcceptDate` DATETIME(6) NULL,
+  `__raw_AdminAcceptDate` VARCHAR(40) NOT NULL COMMENT 'Exact original SQL Server temporal value',
   `AffectOnMainPayment` TINYINT(1) NOT NULL,
   `FileName` VARCHAR(25) NULL,
   PRIMARY KEY (`Id`)
@@ -1049,11 +1037,11 @@ CREATE TABLE `UserLoanPayments` (
   `InstallmentNumber` INT NOT NULL,
   `Amount` DECIMAL(18,2) NOT NULL,
   `SavedBy` LONGTEXT NULL,
-  `SaveDate` DATETIME(6) NOT NULL,
-  `__raw_SaveDate` VARCHAR(40) NULL COMMENT 'Exact SQL Server datetime2 source value',
+  `SaveDate` DATETIME(6) NULL,
+  `__raw_SaveDate` VARCHAR(40) NOT NULL COMMENT 'Exact original SQL Server temporal value',
   `FileMonth` LONGTEXT NULL,
   `TargetMonth` DATETIME(6) NULL,
-  `__raw_TargetMonth` VARCHAR(40) NULL COMMENT 'Exact SQL Server datetime2 source value',
+  `__raw_TargetMonth` VARCHAR(40) NOT NULL DEFAULT '0001-01-01T00:00:00.0000000' COMMENT 'Exact original SQL Server temporal value',
   `DelayDay` INT NOT NULL DEFAULT 0,
   `DelayPrice` DECIMAL(18,2) NOT NULL DEFAULT 0.0,
   `Description` LONGTEXT NULL,
@@ -1070,10 +1058,10 @@ CREATE TABLE `UserLoanPayments` (
   `SentOverDueDateEmail` TINYINT(1) NOT NULL DEFAULT 0,
   `SumAmount` DECIMAL(18,2) NOT NULL DEFAULT 0.0,
   `LastOverDueSmsDate` DATETIME(6) NULL,
-  `__raw_LastOverDueSmsDate` VARCHAR(40) NULL COMMENT 'Exact SQL Server datetime2 source value',
+  `__raw_LastOverDueSmsDate` VARCHAR(40) NULL COMMENT 'Exact original SQL Server temporal value',
   `Discount` DECIMAL(18,2) NOT NULL DEFAULT 0.0,
   `LastGuarantorOverDueSmsDate` DATETIME(6) NULL,
-  `__raw_LastGuarantorOverDueSmsDate` VARCHAR(40) NULL COMMENT 'Exact SQL Server datetime2 source value',
+  `__raw_LastGuarantorOverDueSmsDate` VARCHAR(40) NULL COMMENT 'Exact original SQL Server temporal value',
   PRIMARY KEY (`Id`),
   KEY `IX_auto_Code` (`Code`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -1101,10 +1089,10 @@ CREATE TABLE `UserLoanRequestAuthorizationItems` (
   `Id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
   `UserLoanRequestId` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
   `AuthorizationItemId` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
-  `CreateDate` DATETIME(6) NOT NULL,
-  `__raw_CreateDate` VARCHAR(40) NULL COMMENT 'Exact SQL Server datetime2 source value',
-  `LastChangeDate` DATETIME(6) NOT NULL,
-  `__raw_LastChangeDate` VARCHAR(40) NULL COMMENT 'Exact SQL Server datetime2 source value',
+  `CreateDate` DATETIME(6) NULL,
+  `__raw_CreateDate` VARCHAR(40) NOT NULL COMMENT 'Exact original SQL Server temporal value',
+  `LastChangeDate` DATETIME(6) NULL,
+  `__raw_LastChangeDate` VARCHAR(40) NOT NULL COMMENT 'Exact original SQL Server temporal value',
   `Attachment` VARCHAR(50) NULL,
   `MemberDescription` LONGTEXT NULL,
   `AdminDescription` VARCHAR(500) NULL,
@@ -1131,8 +1119,8 @@ CREATE TABLE `UserLoanRequests` (
   `Id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
   `UserId` BIGINT NOT NULL,
   `LoanId` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
-  `RequestDate` DATETIME(6) NOT NULL,
-  `__raw_RequestDate` VARCHAR(40) NULL COMMENT 'Exact SQL Server datetime2 source value',
+  `RequestDate` DATETIME(6) NULL,
+  `__raw_RequestDate` VARCHAR(40) NOT NULL COMMENT 'Exact original SQL Server temporal value',
   `Amount` DECIMAL(18,2) NOT NULL,
   `Comment` VARCHAR(500) NULL,
   `AdminDescriptionPrivate` VARCHAR(500) NULL,
@@ -1147,7 +1135,7 @@ CREATE TABLE `UserLoanRequests` (
   `IsPhysicalDocsDelivered` TINYINT(1) NOT NULL DEFAULT 0,
   `AdminDescription` LONGTEXT NULL,
   `SponsoreDueDate` DATETIME(6) NULL,
-  `__raw_SponsoreDueDate` VARCHAR(40) NULL COMMENT 'Exact SQL Server datetime2 source value',
+  `__raw_SponsoreDueDate` VARCHAR(40) NOT NULL DEFAULT '0001-01-01T00:00:00.0000000' COMMENT 'Exact original SQL Server temporal value',
   `StatusId` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NULL,
   `AgentStatusId` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NULL,
   `ChargeType` INT NOT NULL DEFAULT 0,
@@ -1170,8 +1158,8 @@ CREATE TABLE `UserLoanRequestSponsorHistory` (
   `Id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
   `UserId` BIGINT NOT NULL,
   `UserLoanRequestId` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
-  `DateTime` DATETIME(6) NOT NULL,
-  `__raw_DateTime` VARCHAR(40) NULL COMMENT 'Exact SQL Server datetime2 source value',
+  `DateTime` DATETIME(6) NULL,
+  `__raw_DateTime` VARCHAR(40) NOT NULL COMMENT 'Exact original SQL Server temporal value',
   `Subject` VARCHAR(50) NULL,
   `Description` VARCHAR(500) NULL,
   `CustomerId` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
@@ -1182,8 +1170,8 @@ CREATE TABLE `UserLoanRequestStatusHistories` (
   `Id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
   `UserId` BIGINT NOT NULL,
   `UserLoanRequestId` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
-  `DateTime` DATETIME(6) NOT NULL,
-  `__raw_DateTime` VARCHAR(40) NULL COMMENT 'Exact SQL Server datetime2 source value',
+  `DateTime` DATETIME(6) NULL,
+  `__raw_DateTime` VARCHAR(40) NOT NULL COMMENT 'Exact original SQL Server temporal value',
   `FromStatusId` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NULL,
   `FromAgentStatusId` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NULL,
   `ToStatusId` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NULL,
@@ -1196,15 +1184,15 @@ CREATE TABLE `UserLoans` (
   `Id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
   `UserId` BIGINT NOT NULL,
   `LoanId` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
-  `StartDate` DATETIME(6) NOT NULL,
-  `__raw_StartDate` VARCHAR(40) NULL COMMENT 'Exact SQL Server datetime2 source value',
+  `StartDate` DATETIME(6) NULL,
+  `__raw_StartDate` VARCHAR(40) NOT NULL COMMENT 'Exact original SQL Server temporal value',
   `Amount` DECIMAL(18,2) NOT NULL,
   `Installment` DECIMAL(18,2) NOT NULL,
   `Month` INT NOT NULL,
   `Paid` DECIMAL(18,2) NOT NULL,
   `Remain` DECIMAL(18,2) NOT NULL,
   `CheckoutDate` DATETIME(6) NULL,
-  `__raw_CheckoutDate` VARCHAR(40) NULL COMMENT 'Exact SQL Server datetime2 source value',
+  `__raw_CheckoutDate` VARCHAR(40) NULL COMMENT 'Exact original SQL Server temporal value',
   `IsCheckouted` TINYINT(1) NULL,
   `Code` INT NOT NULL AUTO_INCREMENT,
   `Description` LONGTEXT NULL,
@@ -1215,18 +1203,18 @@ CREATE TABLE `UserLoans` (
   `UserLoanRequestId` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NULL,
   `AgentPrice` DECIMAL(18,2) NOT NULL DEFAULT 0.0,
   `AgentDueDate` DATETIME(6) NULL,
-  `__raw_AgentDueDate` VARCHAR(40) NULL COMMENT 'Exact SQL Server datetime2 source value',
+  `__raw_AgentDueDate` VARCHAR(40) NULL COMMENT 'Exact original SQL Server temporal value',
   `SubAgentDueDate` DATETIME(6) NULL,
-  `__raw_SubAgentDueDate` VARCHAR(40) NULL COMMENT 'Exact SQL Server datetime2 source value',
+  `__raw_SubAgentDueDate` VARCHAR(40) NULL COMMENT 'Exact original SQL Server temporal value',
   `SubAgentId` BIGINT NULL,
   `SubAgentPrice` DECIMAL(18,2) NOT NULL DEFAULT 0.0,
   `DepositChargeDueDate` DATETIME(6) NULL,
-  `__raw_DepositChargeDueDate` VARCHAR(40) NULL COMMENT 'Exact SQL Server datetime2 source value',
+  `__raw_DepositChargeDueDate` VARCHAR(40) NULL COMMENT 'Exact original SQL Server temporal value',
   `PreDepositAmount` DECIMAL(18,2) NOT NULL DEFAULT 0.0,
   `Status` VARCHAR(25) NULL,
   `CustomProfitPercent` DECIMAL(18,2) NULL,
   `CreateAt` DATETIME(6) NULL,
-  `__raw_CreateAt` VARCHAR(40) NULL COMMENT 'Exact SQL Server datetime2 source value',
+  `__raw_CreateAt` VARCHAR(40) NOT NULL DEFAULT '0001-01-01T00:00:00.0000000' COMMENT 'Exact original SQL Server temporal value',
   `RefahBetaInquiryAmount` BIGINT NOT NULL DEFAULT 0,
   `RefahBetaOrderId` BIGINT NOT NULL DEFAULT 0,
   `Discount` DECIMAL(18,2) NOT NULL DEFAULT 0.0,
@@ -1240,8 +1228,8 @@ CREATE TABLE `UserLoanSponsoreDueDate` (
   `Id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
   `UserLoanId` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
   `Amount` DECIMAL(18,2) NOT NULL,
-  `DueDate` DATETIME(6) NOT NULL,
-  `__raw_DueDate` VARCHAR(40) NULL COMMENT 'Exact SQL Server datetime2 source value',
+  `DueDate` DATETIME(6) NULL,
+  `__raw_DueDate` VARCHAR(40) NOT NULL COMMENT 'Exact original SQL Server temporal value',
   `Description` VARCHAR(250) NULL,
   `IsCheckouted` TINYINT(1) NOT NULL,
   `CustomerId` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
@@ -1251,8 +1239,8 @@ CREATE TABLE `UserLoanSponsoreDueDate` (
 
 CREATE TABLE `UserRefahBeta` (
   `Id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
-  `ModifiedAt` DATETIME(6) NOT NULL,
-  `__raw_ModifiedAt` VARCHAR(40) NULL COMMENT 'Exact SQL Server datetime2 source value',
+  `ModifiedAt` DATETIME(6) NULL,
+  `__raw_ModifiedAt` VARCHAR(40) NOT NULL COMMENT 'Exact original SQL Server temporal value',
   `Message` VARCHAR(125) NULL,
   `Amount` BIGINT NOT NULL,
   `IsSuccess` TINYINT(1) NOT NULL,
@@ -1267,18 +1255,18 @@ CREATE TABLE `UserSavedMonies` (
   `Description` LONGTEXT NULL,
   `Amount` DECIMAL(18,2) NOT NULL,
   `SavedBy` LONGTEXT NULL,
-  `SaveDate` DATETIME(6) NOT NULL,
-  `__raw_SaveDate` VARCHAR(40) NULL COMMENT 'Exact SQL Server datetime2 source value',
+  `SaveDate` DATETIME(6) NULL,
+  `__raw_SaveDate` VARCHAR(40) NOT NULL COMMENT 'Exact original SQL Server temporal value',
   `FileMonth` LONGTEXT NULL,
   `TargetMonth` DATETIME(6) NULL,
-  `__raw_TargetMonth` VARCHAR(40) NULL COMMENT 'Exact SQL Server datetime2 source value',
+  `__raw_TargetMonth` VARCHAR(40) NOT NULL DEFAULT '0001-01-01T00:00:00.0000000' COMMENT 'Exact original SQL Server temporal value',
   PRIMARY KEY (`Id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE `VisitorLogs` (
   `Id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
-  `Date` DATETIME(6) NOT NULL,
-  `__raw_Date` VARCHAR(40) NULL COMMENT 'Exact SQL Server datetime2 source value',
+  `Date` DATETIME(6) NULL,
+  `__raw_Date` VARCHAR(40) NOT NULL COMMENT 'Exact original SQL Server temporal value',
   `IpAddress` VARCHAR(25) NULL,
   `UserAgent` VARCHAR(100) NULL,
   `Mrk` LONGTEXT NULL,
@@ -1295,8 +1283,8 @@ CREATE TABLE `WithdrawAgentFactor` (
 CREATE TABLE `Withdraws` (
   `Id` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
   `Amount` DECIMAL(18,2) NOT NULL,
-  `SaveDate` DATETIME(6) NOT NULL,
-  `__raw_SaveDate` VARCHAR(40) NULL COMMENT 'Exact SQL Server datetime2 source value',
+  `SaveDate` DATETIME(6) NULL,
+  `__raw_SaveDate` VARCHAR(40) NOT NULL COMMENT 'Exact original SQL Server temporal value',
   `PaymentMethod` INT NOT NULL,
   `IsWithdraw` TINYINT(1) NOT NULL,
   `IsUnknown` TINYINT(1) NOT NULL,
@@ -1323,15 +1311,15 @@ CREATE TABLE `HangFire__AggregatedCounter` (
   `Key` VARCHAR(50) NOT NULL,
   `Value` BIGINT NOT NULL,
   `ExpireAt` DATETIME(3) NULL,
+  `__raw_ExpireAt` VARCHAR(40) NULL COMMENT 'Exact original SQL Server temporal value',
   PRIMARY KEY (`Key`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE
-  `__raw_ExpireAt` VARCHAR(40) NULL COMMENT 'Exact original SQL Server temporal value',
-  `__raw_ExpireAt` VARCHAR(40) NULL COMMENT 'Exact original SQL Server temporal value' `HangFire__Counter` (
+CREATE TABLE `HangFire__Counter` (
   `Key` VARCHAR(50) NOT NULL,
   `Value` INT NOT NULL,
   `ExpireAt` DATETIME(3) NULL,
+  `__raw_ExpireAt` VARCHAR(40) NULL COMMENT 'Exact original SQL Server temporal value',
   `Id` BIGINT NOT NULL AUTO_INCREMENT,
   PRIMARY KEY (`Key`, `Id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -1341,7 +1329,7 @@ CREATE TABLE `HangFire__Hash` (
   `Field` VARCHAR(50) NOT NULL,
   `Value` LONGTEXT NULL,
   `ExpireAt` DATETIME(6) NULL,
-  `__raw_ExpireAt` VARCHAR(40) NULL COMMENT 'Exact SQL Server datetime2 source value',
+  `__raw_ExpireAt` VARCHAR(40) NULL COMMENT 'Exact original SQL Server temporal value',
   PRIMARY KEY (`Key`, `Field`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -1352,17 +1340,15 @@ CREATE TABLE `HangFire__Job` (
   `InvocationData` LONGTEXT NOT NULL,
   `Arguments` LONGTEXT NOT NULL,
   `CreatedAt` DATETIME(3) NOT NULL,
+  `__raw_CreatedAt` VARCHAR(40) NOT NULL COMMENT 'Exact original SQL Server temporal value',
   `ExpireAt` DATETIME(3) NULL,
+  `__raw_ExpireAt` VARCHAR(40) NULL COMMENT 'Exact original SQL Server temporal value',
   PRIMARY KEY (`Id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE `HangFire__JobParameter` (
   `JobId` BIGINT NOT NULL,
-  `Name` VA
-  `__raw_CreatedAt` VARCHAR(40) NOT NULL COMMENT 'Exact original S
-  `__raw_ExpireAt` VARCHAR(40) NULL COMMENT 'Exact original SQL Server temporal value'QL Server temporal value'
-  `__raw_CreatedAt` VARCHAR(40) NOT NULL COMMENT 'Exact original S
-  `__raw_ExpireAt` VARCHAR(40) NULL COMMENT 'Exact original SQL Server temporal value'QL Server temporal value'RCHAR(20) NOT NULL,
+  `Name` VARCHAR(20) NOT NULL,
   `Value` LONGTEXT NULL,
   PRIMARY KEY (`JobId`, `Name`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -1372,51 +1358,48 @@ CREATE TABLE `HangFire__JobQueue` (
   `JobId` BIGINT NOT NULL,
   `Queue` VARCHAR(25) NOT NULL,
   `FetchedAt` DATETIME(3) NULL,
+  `__raw_FetchedAt` VARCHAR(40) NULL COMMENT 'Exact original SQL Server temporal value',
   PRIMARY KEY (`Queue`, `Id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE `HangFire__List` (
-  `I
-  `__raw_FetchedAt` VARCHAR(40) NULL COMMENT 'Exact original SQL Server temporal value',
-  `__raw_FetchedAt` VARCHAR(40) NULL COMMENT 'Exact original SQL Server temporal value'd` BIGINT NOT NULL AUTO_INCREMENT,
+  `Id` BIGINT NOT NULL AUTO_INCREMENT,
   `Key` VARCHAR(50) NOT NULL,
   `Value` LONGTEXT NULL,
   `ExpireAt` DATETIME(3) NULL,
+  `__raw_ExpireAt` VARCHAR(40) NULL COMMENT 'Exact original SQL Server temporal value',
   PRIMARY KEY (`Key`, `Id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE `HangFire__Schema` (
   `Version` INT NOT NULL,
   PRIMARY KEY (`Version`)
-) ENGINE=InnoDB DEFAULT CHARSET=
-  `__raw_ExpireAt` VARCHAR(40) NULL COMMENT 'Exact original SQL Server temporal value'u
-  `__raw_ExpireAt` VARCHAR(40) NULL COMMENT 'Exact original SQL Server temporal value'tf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE `HangFire__Server` (
   `Id` VARCHAR(100) NOT NULL,
   `Data` LONGTEXT NULL,
   `LastHeartbeat` DATETIME(3) NOT NULL,
+  `__raw_LastHeartbeat` VARCHAR(40) NOT NULL COMMENT 'Exact original SQL Server temporal value',
   PRIMARY KEY (`Id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-  `__raw_LastHeartbeat` VARCHAR(40) NOT NULL COMMENT 'Exact original SQL Server temporal value',
-  `__raw_LastHeartbeat` VARCHAR(40) NOT NULL COMMENT 'Exact original SQL Server temporal value',
 CREATE TABLE `HangFire__Set` (
   `Key` VARCHAR(50) NOT NULL,
   `Score` DOUBLE NOT NULL,
   `Value` VARCHAR(128) NOT NULL,
   `ExpireAt` DATETIME(3) NULL,
+  `__raw_ExpireAt` VARCHAR(40) NULL COMMENT 'Exact original SQL Server temporal value',
   PRIMARY KEY (`Key`, `Value`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE `HangFire
-  `__raw_ExpireAt` VARCHAR(40) NULL COMMENT 'Exact original SQL Server temporal value',
-  `__raw_ExpireAt` VARCHAR(40) NULL COMMENT 'Exact original SQL Server temporal value'__State` (
+CREATE TABLE `HangFire__State` (
   `Id` BIGINT NOT NULL AUTO_INCREMENT,
   `JobId` BIGINT NOT NULL,
   `Name` VARCHAR(10) NOT NULL,
   `Reason` VARCHAR(50) NULL,
   `CreatedAt` DATETIME(3) NOT NULL,
+  `__raw_CreatedAt` VARCHAR(40) NOT NULL COMMENT 'Exact original SQL Server temporal value',
   `Data` LONGTEXT NULL,
   PRIMARY KEY (`JobId`, `Id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -1605,8 +1588,7 @@ CREATE INDEX `IX_Withdraws_UserLoanContactId` ON `Withdraws` (`UserLoanContactId
 CREATE INDEX `IX_Withdraws_UserLoanId` ON `Withdraws` (`UserLoanId`); -- SQL Server filter: NULL
 CREATE INDEX `IX_HangFire_AggregatedCounter_ExpireAt` ON `HangFire__AggregatedCounter` (`ExpireAt`); -- SQL Server filter: ([ExpireAt] IS NOT NULL)
 CREATE INDEX `IX_HangFire_Hash_ExpireAt` ON `HangFire__Hash` (`ExpireAt`); -- SQL Server filter: ([ExpireAt] IS NOT NULL)
-CREATE INDEX `IX_HangFire_Job_ExpireAt` ON `HangFire__Job` (`ExpireAt`); -- SQL Server filter: ([ExpireAt] IS NOT NULL)
-CREATE INDEX `IX_HangFire_Job_ExpireAt_cover` ON `HangFire__Job` (`ExpireAt`, `StateName`); -- covering index for SQL Server INCLUDE columns
+CREATE INDEX `IX_HangFire_Job_ExpireAt` ON `HangFire__Job` (`ExpireAt`, `StateName`); -- SQL Server filter: ([ExpireAt] IS NOT NULL)
 CREATE INDEX `IX_HangFire_Job_StateName` ON `HangFire__Job` (`StateName`); -- SQL Server filter: ([StateName] IS NOT NULL)
 CREATE INDEX `IX_HangFire_List_ExpireAt` ON `HangFire__List` (`ExpireAt`); -- SQL Server filter: ([ExpireAt] IS NOT NULL)
 CREATE INDEX `IX_HangFire_Server_LastHeartbeat` ON `HangFire__Server` (`LastHeartbeat`); -- SQL Server filter: NULL
@@ -1802,8 +1784,5 @@ ALTER TABLE `Withdraws` ADD CONSTRAINT `FK_Withdraws_UserLoanContact_UserLoanCon
 ALTER TABLE `Withdraws` ADD CONSTRAINT `FK_Withdraws_UserLoans_UserLoanId` FOREIGN KEY (`UserLoanId`) REFERENCES `UserLoans` (`Id`) ON DELETE RESTRICT ON UPDATE RESTRICT;
 ALTER TABLE `HangFire__JobParameter` ADD CONSTRAINT `FK_HangFire_JobParameter_Job` FOREIGN KEY (`JobId`) REFERENCES `HangFire__Job` (`Id`) ON DELETE CASCADE ON UPDATE CASCADE;
 ALTER TABLE `HangFire__State` ADD CONSTRAINT `FK_HangFire_State_Job` FOREIGN KEY (`JobId`) REFERENCES `HangFire__Job` (`Id`) ON DELETE CASCADE ON UPDATE CASCADE;
-
-
--- ============================================================
 
 SET FOREIGN_KEY_CHECKS=1;
