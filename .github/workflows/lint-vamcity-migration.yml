@@ -33,7 +33,7 @@ jobs:
               if grep -q 'function sanitizeJsonControlChars' "$ROOT/database/migration/migrate.php"; then break; fi
               sleep 5
             done
-            grep -q 'BCP may wrap very long nvarchar(max) JSON result rows' "$ROOT/database/migration/migrate.php"
+            grep -q 'function sanitizeJsonControlChars' "$ROOT/database/migration/migrate.php"
             echo "=== MIGRATION FILES ==="
             test -s "$ROOT/database/migration/migrate.php"
             test -s "$ROOT/database/migration/config.example.php"
