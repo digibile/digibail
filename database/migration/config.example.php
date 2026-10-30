@@ -11,10 +11,5 @@ return [
         'password' => 'YOUR_DATABASE_PASSWORD',
         'socket' => '/var/lib/mysql/mysql.sock',
     ],
-    'targets' => [
-        'vamcityc_vamcity_import_20261028' => 'vamcitydigibilepay',
-        'vamcityc_bluvamdb_import_20261028' => 'vamcitydigibilepay_bluvamdb',
-        'vamcityc_transferDb_import_20261028' => 'vamcitydigibilepay_transferdb',
-    ],
     'batch_size' => 500,
 ];
