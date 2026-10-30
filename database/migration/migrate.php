@@ -70,6 +70,8 @@ function bcpJson(string $docker,string $container,string $password,string $dbNam
     $err=stream_get_contents($pipes[2]); fclose($pipes[2]);
     $rc=proc_close($p);
     if($rc!==0) stopNow('BCP failed for '.$dbName.': '.trim($err));
+    // BCP may wrap very long nvarchar(max) JSON result rows at line boundaries; JSON strings escape embedded newlines.
+    $raw=str_replace(["\\r","\\n"],"",$raw);
     $data=json_decode($raw,true,512,JSON_BIGINT_AS_STRING);
     if(!is_array($data) || json_last_error()!==JSON_ERROR_NONE) {
         $controls=[];
