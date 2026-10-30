@@ -8,6 +8,7 @@ declare(strict_types=1);
  * No customer records are written to disk or committed to GitHub.
  * SQL Server source snapshots remain read-only throughout this process.
  * All imported rows are checkpointed by source table for safe restart.
+ * Dry-run probes source metadata only; it never connects to or writes the target database.
  *
  * Usage:
  *   php database/migration/migrate.php --dry-run
