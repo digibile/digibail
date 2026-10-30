@@ -31,12 +31,12 @@ jobs:
             PASS="$($D exec "$C" printenv MSSQL_SA_PASSWORD 2>/dev/null || true)"
             [ -n "$PASS" ] || PASS="$($D exec "$C" printenv SA_PASSWORD 2>/dev/null || true)"
             echo "=== METADATA JSON OUTPUT ==="
-            $D exec -e SQLCMDPASSWORD="$PASS" "$C" /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -C -h -1 -y 0 -w 65535 -Q "SET NOCOUNT ON; SELECT TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, DATA_TYPE, IS_NULLABLE, COLUMNPROPERTY(OBJECT_ID(QUOTENAME(TABLE_SCHEMA)+'.'+QUOTENAME(TABLE_NAME)),COLUMN_NAME,'IsIdentity') AS is_identity FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA='dbo' AND TABLE_NAME='__EFMigrationsHistory' FOR JSON PATH;" 2>&1 | tail -n 5
+            $D exec -e SQLCMDPASSWORD="$PASS" "$C" /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -C -h -1 -w 65535 -Q "SET NOCOUNT ON; SELECT TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, DATA_TYPE, IS_NULLABLE, COLUMNPROPERTY(OBJECT_ID(QUOTENAME(TABLE_SCHEMA)+'.'+QUOTENAME(TABLE_NAME)),COLUMN_NAME,'IsIdentity') AS is_identity FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA='dbo' AND TABLE_NAME='__EFMigrationsHistory' FOR JSON PATH;" 2>&1 | tail -n 5
             echo "=== BCP ONE JSON OBJECT PER ROW ==="
-            $D exec "$C" "$BCP" "SELECT (SELECT * FROM dbo.__EFMigrationsHistory t FOR JSON PATH, WITHOUT_ARRAY_WRAPPER, INCLUDE_NULL_VALUES)" queryout /dev/stdout -c -C 65001 -S localhost -U sa -P "$PASS" 2>&1 | head -n 10 || true
+            $D exec "$C" "$BCP" "SELECT (SELECT * FROM dbo.__EFMigrationsHistory t FOR JSON PATH, WITHOUT_ARRAY_WRAPPER, INCLUDE_NULL_VALUES)" queryout /dev/stdout -c -C 65001 -u -S localhost -U sa -P "$PASS" 2>&1 | head -n 10 || true
             echo "=== BCP EXIT AND JSON VALIDATION ==="
             set +e
-            OUT="$($D exec "$C" "$BCP" "SELECT (SELECT * FROM dbo.__EFMigrationsHistory t FOR JSON PATH, WITHOUT_ARRAY_WRAPPER, INCLUDE_NULL_VALUES)" queryout /dev/stdout -c -C 65001 -S localhost -U sa -P "$PASS" 2>/dev/null)"
+            OUT="$($D exec "$C" "$BCP" "SELECT (SELECT * FROM dbo.__EFMigrationsHistory t FOR JSON PATH, WITHOUT_ARRAY_WRAPPER, INCLUDE_NULL_VALUES)" queryout /dev/stdout -c -C 65001 -u -S localhost -U sa -P "$PASS" 2>/dev/null)"
             RC=$?
             set -e
             printf '%s' "$OUT" | python3 -c 'import sys,json; s=sys.stdin.read(); print("JSON_ROWS_VALID",sum(1 for x in s.splitlines() if x.strip() and isinstance(json.loads(x),dict)))'
