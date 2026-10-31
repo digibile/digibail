@@ -219,6 +219,21 @@ jobs:
             if (!login.ok || !cookie.startsWith("db_session=")) throw new Error("Recovery login failed: " + login.status);
             const admin = await fetch(base + "/api/v1/admin/summary", { headers: { Cookie: cookie } });
             if (!admin.ok) throw new Error("Admin authorization failed: " + admin.status);
+            const summaryBody = await admin.json();
+            const summary = summaryBody.data || summaryBody;
+            if (!(Number(summary.legacy_customers) > 0) || !(Number(summary.legacy_users) > 0)) throw new Error("MariaDB real customer/user counts are missing");
+            const customerResponse = await fetch(base + "/api/v1/admin/legacy-customers-page?page=1&pageSize=10", { headers: { Cookie: cookie } });
+            if (!customerResponse.ok) throw new Error("MariaDB customer directory failed: " + customerResponse.status);
+            const customerBody = await customerResponse.json();
+            const customerRows = customerBody.data?.rows || [];
+            if (!customerRows.length || !(Number(customerBody.data?.overallTotal) > 0)) throw new Error("MariaDB customer directory returned no real rows");
+            const tablesResponse = await fetch(base + "/api/v1/admin/legacy-source-tables", { headers: { Cookie: cookie } });
+            if (!tablesResponse.ok) throw new Error("MariaDB source tables endpoint failed: " + tablesResponse.status);
+            const tablesBody = await tablesResponse.json();
+            const tables = tablesBody.data || [];
+            if (!Array.isArray(tables) || !tables.some(t => t.source_table === "Customers" && Number(t.row_count) > 0)) throw new Error("MariaDB Customers table is not visible in admin API");
+            console.log("MARIADB_ADMIN_CUSTOMERS_SMOKE=PASS rows=" + customerRows.length + " total=" + customerBody.data.overallTotal);
+            console.log("MARIADB_ADMIN_TABLES_SMOKE=PASS tables=" + tables.length);
             const page = await fetch(base + "/admin.html", { headers: { Cookie: cookie } });
             const html = await page.text();
             if (!page.ok || !html.includes("<title>مدیریت دیجی‌بایل پی</title>") || !html.includes("همه داده‌های منتقل‌شده")) {
