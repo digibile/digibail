@@ -1732,7 +1732,7 @@ async function loadUsersDirectory(page=1){
  const options=userDirectoryRoles.map(r=>'<option value="'+esc(r.code)+'">'+esc(r.display_name)+'</option>').join('');
  const table=document.getElementById('userDirectoryRows');
  if(table)table.innerHTML=tbl([
-  ['نام و شناسه',u=>'<b>'+esc(u.full_name||u.username||'—')+'</b><div class="sub">شناسه '+nf(u.id)+' · '+esc(u.legacy_source||'ثبت‌نام جدید')+'</div>'],
+  ['نام و شناسه',u=>'<b>'+esc(u.full_name||u.username||'—')+'</b><div class="sub">شناسه '+esc(u.legacy_id||u.id)+' · '+esc(u.legacy_source||'ثبت‌نام جدید')+'</div>'],
   ['موبایل',u=>esc(u.phone||'—')],
   ['ایمیل',u=>esc(u.email||'—')],
   ['نقش',u=>'<select data-user-role="'+u.id+'" style="max-width:150px">'+userDirectoryRoles.map(r=>'<option value="'+esc(r.code)+'" '+(u.role===r.code?'selected':'')+(r.editable===false?' disabled':'')+'>'+esc(r.display_name)+'</option>').join('')+'</select><div class="sub">'+esc((u.roles||[]).join('، '))+'</div>'],
@@ -1751,12 +1751,12 @@ V.users=view('users-live',async function(){
    const page=e.target.closest('[data-user-page]');
    if(page&&!page.disabled){loadUsersDirectory(Number(page.dataset.userPage)||1).catch(x=>toast(x.message));return}
    const toggle=e.target.closest('[data-user-toggle]');
-   if(toggle){const id=Number(toggle.dataset.userToggle),u=(state.userDirectoryRows||[]).find(x=>Number(x.id)===id);if(!u)return;if(!confirm((u.is_active?'غیرفعال‌سازی':'فعال‌سازی')+' حساب '+(u.full_name||u.phone||id)+' انجام شود؟'))return;try{await api('PATCH','/api/v1/admin/users/'+id,{isActive:!u.is_active});toast('وضعیت حساب به‌روزرسانی شد');await loadUsersDirectory(state.userDirectoryPage||1)}catch(x){toast(x.message)}return}
+   if(toggle){const id=String(toggle.dataset.userToggle||''),u=(state.userDirectoryRows||[]).find(x=>String(x.id)===id);if(!u)return;if(!confirm((u.is_active?'غیرفعال‌سازی':'فعال‌سازی')+' حساب '+(u.full_name||u.phone||id)+' انجام شود؟'))return;try{await api('PATCH','/api/v1/admin/users/'+id,{isActive:!u.is_active});toast('وضعیت حساب به‌روزرسانی شد');await loadUsersDirectory(state.userDirectoryPage||1)}catch(x){toast(x.message)}return}
    const edit=e.target.closest('[data-user-edit]');
-   if(edit){const id=Number(edit.dataset.userEdit),u=(state.userDirectoryRows||[]).find(x=>Number(x.id)===id);if(!u)return;const fullName=prompt('نام و نام خانوادگی',u.full_name||'');if(fullName===null)return;const phone=prompt('شماره موبایل',u.phone||'');if(phone===null)return;const email=prompt('ایمیل',u.email||'');if(email===null)return;try{await api('PATCH','/api/v1/admin/users/'+id,{fullName,phone,email});toast('اطلاعات کاربر ذخیره شد');await loadUsersDirectory(state.userDirectoryPage||1)}catch(x){toast(x.message)}return}
+   if(edit){const id=String(edit.dataset.userEdit||''),u=(state.userDirectoryRows||[]).find(x=>String(x.id)===id);if(!u)return;const fullName=prompt('نام و نام خانوادگی',u.full_name||'');if(fullName===null)return;const phone=prompt('شماره موبایل',u.phone||'');if(phone===null)return;const email=prompt('ایمیل',u.email||'');if(email===null)return;try{await api('PATCH','/api/v1/admin/users/'+id,{fullName,phone,email});toast('اطلاعات کاربر ذخیره شد');await loadUsersDirectory(state.userDirectoryPage||1)}catch(x){toast(x.message)}return}
    if(e.target.id==='userDirectorySearchBtn')loadUsersDirectory(1).catch(x=>toast(x.message));
   });
-  document.addEventListener('change',async e=>{const sel=e.target.closest('[data-user-role]');if(!sel)return;const id=Number(sel.dataset.userRole),u=(state.userDirectoryRows||[]).find(x=>Number(x.id)===id);if(!u)return;try{await api('PATCH','/api/v1/admin/users/'+id,{role:sel.value});toast('نقش کاربر به‌روزرسانی شد');await loadUsersDirectory(state.userDirectoryPage||1)}catch(x){toast(x.message);sel.value=u.role}});
+  document.addEventListener('change',async e=>{const sel=e.target.closest('[data-user-role]');if(!sel)return;const id=String(sel.dataset.userRole||''),u=(state.userDirectoryRows||[]).find(x=>String(x.id)===id);if(!u)return;try{await api('PATCH','/api/v1/admin/users/'+id,{role:sel.value});toast('نقش کاربر به‌روزرسانی شد');await loadUsersDirectory(state.userDirectoryPage||1)}catch(x){toast(x.message);sel.value=u.role}});
   document.addEventListener('keydown',e=>{if(e.target.id==='userDirectorySearch'&&e.key==='Enter'){e.preventDefault();loadUsersDirectory(1).catch(x=>toast(x.message))}});
  }
  setTimeout(()=>loadUsersDirectory(1).catch(x=>toast(x.message)),0);
