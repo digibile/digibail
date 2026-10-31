@@ -6,12 +6,9 @@ RUN npm install --omit=dev --no-audit --no-fund && npm cache clean --force
 COPY --chown=node:node server.js start.js migrate.js next-server.js next.config.mjs ./
 COPY --chown=node:node backend ./backend
 COPY --chown=node:node scripts/create-admin.js ./scripts/create-admin.js
-COPY --chown=node:node scripts/migrate-legacy-digibail.js ./scripts/migrate-legacy-digibail.js
-COPY --chown=node:node scripts/digibail-legacy-schema.json ./scripts/digibail-legacy-schema.json
 COPY --chown=node:node scripts/provision-recovery-admin.js ./scripts/provision-recovery-admin.js
-COPY --chown=node:node scripts/sync-postgres-users-to-mariadb.mjs ./scripts/sync-postgres-users-to-mariadb.mjs
-COPY --chown=node:node scripts/import-legacy-loan-products.mjs ./scripts/import-legacy-loan-products.mjs
-COPY --chown=node:node scripts/backfill-legacy-customers.mjs ./scripts/backfill-legacy-customers.mjs
+COPY --chown=node:node scripts/migrate-postgres-app-data-to-mariadb.mjs ./scripts/migrate-postgres-app-data-to-mariadb.mjs
+COPY --chown=node:node scripts/import-legacy-mariadb-users.mjs ./scripts/import-legacy-mariadb-users.mjs
 COPY --chown=node:node web ./web
 COPY --chown=node:node app ./app
 RUN npm run build && chown -R node:node .next
