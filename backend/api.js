@@ -737,6 +737,7 @@ export async function handleApi(req, res, url) {
           if(!["customer","member","agent","marketer","customermarketer","admin","superadmin"].includes(role))return json(res,400,{message:"نقش انتخاب‌شده معتبر نیست."});
           if(admin.role!=="superadmin")return json(res,403,{message:"تغییر نقش فقط برای مدیر ارشد مجاز است."});
         }
+        if(Number(target.id)===actorId&&role!==null&&role!==target.role)return json(res,400,{message:"نقش حساب مدیر واردشده را نمی‌توان از همین نشست تغییر داد."});
         if(Number(target.id)===actorId&&active===false)return json(res,400,{message:"امکان غیرفعال‌کردن حساب مدیر واردشده وجود ندارد."});
         if((target.role==="superadmin"||role==="superadmin")&&admin.role!=="superadmin")return json(res,403,{message:"مدیریت حساب مدیر ارشد فقط برای مدیر ارشد مجاز است."});
         const fullName=input.fullName===undefined?null:String(input.fullName).trim().replace(/\s+/g," ").slice(0,160);
