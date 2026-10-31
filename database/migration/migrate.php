@@ -21,7 +21,7 @@ if (PHP_SAPI !== 'cli') { http_response_code(404); exit; }
 $execute = in_array('--execute', $argv, true);
 $root = dirname(__DIR__, 2);
 $configPath = __DIR__ . '/config.php';
-$container = 'vamcity-stage-sql';
+$container = 'public_html-db-1';
 $batchSize = 500;
 
 $sources = [
