@@ -3,6 +3,11 @@ import crypto from "node:crypto";
 import bcrypt from "bcryptjs";
 import { Pool } from "pg";
 
+if(process.env.ALLOW_POSTGRES_LEGACY_IMPORT!=="1"){
+  console.error("POSTGRES_LEGACY_IMPORT_DISABLED: legacy operational data is maintained in MariaDB; refusing an unapproved PostgreSQL import.");
+  process.exit(64);
+}
+
 // DIGIBAIL_RELATIONAL_EXPORT_V3_WITH_SCHEMA
 // DIGIBAIL_IMPORT_FIX_20261031_NULLABLE_MIRROR_V2
 // DIGIBAIL_IMPORT_FIX_20261031_PRESERVE_IDENTITY_NULLABILITY_V3
