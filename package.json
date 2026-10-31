@@ -24,6 +24,7 @@
     "typescript": "^5.9.3",
     "@types/react": "^19.1.16",
     "@types/node": "^22.18.12",
-    "@types/react-dom": "^19.1.9"
+    "@types/react-dom": "^19.1.9",
+    "mysql2": "^3.15.3"
   }
 }
