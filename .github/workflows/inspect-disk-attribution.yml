@@ -1,0 +1,51 @@
+name: Read-only full disk attribution for Digibail host
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/inspect-disk-attribution.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Attribute filesystem usage without deleting or modifying files
+        uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          command_timeout: 11m
+          script: |
+            set -u
+            echo "=== Filesystem and mounts ==="
+            df -hT
+            echo "=== Top-level directories ==="
+            for p in /home /var /opt /root /tmp /usr /srv; do
+              [ -d "$p" ] || continue
+              echo "--- $p ---"
+              du -xsh "$p" 2>&1 || true
+              du -xhd1 "$p" 2>/dev/null | sort -h | tail -18 || true
+            done
+            echo "=== Large files >= 500 MB ==="
+            find / -xdev -type f -size +500M -printf '%s bytes %p\n' 2>/dev/null | sort -nr | head -80 || true
+            echo "=== Container storage paths ==="
+            for p in /var/lib/docker /var/lib/containerd /var/lib/containers /var/snap /opt/containerd /home/docker; do
+              [ -e "$p" ] || continue
+              du -xsh "$p" 2>&1 || true
+              du -xhd2 "$p" 2>/dev/null | sort -h | tail -25 || true
+            done
+            echo "=== Deleted but still open files ==="
+            if command -v lsof >/dev/null 2>&1; then lsof -nP +L1 2>/dev/null | head -100 || true; else echo "lsof_not_installed"; fi
+            echo "=== Journald and apt cache ==="
+            journalctl --disk-usage 2>&1 || true
+            du -sh /var/cache/apt /var/log 2>/dev/null || true
+            echo "=== Final filesystem ==="
+            df -hT /
+            echo "DISK_ATTRIBUTION_COMPLETE=1"
