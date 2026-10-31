@@ -127,21 +127,28 @@ function targetConnect(array $mysql,string $dbName): mysqli {
     $db->set_charset('utf8mb4');
     return $db;
 }
-function installSchema(mysqli $db,string $path,string $source): void {
+function installSchema(mysqli $db,string $path,string $source,bool $skipExistingTables=false): void {
     if(!is_file($path)) stopNow('Schema file not found: '.$path);
     $sql=file_get_contents($path);
     $sql=preg_replace('/^\s*--.*$/m','',$sql);
     $sql=preg_replace('/;\s*--[^\r\n]*/',';',$sql);
     if($source==='vamcityc_bluvamdb_import_20261028'){
         $rename=static fn($name)=>shortName('bluvamdb__'.$name);
-        $sql=preg_replace_callback('/\b(CREATE\s+TABLE|ALTER\s+TABLE|REFERENCES)\s+`([^`]+)`/i',
+        $sql=preg_replace_callback('/\\b(CREATE\\s+TABLE|ALTER\\s+TABLE|REFERENCES)\\s+`([^`]+)`/i',
             static fn($m)=>$m[1].' `'.$rename($m[2]).'`',$sql);
-        $sql=preg_replace_callback('/\b(CONSTRAINT\s+)`([^`]+)`/i',
+        $sql=preg_replace_callback('/\\b(CONSTRAINT\\s+)`([^`]+)`/i',
             static fn($m)=>$m[1].'`'.$rename($m[2]).'`',$sql);
+        $sql=preg_replace_callback('/\\bCREATE\\s+(UNIQUE\\s+)?INDEX\\s+`([^`]+)`\\s+ON\\s+`([^`]+)`/i',
+            static fn($m)=>'CREATE '.($m[1]??'').'INDEX IF NOT EXISTS `'.$rename($m[2]).'` ON `'.$rename($m[3]).'`',$sql);
     }
     foreach(explode(';',$sql) as $statement) {
         $statement=trim($statement);
         if($statement==='') continue;
+        if($skipExistingTables && preg_match('/^CREATE\\s+TABLE\\b/i',$statement)) continue;
+        if(preg_match('/^ALTER\\s+TABLE\\s+`[^`]+`\\s+ADD\\s+CONSTRAINT\\s+`([^`]+)`/i',$statement,$cm)){
+            $cq=$db->query("SELECT COUNT(*) n FROM information_schema.table_constraints WHERE constraint_schema=DATABASE() AND constraint_name=".qv($db,$cm[1]));
+            if($cq && (int)$cq->fetch_assoc()['n']>0) continue;
+        }
         if(!$db->query($statement)) stopNow('Schema installation failed: '.$db->error.' | '.substr($statement,0,160));
     }
 }
@@ -295,6 +302,9 @@ foreach($sources as $s){
         installSchema($db,__DIR__.'/../mysql/'.$s['schema'],$source);
     } elseif($present!==$expectedTableCount) {
         stopNow('Partial schema detected for '.$source.' in '.$target.' (present='.$present.', expected='.$expectedTableCount.'); refusing to alter existing tables.');
+    } elseif($source==='vamcityc_bluvamdb_import_20261028') {
+        logLine('Completing isolated BlueVam indexes and constraints without recreating existing tables');
+        installSchema($db,__DIR__.'/../mysql/'.$s['schema'],$source,true);
     }
     foreach($m['tables'] as $t){
         $tn=mappedTable($t['schema_name'],$t['table_name'],$source);
