@@ -21,6 +21,21 @@ export async function migrate() {
   // Existing production databases may still have the original VARCHAR(400) image column.
   // Persist generated/optimized image data URLs safely without truncation failures.
   await pool.query("ALTER TABLE loan_products ALTER COLUMN image_url TYPE TEXT");
+  await pool.query(`
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS password_reset_required BOOLEAN NOT NULL DEFAULT FALSE;
+    ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;
+    ALTER TABLE users ADD CONSTRAINT users_role_check CHECK (role IN ('customer','admin','superadmin','agent','marketer','customermarketer','member'));
+    CREATE TABLE IF NOT EXISTS access_roles (
+      code VARCHAR(40) PRIMARY KEY, display_name VARCHAR(120) NOT NULL,
+      legacy_source TEXT, legacy_id TEXT, UNIQUE(legacy_source,legacy_id)
+    );
+    CREATE TABLE IF NOT EXISTS user_role_assignments (
+      user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      role_code VARCHAR(40) NOT NULL REFERENCES access_roles(code) ON DELETE RESTRICT,
+      legacy_source TEXT NOT NULL, legacy_user_id TEXT NOT NULL, legacy_role_id TEXT NOT NULL,
+      PRIMARY KEY(user_id,role_code), UNIQUE(legacy_source,legacy_user_id,legacy_role_id)
+    );
+  `);
   // Materialize legacy loan requests into this application's indexed PostgreSQL database.
   // The original rows are already imported locally; the page never calls the old site.
   await pool.query(`
@@ -287,10 +302,10 @@ export async function handleApi(req, res, url) {
     if (req.method === "GET" && route === "/api/v1/security/me") {
       const session = sessionFor(req);
       if (!session) return json(res, 401, { message: "وارد حساب خود شوید." });
-      const current = await pool.query("SELECT id,phone,full_name,username,role,is_active FROM users WHERE id=$1 LIMIT 1", [Number(session.sub)]);
+      const current = await pool.query("SELECT id,phone,full_name,username,role,is_active,password_reset_required,COALESCE((SELECT json_agg(role_code ORDER BY role_code) FROM user_role_assignments WHERE user_id=users.id),json_build_array(role)) AS roles FROM users WHERE id=$1 LIMIT 1", [Number(session.sub)]);
       if (!current.rowCount || !current.rows[0].is_active) return json(res, 401, { message: "حساب کاربری فعال نیست." });
       const u = current.rows[0];
-      return json(res, 200, { data: { id: u.id, phone: u.phone, fullName: u.full_name, username: u.username, role: u.role, roles: [u.role] } });
+      return json(res, 200, { data: { id: u.id, phone: u.phone, fullName: u.full_name, username: u.username, role: u.role, roles: u.roles || [u.role], passwordResetRequired: Boolean(u.password_reset_required) } });
     }
     if (req.method === "GET" && route === "/api/v1/tenant/config") {
       return json(res, 200, { data: { name: BRAND_NAME, brand: { logoText: BRAND_NAME.slice(0, 1), primary: "#4a2a86", accent: "#ffb629" } } });
@@ -645,7 +660,7 @@ export async function handleApi(req, res, url) {
         return json(res, 200, { data: { ...q.rows[0], smsConfigured: configured } });
       }
       if (req.method === "GET" && route === "/api/v1/admin/users") {
-        const q = await pool.query("SELECT id,username,phone,full_name,email,role,is_active,created_at,legacy_source FROM users ORDER BY created_at DESC,id DESC LIMIT 500");
+        const q = await pool.query("SELECT id,username,phone,full_name,email,role,is_active,password_reset_required,created_at,legacy_source,COALESCE((SELECT json_agg(role_code ORDER BY role_code) FROM user_role_assignments WHERE user_id=users.id),json_build_array(role)) AS roles FROM users ORDER BY created_at DESC,id DESC LIMIT 500");
         return json(res, 200, { data: q.rows });
       }
       if (req.method === "GET" && route === "/api/v1/admin/legacy-customers-page") {
