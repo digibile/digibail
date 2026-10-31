@@ -63,6 +63,8 @@ jobs:
           node --check scripts/backfill-legacy-customers.mjs
           node --check scripts/import-vamcity-real-data.mjs
           node --check scripts/migrate-legacy-digibail.js
+          node --check scripts/run-legacy-digibail-migration.mjs
+          node -e "const s=require('node:fs').readFileSync('scripts/digibail-legacy-schema.json','utf8'); const d=JSON.parse(s); if(d.columnDefinitions.length!==614||d.primaryKeys.length!==70||d.foreignKeys.length!==104||d.schemaDefinitions.length!==59) throw new Error('Legacy schema inventory mismatch'); console.log('Legacy schema metadata verified')"
       - name: Validate shell installers and sample configuration
         shell: bash
         run: |
