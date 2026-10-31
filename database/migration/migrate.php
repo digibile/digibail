@@ -42,8 +42,8 @@ function mappedTable(string $schema,string $table,string $source): string {
     $prefix='';
     foreach($sources as $item) if($item['source']===$source){$prefix=$item['prefix'];break;}
     $base=strtolower($schema)==='dbo'?$table:$schema.'__'.$table;
-    // Transfer source table names are already prefixed in its reviewed schema; never double-prefix them.
-    if($prefix!=='' && str_starts_with($base,$prefix)) return shortName($base);
+    // Transfer schema table identifiers already include OnlineMoneyTransfer__; map them verbatim.
+    if($source==='vamcityc_transferDb_import_20261028') return shortName($base);
     return shortName($prefix.$base);
 }
 function dockerBin(): string {
