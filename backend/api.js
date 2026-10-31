@@ -492,7 +492,7 @@ export async function handleApi(req, res, url) {
       };
       if (req.method === "GET" && route === "/api/v1/admin/loan-products/legacy-candidates") {
         const q=await pool.query("SELECT source_table,COUNT(*)::int AS row_count FROM legacy_source_data WHERE source_table<>'__legacy_schema__' AND source_table ~* '(loan.?product|loan.?type|loan.?plan|loan.?definition|loan.?configuration|(^|[.])loans?$|وام)' GROUP BY source_table ORDER BY source_table");
-        return json(res,200,{data:q.rows});
+        return json(res,200,q.rows);
       }
       // IMPORT_LATEST_VAMCITY_LOAN_DEFINITIONS_V3
       // IMPORT_LATEST_VAMCITY_LOAN_DEFINITIONS_V3
@@ -765,7 +765,7 @@ export async function handleApi(req, res, url) {
         const order=primary.rows.length?primary.rows.map(x=>qid(x.column_name)).join(","):"ctid";
         const sql="SELECT * FROM "+qid("legacy_digibail")+"."+qid(tableName)+" ORDER BY "+order+" LIMIT $1 OFFSET $2";
         const rows=await pool.query(sql,[limit,offset]);
-        return json(res,200,{data:{sourceTable,rows:rows.rows,columns:columns.rows,primaryKeys:primary.rows.map(x=>x.column_name),foreignKeys:foreign.rows,total:Number(manifest.rows[0].source_rows)||0,offset,limit}});
+        return json(res,200,{sourceTable,rows:rows.rows,columns:columns.rows,primaryKeys:primary.rows.map(x=>x.column_name),foreignKeys:foreign.rows,total:Number(manifest.rows[0].source_rows)||0,offset,limit});
       }
       if (req.method === "GET" && route === "/api/v1/admin/beta-inquiries") {
         const q = await pool.query("SELECT id,reference,user_id,national_code,status,status_note,created_at FROM beta_inquiries ORDER BY created_at DESC LIMIT 500");
