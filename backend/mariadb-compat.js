@@ -66,8 +66,8 @@ export function translateMariaSql(source) {
     sql = replaceFunctionCalls(sql, "json_build_array", arg => "JSON_ARRAY(" + arg + ")");
   }
 
-  sql = sql.replace(/\$(\d+)::date\b/gi, "DATE($$1)");
-  sql = sql.replace(/\$(\d+)::text\b/gi, "CAST($$1 AS CHAR)");
+  sql = sql.replace(/\$(\d+)::date\b/gi, "DATE($$$1)");
+  sql = sql.replace(/\$(\d+)::text\b/gi, "CAST($$$1 AS CHAR)");
   sql = sql.replace(/\b([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)?)::date\b/gi, "DATE($1)");
   sql = sql.replace(/\b([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)?)::text\b/gi, "CAST($1 AS CHAR)");
   sql = sql.replace(/::\s*(?:jsonb|json|boolean|bool|int|integer|bigint|smallint|numeric|uuid|timestamptz|timestamp(?: with time zone)?|double precision)\b/gi, "");
