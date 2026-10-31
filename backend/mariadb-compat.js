@@ -1,3 +1,28 @@
+function replaceFunctionCalls(sql, name, render) {
+  const pattern = new RegExp("\\b" + name + "\\s*\\(", "ig");
+  let out = "", cursor = 0, match;
+  while ((match = pattern.exec(sql))) {
+    const open = sql.indexOf("(", match.index);
+    let depth = 1, quote = null, i = open + 1;
+    for (; i < sql.length; i++) {
+      const ch = sql[i];
+      if (quote) {
+        if (ch === quote && sql[i - 1] !== "\\") quote = null;
+        continue;
+      }
+      if (ch === "'" || ch === '"' || ch === "\`") quote = ch;
+      else if (ch === "(") depth++;
+      else if (ch === ")" && --depth === 0) break;
+    }
+    if (i >= sql.length) break;
+    out += sql.slice(cursor, match.index);
+    out += render(sql.slice(open + 1, i));
+    cursor = i + 1;
+    pattern.lastIndex = cursor;
+  }
+  return out + sql.slice(cursor);
+}
+
 function rewriteFilteredCounts(sql) {
   const re = /COUNT\(\s*\*\s*\)\s+FILTER\s*\(\s*WHERE\s+/ig;
   let out = "", cursor = 0, match;
@@ -27,10 +52,20 @@ export function translateMariaSql(source) {
   let sql = String(source || "").trim();
   sql = sql.replace(/\b([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)?)\s*->>\s*'([^']+)'/g,
     (_, col, key) => "JSON_UNQUOTE(JSON_EXTRACT(" + col + ", '$." + key + "'))");
-  sql = sql.replace(/\bjsonb_typeof\s*\(/gi, "LOWER(JSON_TYPE(");
-  sql = sql.replace(/\bjsonb_array_length\s*\(/gi, "JSON_LENGTH(");
-  sql = sql.replace(/\bjson_agg\s*\(/gi, "JSON_ARRAYAGG(");
-  sql = sql.replace(/\bjson_build_array\s*\(/gi, "JSON_ARRAY(");
+
+  for (let pass = 0; pass < 4 && /\bjsonb_typeof\s*\(/i.test(sql); pass++) {
+    sql = replaceFunctionCalls(sql, "jsonb_typeof", arg => "LOWER(JSON_TYPE(" + arg + "))");
+  }
+  for (let pass = 0; pass < 4 && /\bjsonb_array_length\s*\(/i.test(sql); pass++) {
+    sql = replaceFunctionCalls(sql, "jsonb_array_length", arg => "JSON_LENGTH(" + arg + ")");
+  }
+  for (let pass = 0; pass < 4 && /\bjson_agg\s*\(/i.test(sql); pass++) {
+    sql = replaceFunctionCalls(sql, "json_agg", arg => "JSON_ARRAYAGG(" + arg + ")");
+  }
+  for (let pass = 0; pass < 4 && /\bjson_build_array\s*\(/i.test(sql); pass++) {
+    sql = replaceFunctionCalls(sql, "json_build_array", arg => "JSON_ARRAY(" + arg + ")");
+  }
+
   sql = sql.replace(/\b([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)?)::date\b/gi, "DATE($1)");
   sql = sql.replace(/\b([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)?)::text\b/gi, "CAST($1 AS CHAR)");
   sql = sql.replace(/::\s*(?:jsonb|json|boolean|bool|int|integer|bigint|smallint|numeric|uuid|timestamptz|timestamp(?: with time zone)?|double precision)\b/gi, "");
@@ -79,7 +114,9 @@ function lookupAfterWrite(table, originalSql, values, result) {
   }
   if (op === "INSERT") {
     if (Number(result.insertId) > 0) return { key: "id", value: result.insertId };
-    if (table === "beta_inquiries" || table === "loan_products" || table === "customer_documents" || table === "customer_contracts") return { key: "id", value: values[0] };
+    if (table === "beta_inquiries" || table === "loan_products" || table === "customer_documents" || table === "customer_contracts") {
+      return { key: "id", value: values[0] };
+    }
   }
   return null;
 }
