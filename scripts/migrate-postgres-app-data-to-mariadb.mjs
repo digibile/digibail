@@ -267,6 +267,20 @@ async function main() {
   try {
     await pg.query("SELECT 1");
     await mysql.query("SELECT 1");
+
+    const duplicateChecks = [
+      ["username", "LOWER(TRIM(username))", "username IS NOT NULL AND TRIM(username)<>''"],
+      ["phone", "phone", "phone IS NOT NULL AND phone<>''"],
+      ["national_code", "national_code", "national_code IS NOT NULL AND national_code<>''"]
+    ];
+    for (const [label, expression, predicate] of duplicateChecks) {
+      const duplicate = await pg.query(
+        "SELECT COUNT(*)::bigint AS n FROM (SELECT " + expression + " AS identity_value FROM public.users WHERE " + predicate + " GROUP BY " + expression + " HAVING COUNT(*)>1) duplicate_values"
+      );
+      const count = Number(duplicate.rows[0].n);
+      console.log("POSTGRES_IDENTITY_DUPLICATES=" + label + ":" + count);
+      if (count > 0) throw new Error("Duplicate application identity values found for " + label + "; resolve collisions before migrating accounts.");
+    }
     if (APPLY) await migrate();
 
     const publicResults = [];
