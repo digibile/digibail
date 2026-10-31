@@ -124,13 +124,21 @@ jobs:
             echo "=== No schema migration or data rewrite is run during final verification ==="
             echo "=== Final database and disk metrics ==="
             $D compose exec -T db sh -lc 'psql -X -U "$POSTGRES_USER" -d "$POSTGRES_DB" -P pager=off -c "SELECT pg_size_pretty(pg_database_size(current_database())) AS database_size"'
-            echo "=== Docker storage usage (read-only) ==="
-            $D system df
-            echo "=== Top-level filesystem usage (read-only) ==="
+            echo "=== Docker storage usage (read-only; diagnostic may be incomplete) ==="
+            $D system df || echo "DOCKER_SYSTEM_DF_UNAVAILABLE=1"
+            echo "=== Filesystem and inode usage (read-only) ==="
             df -h /home/digibail
+            df -i /home/digibail
+            echo "=== Top-level filesystem usage (read-only) ==="
             for path in /home /var /opt /root; do
-              if [ -d "$path" ]; then du -xhd1 "$path" 2>/dev/null | sort -h | tail -n 12; fi
+              if [ -d "$path" ]; then du -xhd1 "$path" 2>/dev/null | sort -h | tail -n 12 || true; fi
             done
-            echo "=== Docker data directory usage (read-only) ==="
-            if [ -d /var/lib/docker ]; then du -xhd1 /var/lib/docker 2>/dev/null | sort -h | tail -n 12; fi
+            echo "=== Digibail account storage breakdown (read-only) ==="
+            for path in /home/digibail /home/digibail/domains /home/digibail/domains/digebail.ir /home/digibail/.local /home/digibail/backups; do
+              if [ -d "$path" ]; then echo "--- $path"; du -xhd1 "$path" 2>/dev/null | sort -h | tail -n 15 || true; fi
+            done
+            echo "=== Docker and containerd storage breakdown (read-only) ==="
+            for path in /var/lib/docker /var/lib/containerd; do
+              if [ -d "$path" ]; then echo "--- $path"; du -xhd1 "$path" 2>/dev/null | sort -h | tail -n 15 || true; fi
+            done
             echo "DIGIBAIL_PRODUCTION_FINAL_VERIFICATION=PASS"
