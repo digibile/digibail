@@ -1,4 +1,5 @@
 name: Import VamCity customer directory
+# Customer-only migration; main VamCity database is the audited source.
 on:
   workflow_dispatch:
   push:
