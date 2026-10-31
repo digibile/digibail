@@ -1576,7 +1576,7 @@ V.dash=view('real-dashboard',async()=>{
   api('GET','/api/v1/admin/legacy-customers').catch(()=>[]),
   api('GET','/api/v1/admin/sms/templates').catch(()=>({items:[]})),
   api('GET','/api/v1/admin/beta-inquiries').catch(()=>[]),
-  api('GET','/api/v1/admin/legacy-source-tables').catch(()=>[]),
+  api('GET','/api/v1/admin/legacy-relational-tables').catch(()=>[]),
   api('GET','/api/v1/admin/orders').catch(()=>[]),
   api('GET','/api/v1/admin/virtual-cards').catch(()=>[]),
   api('GET','/api/v1/admin/ledger/entries').catch(()=>[]),
@@ -1584,7 +1584,7 @@ V.dash=view('real-dashboard',async()=>{
  ]);
  const rows=v=>Array.isArray(v)?v:Array.isArray(v?.data)?v.data:Array.isArray(v?.items)?v.items:[];
  const users=rows(rs[0]),usersTotal=Number(rs[0]?.total)||users.length,customerCount=Number(summary.legacy_customers??rs[1]?.data?.legacy_customers??rs[1]?.legacy_customers??0),sms=rows(rs[2]),beta=rows(rs[3]),legacy=rows(rs[4]),orders=rows(rs[5]),cards=rows(rs[6]),ledger=rows(rs[7]),products=rows(rs[8]);
- const total=legacy.reduce((n,t)=>n+(Number(t.row_count)||0),0),activeProducts=products.filter(p=>p.isActive===true||p.isActive===1).length;
+ const total=legacy.reduce((n,t)=>n+(Number(t.imported_rows??t.row_count)||0),0),activeProducts=products.filter(p=>p.isActive===true||p.isActive===1).length;
  return head('داشبورد مدیریت','همه‌ی اعداد از API و پایگاه داده خوانده می‌شوند؛ برای دیدن جزئیات روی هر کارت بزنید.')+
  tiles([
   ['حساب‌های کاربری',nf(usersTotal),'مشاهده فهرست کاربران','','users'],
@@ -1663,7 +1663,7 @@ V.dash=view('real-dashboard-drilldown',async function(){
   api('GET','/api/v1/admin/legacy-customers').catch(()=>[]),
   api('GET','/api/v1/admin/sms/templates').catch(()=>({items:[]})),
   api('GET','/api/v1/admin/beta-inquiries').catch(()=>[]),
-  api('GET','/api/v1/admin/legacy-source-tables').catch(()=>[]),
+  api('GET','/api/v1/admin/legacy-relational-tables').catch(()=>[]),
   api('GET','/api/v1/admin/orders').catch(()=>[]),
   api('GET','/api/v1/admin/virtual-cards').catch(()=>[]),
   api('GET','/api/v1/admin/ledger/entries').catch(()=>[]),
@@ -1671,7 +1671,7 @@ V.dash=view('real-dashboard-drilldown',async function(){
   api('GET','/api/v1/admin/summary').catch(()=>({data:{}}))
  ]);
  const users=drillRows(rs[0]),customers=drillRows(rs[1]),sms=drillRows(rs[2]),beta=drillRows(rs[3]),legacy=drillRows(rs[4]),orders=drillRows(rs[5]),cards=drillRows(rs[6]),ledger=drillRows(rs[7]),products=drillRows(rs[8]),summary=rs[9]?.data||{};
- const usersTotal=Number(summary.users)||users.length,customerCount=Number(rs[1]?.legacy_customers)||usersTotal,total=legacy.reduce((n,t)=>n+(Number(t.row_count)||0),0),active=products.filter(p=>p.isActive).length,review=products.filter(p=>p.needsReview).length;
+ const usersTotal=Number(summary.users)||users.length,customerCount=Number(rs[1]?.legacy_customers)||usersTotal,total=legacy.reduce((n,t)=>n+(Number(t.imported_rows??t.row_count)||0),0),active=products.filter(p=>p.isActive).length,review=products.filter(p=>p.needsReview).length;
  const items=[
   ['تعریف‌های کل وام',nf(products.length),'products','all','فهرست واقعی تعریف‌های ذخیره‌شده'],
   ['طرح‌های وام فعال',nf(active),'products','active','فقط طرح‌های فعال'],

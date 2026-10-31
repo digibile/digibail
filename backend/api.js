@@ -1,29 +1,56 @@
 import crypto from "node:crypto";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
-import { Pool } from "pg";
 import { createPool } from "mysql2/promise";
+import { createMariaCompatPool } from "./mariadb-compat.js";
 import { syncUserToMariaDB } from "./mariadb-user-sync.js";
 
-const pool = new Pool({ connectionString: process.env.DATABASE_URL, max: 10, connectionTimeoutMillis: 5000 });
-let legacyMariaPool = null;
-function legacyMaria() {
-  const database = process.env.MARIADB_DATABASE || "digibail_vamcitydigibilepay";
-  const user = process.env.MARIADB_USER || "";
-  const password = process.env.MARIADB_PASSWORD || "";
-  const socketPath = process.env.MARIADB_SOCKET || "/var/run/mysqld/mysqld.sock";
-  if (!user || !password) throw Object.assign(new Error("اتصال پایگاه داده اصلی تنظیم نشده است."), { status: 503, code: "mariadb_not_configured" });
-  if (!legacyMariaPool) legacyMariaPool = createPool({ socketPath, user, password, database, waitForConnections: true, connectionLimit: 4, queueLimit: 20, charset: "utf8mb4", connectTimeout: 8000 });
-  return legacyMariaPool;
+const mariadbDatabase = process.env.MARIADB_DATABASE || "digibail_vamcitydigibilepay";
+const mariadbUser = process.env.MARIADB_USER || "";
+const mariadbPassword = process.env.MARIADB_PASSWORD || "";
+const mariadbSocket = process.env.MARIADB_SOCKET || "/tmp/mysql.sock";
+if (!mariadbUser || !mariadbPassword) {
+  throw Object.assign(new Error("اتصال MariaDB در تنظیمات محرمانه سرور تکمیل نشده است."), {
+    status: 503, code: "mariadb_not_configured"
+  });
 }
-async function postgresOnlyAccounts(mariaDb, limit=100000) {
-  // Keep every successful registration in the new identity database visible.
-  // A phone match in the historical database is not proof that this distinct
-  // PostgreSQL account is the same row; hiding it made new registrations vanish.
-  const q=await pool.query("SELECT u.id,u.username,u.phone,u.full_name,u.email,u.national_code,u.role,u.is_active,u.created_at,COALESCE((SELECT role_code FROM user_role_overrides o WHERE o.user_id=u.id),u.role) AS effective_role FROM users u WHERE u.legacy_source IS NULL ORDER BY u.created_at DESC,u.id DESC LIMIT $1",[limit]);
-  let mappedIds=new Set();
-  try{const [mapped]=await mariaDb.query("SELECT PostgresUserId FROM DigibailUserIdentity");mappedIds=new Set(mapped.map(r=>String(r.PostgresUserId)));}catch(error){if(error.code!=="ER_NO_SUCH_TABLE")throw error;}
-  return q.rows.filter(r=>!mappedIds.has(String(r.id))).map(r=>({...r,role:r.effective_role,id:"pg:"+String(r.id),legacy_id:String(r.id),mobile:r.phone,email:r.email,legacy_username:r.username,customer_code:String(r.id),registered_at:r.created_at,roles:[r.effective_role],account_type:directoryAccountType(r.effective_role),source_table:"postgres.users"}));
+const mariadbConnection = process.env.MARIADB_HOST
+  ? { host: process.env.MARIADB_HOST, port: Number(process.env.MARIADB_PORT || 3306) }
+  : { socketPath: mariadbSocket };
+const mariadbPool = createPool({
+  ...mariadbConnection,
+  user: mariadbUser,
+  password: mariadbPassword,
+  database: mariadbDatabase,
+  waitForConnections: true,
+  connectionLimit: 10,
+  queueLimit: 50,
+  charset: "utf8mb4",
+  connectTimeout: 8000,
+  timezone: "Z",
+  supportBigNumbers: true,
+  bigNumberStrings: false
+});
+const pool = createMariaCompatPool(mariadbPool);
+function legacyMaria() { return mariadbPool; }
+async function applicationOnlyAccounts(limit=100000) {
+  const q=await pool.query(
+    "SELECT u.id,u.username,u.phone,u.full_name,u.email,u.national_code,u.role,u.is_active,u.created_at,COALESCE((SELECT role_code FROM user_role_overrides o WHERE o.user_id=u.id),u.role) AS effective_role FROM users u WHERE u.legacy_source IS NULL AND NOT EXISTS(SELECT 1 FROM DigibailAppUserIdentity m WHERE m.AppUserId=u.id) ORDER BY u.created_at DESC,u.id DESC LIMIT $1",
+    [limit]
+  );
+  return q.rows.map(r=>({
+    ...r,
+    role:r.effective_role,
+    id:"app:"+String(r.id),
+    legacy_id:String(r.id),
+    mobile:r.phone,
+    customer_code:String(r.id),
+    registered_at:r.created_at,
+    roles:[r.effective_role],
+    account_type:directoryAccountType(r.effective_role),
+    source:"app",
+    source_table:"app.users"
+  }));
 }
 
 function legacyRoleCode(value) {
@@ -72,7 +99,7 @@ async function unifiedUserDirectory({page=1,pageSize=50,search="",role="",status
     const primary=directoryRoleFromNames(roleNames);
     return {...r,id:"legacy:"+r.source_key+":"+String(r.legacy_id),name:r.full_name,mobile:r.phone,customer_number:r.customer_code,role:primary,roles:roles.length?roles:[primary],account_type:r.source_key==="transfer"?"حساب انتقال وجه":directoryAccountType(primary),legacy_source:r.source_table,legacy_source_table:r.source_table,source:r.source_key==="main"?"mariadb":r.source_key==="bluvam"?"bluvamdb":"transfer",source_table:r.source_table,password_reset_required:false,is_active:Boolean(Number(r.is_active)),role_editable:r.source_key!=="transfer"};
   });
-  const fresh=(await postgresOnlyAccounts(db,100000)).map(r=>({...r,name:r.full_name,mobile:r.phone,customer_number:r.customer_code,source:"postgres",role_editable:true}));
+  const fresh=(await applicationOnlyAccounts(100000)).map(r=>({...r,name:r.full_name,mobile:r.phone,customer_number:r.customer_code,source:"app",role_editable:true}));
   const staffRoles=["admin","superadmin","agent","marketer","customermarketer","legacy_appapiuser","legacy_sponsor"];
   const norm=v=>String(v||"").toLowerCase();
   const freshFiltered=fresh.filter(r=>{
@@ -96,7 +123,7 @@ async function unifiedUserDirectory({page=1,pageSize=50,search="",role="",status
   const freshAdmins=fresh.filter(r=>["admin","superadmin"].includes(r.effective_role));
   const freshAgents=fresh.filter(r=>r.effective_role==="agent");
   const freshMarketers=fresh.filter(r=>["marketer","customermarketer"].includes(r.effective_role));
-  return {rows:merged.slice((page-1)*pageSize,page*pageSize),total:(Number(mCountRows[0][0]?.total)||0)+freshFiltered.length,overallTotal:(Number(mStats.total)||0)+fresh.length,activeTotal:(Number(mStats.active)||0)+fresh.filter(r=>r.is_active).length,inactiveTotal:(Number(mStats.inactive)||0)+fresh.filter(r=>!r.is_active).length,todayTotal:(Number(mStats.today)||0)+freshToday,latestRegistration,customerTotal:(Number(mStats.customer_total)||0)+fresh.filter(freshCustomer).length,customerTodayTotal:(Number(mStats.customer_today)||0)+freshCustomerToday,agentTotal:(Number(mStats.agent_total)||0)+freshAgents.length,activeAgentTotal:(Number(mStats.active_agent_total)||0)+freshAgents.filter(r=>r.is_active).length,adminTotal:(Number(mStats.admin_total)||0)+freshAdmins.length,marketerTotal:(Number(mStats.marketer_total)||0)+freshMarketers.length,transferTotal:Number(mStats.transfer_total)||0,sourceCounts:{main:Number(mStats.main_total)||0,bluvam:Number(mStats.bluvam_total)||0,transfer:Number(mStats.transfer_total)||0,postgres:fresh.length},sourceTable:"MariaDB.AspNetUsers+MariaDB.bluvamdb__AspNetUsers+MariaDB.OnlineMoneyTransfer__AspNetUsers+PostgreSQL.users",timezone:"Asia/Tehran"};
+  return {rows:merged.slice((page-1)*pageSize,page*pageSize),total:(Number(mCountRows[0][0]?.total)||0)+freshFiltered.length,overallTotal:(Number(mStats.total)||0)+fresh.length,activeTotal:(Number(mStats.active)||0)+fresh.filter(r=>r.is_active).length,inactiveTotal:(Number(mStats.inactive)||0)+fresh.filter(r=>!r.is_active).length,todayTotal:(Number(mStats.today)||0)+freshToday,latestRegistration,customerTotal:(Number(mStats.customer_total)||0)+fresh.filter(freshCustomer).length,customerTodayTotal:(Number(mStats.customer_today)||0)+freshCustomerToday,agentTotal:(Number(mStats.agent_total)||0)+freshAgents.length,activeAgentTotal:(Number(mStats.active_agent_total)||0)+freshAgents.filter(r=>r.is_active).length,adminTotal:(Number(mStats.admin_total)||0)+freshAdmins.length,marketerTotal:(Number(mStats.marketer_total)||0)+freshMarketers.length,transferTotal:Number(mStats.transfer_total)||0,sourceCounts:{main:Number(mStats.main_total)||0,bluvam:Number(mStats.bluvam_total)||0,transfer:Number(mStats.transfer_total)||0,app:fresh.length},sourceTable:"MariaDB.AspNetUsers+MariaDB.bluvamdb__AspNetUsers+MariaDB.OnlineMoneyTransfer__AspNetUsers+MariaDB.users",timezone:"Asia/Tehran"};
 }
 
 function directoryRoleFromNames(value) {
@@ -123,116 +150,22 @@ const KAVENEGAR_TEMPLATE = process.env.KAVENEGAR_TEMPLATE || "";
 const AI_STORY_RATE = new Map();
 
 export async function migrate() {
-  const client = await pool.connect();
-  const runMigrationStep = async (label, ...args) => {
-    console.log("DB_MIGRATION_START=" + label);
-    try {
-      const result = await client.query(...args);
-      console.log("DB_MIGRATION_DONE=" + label);
-      return result;
-    } catch (error) {
-      console.error("DB_MIGRATION_FAILED=" + label, error?.code || "", error?.message || error);
-      throw error;
-    }
-  };
-  try {
-    await client.query("SET lock_timeout = '10s'; SET statement_timeout = '180s'");
   const { readFile } = await import("node:fs/promises");
   const { fileURLToPath } = await import("node:url");
   const path = await import("node:path");
   const root = path.dirname(fileURLToPath(import.meta.url));
-  await runMigrationStep("step-1", await readFile(path.join(root, "db", "001_init.sql"), "utf8"));
-  // Existing production databases may still have the original VARCHAR(400) image column.
-  // Persist generated/optimized image data URLs safely without truncation failures.
-  await runMigrationStep("step-2", "ALTER TABLE loan_products ALTER COLUMN image_url TYPE TEXT");
-  await runMigrationStep("step-3", `
-    ALTER TABLE users ADD COLUMN IF NOT EXISTS password_reset_required BOOLEAN NOT NULL DEFAULT FALSE;
-    ALTER TABLE users ADD COLUMN IF NOT EXISTS legacy_username TEXT;
-    ALTER TABLE users ADD COLUMN IF NOT EXISTS legacy_customer_id UUID;
-    ALTER TABLE users ADD COLUMN IF NOT EXISTS legacy_agent_id BIGINT;
-    ALTER TABLE users ADD COLUMN IF NOT EXISTS legacy_customer_marketer_id BIGINT;
-    ALTER TABLE users ADD COLUMN IF NOT EXISTS legacy_agent_metadata_id UUID;
-    ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;
-    ALTER TABLE users ADD CONSTRAINT users_role_check CHECK (role IN ('customer','admin','superadmin','agent','marketer','customermarketer','member'));
-    CREATE TABLE IF NOT EXISTS access_roles (
-      code VARCHAR(40) PRIMARY KEY, display_name VARCHAR(120) NOT NULL,
-      legacy_source TEXT, legacy_id TEXT, UNIQUE(legacy_source,legacy_id)
-    );
-    CREATE TABLE IF NOT EXISTS user_role_assignments (
-      user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-      role_code VARCHAR(40) NOT NULL REFERENCES access_roles(code) ON DELETE RESTRICT,
-      legacy_source TEXT NOT NULL, legacy_user_id TEXT NOT NULL, legacy_role_id TEXT NOT NULL,
-      PRIMARY KEY(user_id,role_code), UNIQUE(legacy_source,legacy_user_id,legacy_role_id)
-    );
-  `);
-  // Materialize legacy loan requests into this application's indexed PostgreSQL database.
-  // The original rows are already imported locally; the page never calls the old site.
-  await runMigrationStep("step-4", `
-    CREATE TABLE IF NOT EXISTS loan_requests (
-      id BIGINT GENERATED BY DEFAULT AS IDENTITY UNIQUE,
-      request_key TEXT PRIMARY KEY,
-      source_table VARCHAR(160) NOT NULL,
-      legacy_id VARCHAR(160) NOT NULL,
-      applicant_name TEXT NOT NULL DEFAULT '',
-      mobile TEXT NOT NULL DEFAULT '',
-      national_code TEXT NOT NULL DEFAULT '',
-      status TEXT NOT NULL DEFAULT '',
-      amount NUMERIC(20,2),
-      created_at TIMESTAMPTZ,
-      payload JSONB NOT NULL DEFAULT '{}'::jsonb,
-      imported_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      UNIQUE(source_table, legacy_id)
-    );
-    ALTER TABLE loan_requests ADD COLUMN IF NOT EXISTS id BIGINT GENERATED BY DEFAULT AS IDENTITY;
-    CREATE UNIQUE INDEX IF NOT EXISTS loan_requests_internal_id_idx ON loan_requests(id);
-    CREATE INDEX IF NOT EXISTS loan_requests_created_idx ON loan_requests(created_at DESC NULLS LAST);
-    CREATE INDEX IF NOT EXISTS loan_requests_created_id_idx ON loan_requests(created_at DESC NULLS LAST, id DESC);
-    CREATE INDEX IF NOT EXISTS loan_requests_status_created_idx ON loan_requests(status, created_at DESC NULLS LAST);
-    CREATE INDEX IF NOT EXISTS loan_requests_mobile_idx ON loan_requests(mobile);
-    CREATE INDEX IF NOT EXISTS loan_requests_national_code_idx ON loan_requests(national_code);
-    CREATE INDEX IF NOT EXISTS loan_requests_source_idx ON loan_requests(source_table, legacy_id);
-    CREATE TABLE IF NOT EXISTS loan_request_comments (id BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY, loan_request_id BIGINT NOT NULL REFERENCES loan_requests(id) ON DELETE RESTRICT, author_user_id BIGINT, author_name TEXT NOT NULL DEFAULT '', comment TEXT NOT NULL CHECK(length(comment) BETWEEN 1 AND 5000), created_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
-    CREATE INDEX IF NOT EXISTS loan_request_comments_request_idx ON loan_request_comments(loan_request_id, created_at DESC);
-    CREATE TABLE IF NOT EXISTS loan_request_status_history (id BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY, loan_request_id BIGINT NOT NULL REFERENCES loan_requests(id) ON DELETE RESTRICT, old_status TEXT NOT NULL DEFAULT '', new_status TEXT NOT NULL, note TEXT NOT NULL DEFAULT '', changed_by BIGINT, changed_by_name TEXT NOT NULL DEFAULT '', changed_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
-    CREATE INDEX IF NOT EXISTS loan_request_status_history_request_idx ON loan_request_status_history(loan_request_id, changed_at DESC);
-    ALTER TABLE loan_request_status_history ADD COLUMN IF NOT EXISTS legacy_source_table TEXT;
-    ALTER TABLE loan_request_status_history ADD COLUMN IF NOT EXISTS legacy_id TEXT;
-    CREATE UNIQUE INDEX IF NOT EXISTS loan_request_status_history_legacy_unique_idx ON loan_request_status_history(legacy_source_table, legacy_id) WHERE legacy_source_table IS NOT NULL AND legacy_id IS NOT NULL;
-    -- Heavy legacy request rows are imported by scripts/backfill-legacy-customers.mjs after app health.
-
-  `);
-  await runMigrationStep("step-5", "CREATE INDEX IF NOT EXISTS legacy_customers_registered_idx ON legacy_customers(registered_at DESC NULLS LAST)");
-  await runMigrationStep("step-6", "CREATE INDEX IF NOT EXISTS legacy_customers_mobile_idx ON legacy_customers(mobile)");
-  await runMigrationStep("step-7", "CREATE INDEX IF NOT EXISTS legacy_customers_name_idx ON legacy_customers(name)");
-  // Extend local customer schema here; bulk customer import runs after source tables are loaded.
-  await runMigrationStep("step-8", "ALTER TABLE legacy_customers ADD COLUMN IF NOT EXISTS legacy_username TEXT");
-  await runMigrationStep("step-9", "ALTER TABLE legacy_customers ADD COLUMN IF NOT EXISTS account_type TEXT NOT NULL DEFAULT 'مشتری / کاربر منتقل‌شده'");
-  await runMigrationStep("step-10", "ALTER TABLE legacy_customers ADD COLUMN IF NOT EXISTS legacy_source_table TEXT");
-  await runMigrationStep("step-11", "CREATE INDEX IF NOT EXISTS legacy_customers_registered_idx ON legacy_customers(registered_at DESC NULLS LAST)");
-  await runMigrationStep("step-12", "CREATE INDEX IF NOT EXISTS legacy_customers_mobile_idx ON legacy_customers(mobile)");
-  await runMigrationStep("step-13", "CREATE INDEX IF NOT EXISTS legacy_customers_name_idx ON legacy_customers(name)");
-  await runMigrationStep("step-14", "CREATE INDEX IF NOT EXISTS legacy_customers_username_idx ON legacy_customers(legacy_username)");
-
-  await runMigrationStep("step-15", "ANALYZE loan_requests");
-  // Provision a password-only initial superadmin without relying on SMS delivery.
-  // The password itself is never stored in source; only a salted scrypt verifier is.
-  await runMigrationStep("step-16", 
-    "INSERT INTO users(username,full_name,password_hash,role,is_active) VALUES($1,$2,$3,'superadmin',TRUE) ON CONFLICT(username) DO UPDATE SET password_hash=EXCLUDED.password_hash,role='superadmin',is_active=TRUE,updated_at=NOW() WHERE users.password_hash='scrypt$16384$8$1$ae0n_OnykLU21Q2-sXeXsA$c2gmp32g3QG-xokwTmTSQhirE-ZjBLOVx2e1OgS8oGOAC7uW0fIQcJrN6QnkNdqn'",
-    ["digibail-admin", "مدیر ارشد دیجی‌بایل", "scrypt$16384$8$1$ZGC9mkowEkz4tWjuufSPZA$jNjHElydJ79QieOQkOW23cy-niXHxJNaV9aJfhSfJYg"]
-  );
-  // Keep the explicitly named legacy administrator's authorization after identity import.
-  // This changes only the role of the known legacy username; it never changes the password.
-  await runMigrationStep("step-17", 
-    "UPDATE users SET role='superadmin',is_active=TRUE,updated_at=NOW() WHERE lower(username)='admin'"
-  );
-  await runMigrationStep("step-18", "CREATE TABLE IF NOT EXISTS user_role_overrides (user_id BIGINT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE, role_code VARCHAR(40) NOT NULL, updated_by BIGINT REFERENCES users(id) ON DELETE SET NULL, updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW())");
-  // Legacy role reconciliation is performed during the controlled import, not on every app startup.
-  // The explicit "admin" username promotion above is the only startup role adjustment.
-  } finally {
-    client.release();
+  const schema = await readFile(path.join(root, "db", "002_mariadb_app.sql"), "utf8");
+  const statements = schema
+    .replace(/^\s*--.*$/gm, "")
+    .split(/;\s*(?:\r?\n|$)/)
+    .map(statement => statement.trim())
+    .filter(statement => statement && !statement.startsWith("--"));
+  for (const statement of statements) {
+    await mariadbPool.query(statement);
   }
+  await mariadbPool.query("ANALYZE TABLE users, sms_templates, legacy_source_data, loan_products");
 }
-export async function dbHealth() { await pool.query("SELECT 1"); return true; }
+export async function dbHealth() { await mariadbPool.query("SELECT 1"); return true; }
 function hash(value, pepper) { return crypto.createHmac("sha256", pepper).update(String(value)).digest("hex"); }
 function json(res, status, value, extraHeaders = {}) {
   res.writeHead(status, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", ...extraHeaders });
@@ -326,7 +259,7 @@ function sessionFor(req) {
 async function adminFor(req) {
   const session = sessionFor(req);
   if (!session) return null;
-  // Read the current role from PostgreSQL so role corrections take effect without waiting for an old JWT to expire.
+  // Read the current role from MariaDB so permission changes take effect immediately.
   const current = await pool.query("SELECT id,role,is_active,phone,full_name,username FROM users WHERE id=$1 LIMIT 1", [Number(session.sub)]);
   const role = String(current.rows[0]?.role || "").trim().toLowerCase();
   if (!current.rowCount || !current.rows[0].is_active || !["admin", "superadmin"].includes(role)) return null;
@@ -501,10 +434,7 @@ export async function handleApi(req, res, url) {
         if (slot.count >= max) return false;
         slot.count += 1; AI_STORY_RATE.set(key, slot); return true;
       };
-      const ensureAiStories = async () => {
-        await pool.query("CREATE TABLE IF NOT EXISTS ai_story_assets (id BIGSERIAL PRIMARY KEY, created_by BIGINT NOT NULL, title TEXT NOT NULL, status VARCHAR(20) NOT NULL DEFAULT 'draft', payload JSONB NOT NULL DEFAULT '{}'::jsonb, image_data TEXT, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW())");
-        await pool.query("CREATE INDEX IF NOT EXISTS ix_ai_story_assets_owner_created ON ai_story_assets(created_by, created_at DESC)");
-      };
+      const ensureAiStories = async () => true;
       const parseAiStory = (raw) => {
         let txt = String(raw || "").replace(new RegExp(String.fromCharCode(96), "g"), "").trim();
         const start = txt.indexOf("{"), end = txt.lastIndexOf("}");
@@ -669,12 +599,12 @@ export async function handleApi(req, res, url) {
           const stableSlug="legacy-"+crypto.createHash("sha256").update(sourceTable+"|"+row.legacy_id).digest("hex").slice(0,16);
           const description=String(pick(p,["PlanShortDescription","ShortDescription","Description","Summary","توضیحات"])||"").slice(0,500);
           const conditions={};
-          let costs=[];try{const rawCosts=pick(p,["CostsJson","OperationalCostsJson","OperationalCosts"]);const parsed=typeof rawCosts==="string"?JSON.parse(rawCosts):rawCosts;if(Array.isArray(parsed))costs=parsed.map(c=>({title:String(c.title??c.Title??c.name??c.Name??"هزینه").slice(0,100),percent:num(c.percent??c.Percent??c.value??c.Value??c.amount??c.Amount)??0,months:num(c.months??c.Months)??null}))}catch{}const intervalDays=num(pick(p,["IntervalDays","InstallmentIntervalDays","فاصله اقساط"]))??0;const lateCoef=num(pick(p,["DelayPercent","LateDailyCoef","LatePenaltyDailyCoefficient"]))??0;const earlyCoef=num(pick(p,["EarlyPercent","EarlyDailyCoef","EarlyPaymentDailyCoefficient"]))??0;const ins=await pool.query("INSERT INTO loan_products(slug,name,title,description,badge,min_amount,max_amount,interval_days,tiers,conditions,documents,is_active,sort_order,interest_method,interest_percent,late_daily_coef,early_daily_coef,show_in_list,send_reminders,labels,full_description_html,operational_costs,legacy_source_table,legacy_id,legacy_payload,needs_review) VALUES($1,$2,$3,$4,'',$5,$6,$7,$8::jsonb,$9::jsonb,'[]'::jsonb,FALSE,$10,$11,$12,$13,$14,FALSE,FALSE,'[]'::jsonb,$15,$16::jsonb,$17,$18,$19::jsonb,$20) ON CONFLICT DO NOTHING RETURNING id",[stableSlug,name,title,description,min,max,intervalDays,JSON.stringify(tiers),JSON.stringify(conditions),1000+imported,method,rate??0,lateCoef,earlyCoef,safeHtml(pick(p,["PlanHtml","FullDescriptionHtml"])),JSON.stringify(costs),sourceTable,row.legacy_id,JSON.stringify(Object.fromEntries(["Title","Code","DelayPercent","EarlyPercent","ProfitPercent","MaxAmount","MaxMonthGap","AllowedInstallments","CostsJson","Disable","DisableText","IncludePlan","PlanTitle","PlanShortDescription","HasSponsore","DefaultSponsoreCheckoutDays","LoanProfitType"].filter(k=>p[k]!==undefined).map(k=>[k,p[k]]))), (min<=0 || max<min || tiers.length===0)]);
+          let costs=[];try{const rawCosts=pick(p,["CostsJson","OperationalCostsJson","OperationalCosts"]);const parsed=typeof rawCosts==="string"?JSON.parse(rawCosts):rawCosts;if(Array.isArray(parsed))costs=parsed.map(c=>({title:String(c.title??c.Title??c.name??c.Name??"هزینه").slice(0,100),percent:num(c.percent??c.Percent??c.value??c.Value??c.amount??c.Amount)??0,months:num(c.months??c.Months)??null}))}catch{}const intervalDays=num(pick(p,["IntervalDays","InstallmentIntervalDays","فاصله اقساط"]))??0;const lateCoef=num(pick(p,["DelayPercent","LateDailyCoef","LatePenaltyDailyCoefficient"]))??0;const earlyCoef=num(pick(p,["EarlyPercent","EarlyDailyCoef","EarlyPaymentDailyCoefficient"]))??0;const ins=await pool.query("INSERT INTO loan_products(id,slug,name,title,description,badge,min_amount,max_amount,interval_days,tiers,conditions,documents,is_active,sort_order,interest_method,interest_percent,late_daily_coef,early_daily_coef,show_in_list,send_reminders,labels,full_description_html,operational_costs,legacy_source_table,legacy_id,legacy_payload,needs_review) VALUES($1,$2,$3,$4,$5,'',$6,$7,$8,$9::jsonb,$10::jsonb,'[]'::jsonb,FALSE,$11,$12,$13,$14,$15,FALSE,FALSE,'[]'::jsonb,$16,$17::jsonb,$18,$19,$20::jsonb,$21) ON CONFLICT DO NOTHING RETURNING id",[crypto.randomUUID(),stableSlug,name,title,description,min,max,intervalDays,JSON.stringify(tiers),JSON.stringify(conditions),1000+imported,method,rate??0,lateCoef,earlyCoef,safeHtml(pick(p,["PlanHtml","FullDescriptionHtml"])),JSON.stringify(costs),sourceTable,row.legacy_id,JSON.stringify(Object.fromEntries(["Title","Code","DelayPercent","EarlyPercent","ProfitPercent","MaxAmount","MaxMonthGap","AllowedInstallments","CostsJson","Disable","DisableText","IncludePlan","PlanTitle","PlanShortDescription","HasSponsore","DefaultSponsoreCheckoutDays","LoanProfitType"].filter(k=>p[k]!==undefined).map(k=>[k,p[k]]))), (min<=0 || max<min || tiers.length===0)]);
           if(ins.rowCount)imported++;else skipped++;
           if((imported+skipped)>0&&(imported+skipped)%100===0)console.log("LEGACY_LOAN_IMPORT_PROGRESS="+(imported+skipped)+" imported="+imported+" skipped="+skipped);
           }
         }
-        const statusSync=await pool.query("UPDATE loan_products lp SET show_in_list=CASE WHEN lower(COALESCE(src.payload->>'IncludePlan','')) IN ('true','1','yes','y') THEN TRUE WHEN lower(COALESCE(src.payload->>'IncludePlan','')) IN ('false','0','no','n') THEN FALSE ELSE lp.show_in_list END, is_active=CASE WHEN lower(COALESCE(src.payload->>'Disable','')) IN ('true','1','yes','y') THEN FALSE WHEN lower(COALESCE(src.payload->>'Disable','')) IN ('false','0','no','n') THEN TRUE WHEN COALESCE(lp.min_amount,0)>0 AND COALESCE(lp.max_amount,0)>=COALESCE(lp.min_amount,0) AND jsonb_typeof(lp.tiers)='array' AND jsonb_array_length(CASE WHEN jsonb_typeof(lp.tiers)='array' THEN lp.tiers ELSE '[]'::jsonb END)>0 THEN TRUE ELSE lp.is_active END, needs_review=(COALESCE(lp.min_amount,0)<=0 OR COALESCE(lp.max_amount,0)<COALESCE(lp.min_amount,0) OR jsonb_typeof(lp.tiers)<>'array' OR jsonb_array_length(CASE WHEN jsonb_typeof(lp.tiers)='array' THEN lp.tiers ELSE '[]'::jsonb END)=0), updated_at=NOW() FROM legacy_source_data src WHERE lp.legacy_source_table=src.source_table AND lp.legacy_id=src.legacy_id AND src.source_table=$1",[sourceTable]);
+        const statusSync=await pool.query("UPDATE loan_products lp JOIN legacy_source_data src ON lp.legacy_source_table=src.source_table AND lp.legacy_id=src.legacy_id SET show_in_list=CASE WHEN lower(COALESCE(src.payload->>'IncludePlan','')) IN ('true','1','yes','y') THEN TRUE WHEN lower(COALESCE(src.payload->>'IncludePlan','')) IN ('false','0','no','n') THEN FALSE ELSE lp.show_in_list END, is_active=CASE WHEN lower(COALESCE(src.payload->>'Disable','')) IN ('true','1','yes','y') THEN FALSE WHEN lower(COALESCE(src.payload->>'Disable','')) IN ('false','0','no','n') THEN TRUE WHEN COALESCE(lp.min_amount,0)>0 AND COALESCE(lp.max_amount,0)>=COALESCE(lp.min_amount,0) AND jsonb_typeof(lp.tiers)='array' AND jsonb_array_length(CASE WHEN jsonb_typeof(lp.tiers)='array' THEN lp.tiers ELSE '[]'::jsonb END)>0 THEN TRUE ELSE lp.is_active END, needs_review=(COALESCE(lp.min_amount,0)<=0 OR COALESCE(lp.max_amount,0)<COALESCE(lp.min_amount,0) OR jsonb_typeof(lp.tiers)<>'array' OR jsonb_array_length(CASE WHEN jsonb_typeof(lp.tiers)='array' THEN lp.tiers ELSE '[]'::jsonb END)=0), updated_at=NOW() WHERE src.source_table=$1",[sourceTable]);
         return json(res,200,{imported,skipped,statusSynced:statusSync.rowCount,candidateTables:[sourceTable],message:imported?"تعریف‌های قدیمی وارد شدند و وضعیت فعال/نمایش از رکورد اصلی بازیابی شد.":"رکوردهای موجود بررسی شدند؛ وضعیت فعال/نمایش از داده قدیمی همگام شد."});
       }
       if (req.method === "GET" && route === "/api/v1/admin/loan-products") {
@@ -685,7 +615,7 @@ export async function handleApi(req, res, url) {
         const method = String(params.get("method") || "").trim();
         const review = String(params.get("review") || "").trim();
         const active = String(params.get("active") || "").trim();
-        const where = "WHERE ($1='' OR name ILIKE '%'||$1||'%' OR title ILIKE '%'||$1||'%' OR slug ILIKE '%'||$1||'%' OR COALESCE(legacy_id::text,'') ILIKE '%'||$1||'%') AND ($2='' OR interest_method=$2) AND ($3='' OR needs_review=($3='review')) AND ($4='' OR is_active=($4='active'))";
+        const where = "WHERE ($1='' OR name ILIKE CONCAT('%',$1,'%') OR title ILIKE CONCAT('%',$1,'%') OR slug ILIKE CONCAT('%',$1,'%') OR COALESCE(legacy_id::text,'') ILIKE CONCAT('%',$1,'%')) AND ($2='' OR interest_method=$2) AND ($3='' OR needs_review=($3='review')) AND ($4='' OR is_active=($4='active'))";
         const [rows, count, summary] = await Promise.all([
           pool.query("SELECT * FROM loan_products " + where + " ORDER BY sort_order,created_at DESC LIMIT $5 OFFSET $6", [search,method,review,active,limit,offset]),
           pool.query("SELECT COUNT(*)::int AS total FROM loan_products " + where, [search,method,review,active]),
@@ -695,7 +625,7 @@ export async function handleApi(req, res, url) {
       }
       if (req.method === "POST" && route === "/api/v1/admin/loan-products") {
         const b=cleanLoanInput(await body(req));
-        const q=await pool.query("INSERT INTO loan_products(slug,name,title,description,badge,min_amount,max_amount,interval_days,tiers,conditions,documents,is_active,sort_order,interest_method,interest_percent,late_daily_coef,early_daily_coef,show_in_list,send_reminders,labels,full_description_html,operational_costs,image_url) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10::jsonb,$11::jsonb,$12,$13,$14,$15,$16,$17,$18,$19,$20::jsonb,$21,$22::jsonb,$23) RETURNING id", [b.slug,b.name,b.title,b.description,b.badge,b.minAmount,b.maxAmount,b.intervalDays,JSON.stringify(b.tiers),JSON.stringify(b.conditions),JSON.stringify(b.documents),b.isActive,b.sortOrder,b.interestMethod,b.interestPercent,b.lateDailyCoef,b.earlyDailyCoef,b.showInList,b.sendReminders,JSON.stringify(b.labels),b.fullDescriptionHtml,JSON.stringify(b.operationalCosts),b.imageUrl]);
+        const q=await pool.query("INSERT INTO loan_products(id,slug,name,title,description,badge,min_amount,max_amount,interval_days,tiers,conditions,documents,is_active,sort_order,interest_method,interest_percent,late_daily_coef,early_daily_coef,show_in_list,send_reminders,labels,full_description_html,operational_costs,image_url) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,$11::jsonb,$12::jsonb,$13,$14,$15,$16,$17,$18,$19,$20,$21::jsonb,$22,$23::jsonb,$24) RETURNING id",[crypto.randomUUID(),b.slug,b.name,b.title,b.description,b.badge,b.minAmount,b.maxAmount,b.intervalDays,JSON.stringify(b.tiers),JSON.stringify(b.conditions),JSON.stringify(b.documents),b.isActive,b.sortOrder,b.interestMethod,b.interestPercent,b.lateDailyCoef,b.earlyDailyCoef,b.showInList,b.sendReminders,JSON.stringify(b.labels),b.fullDescriptionHtml,JSON.stringify(b.operationalCosts),b.imageUrl]);
         return json(res,201,{id:q.rows[0].id});
       }
       const loanToggle=route.match(/^\/api\/v1\/admin\/loan-products\/([0-9a-f-]{36})\/toggle$/i);
@@ -855,7 +785,7 @@ export async function handleApi(req, res, url) {
             if((currentRoles.includes("superadmin")||role==="superadmin")&&admin.role!=="superadmin"){await conn.rollback();return json(res,403,{message:"مدیریت حساب مدیر ارشد فقط برای مدیر ارشد مجاز است."});}
             if(sourceKey==="main"&&(active===false||(role!==null&&role!==directoryRoleFromNames(currentRoleNames)))){
               try{
-                const [actorMap]=await conn.query("SELECT MariaDbUserId FROM DigibailUserIdentity WHERE PostgresUserId=? LIMIT 1",[actorId]);
+                const [actorMap]=await conn.query("SELECT MariaDbUserId FROM DigibailAppUserIdentity WHERE AppUserId=? AND LegacySource='mariadb.AspNetUsers' LIMIT 1",[actorId]);
                 if(actorMap.length&&String(actorMap[0].MariaDbUserId)===String(legacyId)){await conn.rollback();return json(res,400,{message:"امکان تغییر نقش یا غیرفعال‌کردن حساب مدیر واردشده وجود ندارد."});}
               }catch{}
             }
@@ -884,20 +814,32 @@ export async function handleApi(req, res, url) {
             const names=String(result[0]?.role_names||"").split(",").filter(Boolean),roles=names.map(legacyRoleCode),primary=directoryRoleFromNames(names);
             updated={...result[0],id:rawId,role:primary,roles:roles.length?roles:[primary],is_active:Boolean(Number(result[0]?.is_active)),source:sourceKey,legacy_source:config.users,role_editable:config.roleEditable};
           }catch(error){await conn.rollback().catch(()=>{});throw error;}finally{conn.release();}
-          if(sourceKey==="main"){
-            try{
-              const [mappingRows]=await db.query("SELECT PostgresUserId FROM DigibailUserIdentity WHERE MariaDbUserId=? LIMIT 1",[legacyId]);
-              if(mappingRows.length){
-                const pgId=Number(mappingRows[0].PostgresUserId);
-                await pool.query("UPDATE users SET full_name=COALESCE($1,full_name),phone=CASE WHEN $2::boolean THEN $3 ELSE phone END,email=CASE WHEN $4::boolean THEN $5 ELSE email END,role=COALESCE($6,role),is_active=COALESCE($7,is_active),updated_at=NOW() WHERE id=$8",[fullName,input.phone!==undefined,phone,input.email!==undefined,email,role,active,pgId]);
-                if(role!==null)await pool.query("INSERT INTO user_role_overrides(user_id,role_code,updated_by,updated_at) VALUES($1,$2,$3,NOW()) ON CONFLICT(user_id) DO UPDATE SET role_code=EXCLUDED.role_code,updated_by=EXCLUDED.updated_by,updated_at=NOW()",[pgId,role,actorId]);
-              }
-            }catch(syncError){console.error("POSTGRES_MAPPED_USER_UPDATE_FAILED="+String(syncError.code||syncError.name||"unknown"));}
+          const identitySource={
+            main:"mariadb.AspNetUsers",
+            bluvam:"mariadb.bluvamdb__AspNetUsers",
+            transfer:"mariadb.OnlineMoneyTransfer__AspNetUsers"
+          }[sourceKey];
+          if(identitySource){
+            const [mappingRows]=await db.query(
+              "SELECT AppUserId FROM DigibailAppUserIdentity WHERE LegacySource=? AND MariaDbUserId=? LIMIT 1",
+              [identitySource,legacyId]
+            );
+            if(mappingRows.length){
+              const appId=Number(mappingRows[0].AppUserId);
+              await pool.query(
+                "UPDATE users SET full_name=COALESCE($1,full_name),phone=CASE WHEN $2=1 THEN $3 ELSE phone END,email=CASE WHEN $4=1 THEN $5 ELSE email END,role=COALESCE($6,role),is_active=COALESCE($7,is_active),updated_at=NOW() WHERE id=$8",
+                [fullName,input.phone!==undefined?1:0,phone,input.email!==undefined?1:0,email,role,active,appId]
+              );
+              if(role!==null)await pool.query(
+                "INSERT INTO user_role_overrides(user_id,role_code,updated_by,updated_at) VALUES($1,$2,$3,NOW()) ON DUPLICATE KEY UPDATE role_code=VALUES(role_code),updated_by=VALUES(updated_by),updated_at=NOW()",
+                [appId,role,actorId]
+              );
+            }
           }
           await audit(req,"admin.user.updated",actorId,{targetUserId:rawId,source:"mariadb."+config.users,changed:{fullName:fullName!==null,phone:input.phone!==undefined,email:input.email!==undefined,role:role!==null,isActive:active!==null}});
           return json(res,200,{data:updated,message:"اطلاعات حساب به‌روزرسانی شد."});
         }
-        const id=Number(rawId.startsWith("pg:")?rawId.slice(3):rawId);
+        const id=Number(rawId.startsWith("app:")?rawId.slice(4):rawId);
         if(!Number.isSafeInteger(id)||id<1)return json(res,400,{message:"شناسه حساب معتبر نیست."});
         const current=await pool.query("SELECT id,role,is_active FROM users WHERE id=$1",[id]);
         if(!current.rowCount)return json(res,404,{message:"حساب کاربری پیدا نشد."});
@@ -915,7 +857,7 @@ export async function handleApi(req, res, url) {
           const mirror=await pool.query("SELECT id,username,phone,full_name,national_code,email,is_active,COALESCE((SELECT role_code FROM user_role_overrides o WHERE o.user_id=users.id),role) AS effective_role,to_char(created_at AT TIME ZONE 'Asia/Tehran','YYYY-MM-DD HH24:MI:SS.US') AS created_at_tehran FROM users WHERE id=$1",[id]);
           if(mirror.rowCount)await syncUserToMariaDB(legacyMaria(),mirror.rows[0]);
         }catch(mirrorError){console.error("MARIADB_ADMIN_USER_MIRROR_FAILED="+String(mirrorError.code||mirrorError.name||"unknown"));}
-        await audit(req,"admin.user.updated",actorId,{targetUserId:id,source:"postgres.users",changed:{fullName:fullName!==null,phone:input.phone!==undefined,email:input.email!==undefined,role:role!==null,isActive:active!==null}});
+        await audit(req,"admin.user.updated",actorId,{targetUserId:id,source:"app.users",changed:{fullName:fullName!==null,phone:input.phone!==undefined,email:input.email!==undefined,role:role!==null,isActive:active!==null}});
         return json(res,200,{data:updated,message:"اطلاعات حساب به‌روزرسانی شد."});
       }
       if (req.method === "GET" && route === "/api/v1/admin/legacy-customers") {
@@ -977,28 +919,56 @@ export async function handleApi(req, res, url) {
         return json(res, 200, { data: rows.map((payload,index)=>({ legacy_id: primary.length ? primary.map(k=>String(payload[k] ?? "")).join(" / ") : String(offset+index+1), payload, imported_at: null })), total: Number(countRows[0]?.total)||0, columns: columns.map(x=>({name:x.COLUMN_NAME,type:x.DATA_TYPE})) });
       }
       if (req.method === "GET" && route === "/api/v1/admin/legacy-relational-tables") {
-        const q = await pool.query("SELECT source_schema,source_table,source_rows,imported_rows,imported_at FROM legacy_digibail._import_manifest ORDER BY source_schema,source_table");
+        const q=await pool.query(
+          "SELECT source_schema,source_table,source_rows,imported_rows,imported_at FROM digibail_legacy_manifest ORDER BY source_schema,source_table"
+        );
         return json(res,200,q.rows);
       }
       if (req.method === "GET" && route === "/api/v1/admin/legacy-relational-data") {
         const sourceTable=String(url.searchParams.get("table")||"");
-        const match=/^([A-Za-z0-9_]{1,63})\.([A-Za-z0-9_]{1,63})$/.exec(sourceTable);
+        const match=/^([A-Za-z0-9_]{1,63})\\.([A-Za-z0-9_]{1,63})$/.exec(sourceTable);
         if(!match)return json(res,400,{message:"نام جدول معتبر نیست."});
         const [,sourceSchema,tableName]=match;
-        const physicalTable=sourceSchema+"__"+tableName;
-        const manifest=await pool.query("SELECT source_rows,imported_rows FROM legacy_digibail._import_manifest WHERE source_schema=$1 AND source_table=$2",[sourceSchema,tableName]);
+        const manifest=await pool.query(
+          "SELECT source_rows,imported_rows FROM digibail_legacy_manifest WHERE source_schema=$1 AND source_table=$2",
+          [sourceSchema,tableName]
+        );
         if(!manifest.rowCount)return json(res,404,{message:"جدول در ساختار منتقل‌شده پیدا نشد."});
         const limit=Math.min(100,Math.max(1,Number.parseInt(url.searchParams.get("limit")||"50",10)||50));
         const offset=Math.max(0,Number.parseInt(url.searchParams.get("offset")||"0",10)||0);
-        const columns=await pool.query("SELECT column_name,data_type,is_nullable,ordinal_position FROM information_schema.columns WHERE table_schema='legacy_digibail' AND table_name=$1 ORDER BY ordinal_position",[physicalTable]);
-        const primary=await pool.query("SELECT kcu.column_name FROM information_schema.table_constraints tc JOIN information_schema.key_column_usage kcu ON tc.constraint_name=kcu.constraint_name AND tc.table_schema=kcu.table_schema AND tc.table_name=kcu.table_name WHERE tc.constraint_type='PRIMARY KEY' AND tc.table_schema='legacy_digibail' AND tc.table_name=$1 ORDER BY kcu.ordinal_position",[physicalTable]);
-        const foreign=await pool.query("SELECT kcu.column_name,ccu.table_schema AS referenced_schema,ccu.table_name AS referenced_table,ccu.column_name AS referenced_column FROM information_schema.table_constraints tc JOIN information_schema.key_column_usage kcu ON tc.constraint_name=kcu.constraint_name AND tc.table_schema=kcu.table_schema AND tc.table_name=kcu.table_name JOIN information_schema.constraint_column_usage ccu ON ccu.constraint_name=tc.constraint_name AND ccu.constraint_schema=tc.constraint_schema WHERE tc.constraint_type='FOREIGN KEY' AND tc.table_schema='legacy_digibail' AND tc.table_name=$1 ORDER BY tc.constraint_name,kcu.ordinal_position",[physicalTable]);
-        const qid=v=>'"'+String(v).replace(/"/g,'""')+'"';
-        const order=primary.rows.length?primary.rows.map(x=>qid(x.column_name)).join(","):qid("__legacy_row_number");
-        const sql="SELECT * FROM "+qid("legacy_digibail")+"."+qid(physicalTable)+" ORDER BY "+order+" LIMIT $1 OFFSET $2";
-        const rows=await pool.query(sql,[limit,offset]);
-        const foreignKeys=foreign.rows.map(x=>({...x,referenced_table:String(x.referenced_table).replace(/^([^_]+)__(.+)$/,"$1.$2")}));
-        return json(res,200,{sourceTable,rows:rows.rows,columns:columns.rows,primaryKeys:primary.rows.map(x=>x.column_name),foreignKeys,total:Number(manifest.rows[0].imported_rows)||0,offset,limit});
+        const [columns,rows]=await Promise.all([
+          pool.query(
+            "SELECT column_name,data_type,is_nullable,ordinal_position,primary_key_order,referenced_schema,referenced_table,referenced_column FROM digibail_legacy_columns WHERE source_schema=$1 AND source_table=$2 ORDER BY ordinal_position",
+            [sourceSchema,tableName]
+          ),
+          pool.query(
+            "SELECT legacy_id,payload FROM digibail_legacy_relational_rows WHERE source_schema=$1 AND source_table=$2 ORDER BY legacy_id LIMIT $3 OFFSET $4",
+            [sourceSchema,tableName,limit,offset]
+          )
+        ]);
+        const primaryKeys=columns.rows.filter(x=>x.primary_key_order!==null&&x.primary_key_order!==undefined)
+          .sort((a,b)=>Number(a.primary_key_order)-Number(b.primary_key_order)).map(x=>x.column_name);
+        const foreignKeys=columns.rows.filter(x=>x.referenced_table).map(x=>({
+          column_name:x.column_name,
+          referenced_schema:x.referenced_schema,
+          referenced_table:String(x.referenced_table).replace(/^([^_]+)__(.+)$/,"$1.$2"),
+          referenced_column:x.referenced_column
+        }));
+        const dataRows=rows.rows.map(row=>({
+          legacy_id:row.legacy_id,
+          payload:typeof row.payload==="string"?(JSON.parse(row.payload||"{}")):row.payload
+        }));
+        return json(res,200,{
+          sourceTable,
+          rows:dataRows,
+          columns:columns.rows.map(x=>({column_name:x.column_name,data_type:x.data_type,is_nullable:x.is_nullable,ordinal_position:x.ordinal_position})),
+          primaryKeys,
+          foreignKeys,
+          total:Number(manifest.rows[0].imported_rows)||0,
+          sourceRows:Number(manifest.rows[0].source_rows)||0,
+          offset,
+          limit
+        });
       }
       if (req.method === "GET" && route === "/api/v1/admin/beta-inquiries") {
         const q = await pool.query("SELECT id,reference,user_id,national_code,status,status_note,created_at FROM beta_inquiries ORDER BY created_at DESC LIMIT 500");
@@ -1032,7 +1002,7 @@ export async function handleApi(req, res, url) {
         if (!Number.isSafeInteger(userId)||userId<1||!title||!number||!bodyHtml||bodyHtml.length>200000||(expiresAt&&!Number.isFinite(expiresAt.getTime()))) return json(res,400,{message:"اطلاعات قرارداد معتبر نیست."});
         const owner = await pool.query("SELECT id FROM users WHERE id=$1 AND is_active=TRUE",[userId]);
         if(!owner.rowCount) return json(res,404,{message:"کاربر فعال پیدا نشد."});
-        const q=await pool.query("INSERT INTO customer_contracts(user_id,title,number,body_html,expires_at) VALUES($1,$2,$3,$4,$5) RETURNING id,title,number,status,created_on",[userId,title,number,bodyHtml,expiresAt?expiresAt.toISOString():null]);
+        const q=await pool.query("INSERT INTO customer_contracts(id,user_id,title,number,body_html,expires_at) VALUES($1,$2,$3,$4,$5,$6) RETURNING id,title,number,status,created_on",[crypto.randomUUID(),userId,title,number,bodyHtml,expiresAt?expiresAt.toISOString():null]);
         await audit(req,"admin.contracts.created",Number(admin.sub)||null,{contractId:q.rows[0].id,userId});
         return json(res,201,{ok:true,data:q.rows[0]});
       }
@@ -1082,8 +1052,8 @@ export async function handleApi(req, res, url) {
       const reference = "BETA-" + crypto.randomBytes(4).toString("hex").toUpperCase();
       const statusNote = "درخواست و رضایت ثبت شد؛ اتصال API رسمی بانک رفاه تنظیم نشده و استعلام به بانک ارسال نشده است.";
       const q = await pool.query(
-        "INSERT INTO beta_inquiries(reference,user_id,national_code,status,status_note) VALUES($1,$2,$3,'pending_provider',$4) RETURNING reference,status,status_note,created_at",
-        [reference,userId,nationalCode,statusNote]
+        "INSERT INTO beta_inquiries(id,reference,user_id,national_code,status,status_note) VALUES($1,$2,$3,$4,'pending_provider',$5) RETURNING reference,status,status_note,created_at",
+        [crypto.randomUUID(),reference,userId,nationalCode,statusNote]
       );
       await audit(req,"beta.inquiry.created",userId,{reference});
       return json(res,202,{data:{ref:q.rows[0].reference,status:q.rows[0].status,message:q.rows[0].status_note,createdAt:q.rows[0].created_at}});
@@ -1091,7 +1061,7 @@ export async function handleApi(req, res, url) {
     if (route.startsWith("/api/v1/me/loan-applications")) {
       const userId = authenticatedUserId(req);
       if (!userId) return json(res, 401, { message: "برای ثبت یا مشاهده درخواست وام وارد حساب شوید." });
-      await pool.query("CREATE TABLE IF NOT EXISTS customer_loan_applications (id BIGSERIAL PRIMARY KEY, reference VARCHAR(32) NOT NULL UNIQUE, user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE, loan_product_id UUID NOT NULL REFERENCES loan_products(id), loan_name TEXT NOT NULL, amount NUMERIC(18,2) NOT NULL CHECK(amount>0), installment_months INTEGER NOT NULL CHECK(installment_months>0), down_payment NUMERIC(18,2) NOT NULL DEFAULT 0, monthly_payment NUMERIC(18,2) NOT NULL DEFAULT 0, status VARCHAR(32) NOT NULL DEFAULT 'Submitted', details JSONB NOT NULL DEFAULT '{}'::jsonb, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW())");
+
       if (req.method === "GET" && route === "/api/v1/me/loan-applications") {
         const q = await pool.query("SELECT id,reference,loan_product_id AS \"loanProductId\",loan_name AS \"loanName\",amount,installment_months AS \"installmentMonths\",down_payment AS \"downPayment\",monthly_payment AS \"monthlyPayment\",status,details,created_at AS \"createdAt\" FROM customer_loan_applications WHERE user_id=$1 ORDER BY created_at DESC", [userId]);
         return json(res,200,{data:q.rows});
@@ -1136,8 +1106,8 @@ export async function handleApi(req, res, url) {
         if (!["image/jpeg","image/png","image/webp"].includes(file.mime)) return json(res, 415, { message: "فقط تصویر JPG، PNG یا WEBP پذیرفته می‌شود." });
         const safeName = String(file.name || "document").replace(/[\\/\\r\\n\0]/g,"_").slice(0,255) || "document";
         const q = await pool.query(
-          "INSERT INTO customer_documents(user_id,kind,file_name,mime_type,file_data,fields) VALUES($1,$2,$3,$4,$5,$6::jsonb) RETURNING id",
-          [userId,kind,safeName,file.mime,file.data,JSON.stringify({fields:{fullName:"",nationalCode:""}})]
+          "INSERT INTO customer_documents(id,user_id,kind,file_name,mime_type,file_data,fields) VALUES($1,$2,$3,$4,$5,$6,$7::jsonb) RETURNING id",
+          [crypto.randomUUID(),userId,kind,safeName,file.mime,file.data,JSON.stringify({fields:{fullName:"",nationalCode:""}})]
         );
         await audit(req, "documents.uploaded", userId, { documentId:q.rows[0].id, kind, size:file.data.length });
         return json(res, 201, { ok:true, ocr:false, id:q.rows[0].id });
@@ -1203,7 +1173,7 @@ export async function handleApi(req, res, url) {
       if (!phoneOk(phone)) return json(res, 400, { message: "شماره موبایل معتبر نیست." });
       if (!await consumeCaptcha(b.captchaId, b.captchaAnswer)) return json(res, 400, { message: "کد امنیتی نامعتبر یا منقضی شده است." });
       if (OTP_PEPPER.length < 32) return json(res, 503, { message: "تنظیم امنیتی OTP موجود نیست." });
-      const user = await pool.query("SELECT id FROM users WHERE phone=$1 AND is_active=TRUE LIMIT 1", [phone]);
+      const user = await pool.query("SELECT id FROM users WHERE phone=$1 AND is_active=TRUE ORDER BY CASE WHEN legacy_source='mariadb.AspNetUsers' THEN 0 WHEN legacy_source IS NULL THEN 1 ELSE 2 END,id LIMIT 1", [phone]);
       if (!user.rowCount) {
         await audit(req, "auth.password_reset.requested_unknown");
         resetLimit("reset:" + ip);
@@ -1236,13 +1206,17 @@ export async function handleApi(req, res, url) {
       const user = await pool.query("SELECT id FROM users WHERE phone=$1 AND is_active=TRUE LIMIT 1", [phone]);
       if (!user.rowCount) return json(res, 400, { message: "بازیابی برای این حساب ممکن نیست." });
       const passwordHash = await bcrypt.hash(password,12);
-      await pool.query("BEGIN");
+      const client=await pool.connect();
       try {
-        await pool.query("UPDATE users SET password_hash=$1,updated_at=NOW() WHERE id=$2",[passwordHash,user.rows[0].id]);
-        await pool.query("UPDATE otp_challenges SET consumed_at=NOW() WHERE id=$1",[challenge.id]);
-        await audit(req,"auth.password_reset.completed",user.rows[0].id);
-        await pool.query("COMMIT");
-      } catch(e) { await pool.query("ROLLBACK"); throw e; }
+        await client.query("BEGIN");
+        await client.query("UPDATE users SET password_hash=$1,updated_at=NOW() WHERE id=$2",[passwordHash,user.rows[0].id]);
+        await client.query("UPDATE otp_challenges SET consumed_at=NOW() WHERE id=$1",[challenge.id]);
+        await client.query("COMMIT");
+      } catch(e) {
+        await client.query("ROLLBACK").catch(()=>{});
+        throw e;
+      } finally { client.release(); }
+      await audit(req,"auth.password_reset.completed",user.rows[0].id);
       return json(res,200,{ok:true,message:"رمز عبور تغییر کرد. اکنون وارد شوید."});
     }
     if (req.method === "GET" && route === "/api/v1/security/captcha") {
@@ -1259,36 +1233,25 @@ export async function handleApi(req, res, url) {
       const password = String(b.password || "");
       // Prefer the exact account name or phone. The legacy "admin" alias is only a fallback,
       // otherwise it can accidentally select the bootstrap account instead of the real migrated admin.
-      let result = await pool.query(
-        "SELECT id,phone,full_name,username,password_hash,role,is_active FROM users WHERE phone=$1 OR lower(username)=lower($1) ORDER BY CASE WHEN lower(username)=lower($1) THEN 0 ELSE 1 END LIMIT 1",
+      const candidates = await pool.query(
+        "SELECT id,phone,full_name,username,password_hash,role,is_active,legacy_source FROM users WHERE phone=$1 OR lower(username)=lower($1) ORDER BY CASE WHEN lower(username)=lower($1) THEN 0 ELSE 1 END,CASE WHEN legacy_source='mariadb.AspNetUsers' THEN 0 WHEN legacy_source IS NULL THEN 1 WHEN legacy_source='mariadb.bluvamdb__AspNetUsers' THEN 2 ELSE 3 END,id ASC LIMIT 20",
         [username]
       );
-      if (!result.rowCount && username.toLowerCase() === "admin") {
-        result = await pool.query("SELECT id,phone,full_name,username,password_hash,role,is_active FROM users WHERE lower(username)='digibail-admin' LIMIT 1");
+      if (username.toLowerCase() === "admin") {
+        const alias = await pool.query("SELECT id,phone,full_name,username,password_hash,role,is_active,legacy_source FROM users WHERE lower(username)='digibail-admin' LIMIT 1");
+        candidates.rows.push(...alias.rows);
       }
-      if (!result.rowCount || !result.rows[0].is_active) {
-        await audit(req, "auth.login.failed"); return json(res, 401, { message: "نام کاربری یا رمز عبور نادرست است." });
+      let u=null;
+      for(const candidate of candidates.rows){
+        if(!candidate.is_active)continue;
+        if(await verifyPassword(password,candidate.password_hash)){u=candidate;break;}
       }
-      const u = result.rows[0];
-      let passwordValid = await verifyPassword(password, u.password_hash);
-      let verifiedLegacyHash = null;
-      if (!passwordValid) {
-        // If a legacy identity collided with an existing modern username, verify against
-        // the preserved ASP.NET Identity hash and upgrade only after a successful login.
-        const legacy = await pool.query(
-          "SELECT payload->>'PasswordHash' AS password_hash FROM legacy_source_data WHERE source_table LIKE '%AspNetUsers' AND (lower(COALESCE(payload->>'UserName',payload->>'username',''))=lower($1) OR COALESCE(payload->>'Mobile',payload->>'Phone',payload->>'mobile',payload->>'phone','')=$1) ORDER BY imported_at DESC LIMIT 1",
-          [username]
-        );
-        if (legacy.rowCount && legacy.rows[0].password_hash) {
-          verifiedLegacyHash = String(legacy.rows[0].password_hash);
-          passwordValid = await verifyPassword(password, "aspnet:" + verifiedLegacyHash);
-        }
-      }
-      if (!passwordValid) {
-        await audit(req, "auth.login.failed"); return json(res, 401, { message: "نام کاربری یا رمز عبور نادرست است." });
+      if(!u){
+        await audit(req, "auth.login.failed");
+        return json(res, 401, { message: "نام کاربری یا رمز عبور نادرست است." });
       }
       resetLimit("login:" + ip);
-      if (String(u.password_hash).startsWith("aspnet:") || verifiedLegacyHash) {
+      if (String(u.password_hash).startsWith("aspnet:")) {
         const upgraded = await bcrypt.hash(password, 12);
         await pool.query("UPDATE users SET password_hash=$1,updated_at=NOW() WHERE id=$2", [upgraded, u.id]);
       }
@@ -1335,7 +1298,7 @@ export async function handleApi(req, res, url) {
         if (JWT_SECRET.length < 32) return json(res, 503, { message: "تنظیم امنیتی توکن موجود نیست." });
         return json(res, 200, { ticket: jwt.sign({ purpose: "register", phone }, JWT_SECRET, { expiresIn: "10m", issuer: "digibail" }) });
       }
-      const users = await pool.query("SELECT id,phone,full_name,role,is_active FROM users WHERE phone=$1", [phone]);
+      const users = await pool.query("SELECT id,phone,full_name,role,is_active FROM users WHERE phone=$1 ORDER BY CASE WHEN legacy_source='mariadb.AspNetUsers' THEN 0 WHEN legacy_source IS NULL THEN 1 ELSE 2 END,id LIMIT 1", [phone]);
       if (!users.rowCount || !users.rows[0].is_active) return json(res, 404, { message: "حسابی با این شماره نیست." });
       const u = users.rows[0]; await audit(req, "auth.otp.login.success", u.id);
       const token = tokenFor(u);
@@ -1354,6 +1317,8 @@ export async function handleApi(req, res, url) {
       if (fullName.length < 5 || fullName.length > 160) return json(res, 400, { message: "نام و نام خانوادگی را کامل وارد کنید." });
       if (!nationalCodeOk(nationalCode)) return json(res, 400, { message: "کد ملی معتبر نیست." });
       if (password.length < 10 || password.length > 128) return json(res, 400, { message: "رمز عبور باید حداقل ۱۰ نویسه باشد." });
+      const duplicate=await pool.query("SELECT id FROM users WHERE phone=$1 OR national_code=$2 LIMIT 1",[ticket.phone,nationalCode]);
+      if(duplicate.rowCount)return json(res,409,{message:"شماره موبایل یا کد ملی قبلاً ثبت شده است."});
       const passwordHash = await bcrypt.hash(password, 12);
       try {
         const created = await pool.query("INSERT INTO users(phone,full_name,national_code,email,password_hash) VALUES($1,$2,$3,$4,$5) RETURNING id,phone,full_name,role", [ticket.phone, fullName, nationalCode, email, passwordHash]);
@@ -1367,7 +1332,7 @@ export async function handleApi(req, res, url) {
         const token = tokenFor(u);
         return authJson(res, 201, token, { accessToken: token, user: { id: u.id, phone: u.phone, fullName: u.full_name, role: u.role } });
       } catch (error) {
-        if (error.code === "23505") return json(res, 409, { message: "شماره موبایل یا کد ملی قبلاً ثبت شده است." });
+        if (error.code === "23505" || error.code === "ER_DUP_ENTRY") return json(res, 409, { message: "شماره موبایل یا کد ملی قبلاً ثبت شده است." });
         throw error;
       }
     }
@@ -1380,4 +1345,4 @@ export async function handleApi(req, res, url) {
     return json(res, status, { message: status === 500 ? "خطای داخلی سرور." : error.message, code: error.code || undefined });
   }
 }
-export async function closePool() { await pool.end(); }
+export async function closePool() { await mariadbPool.end(); }
