@@ -35,6 +35,7 @@ function accountTypeForRoles(roles) {
   const r=roles||[];
   if(r.includes("superadmin"))return "مدیر ارشد";
   if(r.includes("admin"))return "مدیر سامانه";
+  if(r.includes("legacy_appapiuser")||r.includes("legacy_sponsor"))return "حساب سیستمی";
   if(r.includes("agent"))return "نماینده";
   if(r.includes("marketer")||r.includes("customermarketer"))return "بازاریاب";
   return "مشتری / کاربر";
@@ -762,7 +763,7 @@ export async function handleApi(req, res, url) {
         const [mariaStatsResult,roleStatsResult,staffRows,fresh]=await Promise.all([
           db.query("SELECT COUNT(*) AS total,SUM(CASE WHEN COALESCE(IsActive,1)=1 THEN 1 ELSE 0 END) AS active,SUM(CASE WHEN COALESCE(IsActive,1)=0 THEN 1 ELSE 0 END) AS inactive,DATE_FORMAT(MAX(RegDate),'%Y-%m-%dT%H:%i:%s+03:30') AS latest_registration,SUM(CASE WHEN DATE(RegDate)=DATE(CONVERT_TZ(UTC_TIMESTAMP(),'+00:00','+03:30')) THEN 1 ELSE 0 END) AS today FROM AspNetUsers"),
           db.query("SELECT LOWER(r.Name) AS role,COUNT(DISTINCT u.Id) AS total FROM AspNetUsers u JOIN AspNetUserRoles ur ON ur.UserId=u.Id JOIN AspNetRoles r ON r.Id=ur.RoleId GROUP BY LOWER(r.Name)"),
-          db.query("SELECT COUNT(DISTINCT u.Id) AS total FROM AspNetUsers u WHERE EXISTS(SELECT 1 FROM AspNetUserRoles ur JOIN AspNetRoles r ON r.Id=ur.RoleId WHERE ur.UserId=u.Id AND LOWER(REPLACE(REPLACE(REPLACE(r.Name,' ',''),'-',''),'_','')) IN ('admin','superadmin','agent','marketer','customermarketer'))"),
+          db.query("SELECT COUNT(DISTINCT u.Id) AS total FROM AspNetUsers u WHERE EXISTS(SELECT 1 FROM AspNetUserRoles ur JOIN AspNetRoles r ON r.Id=ur.RoleId WHERE ur.UserId=u.Id AND LOWER(REPLACE(REPLACE(REPLACE(r.Name,' ',''),'-',''),'_','')) IN ('admin','superadmin','agent','marketer','customermarketer','appapiuser','sponsor'))"),
           postgresOnlyAccounts(db,100000)
         ]);
         const mariaStats=mariaStatsResult[0]?.[0]||{},roleMap=new Map(roleStatsResult[0].map(r=>[String(r.role||"").replace(/[^a-z]/g,""),Number(r.total)||0]));
@@ -771,7 +772,7 @@ export async function handleApi(req, res, url) {
         const admins=(roleMap.get("admin")||0)+(roleMap.get("superadmin")||0)+fresh.filter(r=>["admin","superadmin"].includes(r.effective_role)).length;
         const agents=(roleMap.get("agent")||0)+fresh.filter(r=>r.effective_role==="agent").length;
         const marketers=(roleMap.get("marketer")||0)+(roleMap.get("customermarketer")||0)+fresh.filter(r=>["marketer","customermarketer"].includes(r.effective_role)).length;
-        const customers=Math.max(0,mariaTotal-(Number(staffRows[0][0]?.total)||0))+fresh.filter(r=>!["admin","superadmin","agent","marketer","customermarketer"].includes(r.effective_role)).length;
+        const customers=Math.max(0,mariaTotal-(Number(staffRows[0][0]?.total)||0))+fresh.filter(r=>!["admin","superadmin","agent","marketer","customermarketer","legacy_appapiuser","legacy_sponsor"].includes(r.effective_role)).length;
         const mariaLatest=mariaStats.latest_registration?new Date(mariaStats.latest_registration):null,freshLatest=fresh[0]?.created_at?new Date(fresh[0].created_at):null;
         const latestRegistration=freshLatest&&(!mariaLatest||freshLatest>mariaLatest)?freshLatest.toISOString():mariaStats.latest_registration?new Date(mariaStats.latest_registration).toISOString():null;
         const [tenantRows]=await db.query("SELECT COUNT(*) AS total FROM Customers");
