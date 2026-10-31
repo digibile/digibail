@@ -125,8 +125,8 @@ async function copyPublicTable(pg,mysql,table) {
 
   const sourceCount=await countPg(pg,"public",table);
   const before=await countMy(mysql,table);
-  if(before!==0 && before!==sourceCount) {
-    throw new Error("Destination table not empty and not already complete: "+table+" source="+sourceCount+" destination_before="+before);
+  if(before>sourceCount) {
+    throw new Error("Destination table has unexpected extra records: "+table+" source="+sourceCount+" destination_before="+before);
   }
   const names=cols.map(c=>qpg(c.column_name)).join(",");
   const order=pks.length?pks.map(qpg).join(","):"ctid";
@@ -186,8 +186,8 @@ async function copyLegacyTable(pg,mysql,table) {
   await storeLegacyColumns(pg,mysql,table,columns,pks);
   const where="WHERE source_schema=? AND source_table=?";
   const before=await countMy(mysql,"digibail_legacy_relational_rows",where,["legacy_digibail",table]);
-  if(before!==0&&before!==sourceCount) {
-    throw new Error("Legacy relational destination is partial: "+table+" source="+sourceCount+" destination_before="+before);
+  if(before>sourceCount) {
+    throw new Error("Legacy relational destination has unexpected extra records: "+table+" source="+sourceCount+" destination_before="+before);
   }
   const colNames=columns.map(c=>c.column_name);
   const order=pks.length?pks.map(qpg).join(","):"ctid";
