@@ -431,10 +431,7 @@ export async function handleApi(req, res, url) {
         if (slot.count >= max) return false;
         slot.count += 1; AI_STORY_RATE.set(key, slot); return true;
       };
-      const ensureAiStories = async () => {
-        await pool.query("CREATE TABLE IF NOT EXISTS ai_story_assets (id BIGSERIAL PRIMARY KEY, created_by BIGINT NOT NULL, title TEXT NOT NULL, status VARCHAR(20) NOT NULL DEFAULT 'draft', payload JSONB NOT NULL DEFAULT '{}'::jsonb, image_data TEXT, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW())");
-        await pool.query("CREATE INDEX IF NOT EXISTS ix_ai_story_assets_owner_created ON ai_story_assets(created_by, created_at DESC)");
-      };
+      const ensureAiStories = async () => true;
       const parseAiStory = (raw) => {
         let txt = String(raw || "").replace(new RegExp(String.fromCharCode(96), "g"), "").trim();
         const start = txt.indexOf("{"), end = txt.lastIndexOf("}");
@@ -604,7 +601,7 @@ export async function handleApi(req, res, url) {
           if((imported+skipped)>0&&(imported+skipped)%100===0)console.log("LEGACY_LOAN_IMPORT_PROGRESS="+(imported+skipped)+" imported="+imported+" skipped="+skipped);
           }
         }
-        const statusSync=await pool.query("UPDATE loan_products lp SET show_in_list=CASE WHEN lower(COALESCE(src.payload->>'IncludePlan','')) IN ('true','1','yes','y') THEN TRUE WHEN lower(COALESCE(src.payload->>'IncludePlan','')) IN ('false','0','no','n') THEN FALSE ELSE lp.show_in_list END, is_active=CASE WHEN lower(COALESCE(src.payload->>'Disable','')) IN ('true','1','yes','y') THEN FALSE WHEN lower(COALESCE(src.payload->>'Disable','')) IN ('false','0','no','n') THEN TRUE WHEN COALESCE(lp.min_amount,0)>0 AND COALESCE(lp.max_amount,0)>=COALESCE(lp.min_amount,0) AND jsonb_typeof(lp.tiers)='array' AND jsonb_array_length(CASE WHEN jsonb_typeof(lp.tiers)='array' THEN lp.tiers ELSE '[]'::jsonb END)>0 THEN TRUE ELSE lp.is_active END, needs_review=(COALESCE(lp.min_amount,0)<=0 OR COALESCE(lp.max_amount,0)<COALESCE(lp.min_amount,0) OR jsonb_typeof(lp.tiers)<>'array' OR jsonb_array_length(CASE WHEN jsonb_typeof(lp.tiers)='array' THEN lp.tiers ELSE '[]'::jsonb END)=0), updated_at=NOW() FROM legacy_source_data src WHERE lp.legacy_source_table=src.source_table AND lp.legacy_id=src.legacy_id AND src.source_table=$1",[sourceTable]);
+        const statusSync=await pool.query("UPDATE loan_products lp JOIN legacy_source_data src ON lp.legacy_source_table=src.source_table AND lp.legacy_id=src.legacy_id SET show_in_list=CASE WHEN lower(COALESCE(src.payload->>'IncludePlan','')) IN ('true','1','yes','y') THEN TRUE WHEN lower(COALESCE(src.payload->>'IncludePlan','')) IN ('false','0','no','n') THEN FALSE ELSE lp.show_in_list END, is_active=CASE WHEN lower(COALESCE(src.payload->>'Disable','')) IN ('true','1','yes','y') THEN FALSE WHEN lower(COALESCE(src.payload->>'Disable','')) IN ('false','0','no','n') THEN TRUE WHEN COALESCE(lp.min_amount,0)>0 AND COALESCE(lp.max_amount,0)>=COALESCE(lp.min_amount,0) AND jsonb_typeof(lp.tiers)='array' AND jsonb_array_length(CASE WHEN jsonb_typeof(lp.tiers)='array' THEN lp.tiers ELSE '[]'::jsonb END)>0 THEN TRUE ELSE lp.is_active END, needs_review=(COALESCE(lp.min_amount,0)<=0 OR COALESCE(lp.max_amount,0)<COALESCE(lp.min_amount,0) OR jsonb_typeof(lp.tiers)<>'array' OR jsonb_array_length(CASE WHEN jsonb_typeof(lp.tiers)='array' THEN lp.tiers ELSE '[]'::jsonb END)=0), updated_at=NOW() WHERE src.source_table=$1",[sourceTable]);
         return json(res,200,{imported,skipped,statusSynced:statusSync.rowCount,candidateTables:[sourceTable],message:imported?"تعریف‌های قدیمی وارد شدند و وضعیت فعال/نمایش از رکورد اصلی بازیابی شد.":"رکوردهای موجود بررسی شدند؛ وضعیت فعال/نمایش از داده قدیمی همگام شد."});
       }
       if (req.method === "GET" && route === "/api/v1/admin/loan-products") {
@@ -1022,7 +1019,7 @@ export async function handleApi(req, res, url) {
     if (route.startsWith("/api/v1/me/loan-applications")) {
       const userId = authenticatedUserId(req);
       if (!userId) return json(res, 401, { message: "برای ثبت یا مشاهده درخواست وام وارد حساب شوید." });
-      await pool.query("CREATE TABLE IF NOT EXISTS customer_loan_applications (id BIGSERIAL PRIMARY KEY, reference VARCHAR(32) NOT NULL UNIQUE, user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE, loan_product_id UUID NOT NULL REFERENCES loan_products(id), loan_name TEXT NOT NULL, amount NUMERIC(18,2) NOT NULL CHECK(amount>0), installment_months INTEGER NOT NULL CHECK(installment_months>0), down_payment NUMERIC(18,2) NOT NULL DEFAULT 0, monthly_payment NUMERIC(18,2) NOT NULL DEFAULT 0, status VARCHAR(32) NOT NULL DEFAULT 'Submitted', details JSONB NOT NULL DEFAULT '{}'::jsonb, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW())");
+
       if (req.method === "GET" && route === "/api/v1/me/loan-applications") {
         const q = await pool.query("SELECT id,reference,loan_product_id AS \"loanProductId\",loan_name AS \"loanName\",amount,installment_months AS \"installmentMonths\",down_payment AS \"downPayment\",monthly_payment AS \"monthlyPayment\",status,details,created_at AS \"createdAt\" FROM customer_loan_applications WHERE user_id=$1 ORDER BY created_at DESC", [userId]);
         return json(res,200,{data:q.rows});
