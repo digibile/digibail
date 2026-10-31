@@ -250,8 +250,8 @@ async function importExistingMariaIdentityMap(mysql) {
   const [maps]=await mysql.query("SELECT PostgresUserId,MariaDbUserId,RoleCode FROM DigibailUserIdentity");
   for(const item of maps) {
     await mysql.query(
-      "INSERT INTO DigibailAppUserIdentity(AppUserId,LegacySource,MariaDbUserId,RoleCode) VALUES(?,'mariadb.AspNetUsers',?,?) "+
-      "ON DUPLICATE KEY UPDATE MariaDbUserId=VALUES(MariaDbUserId),RoleCode=VALUES(RoleCode)",
+      "INSERT INTO DigibailAppUserIdentity(AppUserId,LegacySource,MariaDbUserId,MariaDbUserKey,RoleCode) VALUES(?,'mariadb.AspNetUsers',?,NULL,?) "+
+      "ON DUPLICATE KEY UPDATE MariaDbUserId=VALUES(MariaDbUserId),MariaDbUserKey=NULL,RoleCode=VALUES(RoleCode)",
       [item.PostgresUserId,item.MariaDbUserId,item.RoleCode||"customer"]
     );
   }
