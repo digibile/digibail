@@ -119,12 +119,12 @@ async function copyPublicTable(pg, mysql, table) {
   const missing = columns.filter(c => !targetNames.has(c.column_name)).map(c => c.column_name);
   if (missing.length) throw new Error("Destination schema incomplete for " + table + ": " + missing.join(","));
 
-  const sourceCount = Number((await pg.query("SELECT COUNT(*)::bigint AS n FROM public." + qi(table))).rows[0].n);
+  const sourceCount = Number((await pg.query("SELECT COUNT(*)::bigint AS n FROM public." + qpg(table))).rows[0].n);
   let copied = 0;
-  const names = columns.map(c => qi(c.column_name)).join(",");
+  const names = columns.map(c => qpg(c.column_name)).join(",");
   while (copied < sourceCount) {
     const batch = await pg.query(
-      "SELECT " + names + " FROM public." + qi(table) + " ORDER BY 1 LIMIT $1 OFFSET $2",
+      "SELECT " + names + " FROM public." + qpg(table) + " ORDER BY 1 LIMIT $1 OFFSET $2",
       [BATCH_SIZE, copied]
     );
     if (!batch.rows.length) break;
@@ -189,16 +189,16 @@ async function copyLegacyRelationalTable(pg, mysql, table) {
   const columns = await readTableColumns(pg, "legacy_digibail", table);
   const primaryKeys = await legacyPrimaryKeys(pg, table);
   const sourceCount = Number((await pg.query(
-    "SELECT COUNT(*)::bigint AS n FROM legacy_digibail." + qi(table)
+    "SELECT COUNT(*)::bigint AS n FROM legacy_digibail." + qpg(table)
   )).rows[0].n);
 
   await storeLegacyColumnMetadata(pg, mysql, table, columns, primaryKeys);
 
   let offset = 0;
   while (offset < sourceCount) {
-    const order = primaryKeys.length ? primaryKeys.map(qi).join(",") : "ctid";
+    const order = primaryKeys.length ? primaryKeys.map(qpg).join(",") : "ctid";
     const result = await pg.query(
-      "SELECT * FROM legacy_digibail." + qi(table) + " ORDER BY " + order + " LIMIT $1 OFFSET $2",
+      "SELECT * FROM legacy_digibail." + qpg(table) + " ORDER BY " + order + " LIMIT $1 OFFSET $2",
       [BATCH_SIZE, offset]
     );
     if (!result.rows.length) break;
@@ -316,7 +316,7 @@ async function main() {
       for (const table of publicTables) {
         const sourceExists = await pg.query("SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name=$1",[table]);
         if (!sourceExists.rowCount) continue;
-        const expected=Number((await pg.query("SELECT COUNT(*)::bigint AS n FROM public."+qi(table))).rows[0].n);
+        const expected=Number((await pg.query("SELECT COUNT(*)::bigint AS n FROM public."+qpg(table))).rows[0].n);
         const actual=Number((await mysql.query("SELECT COUNT(*) AS n FROM "+qi(table)))[0][0].n);
         if (actual !== expected) throw new Error("Final verification failed for "+table+": source="+expected+" destination="+actual);
       }
