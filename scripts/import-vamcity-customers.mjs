@@ -120,6 +120,7 @@ try {
   );
   if(users.length!==counts.users||identityRoles.length!==counts.roles||identityUserRoles.length!==counts.userRoles||customers.length!==counts.customers)throw new Error("Exported customer/account rows do not match main source counts");
   const smsPatterns=[];
+  const input={users,customers,identityRoles,identityUserRoles,smsPatterns,genericTables,schemaDefinitions,columnDefinitions,primaryKeys,foreignKeys};
   const inputPath=join(temp,"legacy-migration.json");
   writeFileSync(inputPath,JSON.stringify(input),{mode:0o600});
   console.log("FULL_LEGACY_IMPORT_PAYLOAD_READY="+JSON.stringify({databases:sourceInventory,tables:schemaDefinitions.length,columns:columnDefinitions.length,primaryKeys:primaryKeys.length,foreignKeyColumns:foreignKeys.length,sourceRows:totalRows,users:users.length,roles:identityRoles.length,userRoles:identityUserRoles.length,customers:customers.length,bytes:readFileSync(inputPath).length}));
@@ -131,11 +132,14 @@ try {
     "SELECT 'role_assignments='||COUNT(*) FROM user_role_assignments WHERE legacy_source='aspnetuserroles';\n"+
     "SELECT 'business_customers='||COUNT(*) FROM legacy_digibail.\"dbo__Customers\";\n"+
     "SELECT 'agent_metadata='||COUNT(*) FROM legacy_digibail.\"dbo__AgentMetaData\";\n"+
-    "SELECT 'subagent_transactions='||COUNT(*) FROM legacy_digibail.\"dbo__SubAgentTransactions\";\n"
+    "SELECT 'subagent_transactions='||COUNT(*) FROM legacy_digibail.\"dbo__SubAgentTransactions\";\n"+
+    "SELECT 'legacy_tables='||COUNT(*) FROM legacy_digibail.\"_import_manifest\";\n"+
+    "SELECT 'legacy_rows='||COALESCE(SUM(imported_rows),0) FROM legacy_digibail.\"_import_manifest\";\n"+
+    "SELECT 'manifest_mismatches='||COUNT(*) FROM legacy_digibail.\"_import_manifest\" WHERE source_rows<>imported_rows;\n"
   });
   console.log("CUSTOMER_IMPORT_TARGET_COUNTS_BEGIN\n"+verify+"CUSTOMER_IMPORT_TARGET_COUNTS_END");
-  if(!verify.includes("users="+counts.users)||!verify.includes("role_assignments="+counts.userRoles)||!verify.includes("business_customers="+counts.customers)) {
-    throw new Error("Production target counts did not match the audited customer source");
+  if(!verify.includes("users="+counts.users)||!verify.includes("role_assignments="+counts.userRoles)||!verify.includes("business_customers="+counts.customers)||!verify.includes("legacy_tables="+schemaDefinitions.length)||!verify.includes("legacy_rows="+totalRows)||!verify.includes("manifest_mismatches=0")) {
+    throw new Error("Linux production row counts or relational import manifest did not match all three Windows source databases");
   }
   console.log("VAMCITY_ALL_DATABASES_IMPORT_VERIFIED=1");
 } catch(error) {
