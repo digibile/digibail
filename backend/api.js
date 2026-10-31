@@ -14,8 +14,11 @@ if (!mariadbUser || !mariadbPassword) {
     status: 503, code: "mariadb_not_configured"
   });
 }
+const mariadbConnection = process.env.MARIADB_HOST
+  ? { host: process.env.MARIADB_HOST, port: Number(process.env.MARIADB_PORT || 3306) }
+  : { socketPath: mariadbSocket };
 const mariadbPool = createPool({
-  socketPath: mariadbSocket,
+  ...mariadbConnection,
   user: mariadbUser,
   password: mariadbPassword,
   database: mariadbDatabase,
