@@ -1,4 +1,5 @@
 name: Deploy digebail.ir production site
+# Deploy the corrected legacy customer migration tooling before it is executed.
 
 on:
   workflow_dispatch:
