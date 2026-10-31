@@ -7,14 +7,12 @@ return [
     'mysql' => [
         'host' => 'localhost',
         'port' => 3306,
-        'user' => 'YOUR_DATABASE_USER',
-        'password' => 'YOUR_DATABASE_PASSWORD',
+        'user' => 'digibail_vamcitydigibilepay',
+        'password' => 'SET_ON_SERVER_ONLY',
         'socket' => '/var/lib/mysql/mysql.sock',
     ],
     'targets' => [
-        'vamcityc_vamcity_import_20261028' => 'vamcitydigibilepay',
-        'vamcityc_bluvamdb_import_20261028' => 'vamcitydigibilepay_bluvamdb',
-        'vamcityc_transferDb_import_20261028' => 'vamcitydigibilepay_transferdb',
+        'vamcityc_vamcity_import_20261028' => 'digibail_vamcitydigibilepay',
     ],
     'batch_size' => 500,
 ];
