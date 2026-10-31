@@ -23,7 +23,10 @@ const sets=[
     phone:"COALESCE(NULLIF(u.Mobile,''),NULLIF(u.Phone,''),NULLIF(u.PhoneNumber,''))",
     customerId:"CAST(u.CustomerId AS CHAR)",
     agentId:"u.AgentId",
-    created:"u.RegDate"
+    created:"u.RegDate",
+    mariaId:"CAST(u.Id AS UNSIGNED)",
+    mariaKey:"NULL",
+    identityJoin:"map.MariaDbUserId=CAST(u.Id AS UNSIGNED)"
   },
   {
     key:"mariadb.bluvamdb__AspNetUsers",
@@ -43,7 +46,10 @@ const sets=[
     phone:"u.PhoneNumber",
     customerId:"NULL",
     agentId:"NULL",
-    created:"NULL"
+    created:"NULL",
+    mariaId:"NULL",
+    mariaKey:"CAST(u.Id AS CHAR)",
+    identityJoin:"map.MariaDbUserKey=CAST(u.Id AS CHAR)"
   }
 ];
 
@@ -96,7 +102,7 @@ async function importSet(set){
     set.customerId+","+set.agentId+",CASE WHEN "+set.created+" IS NULL OR "+set.created+"<'1000-01-01 00:00:00' THEN CURRENT_TIMESTAMP(6) ELSE "+set.created+" END "+
     "FROM "+quote(set.users)+" u LEFT JOIN ("+aggregate+") rr ON rr.UserId=u.Id "+
     "WHERE NOT EXISTS(SELECT 1 FROM users target WHERE target.legacy_source=? AND target.legacy_id=CAST(u.Id AS CHAR)) "+
-    "AND NOT EXISTS(SELECT 1 FROM DigibailAppUserIdentity linked WHERE linked.LegacySource=? AND linked.MariaDbUserId=CAST(u.Id AS UNSIGNED))";
+    "AND NOT EXISTS(SELECT 1 FROM DigibailAppUserIdentity linked WHERE linked.LegacySource=? AND "+(set.mariaKey==="NULL"?"linked.MariaDbUserId=CAST(u.Id AS UNSIGNED)":"linked.MariaDbUserKey=CAST(u.Id AS CHAR)")+")";
   const [result]=await pool.query(sql,[set.key,set.key,set.key]);
   const linkedUsers=await scalar("SELECT COUNT(*) AS n FROM users WHERE legacy_source=?",[set.key]);
   const preMappedUsers=await scalar("SELECT COUNT(*) AS n FROM DigibailAppUserIdentity WHERE LegacySource=?",[set.key]);
@@ -109,10 +115,10 @@ async function importSet(set){
     "ON DUPLICATE KEY UPDATE display_name=VALUES(display_name)";
   await pool.query(rolesSql,[set.key+".AspNetRoles"]);
 
-  const mappingSql="INSERT INTO DigibailAppUserIdentity(AppUserId,LegacySource,MariaDbUserId,RoleCode) "+
-    "SELECT app.id,?,CAST(u.Id AS UNSIGNED),app.role FROM "+quote(set.users)+" u "+
+  const mappingSql="INSERT INTO DigibailAppUserIdentity(AppUserId,LegacySource,MariaDbUserId,MariaDbUserKey,RoleCode) "+
+    "SELECT app.id,?,"+set.mariaId+","+set.mariaKey+",app.role FROM "+quote(set.users)+" u "+
     "JOIN users app ON app.legacy_source=? AND app.legacy_id=CAST(u.Id AS CHAR) "+
-    "ON DUPLICATE KEY UPDATE RoleCode=VALUES(RoleCode)";
+    "ON DUPLICATE KEY UPDATE MariaDbUserId=VALUES(MariaDbUserId),MariaDbUserKey=VALUES(MariaDbUserKey),RoleCode=VALUES(RoleCode)";
   await pool.query(mappingSql,[set.key,set.key]);
   const targetMappings=await scalar("SELECT COUNT(*) AS n FROM DigibailAppUserIdentity WHERE LegacySource=?",[set.key]);
   if(targetMappings!==userCount)throw new Error("Identity-map mismatch "+set.key+" source="+userCount+" target="+targetMappings);
@@ -122,7 +128,7 @@ async function importSet(set){
     "FROM "+quote(set.users)+" u "+
     "JOIN "+quote(set.links)+" ur ON ur.UserId=u.Id "+
     "JOIN "+quote(set.roles)+" r ON r.Id=ur.RoleId "+
-    "JOIN DigibailAppUserIdentity map ON map.LegacySource=? AND map.MariaDbUserId=CAST(u.Id AS UNSIGNED) "+
+    "JOIN DigibailAppUserIdentity map ON map.LegacySource=? AND "+set.identityJoin+" "+
     "JOIN users app ON app.id=map.AppUserId "+
     "ON DUPLICATE KEY UPDATE role_code=VALUES(role_code)";
   await pool.query(assignmentSql,[set.key+".AspNetUserRoles",set.key]);
