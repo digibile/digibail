@@ -40,7 +40,7 @@ try {
   function rows(query,label,db=SOURCE_DB) { return jsonRows(sql("SET NOCOUNT ON; "+query,[],db),label); }
   function count(table,db=SOURCE_DB) {
     const raw=sql("SET NOCOUNT ON; SELECT COUNT_BIG(*) FROM dbo.["+table.replace(/]/g,"]]")+"]; ",[],db);
-    const numericLines=raw.split(/\\r?\\n/).map(x=>x.trim()).filter(x=>/^\\d+$/.test(x));
+    const numericLines=raw.split(/\r?\n/).map(x=>x.trim()).filter(x=>/^\d+$/.test(x));
     const n=Number(numericLines[numericLines.length-1]);
     if(!Number.isSafeInteger(n)) throw new Error("Could not count source table "+db+".dbo."+table);
     return n;
@@ -51,7 +51,7 @@ try {
   const exportedByDatabase=new Map();
   for(const db of SOURCE_DATABASES) {
     const onlineRaw=sql("SET NOCOUNT ON; SELECT COUNT(*) FROM sys.databases WHERE name=N'"+db.name+"' AND state_desc='ONLINE';",[],db.name);
-    const online=onlineRaw.split(/\\r?\\n/).map(x=>x.trim()).filter(x=>/^\\d+$/.test(x)).slice(-1)[0]||"";
+    const online=onlineRaw.split(/\r?\n/).map(x=>x.trim()).filter(x=>/^\d+$/.test(x)).slice(-1)[0]||"";
     if(online!=="1") throw new Error("Required restored source database is not ONLINE: "+db.name);
     const tableRows=rows(
       "SELECT s.name AS schemaName,t.name AS tableName FROM sys.tables t JOIN sys.schemas s ON s.schema_id=t.schema_id WHERE s.name=N'dbo' AND t.is_ms_shipped=0 ORDER BY t.name FOR JSON PATH, INCLUDE_NULL_VALUES;",
