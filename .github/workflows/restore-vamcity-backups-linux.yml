@@ -31,13 +31,19 @@ jobs:
             set -eu
             ROOT="/home/digibail/domains/digebail.ir"
             if sudo -n docker info >/dev/null 2>&1; then D='sudo -n docker'; elif docker info >/dev/null 2>&1; then D='docker'; else echo "BLOCKED: Docker unavailable"; exit 20; fi
-            SQLC="vamcity-stage-sql"
+            SQLC="public_html-db-1"
             SQLCMD="$($D exec "$SQLC" sh -lc 'command -v /opt/mssql-tools18/bin/sqlcmd || command -v /opt/mssql-tools/bin/sqlcmd || command -v sqlcmd' 2>/dev/null | head -n 1)"
             SA_PASS="$($D exec "$SQLC" printenv MSSQL_SA_PASSWORD 2>/dev/null || true)"
             [ -n "$SQLCMD" ] && [ -n "$SA_PASS" ] || { echo "BLOCKED: SQL Server access unavailable"; exit 21; }
             TMP="$(mktemp -d /tmp/vamcity-restore.XXXXXX)"
             trap 'rm -rf "$TMP"; unset SA_PASS' EXIT
             df -h "$ROOT" /tmp
+            $D exec "$SQLC" df -h /var/opt/mssql/data
+            echo "=== PROTECT EXISTING DATABASES ==="
+            for TARGET in vamcityc_vamcity_import_20261028 vamcityc_bluvamdb_import_20261028 vamcityc_transferDb_import_20261028; do
+              EXISTS="$($D exec "$SQLC" "$SQLCMD" -S localhost -U sa -P "$SA_PASS" -C -W -h -1 -Q "SET NOCOUNT ON; SELECT CASE WHEN DB_ID(N'$TARGET') IS NULL THEN 0 ELSE 1 END;" 2>/dev/null | tr -d '[:space:]')"
+              [ "$EXISTS" = "0" ] || { echo "BLOCKED: target database already exists; refusing WITH REPLACE: $TARGET"; exit 25; }
+            done
             for f in "$ROOT/vamcityc_bluvamdb_2026-10-29_19-19-45.zip" "$ROOT/vamcityc_transferDb_2026-10-29_19-19-51.zip" "$ROOT/vamcityc_vamcity_2026-10-29_19-20-04.zip"; do
               [ -s "$f" ] && unzip -t "$f" >/dev/null || { echo "BLOCKED: missing or invalid archive $f"; exit 22; }
               sha256sum "$f"
@@ -82,6 +88,7 @@ jobs:
               $D exec "$SQLC" "$SQLCMD" -S localhost -U sa -P "$SA_PASS" -C -b -Q "$RESTORE_SQL"
               $D exec "$SQLC" "$SQLCMD" -S localhost -U sa -P "$SA_PASS" -C -W -s '|' -Q "SET NOCOUNT ON; SELECT name,state_desc FROM sys.databases WHERE name=N'$TARGET_DB';"
               echo "RESTORE_VERIFIED=$TARGET_DB"
+              $D exec "$SQLC" rm -f "$BAK_CONTAINER"
             }
             restore_one "$ROOT/vamcityc_vamcity_2026-10-29_19-20-04.zip" "vamcityc_vamcity" "vamcityc_vamcity_import_20261028"
             restore_one "$ROOT/vamcityc_bluvamdb_2026-10-29_19-19-45.zip" "vamcityc_bluvamdb" "vamcityc_bluvamdb_import_20261028"
