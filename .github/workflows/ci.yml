@@ -61,7 +61,6 @@ jobs:
           test -s backend/core/panel.html
           test -s backend/db/002_mariadb_app.sql
           test -s Dockerfile.migration
-          test -s Dockerfile.verifier
           test -s scripts/migration-tools/migrate-postgres-app-data-to-mariadb.mjs
           test -s scripts/migration-tools/verify-single-mariadb-ready.mjs
       - name: Validate inline JavaScript in live pages
@@ -112,11 +111,9 @@ jobs:
           test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:1631/loan-requests.html)" = "302"
           test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:1631/customers.html)" = "302"
           test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:1631/agents.html)" = "302"
-      - name: Build isolated migration tools image
-        run: docker build -f Dockerfile.migration -t digibail-migration-tools:${{ github.sha }} .
-      - name: Build MariaDB-only cutover verifier image
-        run: docker build -f Dockerfile.verifier -t digibail-cutover-verifier:${{ github.sha }} .
-      - name: Build isolated one-time migration tools image
-        run: docker build -f Dockerfile.migration -t digibail-migration-tools:${{ github.sha }} .
+      - name: Build MariaDB-only cutover verifier image (default target, no pg driver)
+        run: docker build -f Dockerfile.migration -t digibail-cutover-verifier:${{ github.sha }} .
+      - name: Build isolated one-time source migration image
+        run: docker build -f Dockerfile.migration --target migration-tools -t digibail-migration-tools:${{ github.sha }} .
       - name: Build Docker image
         run: docker build -t digibail-app:${{ github.sha }} .
