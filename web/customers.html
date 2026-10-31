@@ -15,7 +15,7 @@ const n=v=>Number(v||0).toLocaleString('fa-IR'),e=v=>String(v??'').replace(/[&<>
 const pf=new Intl.DateTimeFormat('en-u-ca-persian',{year:'numeric',month:'numeric',day:'numeric',timeZone:'UTC'});
 const parts=d=>Object.fromEntries(pf.formatToParts(d).map(x=>[x.type,x.value]));
 function jalaliParts(d){const p=parts(d);return {y:+p.year,m:+p.month,d:+p.day}}
-function persianDate(v){if(!v)return'ثبت نشده';const d=new Date(v);if(Number.isNaN(+d))return'نامشخص';return new Intl.DateTimeFormat('fa-IR-u-ca-persian',{year:'numeric',month:'long',day:'numeric',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).format(d)}
+function persianDate(v){if(!v)return'ثبت نشده';const d=new Date(v);if(Number.isNaN(+d))return'نامشخص';return new Intl.DateTimeFormat('fa-IR-u-ca-persian',{timeZone:'Asia/Tehran',year:'numeric',month:'long',day:'numeric',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).format(d)}
 function toIso(d){return d.toISOString().slice(0,10)}
 function jalaliToIso(v){if(!v)return'';const m=v.match(/^(\d{4})\/(\d{1,2})\/(\d{1,2})$/);if(!m)return'';const [y,mo,day]=m.slice(1).map(Number),start=Date.UTC(y+621,0,1);for(let i=0;i<370;i++){const d=new Date(start+i*86400000),p=jalaliParts(d);if(p.y===y&&p.m===mo&&p.d===day)return toIso(d)}return''}
 function todayJ(){const p=jalaliParts(new Date());return p}
