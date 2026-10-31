@@ -892,23 +892,15 @@ export async function handleApi(req, res, url) {
         return json(res,200,{data:{...data,legacy_customers:data.overallTotal}});
       }
       if (req.method === "GET" && route === "/api/v1/admin/legacy-agents-page") {
-        const page=Math.max(1,Number.parseInt(url.searchParams.get("page")||"1",10)||1),pageSize=Math.min(100,Math.max(10,Number.parseInt(url.searchParams.get("pageSize")||"25",10)||25)),search=String(url.searchParams.get("q")||"").trim().slice(0,120),status=String(url.searchParams.get("status")||"").trim();
-        const roleExpr="COALESCE((SELECT role_code FROM user_role_overrides o WHERE o.user_id=u.id),u.role)='agent'";
-        const where=[],params=[];
-        if(search){params.push("%"+search+"%");where.push("(u.full_name ILIKE $"+params.length+" OR u.phone ILIKE $"+params.length+" OR u.email ILIKE $"+params.length+" OR u.username ILIKE $"+params.length+" OR u.legacy_id ILIKE $"+params.length+" OR u.id::text ILIKE $"+params.length+")");}
-        if(status==="active")where.push("u.is_active=TRUE");
-        if(status==="inactive")where.push("u.is_active=FALSE");
-        const filter=where.length?" AND "+where.join(" AND "):"";
-        const [count,overall,active,customers,rows]=await Promise.all([
-          pool.query("SELECT COUNT(*)::int AS total FROM users u WHERE "+roleExpr+filter,params),
-          pool.query("SELECT COUNT(*)::int AS total FROM users u WHERE "+roleExpr,[]),
-          pool.query("SELECT COUNT(*)::int AS total FROM users u WHERE "+roleExpr+" AND u.is_active=TRUE",[]),
-          pool.query("SELECT COUNT(*)::int AS total FROM users cu WHERE cu.legacy_agent_id IN (SELECT CASE WHEN u.legacy_id ~ '^[0-9]+$' THEN u.legacy_id::bigint END FROM users u WHERE "+roleExpr+")",[]),
-          pool.query("SELECT u.id,COALESCE(u.legacy_id,u.id::text) AS legacy_id,COALESCE(NULLIF(u.full_name,''),NULLIF(u.username,''),NULLIF(u.phone,''),'نام ثبت نشده') AS name,(SELECT NULLIF(payload->>'BusinessName','') FROM legacy_source_data WHERE source_table='dbo.AspNetUsers' AND payload->>'Id'=u.legacy_id LIMIT 1) AS business_name,u.phone AS mobile,(SELECT COALESCE(NULLIF(payload->>'CommissionPercent',''),NULLIF(payload->>'CommissionRate','')) FROM legacy_source_data WHERE source_table='dbo.AspNetUsers' AND payload->>'Id'=u.legacy_id LIMIT 1) AS commission_percent,(SELECT COALESCE(NULLIF(payload->>'LastLoginDate',''),NULLIF(payload->>'LastLoginDate2','')) FROM legacy_source_data WHERE source_table='dbo.AspNetUsers' AND payload->>'Id'=u.legacy_id LIMIT 1) AS last_login,u.is_active AS is_active,(SELECT COUNT(*)::int FROM users cu WHERE cu.legacy_agent_id=CASE WHEN u.legacy_id ~ '^[0-9]+$' THEN u.legacy_id::bigint END) AS customer_count,(SELECT COUNT(*)::int FROM users sa WHERE sa.legacy_agent_id=CASE WHEN u.legacy_id ~ '^[0-9]+$' THEN u.legacy_id::bigint END AND COALESCE((SELECT role_code FROM user_role_overrides o WHERE o.user_id=sa.id),sa.role)='agent') AS subagents_count,(SELECT COUNT(*)::int FROM loan_requests lr WHERE lr.payload->>'AgentId'=COALESCE(u.legacy_id,u.legacy_agent_id::text,'')) AS loan_requests_count,jsonb_build_object('id',u.id,'legacy_source',u.legacy_source,'legacy_id',u.legacy_id,'role',u.role,'is_active',u.is_active,'legacy_agent_id',u.legacy_agent_id) AS raw_payload FROM users u WHERE "+roleExpr+filter+" ORDER BY u.created_at DESC NULLS LAST,u.id DESC LIMIT $"+(params.length+1)+" OFFSET $"+(params.length+2),[...params,pageSize,(page-1)*pageSize])
-        ]);
-        const mapped=rows.rows.map(r=>({...r,commission_percent:r.commission_percent==null?null:Number(r.commission_percent),customer_count:Number(r.customer_count)||0,subagents_count:Number(r.subagents_count)||0,loan_requests_count:Number(r.loan_requests_count)||0}));
-        const customerTotal=mapped.reduce((n,r)=>n+(Number(r.customer_count)||0),0);
-        return json(res,200,{data:{rows:mapped,total:Number(count.rows[0]?.total)||0,overallTotal:Number(overall.rows[0]?.total)||0,activeTotal:Number(active.rows[0]?.total)||0,customerTotal:customerTotal||Number(customers.rows[0]?.total)||0,page,pageSize,sourceTable:"users",identitySource:"postgres.users"}});
+        const page=Math.max(1,Number.parseInt(url.searchParams.get("page")||"1",10)||1),pageSize=Math.min(100,Math.max(10,Number.parseInt(url.searchParams.get("pageSize")||"25",10)||25));
+        const search=String(url.searchParams.get("q")||""),status=String(url.searchParams.get("status")||"");
+        const data=await unifiedUserDirectory({page,pageSize,search,role:"agent",status});
+        const db=legacyMaria();
+        const [mariaStats]=await db.query("SELECT COUNT(DISTINCT u.Id) AS total,SUM(CASE WHEN COALESCE(u.IsActive,1)=1 THEN 1 ELSE 0 END) AS active FROM AspNetUsers u WHERE EXISTS(SELECT 1 FROM AspNetUserRoles ur JOIN AspNetRoles r ON r.Id=ur.RoleId WHERE ur.UserId=u.Id AND LOWER(REPLACE(REPLACE(REPLACE(r.Name,' ',''),'-',''),'_',''))='agent')");
+        const fresh=await postgresOnlyAccounts(db,10000),freshAgents=fresh.filter(r=>r.effective_role==="agent");
+        const overallTotal=(Number(mariaStats[0]?.total)||0)+freshAgents.length,activeTotal=(Number(mariaStats[0]?.active)||0)+freshAgents.filter(r=>r.is_active).length;
+        const rows=data.rows.map(r=>({...r,name:r.full_name||r.username,business_name:null,commission_percent:null,last_login:null,customer_count:null,subagents_count:null,loan_requests_count:null,raw_payload:{id:r.id,legacy_id:r.legacy_id,source:r.source||r.legacy_source,role:r.role,is_active:r.is_active,legacy_agent_id:r.legacy_agent_id}}));
+        return json(res,200,{data:{...data,rows,overallTotal,activeTotal,customerTotal:null,identitySource:"MariaDB.AspNetUsers roles + new PostgreSQL registrations"}});
       }
       if (req.method === "GET" && route === "/api/v1/admin/legacy-source-tables") {
         const db = legacyMaria(), database = process.env.MARIADB_DATABASE || "digibail_vamcitydigibilepay";
