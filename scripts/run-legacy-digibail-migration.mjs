@@ -62,7 +62,7 @@ if(appCreds.database&&appCreds.database.toLowerCase()!==DB_NAME.toLowerCase())th
 console.log("LEGACY_SQL_AUTH=verified");
 const composeApp=String(runDocker(["compose","ps","-q","app"],{maxBuffer:1024*1024})).trim();
 if(!composeApp)throw new Error("Production app container not found.");
-let markerFound=false;try{runDocker(["exec",composeApp,"grep","-q","DIGIBAIL_RELATIONAL_EXPORT_V2","/app/scripts/migrate-legacy-digibail.js"],{maxBuffer:1024*1024});markerFound=true;}catch{}if(!markerFound)throw new Error("Relational importer version marker not found in production app.");
+let markerFound=false;try{runDocker(["exec",composeApp,"grep","-q","DIGIBAIL_RELATIONAL_EXPORT_V3_WITH_SCHEMA","/app/scripts/migrate-legacy-digibail.js"],{maxBuffer:1024*1024});markerFound=true;}catch{}if(!markerFound)throw new Error("Relational importer version marker not found in production app.");
 const backupDir=path.join(ROOT,".migration-backups");
 fs.mkdirSync(backupDir,{recursive:true,mode:0o700});fs.chmodSync(backupDir,0o700);
 const backup=path.join(backupDir,"digibail-before-relational-"+new Date().toISOString().replace(/[-:TZ.]/g,"").slice(0,14)+".sql.gz");
