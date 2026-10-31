@@ -1,0 +1,171 @@
+name: Isolate VamCity data from Digibail PostgreSQL
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/inspect-isolate-vamcity-data.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  isolate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Verify backup and remove only VamCity-derived rows from Digibail
+        uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          command_timeout: 18m
+          script: |
+            set -eu
+            ROOT="/home/digibail/domains/digebail.ir"
+            BACKUP="/home/digibail/.local/backups/digibail_before_vamcity_isolation_20261031.dump"
+            cd "$ROOT"
+            if sudo -n docker info >/dev/null 2>&1; then D="sudo -n docker"; elif docker info >/dev/null 2>&1; then D="docker"; else echo "BLOCKED: Docker unavailable"; exit 20; fi
+            DB_ID="$($D compose ps -q db)"
+            echo "=== Verify full pre-cleanup database backup ==="
+            $D cp "$BACKUP" "$DB_ID:/tmp/digibail_before_cleanup.dump"
+            $D exec --user 0 "$DB_ID" sh -lc 'pg_restore --list /tmp/digibail_before_cleanup.dump >/dev/null && stat -c %s /tmp/digibail_before_cleanup.dump && sha256sum /tmp/digibail_before_cleanup.dump'
+            $D exec --user 0 "$DB_ID" rm -f /tmp/digibail_before_cleanup.dump
+            echo "PRE_CLEANUP_BACKUP_VERIFIED=1"
+            echo "=== Transactional isolation of VamCity-only records ==="
+            $D compose exec -T db sh -lc 'psql -X -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -P pager=off' <<'SQL'
+            BEGIN;
+            SET LOCAL lock_timeout='10s';
+            SET LOCAL statement_timeout='15min';
+
+            CREATE TEMP TABLE cleanup_vamcity_user_ids ON COMMIT PRESERVE ROWS AS
+            SELECT DISTINCT u.id
+            FROM users u
+            JOIN legacy_source_data s
+              ON left(s.source_table,9)='vamcityc_'
+             AND right(s.source_table,16)='.dbo.AspNetUsers'
+             AND s.payload->>'Id'=u.legacy_id
+            WHERE u.legacy_source='aspnetusers'
+              AND NOT EXISTS (
+                SELECT 1 FROM legacy_source_data d
+                WHERE d.source_table='dbo.AspNetUsers'
+                  AND d.payload->>'Id'=u.legacy_id
+              );
+
+            CREATE TEMP TABLE cleanup_vamcity_customer_ids ON COMMIT PRESERVE ROWS AS
+            SELECT DISTINCT lc.legacy_id
+            FROM legacy_customers lc
+            WHERE (
+              left(COALESCE(lc.legacy_source_table,''),9)='vamcityc_'
+              OR EXISTS (
+                SELECT 1 FROM legacy_source_data s
+                WHERE left(s.source_table,9)='vamcityc_'
+                  AND right(s.source_table,16)='.dbo.AspNetUsers'
+                  AND s.payload->>'Id'=lc.legacy_id::text
+              )
+              OR EXISTS (
+                SELECT 1 FROM legacy_source_data s
+                WHERE left(s.source_table,9)='vamcityc_'
+                  AND right(s.source_table,14)='.dbo.Customers'
+                  AND s.payload->>'Id'=lc.legacy_id::text
+              )
+            )
+            AND NOT EXISTS (
+              SELECT 1 FROM legacy_source_data d
+              WHERE d.source_table IN ('dbo.AspNetUsers','dbo.Customers')
+                AND d.payload->>'Id'=lc.legacy_id::text
+            );
+
+            CREATE TEMP TABLE cleanup_vamcity_request_ids ON COMMIT PRESERVE ROWS AS
+            SELECT id FROM loan_requests WHERE left(source_table,9)='vamcityc_';
+
+            CREATE TEMP TABLE cleanup_vamcity_product_ids ON COMMIT PRESERVE ROWS AS
+            SELECT id FROM loan_products WHERE left(COALESCE(legacy_source_table,''),9)='vamcityc_';
+
+            CREATE TEMP TABLE cleanup_counts(item text, rows bigint) ON COMMIT PRESERVE ROWS;
+            INSERT INTO cleanup_counts SELECT 'users',count(*) FROM cleanup_vamcity_user_ids;
+            INSERT INTO cleanup_counts SELECT 'legacy_customers',count(*) FROM cleanup_vamcity_customer_ids;
+            INSERT INTO cleanup_counts SELECT 'loan_requests',count(*) FROM cleanup_vamcity_request_ids;
+            INSERT INTO cleanup_counts SELECT 'loan_products',count(*) FROM cleanup_vamcity_product_ids;
+            INSERT INTO cleanup_counts SELECT 'loan_request_status_history',count(*) FROM loan_request_status_history WHERE left(COALESCE(legacy_source_table,''),9)='vamcityc_' OR loan_request_id IN (SELECT id FROM cleanup_vamcity_request_ids);
+            INSERT INTO cleanup_counts SELECT 'legacy_source_data',count(*) FROM legacy_source_data WHERE left(source_table,9)='vamcityc_';
+
+            DO $$
+            DECLARE n bigint;
+            BEGIN
+              SELECT rows INTO n FROM cleanup_counts WHERE item='users';
+              IF n <> 40086 THEN RAISE EXCEPTION 'Unexpected VamCity-only users count: %',n; END IF;
+              SELECT rows INTO n FROM cleanup_counts WHERE item='legacy_customers';
+              IF n <> 104497 THEN RAISE EXCEPTION 'Unexpected VamCity-only customers count: %',n; END IF;
+              SELECT rows INTO n FROM cleanup_counts WHERE item='loan_requests';
+              IF n <> 29487 THEN RAISE EXCEPTION 'Unexpected VamCity loan request count: %',n; END IF;
+              SELECT rows INTO n FROM cleanup_counts WHERE item='loan_products';
+              IF n <> 112 THEN RAISE EXCEPTION 'Unexpected VamCity loan product count: %',n; END IF;
+              SELECT rows INTO n FROM cleanup_counts WHERE item='loan_request_status_history';
+              IF n <> 74208 THEN RAISE EXCEPTION 'Unexpected VamCity status history count: %',n; END IF;
+              SELECT rows INTO n FROM cleanup_counts WHERE item='legacy_source_data';
+              IF n <> 817798 THEN RAISE EXCEPTION 'Unexpected VamCity source archive count: %',n; END IF;
+              IF EXISTS (SELECT 1 FROM user_role_assignments a JOIN cleanup_vamcity_user_ids u ON u.id=a.user_id)
+                THEN RAISE EXCEPTION 'VamCity-only users still own role assignments; refusing deletion'; END IF;
+              IF EXISTS (SELECT 1 FROM customer_documents d JOIN cleanup_vamcity_user_ids u ON u.id=d.user_id)
+                THEN RAISE EXCEPTION 'VamCity-only users still own documents; refusing deletion'; END IF;
+              IF EXISTS (SELECT 1 FROM customer_contracts c JOIN cleanup_vamcity_user_ids u ON u.id=c.user_id)
+                THEN RAISE EXCEPTION 'VamCity-only users still own contracts; refusing deletion'; END IF;
+              IF EXISTS (SELECT 1 FROM beta_inquiries b JOIN cleanup_vamcity_user_ids u ON u.id=b.user_id)
+                THEN RAISE EXCEPTION 'VamCity-only users still own inquiries; refusing deletion'; END IF;
+            END $$;
+
+            SELECT item,rows AS rows_to_remove FROM cleanup_counts ORDER BY item;
+
+            DELETE FROM loan_request_status_history
+            WHERE left(COALESCE(legacy_source_table,''),9)='vamcityc_'
+               OR loan_request_id IN (SELECT id FROM cleanup_vamcity_request_ids);
+
+            DELETE FROM loan_request_comments
+            WHERE loan_request_id IN (SELECT id FROM cleanup_vamcity_request_ids);
+
+            DELETE FROM loan_requests
+            WHERE id IN (SELECT id FROM cleanup_vamcity_request_ids);
+
+            DELETE FROM loan_products
+            WHERE id IN (SELECT id FROM cleanup_vamcity_product_ids);
+
+            DELETE FROM legacy_customers
+            WHERE legacy_id IN (SELECT legacy_id FROM cleanup_vamcity_customer_ids);
+
+            DELETE FROM users
+            WHERE id IN (SELECT id FROM cleanup_vamcity_user_ids);
+
+            DELETE FROM legacy_source_data
+            WHERE left(source_table,9)='vamcityc_';
+
+            COMMIT;
+
+            echo "=== Verify VamCity-only rows removed and original Digibail source retained ==="
+            SELECT 'remaining_vamcity_source_rows' AS item,count(*) AS rows FROM legacy_source_data WHERE left(source_table,9)='vamcityc_'
+            UNION ALL SELECT 'remaining_vamcity_loan_requests',count(*) FROM loan_requests WHERE left(source_table,9)='vamcityc_'
+            UNION ALL SELECT 'remaining_vamcity_status_history',count(*) FROM loan_request_status_history WHERE left(COALESCE(legacy_source_table,''),9)='vamcityc_'
+            UNION ALL SELECT 'remaining_vamcity_loan_products',count(*) FROM loan_products WHERE left(COALESCE(legacy_source_table,''),9)='vamcityc_'
+            UNION ALL SELECT 'remaining_vamcity_users',count(*) FROM users u WHERE u.legacy_source='aspnetusers' AND EXISTS (SELECT 1 FROM cleanup_vamcity_user_ids x WHERE x.id=u.id)
+            UNION ALL SELECT 'remaining_vamcity_customers',count(*) FROM legacy_customers lc JOIN cleanup_vamcity_customer_ids x ON x.legacy_id=lc.legacy_id
+            UNION ALL SELECT 'original_digibail_aspnetusers',count(*) FROM legacy_source_data WHERE source_table='dbo.AspNetUsers'
+            UNION ALL SELECT 'original_digibail_customers',count(*) FROM legacy_source_data WHERE source_table='dbo.Customers'
+            UNION ALL SELECT 'original_digibail_sms_patterns',count(*) FROM legacy_source_data WHERE source_table='dbo.SmsPatterns'
+            UNION ALL SELECT 'original_digibail_roles',count(*) FROM legacy_source_data WHERE source_table='AspNetRoles'
+            UNION ALL SELECT 'original_digibail_user_roles',count(*) FROM legacy_source_data WHERE source_table='AspNetUserRoles'
+            UNION ALL SELECT 'original_digibail_user_claims',count(*) FROM legacy_source_data WHERE source_table='AspNetUserClaims'
+            UNION ALL SELECT 'original_digibail_purchase_plans',count(*) FROM legacy_source_data WHERE source_table='CustomerPurchasePlan'
+            UNION ALL SELECT 'original_digibail_loan_statuses',count(*) FROM legacy_source_data WHERE source_table='LoanRequestStatuses'
+            UNION ALL SELECT 'legacy_digibail_relational_tables',count(*) FROM information_schema.tables WHERE table_schema='legacy_digibail' AND table_type='BASE TABLE';
+
+            SQL
+            echo "=== Refresh planner statistics after isolation ==="
+            $D compose exec -T db sh -lc 'psql -X -U "$POSTGRES_USER" -d "$POSTGRES_DB" -P pager=off -c "VACUUM (ANALYZE) legacy_source_data"'
+            $D compose exec -T db sh -lc 'psql -X -U "$POSTGRES_USER" -d "$POSTGRES_DB" -P pager=off -c "VACUUM (ANALYZE) legacy_customers"'
+            $D compose exec -T db sh -lc 'psql -X -U "$POSTGRES_USER" -d "$POSTGRES_DB" -P pager=off -c "VACUUM (ANALYZE) users"'
+            $D compose exec -T db sh -lc 'psql -X -U "$POSTGRES_USER" -d "$POSTGRES_DB" -P pager=off -c "VACUUM (ANALYZE) loan_requests"'
+            $D compose exec -T db sh -lc 'psql -X -U "$POSTGRES_USER" -d "$POSTGRES_DB" -P pager=off -c "VACUUM (ANALYZE) loan_request_status_history"'
+            $D compose exec -T db sh -lc 'psql -X -U "$POSTGRES_USER" -d "$POSTGRES_DB" -P pager=off -c "VACUUM (ANALYZE) loan_products"'
+            echo "VAMCITY_DATA_ISOLATION=COMPLETE"
