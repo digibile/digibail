@@ -141,6 +141,13 @@ function installSchema(mysqli $db,string $path,string $source,bool $skipExisting
         $sql=preg_replace_callback('/\\bCREATE\\s+(UNIQUE\\s+)?INDEX\\s+`([^`]+)`\\s+ON\\s+`([^`]+)`/i',
             static fn($m)=>'CREATE '.($m[1]??'').'INDEX IF NOT EXISTS `'.$rename($m[2]).'` ON `'.$rename($m[3]).'`',$sql);
     }
+    if($source==='vamcityc_transferDb_import_20261028'){
+        // MariaDB requires foreign-key constraint names to be unique across the entire database.
+        // The main and BlueVam databases already use the unprefixed ASP.NET constraint names.
+        $rename=static fn($name)=>shortName('OnlineMoneyTransfer__'.$name);
+        $sql=preg_replace_callback('/\\b(ADD\\s+CONSTRAINT\\s+)`([^`]+)`/i',
+            static fn($m)=>$m[1].'`'.$rename($m[2]).'`',$sql);
+    }
     foreach(explode(';',$sql) as $statement) {
         $statement=trim($statement);
         if($statement==='') continue;
