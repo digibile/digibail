@@ -48,7 +48,7 @@ jobs:
               fi
             done
             echo "=== TEST DIRECTADMIN MYSQL CREDENTIALS THROUGH HOST SOCKET ==="
-            if [ -s /var/lib/mysql/mysql.sock ]; then
+            if [ -S /var/lib/mysql/mysql.sock ]; then
               $D run --rm --network host -v /var/lib/mysql/mysql.sock:/var/lib/mysql/mysql.sock -v /usr/local/directadmin/conf/mysql.conf:/tmp/da-mysql.conf:ro mariadb:10.6 sh -lc '
                 getv(){ sed -n "s/^[[:space:]]*$1[[:space:]]*=[[:space:]]*//p" /tmp/da-mysql.conf | head -n 1; }
                 U="$(getv user)"; P="$(getv passwd)"; H="$(getv host)"; PORT="$(getv port)"; S="$(getv socket)"
