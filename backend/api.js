@@ -32,7 +32,7 @@ const pool = createMariaCompatPool(mariadbPool);
 function legacyMaria() { return mariadbPool; }
 async function applicationOnlyAccounts(limit=100000) {
   const q=await pool.query(
-    "SELECT u.id,u.username,u.phone,u.full_name,u.email,u.national_code,u.role,u.is_active,u.created_at,COALESCE((SELECT role_code FROM user_role_overrides o WHERE o.user_id=u.id),u.role) AS effective_role FROM users u WHERE u.legacy_source IS NULL ORDER BY u.created_at DESC,u.id DESC LIMIT $1",
+    "SELECT u.id,u.username,u.phone,u.full_name,u.email,u.national_code,u.role,u.is_active,u.created_at,COALESCE((SELECT role_code FROM user_role_overrides o WHERE o.user_id=u.id),u.role) AS effective_role FROM users u WHERE u.legacy_source IS NULL AND NOT EXISTS(SELECT 1 FROM DigibailAppUserIdentity m WHERE m.AppUserId=u.id) ORDER BY u.created_at DESC,u.id DESC LIMIT $1",
     [limit]
   );
   return q.rows.map(r=>({
