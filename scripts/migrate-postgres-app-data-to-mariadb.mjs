@@ -48,6 +48,7 @@ const publicTables = [
 function qi(value) {
   return "\`" + String(value).replace(/\`/g, "\`\`") + "\`";
 }
+function qpg(value) { return '"' + String(value).replace(/"/g, '""') + '"'; }
 function jsonSafe(value) {
   return JSON.stringify(value, (_key, item) => {
     if (Buffer.isBuffer(item)) return { __digibail_binary_base64: item.toString("base64") };
@@ -280,7 +281,7 @@ async function main() {
         [table]
       );
       if (!targetExists[0].length) throw new Error("MariaDB application schema is missing table " + table);
-      const count = Number((await pg.query("SELECT COUNT(*)::bigint AS n FROM public." + qi(table))).rows[0].n);
+      const count = Number((await pg.query("SELECT COUNT(*)::bigint AS n FROM public." + qpg(table))).rows[0].n);
       console.log("PUBLIC_TABLE_PLAN=" + table + " rows=" + count);
       if (APPLY) publicResults.push(await copyPublicTable(pg, mysql, table));
     }
@@ -290,7 +291,7 @@ async function main() {
     )).rows.map(x => x.table_name);
     console.log("LEGACY_RELATIONAL_TABLES=" + legacyTables.length);
     for (const table of legacyTables) {
-      const count = Number((await pg.query("SELECT COUNT(*)::bigint AS n FROM legacy_digibail." + qi(table))).rows[0].n);
+      const count = Number((await pg.query("SELECT COUNT(*)::bigint AS n FROM legacy_digibail." + qpg(table))).rows[0].n);
       console.log("LEGACY_RELATIONAL_PLAN=" + table + " rows=" + count);
       if (APPLY) await copyLegacyRelationalTable(pg, mysql, table);
     }
