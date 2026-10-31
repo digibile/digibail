@@ -70,7 +70,16 @@ jobs:
                 $DOCKER exec -e SQLCMDPASSWORD="$SA_PASS" "$SQLC" "$SQLCMD" -S localhost -U sa -C -b -W -d Digibail -Q "$SQL" | tr -d '\r' | head -250
                 echo "=== SQL Server table columns (for migration mapping) ==="
                 SQL="SET NOCOUNT ON; SELECT t.name AS table_name, c.name AS column_name, TYPE_NAME(c.user_type_id) AS data_type, c.max_length, c.is_nullable FROM sys.tables t JOIN sys.columns c ON c.object_id=t.object_id ORDER BY t.name,c.column_id;"
-                $DOCKER exec -e SQLCMDPASSWORD="$SA_PASS" "$SQLC" "$SQLCMD" -S localhost -U sa -C -b -W -d Digibail -Q "$SQL" | tr -d '\r' | head -350
+                $DOCKER exec -e SQLCMDPASSWORD="$SA_PASS" "$SQLC" "$SQLCMD" -S localhost -U sa -C -b -W -w 65535 -d Digibail -Q "$SQL" | tr -d '\r'
+                echo "=== complete foreign-key relationships ==="
+                SQL="SET NOCOUNT ON; SELECT OBJECT_SCHEMA_NAME(fk.parent_object_id)+'.'+OBJECT_NAME(fk.parent_object_id) AS source_table, pc.name AS source_column, OBJECT_SCHEMA_NAME(fk.referenced_object_id)+'.'+OBJECT_NAME(fk.referenced_object_id) AS target_table, rc.name AS target_column, fk.name AS constraint_name FROM sys.foreign_keys fk JOIN sys.foreign_key_columns fkc ON fkc.constraint_object_id=fk.object_id JOIN sys.columns pc ON pc.object_id=fkc.parent_object_id AND pc.column_id=fkc.parent_column_id JOIN sys.columns rc ON rc.object_id=fkc.referenced_object_id AND rc.column_id=fkc.referenced_column_id ORDER BY source_table, constraint_name, fkc.constraint_column_id;"
+                $DOCKER exec -e SQLCMDPASSWORD="$SA_PASS" "$SQLC" "$SQLCMD" -S localhost -U sa -C -b -W -w 65535 -d Digibail -Q "$SQL" | tr -d '\r'
+                echo "=== all legacy roles (names only) ==="
+                SQL="SET NOCOUNT ON; SELECT Id, Name, NormalizedName FROM dbo.AspNetRoles ORDER BY Id;"
+                $DOCKER exec -e SQLCMDPASSWORD="$SA_PASS" "$SQLC" "$SQLCMD" -S localhost -U sa -C -b -W -w 65535 -d Digibail -Q "$SQL" | tr -d '\r'
+                echo "=== complete table and column totals ==="
+                SQL="SET NOCOUNT ON; SELECT COUNT(*) AS table_count FROM sys.tables WHERE is_ms_shipped=0; SELECT COUNT(*) AS column_count FROM sys.columns c JOIN sys.tables t ON t.object_id=c.object_id WHERE t.is_ms_shipped=0; SELECT COUNT(*) AS foreign_key_count FROM sys.foreign_keys;"
+                $DOCKER exec -e SQLCMDPASSWORD="$SA_PASS" "$SQLC" "$SQLCMD" -S localhost -U sa -C -b -W -d Digibail -Q "$SQL" | tr -d '\r'
                 echo "=== focused identity, SMS, and settings columns ==="
                 SQL="SET NOCOUNT ON; SELECT t.name AS table_name, c.name AS column_name, TYPE_NAME(c.user_type_id) AS data_type FROM sys.tables t JOIN sys.columns c ON c.object_id=t.object_id WHERE t.name IN ('AspNetUsers','AspNetRoles','AspNetUserRoles','Customers','SmsPatterns','AppSms','AppSettings','ThirdPartySettings') ORDER BY t.name,c.column_id;"
                 $DOCKER exec -e SQLCMDPASSWORD="$SA_PASS" "$SQLC" "$SQLCMD" -S localhost -U sa -C -b -W -d Digibail -Q "$SQL" | tr -d '\r' | head -260
