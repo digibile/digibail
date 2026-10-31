@@ -100,7 +100,12 @@ export async function syncUserToMariaDB(pool,user) {
       );
       selected={Id:createdRole.insertId,Name:role};
     }
-    await conn.query("DELETE FROM AspNetUserRoles WHERE UserId=?",[mariaId]);
+    await conn.query(
+      "DELETE ur FROM AspNetUserRoles ur JOIN AspNetRoles r ON r.Id=ur.RoleId "+
+      "WHERE ur.UserId=? AND LOWER(REPLACE(REPLACE(REPLACE(r.Name,' ',''),'-',''),'_','')) "+
+      "IN ('superadmin','admin','administrator','agent','representative','marketer','customermarketer','member','customer','user')",
+      [mariaId]
+    );
     await conn.query("INSERT INTO AspNetUserRoles(UserId,RoleId) VALUES(?,?)",[mariaId,selected.Id]);
     await conn.query(
       "INSERT INTO DigibailAppUserIdentity(AppUserId,LegacySource,MariaDbUserId,RoleCode) VALUES(?,'mariadb.AspNetUsers',?,?) ON DUPLICATE KEY UPDATE MariaDbUserId=VALUES(MariaDbUserId),RoleCode=VALUES(RoleCode)",
