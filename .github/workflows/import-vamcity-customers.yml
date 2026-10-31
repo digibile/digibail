@@ -1,5 +1,6 @@
 name: Import VamCity customer directory
 # Customer-only migration; main VamCity database is the audited source.
+# run legacy import after the unified identity directory is deployed; preserve a full PostgreSQL backup first.
 on:
   workflow_dispatch:
   workflow_run:
