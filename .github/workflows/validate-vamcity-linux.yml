@@ -58,10 +58,10 @@ jobs:
           for (const file of sourceFiles) {
             const ddl = fs.readFileSync(file, 'utf8');
             const invalid = [
-              /DEFAULT\\s*(?:\\r?\\n)\\s*`__raw_/i,
-              /ENGINE=InnoDB DEFAULT\\s*(?:\\r?\\n)\\s*`__raw_/i,
-              /\\bVA\\s*(?:\\r?\\n)\\s*`__raw_/i,
-              /COMMENT[^\\n]*temporal value[^\\n]*CHARSET=/i
+              /DEFAULT\s*(?:\r?\n)\s*`__raw_/i,
+              /ENGINE=InnoDB DEFAULT\s*(?:\r?\n)\s*`__raw_/i,
+              /\bVA\s*(?:\r?\n)\s*`__raw_/i,
+              /COMMENT[^\n]*temporal value[^\n]*CHARSET=/i
             ];
             if (invalid.some(pattern => pattern.test(ddl))) {
               throw new Error('Malformed generated SQL detected in ' + file);
