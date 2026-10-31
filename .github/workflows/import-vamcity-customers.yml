@@ -3,7 +3,6 @@ name: Import VamCity customer directory
 # run legacy import after the unified identity directory is deployed; preserve a full PostgreSQL backup first.
 on:
   workflow_dispatch:
-      - .github/workflows/import-vamcity-customers.yml
 
 permissions:
   contents: read
