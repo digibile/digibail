@@ -20,8 +20,14 @@ services:
     env_file: .env
     environment:
       DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL in deployment .env}
+      MARIADB_DATABASE: ${MARIADB_DATABASE:-digibail_vamcitydigibilepay}
+      MARIADB_USER: ${MARIADB_USER:-digibail_vamcitydigibilepay}
+      MARIADB_PASSWORD: ${MARIADB_PASSWORD:-}
+      MARIADB_SOCKET: /var/run/mysqld/mysqld.sock
       PORT: 1631
       HOST: 0.0.0.0
+    volumes:
+      - /var/lib/mysql/mysql.sock:/var/run/mysqld/mysqld.sock
     ports:
       - "1631:1631"
     depends_on:
