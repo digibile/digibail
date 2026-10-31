@@ -67,12 +67,15 @@ CREATE TABLE IF NOT EXISTS user_role_overrides (
 CREATE TABLE IF NOT EXISTS DigibailAppUserIdentity (
  AppUserId BIGINT NOT NULL PRIMARY KEY,
  LegacySource VARCHAR(80) NOT NULL,
- MariaDbUserId BIGINT NOT NULL,
+ MariaDbUserId BIGINT NULL,
+ MariaDbUserKey VARCHAR(160) NULL,
  RoleCode VARCHAR(40) NOT NULL,
  CreatedAt DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
  UpdatedAt DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
- UNIQUE KEY uq_DigibailAppUserIdentity_SourceUser(LegacySource,MariaDbUserId),
- KEY ix_DigibailAppUserIdentity_MariaUser(MariaDbUserId)
+ UNIQUE KEY uq_DigibailAppUserIdentity_SourceNumeric(LegacySource,MariaDbUserId),
+ UNIQUE KEY uq_DigibailAppUserIdentity_SourceGuid(LegacySource,MariaDbUserKey),
+ KEY ix_DigibailAppUserIdentity_MariaUser(MariaDbUserId),
+ KEY ix_DigibailAppUserIdentity_MariaUserKey(LegacySource,MariaDbUserKey)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS sms_provider_settings (
