@@ -1,0 +1,53 @@
+name: Read-only VamCity customer inventory and mapping audit
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/inspect-vamcity-customer-mapping.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Inspect source customer entities and target schema without reading personal values
+        uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          command_timeout: 9m
+          script: |
+            set -eu
+            ROOT="/home/digibail/domains/digebail.ir"
+            cd "$ROOT"
+            if sudo -n docker info >/dev/null 2>&1; then D="sudo -n docker"; elif docker info >/dev/null 2>&1; then D="docker"; else echo "DOCKER_UNAVAILABLE"; exit 20; fi
+            SQLC="public_html-db-1"
+            SQLCMD="$($D exec "$SQLC" sh -lc 'command -v /opt/mssql-tools18/bin/sqlcmd || command -v /opt/mssql-tools/bin/sqlcmd || command -v sqlcmd' 2>/dev/null | head -n 1)"
+            PASS="$($D exec "$SQLC" printenv MSSQL_SA_PASSWORD 2>/dev/null || true)"
+            [ -n "$SQLCMD" ] && [ -n "$PASS" ] || { echo "SQL_SERVER_ACCESS_UNAVAILABLE"; exit 21; }
+            echo "=== SOURCE CUSTOMER-LIKE TABLE ROW COUNTS ==="
+            for DB in vamcityc_vamcity_import_20261028 vamcityc_bluvamdb_import_20261028 vamcityc_transferDb_import_20261028; do
+              echo "SOURCE_DATABASE=$DB"
+              $D exec "$SQLC" "$SQLCMD" -S localhost -U sa -P "$PASS" -C -b -W -s '|' -d "$DB" -Q "SET NOCOUNT ON; SELECT s.name AS schema_name,t.name AS table_name,SUM(p.rows) AS row_count FROM sys.tables t JOIN sys.schemas s ON s.schema_id=t.schema_id JOIN sys.partitions p ON p.object_id=t.object_id AND p.index_id IN (0,1) WHERE t.name LIKE '%Customer%' OR t.name LIKE '%User%' OR t.name LIKE '%Member%' OR t.name LIKE '%Agent%' OR t.name LIKE '%Representative%' GROUP BY s.name,t.name ORDER BY s.name,t.name;" 2>&1
+            done
+            echo "=== SOURCE CUSTOMER AND USER COLUMN METADATA (NO VALUES) ==="
+            for DB in vamcityc_vamcity_import_20261028 vamcityc_bluvamdb_import_20261028 vamcityc_transferDb_import_20261028; do
+              echo "SOURCE_DATABASE=$DB"
+              $D exec "$SQLC" "$SQLCMD" -S localhost -U sa -P "$PASS" -C -b -W -s '|' -d "$DB" -Q "SET NOCOUNT ON; SELECT TABLE_SCHEMA,TABLE_NAME,ORDINAL_POSITION,COLUMN_NAME,DATA_TYPE,IS_NULLABLE,COALESCE(CONVERT(varchar(100),CHARACTER_MAXIMUM_LENGTH),''),COALESCE(COLUMN_DEFAULT,'') FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME LIKE '%Customer%' OR TABLE_NAME IN ('AspNetUsers','AspNetUserRoles','AgentLoans','AgentMetaData','SubAgentTransactions','Agent') ORDER BY TABLE_SCHEMA,TABLE_NAME,ORDINAL_POSITION;" 2>&1
+            done
+            echo "=== SOURCE FOREIGN KEY RELATIONSHIPS FOR CUSTOMER/USER TABLES ==="
+            for DB in vamcityc_vamcity_import_20261028 vamcityc_bluvamdb_import_20261028 vamcityc_transferDb_import_20261028; do
+              echo "SOURCE_DATABASE=$DB"
+              $D exec "$SQLC" "$SQLCMD" -S localhost -U sa -P "$PASS" -C -b -W -s '|' -d "$DB" -Q "SET NOCOUNT ON; SELECT OBJECT_SCHEMA_NAME(f.parent_object_id)+'.'+OBJECT_NAME(f.parent_object_id) AS child_table,COL_NAME(fc.parent_object_id,fc.parent_column_id) AS child_column,OBJECT_SCHEMA_NAME(f.referenced_object_id)+'.'+OBJECT_NAME(f.referenced_object_id) AS parent_table,COL_NAME(fc.referenced_object_id,fc.referenced_column_id) AS parent_column FROM sys.foreign_keys f JOIN sys.foreign_key_columns fc ON fc.constraint_object_id=f.object_id WHERE OBJECT_NAME(f.parent_object_id) LIKE '%Customer%' OR OBJECT_NAME(f.referenced_object_id) LIKE '%Customer%' OR OBJECT_NAME(f.parent_object_id) LIKE '%User%' OR OBJECT_NAME(f.referenced_object_id) LIKE '%User%' ORDER BY child_table,child_column;" 2>&1
+            done
+            echo "=== TARGET POSTGRES CUSTOMER TABLES AND COLUMNS ==="
+            $D compose exec -T db sh -lc 'psql -X -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -P pager=off -c "SELECT table_schema,table_name,column_name,data_type,is_nullable FROM information_schema.columns WHERE table_schema NOT IN (chr(112)||chr(103)||chr(95)||chr(99)||chr(97)||chr(116)||chr(97)||chr(108)||chr(111)||chr(103),chr(105)||chr(110)||chr(102)||chr(111)||chr(114)||chr(109)||chr(97)||chr(116)||chr(105)||chr(111)||chr(110)||chr(95)||chr(115)||chr(99)||chr(104)||chr(101)||chr(109)||chr(97)) AND (table_name ILIKE chr(37)||chr(99)||chr(117)||chr(115)||chr(116)||chr(111)||chr(109)||chr(101)||chr(114)||chr(37) OR table_name IN (chr(117)||chr(115)||chr(101)||chr(114)||chr(115),chr(108)||chr(101)||chr(103)||chr(97)||chr(99)||chr(121)||chr(95)||chr(115)||chr(111)||chr(117)||chr(114)||chr(99)||chr(101)||chr(95)||chr(100)||chr(97)||chr(116)||chr(97))) ORDER BY table_schema,table_name,ordinal_position"'
+            echo "=== TARGET POSTGRES CUSTOMER-RELATED FOREIGN KEYS ==="
+            $D compose exec -T db sh -lc 'psql -X -U "$POSTGRES_USER" -d "$POSTGRES_DB" -P pager=off -c "SELECT tc.table_schema,tc.table_name,kcu.column_name,ccu.table_name AS referenced_table,ccu.column_name AS referenced_column,rc.delete_rule FROM information_schema.table_constraints tc JOIN information_schema.key_column_usage kcu ON tc.constraint_name=kcu.constraint_name AND tc.constraint_schema=kcu.constraint_schema JOIN information_schema.constraint_column_usage ccu ON ccu.constraint_name=tc.constraint_name AND ccu.constraint_schema=tc.constraint_schema JOIN information_schema.referential_constraints rc ON rc.constraint_name=tc.constraint_name AND rc.constraint_schema=tc.constraint_schema WHERE tc.constraint_type=chr(70)||chr(79)||chr(82)||chr(69)||chr(73)||chr(71)||chr(78)||chr(32)||chr(75)||chr(69)||chr(89) AND (tc.table_name ILIKE chr(37)||chr(99)||chr(117)||chr(115)||chr(116)||chr(111)||chr(109)||chr(101)||chr(114)||chr(37) OR ccu.table_name IN (chr(117)||chr(115)||chr(101)||chr(114)||chr(115),chr(108)||chr(101)||chr(103)||chr(97)||chr(99)||chr(121)||chr(95)||chr(99)||chr(117)||chr(115)||chr(116)||chr(111)||chr(109)||chr(101)||chr(114)||chr(115))) ORDER BY tc.table_schema,tc.table_name"'
+            echo "CUSTOMER_SCHEMA_AUDIT_COMPLETE=1"
