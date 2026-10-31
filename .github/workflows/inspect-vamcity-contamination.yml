@@ -81,7 +81,7 @@ jobs:
             UNION ALL SELECT 'vamcity_users_not_in_original_digibail',count(*) FROM v_user_rows u WHERE NOT EXISTS (SELECT 1 FROM legacy_source_data d WHERE d.source_table='dbo.AspNetUsers' AND d.payload->>'Id'=u.legacy_id)
             UNION ALL SELECT 'vamcity_customers_overlapping_original_digibail_ids',count(*) FROM v_customer_rows c WHERE EXISTS (SELECT 1 FROM legacy_source_data d WHERE d.source_table='dbo.Customers' AND d.payload->>'Id'=c.legacy_id::text)
             UNION ALL SELECT 'vamcity_sms_overlapping_original_digibail_ids',count(*) FROM v_sms_rows s WHERE EXISTS (SELECT 1 FROM legacy_source_data d WHERE d.source_table='dbo.SmsPatterns' AND d.legacy_id=s.legacy_id)
-;
+            ;
             SQL
             echo "=== Foreign keys referencing cleanup candidate tables ==="
             $D compose exec -T db sh -lc 'psql -X -U "$POSTGRES_USER" -d "$POSTGRES_DB" -P pager=off' <<'SQL'
