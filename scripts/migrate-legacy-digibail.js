@@ -3,6 +3,8 @@ import crypto from "node:crypto";
 import bcrypt from "bcryptjs";
 import { Pool } from "pg";
 
+// DIGIBAIL_RELATIONAL_EXPORT_V2
+
 const input = JSON.parse(await readFile(process.argv[2] || "/tmp/legacy-migration.json", "utf8"));
 const pool = new Pool({ connectionString: process.env.DATABASE_URL, max: 3, connectionTimeoutMillis: 10000 });
 const TARGET_SCHEMA = "legacy_digibail";
@@ -96,7 +98,7 @@ try{
   if(!u.legacyId)continue;
   const username=String(u.username||u.email||("legacy_"+u.legacyId)).trim().slice(0,80),fullName=String(u.fullName||"").trim().replace(/\s+/g," ").slice(0,160)||username;
   const randomHash=await bcrypt.hash(crypto.randomBytes(48).toString("hex"),12);
-  const r=await pool.query("INSERT INTO users(username,phone,full_name,email,password_hash,role,is_active,created_at,legacy_source,legacy_id,password_reset_required) VALUES($1,$2,$3,$4,$5,$6,$7,COALESCE($8::timestamptz,NOW()),'aspnetusers',$9,TRUE) ON CONFLICT(legacy_source,legacy_id) WHERE legacy_source IS NOT NULL AND legacy_id IS NOT NULL DO UPDATE SET full_name=EXCLUDED.full_name,email=EXCLUDED.email,role=EXCLUDED.role,is_active=EXCLUDED.is_active,password_reset_required=TRUE,updated_at=NOW() RETURNING id",[username,u.phone||null,fullName,u.email||null,randomHash,primaryRole(u.roles),u.isActive!==false&&u.isActive!==0,dateOrNull(u.createdAt),String(u.legacyId)]);
+  const r=await pool.query("INSERT INTO users(username,phone,full_name,email,password_hash,role,is_active,created_at,legacy_source,legacy_id,password_reset_required) VALUES($1,$2,$3,$4,$5,$6,$7,COALESCE($8::timestamptz,NOW()),'aspnetusers',$9,TRUE) ON CONFLICT(legacy_source,legacy_id) WHERE legacy_source IS NOT NULL AND legacy_id IS NOT NULL DO UPDATE SET full_name=EXCLUDED.full_name,email=EXCLUDED.email,password_hash=EXCLUDED.password_hash,role=EXCLUDED.role,is_active=EXCLUDED.is_active,password_reset_required=TRUE,updated_at=NOW() RETURNING id",[username,u.phone||null,fullName,u.email||null,randomHash,primaryRole(u.roles),u.isActive!==false&&u.isActive!==0,dateOrNull(u.createdAt),String(u.legacyId)]);
   usersImported+=r.rowCount;
  }
  for(const p of input.identityUserRoles||[]){
@@ -113,6 +115,7 @@ try{
   if(!x.legacyId||!String(x.title||"").trim()||typeof x.pattern!=="string")continue;
   const r=await pool.query("INSERT INTO sms_templates(legacy_id,title,body,is_system,status,category,provider_panel,is_pattern_base,pattern_base_code,reject_reason,legacy_customer_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) ON CONFLICT(legacy_id) DO UPDATE SET title=EXCLUDED.title,body=EXCLUDED.body,is_system=EXCLUDED.is_system,status=EXCLUDED.status,category=EXCLUDED.category,provider_panel=EXCLUDED.provider_panel,is_pattern_base=EXCLUDED.is_pattern_base,pattern_base_code=EXCLUDED.pattern_base_code,reject_reason=EXCLUDED.reject_reason,legacy_customer_id=EXCLUDED.legacy_customer_id,updated_at=NOW()",[x.legacyId,String(x.title).slice(0,200),x.pattern,Boolean(x.isSystem),Number(x.status)||0,Number(x.category)||0,Number(x.providerPanel)||0,Boolean(x.isPatternBase),x.patternBaseCode||null,x.rejectReason||null,x.legacyCustomerId||null]);smsImported+=r.rowCount;
  }
+ await pool.query("UPDATE legacy_source_data SET payload=payload-'PasswordHash'-'passwordHash' WHERE source_table='dbo.AspNetUsers'");
  for(const m of manifest)await pool.query("INSERT INTO "+qid(TARGET_SCHEMA)+".\"_import_manifest\"(source_schema,source_table,source_rows,imported_rows) VALUES($1,$2,$3,$4) ON CONFLICT(source_schema,source_table) DO UPDATE SET source_rows=EXCLUDED.source_rows,imported_rows=EXCLUDED.imported_rows,imported_at=NOW()",[m.schemaName,m.tableName,m.sourceRows,m.importedRows]);
  for(const m of manifest){const r=await pool.query("SELECT COUNT(*)::bigint AS n FROM "+qtable(m.schemaName,m.tableName));if(Number(r.rows[0].n)!==m.sourceRows)throw new Error("Row count mismatch "+m.schemaName+"."+m.tableName);}
  const fkCount=await pool.query("SELECT COUNT(*)::int AS n FROM pg_constraint c JOIN pg_namespace n ON n.oid=c.connamespace WHERE n.nspname=$1 AND c.contype='f'",[TARGET_SCHEMA]);
