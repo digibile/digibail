@@ -15,6 +15,18 @@ function legacyMaria() {
   if (!legacyMariaPool) legacyMariaPool = createPool({ socketPath, user, password, database, waitForConnections: true, connectionLimit: 4, queueLimit: 20, charset: "utf8mb4", connectTimeout: 8000 });
   return legacyMariaPool;
 }
+async function postgresOnlyAccounts(mariaDb, limit=10000) {
+  const q=await pool.query("SELECT u.id,u.username,u.phone,u.full_name,u.email,u.national_code,u.role,u.is_active,u.created_at,COALESCE((SELECT role_code FROM user_role_overrides o WHERE o.user_id=u.id),u.role) AS effective_role FROM users u WHERE u.legacy_source IS NULL ORDER BY u.created_at DESC,u.id DESC LIMIT $1",[limit]);
+  const phones=[...new Set(q.rows.map(r=>String(r.phone||"").trim()).filter(Boolean))];
+  let existing=[];
+  if(phones.length){
+    const [found]=await mariaDb.query("SELECT Mobile AS mobile,Phone AS phone,PhoneNumber AS phone_number FROM AspNetUsers WHERE Mobile IN (?) OR Phone IN (?) OR PhoneNumber IN (?)",[phones,phones,phones]);
+    existing=found;
+  }
+  const norm=v=>String(v||"").replace(/\D/g,"");
+  const known=new Set(existing.flatMap(r=>[r.mobile,r.phone,r.phone_number].map(norm)).filter(Boolean));
+  return q.rows.filter(r=>!r.phone||!known.has(norm(r.phone))).map(r=>({...r,legacy_id:String(r.id),mobile:r.phone,email:r.email,legacy_username:r.username,customer_code:String(r.id),registered_at:r.created_at,roles:[r.effective_role],account_type:r.effective_role==="agent"?"نماینده":(["admin","superadmin"].includes(r.effective_role)?"مدیر سامانه":(["marketer","customermarketer"].includes(r.effective_role)?"بازاریاب":"مشتری / کاربر")),source_table:"postgres.users"}));
+}
 const sqlIdent = value => "`" + String(value).replace(/`/g, "``") + "`";
 
 const JWT_SECRET = process.env.JWT_SECRET || "";
@@ -691,9 +703,20 @@ export async function handleApi(req, res, url) {
         return json(res,200,{data:{rows:rows.rows,total:Number(count.rows[0]?.total)||0,page,pageSize,summary:summary.rows[0],statuses:statuses.rows}});
       }
       if (req.method === "GET" && route === "/api/v1/admin/summary") {
-        const q = await pool.query("SELECT COUNT(*)::int AS users,COUNT(*) FILTER (WHERE COALESCE((SELECT role_code FROM user_role_overrides o WHERE o.user_id=users.id),role) IN ('admin','superadmin'))::int AS admins,COUNT(*) FILTER (WHERE COALESCE((SELECT role_code FROM user_role_overrides o WHERE o.user_id=users.id),role)='agent')::int AS agents,COUNT(*) FILTER (WHERE COALESCE((SELECT role_code FROM user_role_overrides o WHERE o.user_id=users.id),role) IN ('customer','member'))::int AS customers,COUNT(*) FILTER (WHERE is_active)::int AS users_active,COUNT(*) FILTER (WHERE NOT is_active)::int AS users_inactive,COUNT(*) FILTER (WHERE (created_at AT TIME ZONE 'Asia/Tehran')::date=(NOW() AT TIME ZONE 'Asia/Tehran')::date)::int AS users_today,(to_char(MAX(created_at) AT TIME ZONE 'Asia/Tehran','YYYY-MM-DD\"T\"HH24:MI:SS')||'+03:30') AS latest_user_registration,(SELECT COUNT(*)::int FROM sms_templates) AS sms_templates,(SELECT COUNT(*)::int FROM sms_logs) AS sms_logs FROM users");
-        const db=legacyMaria(), [customerTenants]=await db.query("SELECT COUNT(*) AS total FROM Customers");
-        return json(res,200,{data:{...q.rows[0],legacy_customers:Number(q.rows[0]?.customers)||0,legacy_users:Number(q.rows[0]?.users)||0,legacy_customer_tenants:Number(customerTenants[0]?.total)||0,smsConfigured:Boolean(KAVENEGAR_API_KEY),identitySource:"postgres.users",businessDateTimezone:"Asia/Tehran"}});
+        const db=legacyMaria();
+        const [[mariaStats],[roleStats],fresh]=await Promise.all([
+          db.query("SELECT COUNT(*) AS total,SUM(CASE WHEN COALESCE(IsActive,1)=1 THEN 1 ELSE 0 END) AS active,SUM(CASE WHEN COALESCE(IsActive,1)=0 THEN 1 ELSE 0 END) AS inactive,MAX(RegDate) AS latest_registration,SUM(CASE WHEN DATE(RegDate)=DATE(CONVERT_TZ(UTC_TIMESTAMP(),'+00:00','+03:30')) THEN 1 ELSE 0 END) AS today FROM AspNetUsers"),
+          db.query("SELECT LOWER(r.Name) AS role,COUNT(DISTINCT u.Id) AS total FROM AspNetUsers u JOIN AspNetUserRoles ur ON ur.UserId=u.Id JOIN AspNetRoles r ON r.Id=ur.RoleId GROUP BY LOWER(r.Name)"),
+          postgresOnlyAccounts(db,10000)
+        ]);
+        const roleMap=new Map(roleStats.map(r=>[String(r.role||"").replace(/[^a-z]/g,""),Number(r.total)||0]));
+        const freshToday=fresh.filter(r=>{const d=new Date(r.created_at);return !Number.isNaN(d.getTime())&&new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Tehran",year:"numeric",month:"2-digit",day:"2-digit"}).format(d)===new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Tehran",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date());}).length;
+        const mariaTotal=Number(mariaStats[0]?.total)||0,freshTotal=fresh.length;
+        const mariaLatest=mariaStats[0]?.latest_registration||null,freshLatest=fresh[0]?.created_at||null;
+        const latestRegistration=freshLatest&&(!mariaLatest||new Date(freshLatest)>new Date(mariaLatest))?freshLatest:mariaLatest;
+        const users=mariaTotal+freshTotal,admins=(roleMap.get("admin")||0)+(roleMap.get("superadmin")||0)+fresh.filter(r=>["admin","superadmin"].includes(r.effective_role)).length,agents=(roleMap.get("agent")||0)+fresh.filter(r=>r.effective_role==="agent").length;
+        const [[customerTenants]]=await db.query("SELECT COUNT(*) AS total FROM Customers");
+        return json(res,200,{data:{users,admins,agents,legacy_customers:users,legacy_users:users,users_active:(Number(mariaStats[0]?.active)||0)+fresh.filter(r=>r.is_active).length,users_inactive:(Number(mariaStats[0]?.inactive)||0)+fresh.filter(r=>!r.is_active).length,users_today:(Number(mariaStats[0]?.today)||0)+freshToday,latest_user_registration:latestRegistration,latestRegistration,legacy_customer_tenants:Number(customerTenants[0]?.total)||0,smsConfigured:Boolean(KAVENEGAR_API_KEY),identitySource:"MariaDB.AspNetUsers+new PostgreSQL registrations",businessDateTimezone:"Asia/Tehran"}});
       }
       if (req.method === "GET" && route === "/api/v1/admin/users") {
         const q = await pool.query("SELECT id,username,legacy_username,phone,full_name,email,role,is_active,password_reset_required,created_at,legacy_source,legacy_id,COALESCE((SELECT json_agg(role_code ORDER BY role_code) FROM (SELECT role_code FROM user_role_overrides WHERE user_id=users.id UNION SELECT role_code FROM user_role_assignments WHERE user_id=users.id AND NOT EXISTS(SELECT 1 FROM user_role_overrides WHERE user_id=users.id)) rr),json_build_array(role)) AS roles FROM users ORDER BY created_at DESC,id DESC LIMIT 500");
@@ -755,23 +778,24 @@ export async function handleApi(req, res, url) {
         return json(res,200,{data:updated,message:"اطلاعات حساب به‌روزرسانی شد."});
       }
       if (req.method === "GET" && route === "/api/v1/admin/legacy-customers") {
-        const q=await pool.query("SELECT COUNT(*) FILTER(WHERE COALESCE((SELECT role_code FROM user_role_overrides o WHERE o.user_id=users.id),role) IN ('customer','member'))::int AS total,(SELECT COUNT(*)::int FROM users) AS all_users,(to_char((MAX(created_at) FILTER(WHERE COALESCE((SELECT role_code FROM user_role_overrides o WHERE o.user_id=users.id),role) IN ('customer','member'))) AT TIME ZONE 'Asia/Tehran','YYYY-MM-DD\"T\"HH24:MI:SS')||'+03:30') AS latest_registration,COUNT(*) FILTER(WHERE COALESCE((SELECT role_code FROM user_role_overrides o WHERE o.user_id=users.id),role) IN ('customer','member') AND (created_at AT TIME ZONE 'Asia/Tehran')::date=(NOW() AT TIME ZONE 'Asia/Tehran')::date)::int AS today FROM users");
-        return json(res,200,{data:{legacy_customers:Number(q.rows[0]?.total)||0,legacy_users:Number(q.rows[0]?.all_users)||0,today:Number(q.rows[0]?.today)||0,latestRegistration:q.rows[0]?.latest_registration||null,sourceTable:"users",timezone:"Asia/Tehran"}});
+        const db=legacyMaria();
+        const [[maria],[fresh]]=await Promise.all([db.query("SELECT COUNT(*) AS total FROM AspNetUsers"),postgresOnlyAccounts(db,10000)]);
+        const total=(Number(maria[0]?.total)||0)+fresh.length;
+        const [todayRows]=await db.query("SELECT COUNT(*) AS total FROM AspNetUsers WHERE DATE(RegDate)=DATE(CONVERT_TZ(UTC_TIMESTAMP(),'+00:00','+03:30'))");
+        const latest=[...(await db.query("SELECT MAX(RegDate) AS latest FROM AspNetUsers"))[0],...(fresh.length?[{latest:fresh[0].created_at}]:[])].map(x=>x.latest).filter(Boolean).sort((a,b)=>new Date(b)-new Date(a))[0]||null;
+        return json(res,200,{data:{legacy_customers:total,legacy_users:total,today:(Number(todayRows[0]?.total)||0)+fresh.filter(r=>new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Tehran",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date(r.created_at))===new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Tehran",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date())).length,latestRegistration:latest,sourceTable:"MariaDB.AspNetUsers",additionalSource:"new PostgreSQL registrations",timezone:"Asia/Tehran"}});
       }
       if (req.method === "GET" && route === "/api/v1/admin/legacy-customers-page") {
-        const page=Math.max(1,Number.parseInt(url.searchParams.get("page")||"1",10)||1),pageSize=Math.min(100,Math.max(10,Number.parseInt(url.searchParams.get("pageSize")||"50",10)||50)),search=String(url.searchParams.get("q")||"").trim().slice(0,120),from=String(url.searchParams.get("from")||"").trim(),to=String(url.searchParams.get("to")||"").trim();
-        const where=[],params=[];
-        if(search){params.push("%"+search+"%");where.push("(u.full_name ILIKE $"+params.length+" OR u.phone ILIKE $"+params.length+" OR u.email ILIKE $"+params.length+" OR u.username ILIKE $"+params.length+" OR u.legacy_username ILIKE $"+params.length+" OR u.national_code ILIKE $"+params.length+" OR u.legacy_id ILIKE $"+params.length+" OR u.id::text ILIKE $"+params.length+")");}
-        if(from&&/^\d{4}-\d{2}-\d{2}$/.test(from)){params.push(from);where.push("u.created_at >= ($"+params.length+"::date::timestamp AT TIME ZONE 'Asia/Tehran')");}
-        if(to&&/^\d{4}-\d{2}-\d{2}$/.test(to)){params.push(to);where.push("u.created_at < (($"+params.length+"::date + INTERVAL '1 day')::timestamp AT TIME ZONE 'Asia/Tehran')");}
-        const customerFilter="COALESCE((SELECT role_code FROM user_role_overrides o WHERE o.user_id=u.id),u.role) IN ('customer','member')";
-        const filter=" WHERE "+customerFilter+(where.length?" AND "+where.join(" AND "):"");
-        const [count,overall,rows]=await Promise.all([
-          pool.query("SELECT COUNT(*)::int AS total FROM users u"+filter,params),
-          pool.query("SELECT COUNT(*)::int AS total,(to_char((MAX(created_at) FILTER(WHERE "+customerFilter+")) AT TIME ZONE 'Asia/Tehran','YYYY-MM-DD\"T\"HH24:MI:SS')||'+03:30') AS latest_registration,COUNT(*) FILTER(WHERE "+customerFilter+" AND (created_at AT TIME ZONE 'Asia/Tehran')::date=(NOW() AT TIME ZONE 'Asia/Tehran')::date)::int AS today FROM users u"),
-          pool.query("SELECT u.id,COALESCE(u.legacy_id,u.id::text) AS legacy_id,COALESCE(NULLIF(u.full_name,''),NULLIF(u.username,''),NULLIF(u.phone,''),'کاربر بدون نام') AS name,u.phone AS mobile,u.email,u.username AS legacy_username,COALESCE(u.legacy_id,u.id::text) AS customer_code,COALESCE(u.legacy_id,u.id::text) AS customer_number,(to_char(u.created_at AT TIME ZONE 'Asia/Tehran','YYYY-MM-DD\"T\"HH24:MI:SS')||'+03:30') AS registered_at,u.role,COALESCE((SELECT json_agg(role_code ORDER BY role_code) FROM (SELECT role_code FROM user_role_overrides WHERE user_id=u.id UNION SELECT role_code FROM user_role_assignments WHERE user_id=u.id AND NOT EXISTS(SELECT 1 FROM user_role_overrides WHERE user_id=u.id)) rr),json_build_array(u.role)) AS roles,u.is_active,u.national_code,u.legacy_source AS legacy_source_table,u.legacy_customer_id AS customer_id,u.legacy_agent_id AS agent_id,'مشتری' AS account_type FROM users u"+filter+" ORDER BY u.created_at DESC NULLS LAST,u.id DESC LIMIT $"+(params.length+1)+" OFFSET $"+(params.length+2),[...params,pageSize,(page-1)*pageSize])
-        ]);
-        return json(res,200,{data:{rows:rows.rows,total:Number(count.rows[0]?.total)||0,overallTotal:Number(overall.rows[0]?.total)||0,todayTotal:Number(overall.rows[0]?.today)||0,latestRegistration:overall.rows[0]?.latest_registration||null,page,pageSize,sourceTable:"users",timezone:"Asia/Tehran"}});
+        const page=Math.max(1,Number.parseInt(url.searchParams.get("page")||"1",10)||1),pageSize=Math.min(100,Math.max(10,Number.parseInt(url.searchParams.get("pageSize")||"50",10)||50)),search=String(url.searchParams.get("q")||"").trim().slice(0,120),db=legacyMaria(),where=[],values=[];
+        if(search){where.push("(u.FirstName LIKE ? OR u.LastName LIKE ? OR CONCAT_WS(' ',u.FirstName,u.LastName) LIKE ? OR u.Mobile LIKE ? OR u.Phone LIKE ? OR u.PhoneNumber LIKE ? OR u.Email LIKE ? OR u.UserName LIKE ? OR u.NationalCode LIKE ? OR u.UserCode LIKE ? OR CAST(u.Id AS CHAR) LIKE ? OR u.AffiliateCode LIKE ?)");for(let i=0;i<12;i++)values.push("%"+search+"%");}
+        const filter=where.length?" WHERE "+where.join(" AND "):"";
+        const [[count],[fresh]]=await Promise.all([db.query("SELECT COUNT(*) AS total FROM AspNetUsers u"+filter,values),postgresOnlyAccounts(db,10000)]);
+        const offset=Math.max(0,(page-1)*pageSize-fresh.length),limit=pageSize+fresh.length;
+        const [legacyRows]=await db.query("SELECT CAST(u.Id AS CHAR) AS legacy_id,COALESCE(NULLIF(TRIM(CONCAT_WS(' ',u.FirstName,u.LastName)),''),NULLIF(u.UserName,''),NULLIF(u.Mobile,''),'کاربر بدون نام') AS name,COALESCE(NULLIF(u.Mobile,''),NULLIF(u.Phone,''),NULLIF(u.PhoneNumber,'')) AS mobile,u.Email AS email,COALESCE(NULLIF(u.UserCode,''),CAST(u.Id AS CHAR)) AS customer_code,u.RegDate AS registered_at,CAST(u.CustomerId AS CHAR) AS customer_id,CAST(u.AgentId AS CHAR) AS agent_id,u.UserName AS legacy_username,u.IsActive AS is_active,(SELECT GROUP_CONCAT(DISTINCT r.Name ORDER BY r.Name SEPARATOR ',') FROM AspNetUserRoles ur JOIN AspNetRoles r ON r.Id=ur.RoleId WHERE ur.UserId=u.Id) AS roles FROM AspNetUsers u"+filter+" ORDER BY u.RegDate DESC,u.Id DESC LIMIT ? OFFSET ?",[...values,limit,offset]);
+        const classify=roles=>{const r=String(roles||"").toLowerCase().replace(/[^a-z,]/g,"").split(",");return r.some(x=>x==="superadmin"||x==="admin")?"مدیر سامانه":r.includes("agent")?"نماینده":r.some(x=>x.includes("marketer"))?"بازاریاب":"مشتری سامانه";};
+        const merged=[...fresh,...legacyRows.map(r=>({...r,roles:String(r.roles||"").split(",").filter(Boolean),account_type:classify(r.roles),source_table:"AspNetUsers"}))].sort((a,b)=>new Date(b.registered_at||0)-new Date(a.registered_at||0));
+        const rows=merged.slice((page-1)*pageSize,page*pageSize);
+        return json(res,200,{data:{rows,total:(Number(count[0]?.total)||0)+fresh.length,page,pageSize,sourceTable:"MariaDB.AspNetUsers",additionalSource:"new PostgreSQL registrations",timezone:"Asia/Tehran"}});
       }
       if (req.method === "GET" && route === "/api/v1/admin/legacy-agents-page") {
         const page=Math.max(1,Number.parseInt(url.searchParams.get("page")||"1",10)||1),pageSize=Math.min(100,Math.max(10,Number.parseInt(url.searchParams.get("pageSize")||"25",10)||25)),search=String(url.searchParams.get("q")||"").trim().slice(0,120),status=String(url.searchParams.get("status")||"").trim();
@@ -791,21 +815,6 @@ export async function handleApi(req, res, url) {
         const mapped=rows.rows.map(r=>({...r,commission_percent:r.commission_percent==null?null:Number(r.commission_percent),customer_count:Number(r.customer_count)||0,subagents_count:Number(r.subagents_count)||0,loan_requests_count:Number(r.loan_requests_count)||0}));
         const customerTotal=mapped.reduce((n,r)=>n+(Number(r.customer_count)||0),0);
         return json(res,200,{data:{rows:mapped,total:Number(count.rows[0]?.total)||0,overallTotal:Number(overall.rows[0]?.total)||0,activeTotal:Number(active.rows[0]?.total)||0,customerTotal:customerTotal||Number(customers.rows[0]?.total)||0,page,pageSize,sourceTable:"users",identitySource:"postgres.users"}});
-      }
-      if (req.method === "GET" && route === "/api/v1/admin/legacy-customers") {
-        const search=String(url.searchParams.get("q")||"").trim().slice(0,120);
-        const page=Math.max(1,Number.parseInt(url.searchParams.get("page")||"1",10)||1);
-        const pageSize=Math.min(100,Math.max(10,Number.parseInt(url.searchParams.get("pageSize")||"50",10)||50));
-        const db=legacyMaria(),where=[],values=[];
-        if(search){
-          where.push("(u.FirstName LIKE ? OR u.LastName LIKE ? OR CONCAT_WS(' ',u.FirstName,u.LastName) LIKE ? OR u.Mobile LIKE ? OR u.Phone LIKE ? OR u.PhoneNumber LIKE ? OR u.Email LIKE ? OR u.UserName LIKE ? OR u.NationalCode LIKE ? OR u.UserCode LIKE ? OR CAST(u.Id AS CHAR) LIKE ? OR u.AffiliateCode LIKE ?)");
-          for(let i=0;i<12;i++)values.push("%"+search+"%");
-        }
-        const filter=where.length?" WHERE "+where.join(" AND "):"";
-        const [count]=await db.query("SELECT COUNT(*) AS total FROM AspNetUsers u"+filter,values);
-        const [rows]=await db.query("SELECT CAST(u.Id AS CHAR) AS legacy_id,COALESCE(NULLIF(TRIM(CONCAT_WS(' ',u.FirstName,u.LastName)),''),NULLIF(u.UserName,''),NULLIF(u.Mobile,''),'کاربر بدون نام') AS name,COALESCE(NULLIF(u.Mobile,''),NULLIF(u.Phone,''),NULLIF(u.PhoneNumber,'')) AS mobile,u.Email AS email,COALESCE(NULLIF(u.UserCode,''),CAST(u.Id AS CHAR)) AS customer_code,u.RegDate AS registered_at,CAST(u.CustomerId AS CHAR) AS customer_id,u.UserName AS legacy_username,'مشتری سامانه' AS account_type FROM AspNetUsers u"+filter+" ORDER BY u.RegDate DESC,u.Id DESC LIMIT ? OFFSET ?",[...values,pageSize,(page-1)*pageSize]);
-        const total=Number(count[0]?.total)||0;
-        return json(res,200,{data:{rows,total,legacy_customers:total,page,pageSize,sourceTable:"AspNetUsers"}});
       }
       if (req.method === "GET" && route === "/api/v1/admin/legacy-source-tables") {
         const db = legacyMaria(), database = process.env.MARIADB_DATABASE || "digibail_vamcitydigibilepay";
