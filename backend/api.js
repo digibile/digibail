@@ -25,7 +25,7 @@ async function postgresOnlyAccounts(mariaDb, limit=10000) {
   }
   const norm=v=>String(v||"").replace(/\D/g,"");
   const known=new Set(existing.flatMap(r=>[r.mobile,r.phone,r.phone_number].map(norm)).filter(Boolean));
-  return q.rows.filter(r=>!r.phone||!known.has(norm(r.phone))).map(r=>({...r,legacy_id:String(r.id),mobile:r.phone,email:r.email,legacy_username:r.username,customer_code:String(r.id),registered_at:r.created_at,roles:[r.effective_role],account_type:r.effective_role==="agent"?"نماینده":(["admin","superadmin"].includes(r.effective_role)?"مدیر سامانه":(["marketer","customermarketer"].includes(r.effective_role)?"بازاریاب":"مشتری / کاربر")),source_table:"postgres.users"}));
+  return q.rows.filter(r=>!r.phone||!known.has(norm(r.phone))).map(r=>({...r,role:r.effective_role,legacy_id:String(r.id),mobile:r.phone,email:r.email,legacy_username:r.username,customer_code:String(r.id),registered_at:r.created_at,roles:[r.effective_role],account_type:directoryAccountType(r.effective_role),source_table:"postgres.users"}));
 }
 
 function legacyRoleCode(value) {
@@ -75,6 +75,18 @@ async function unifiedUserDirectory({page=1,pageSize=50,search="",role="",status
   return {rows:merged.slice((page-1)*pageSize,page*pageSize),total:(Number(mCountRows[0][0]?.total)||0)+freshFiltered.length,overallTotal:(Number(mStats.total)||0)+fresh.length,activeTotal:(Number(mStats.active)||0)+fresh.filter(r=>r.is_active).length,inactiveTotal:(Number(mStats.inactive)||0)+fresh.filter(r=>!r.is_active).length,todayTotal:(Number(mStats.today)||0)+todayFresh,latestRegistration,page,pageSize,sourceTable:"MariaDB.AspNetUsers+PostgreSQL.users",timezone:"Asia/Tehran"};
 }
 
+function directoryRoleFromNames(value) {
+  const names=(Array.isArray(value)?value:String(value||"").split(",")).map(x=>String(x||"").toLowerCase().replace(/[^a-z]/g,"")).filter(Boolean);
+  for(const code of ["superadmin","admin","agent","customermarketer","marketer","member","customer"])if(names.includes(code))return code;
+  return "customer";
+}
+function directoryAccountType(role) {
+  return role==="superadmin"||role==="admin"?"مدیر سامانه":role==="agent"?"نماینده":role==="marketer"||role==="customermarketer"?"بازاریاب":"مشتری / کاربر";
+}
+function mapMariaDirectoryUser(r) {
+  const roleNames=String(r.roles||"").split(",").filter(Boolean),role=directoryRoleFromNames(roleNames);
+  return {id:-Number(r.Id),legacy_id:String(r.Id),username:r.UserName||null,legacy_username:r.UserName||null,full_name:[r.FirstName,r.LastName].filter(Boolean).join(" ").trim()||r.UserName||r.Mobile||"کاربر بدون نام",phone:r.Mobile||r.Phone||r.PhoneNumber||null,mobile:r.Mobile||r.Phone||r.PhoneNumber||null,email:r.Email||null,national_code:r.NationalCode||null,role,roles:roleNames.map(x=>String(x).toLowerCase().replace(/[^a-z]/g,"")),is_active:Boolean(r.IsActive),created_at:r.RegDate||null,registered_at:r.RegDate||null,legacy_source:"MariaDB.AspNetUsers",source_table:"AspNetUsers",legacy_customer_id:r.CustomerId||null,legacy_agent_id:r.AgentId||null,password_reset_required:true,account_type:directoryAccountType(role)};
+}
 const sqlIdent = value => "`" + String(value).replace(/`/g, "``") + "`";
 
 const JWT_SECRET = process.env.JWT_SECRET || "";
@@ -767,8 +779,10 @@ export async function handleApi(req, res, url) {
         return json(res,200,{data:{users,admins,agents,legacy_customers:users,legacy_users:users,users_active:(Number(mariaStats.active)||0)+fresh.filter(r=>r.is_active).length,users_inactive:(Number(mariaStats.inactive)||0)+fresh.filter(r=>!r.is_active).length,users_today:(Number(mariaStats.today)||0)+freshToday,latest_user_registration:latestRegistration,latestRegistration,legacy_customer_tenants:Number(tenantRows[0]?.total)||0,smsConfigured:Boolean(KAVENEGAR_API_KEY),identitySource:"MariaDB.AspNetUsers+new PostgreSQL registrations",businessDateTimezone:"Asia/Tehran"}});
       }
       if (req.method === "GET" && route === "/api/v1/admin/users") {
-        const q = await pool.query("SELECT id,username,legacy_username,phone,full_name,email,role,is_active,password_reset_required,created_at,legacy_source,legacy_id,COALESCE((SELECT json_agg(role_code ORDER BY role_code) FROM (SELECT role_code FROM user_role_overrides WHERE user_id=users.id UNION SELECT role_code FROM user_role_assignments WHERE user_id=users.id AND NOT EXISTS(SELECT 1 FROM user_role_overrides WHERE user_id=users.id)) rr),json_build_array(role)) AS roles FROM users ORDER BY created_at DESC,id DESC LIMIT 500");
-        return json(res,200,{data:q.rows});
+        const db=legacyMaria(),[fresh,[legacyRows]]=await Promise.all([postgresOnlyAccounts(db,10000),db.query("SELECT u.Id,u.FirstName,u.LastName,u.Mobile,u.Phone,u.PhoneNumber,u.Email,u.NationalCode,u.UserName,u.IsActive,u.RegDate,u.CustomerId,u.AgentId,(SELECT GROUP_CONCAT(DISTINCT r.Name ORDER BY r.Name SEPARATOR ',') FROM AspNetUserRoles ur JOIN AspNetRoles r ON r.Id=ur.RoleId WHERE ur.UserId=u.Id) AS roles FROM AspNetUsers u ORDER BY u.RegDate DESC,u.Id DESC LIMIT 500")]);
+        const merged=[...fresh,...legacyRows.map(mapMariaDirectoryUser)].sort((a,b)=>new Date(b.created_at||0)-new Date(a.created_at||0));
+        const [counts]=await db.query("SELECT COUNT(*) AS total FROM AspNetUsers");
+        return json(res,200,{data:merged.slice(0,500),total:(Number(counts[0]?.total)||0)+fresh.length,sourceTable:"MariaDB.AspNetUsers",additionalSource:"new PostgreSQL registrations"});
       }
       if (req.method === "GET" && route === "/api/v1/admin/roles") {
         const db=legacyMaria(),[sourceRoles]=await db.query("SELECT Name FROM AspNetRoles ORDER BY Name");
@@ -778,10 +792,25 @@ export async function handleApi(req, res, url) {
         return json(res,200,{data:[...map.values()]});
       }
       if (req.method === "GET" && route === "/api/v1/admin/users-page") {
-        const page=Math.max(1,Number.parseInt(url.searchParams.get("page")||"1",10)||1);
-        const pageSize=Math.min(100,Math.max(10,Number.parseInt(url.searchParams.get("pageSize")||"50",10)||50));
-        const data=await unifiedUserDirectory({page,pageSize,search:url.searchParams.get("q")||"",role:url.searchParams.get("role")||"",status:url.searchParams.get("status")||""});
-        return json(res,200,{data});
+        const page=Math.max(1,Number.parseInt(url.searchParams.get("page")||"1",10)||1),pageSize=Math.min(100,Math.max(10,Number.parseInt(url.searchParams.get("pageSize")||"50",10)||50)),search=String(url.searchParams.get("q")||"").trim().slice(0,120),role=String(url.searchParams.get("role")||"").trim().toLowerCase(),status=String(url.searchParams.get("status")||"").trim().toLowerCase(),db=legacyMaria(),where=[],values=[];
+        if(search){where.push("(u.FirstName LIKE ? OR u.LastName LIKE ? OR CONCAT_WS(' ',u.FirstName,u.LastName) LIKE ? OR u.Mobile LIKE ? OR u.Phone LIKE ? OR u.PhoneNumber LIKE ? OR u.Email LIKE ? OR u.UserName LIKE ? OR u.NationalCode LIKE ? OR CAST(u.Id AS CHAR) LIKE ? OR u.AffiliateCode LIKE ?)");for(let i=0;i<11;i++)values.push("%"+search+"%");}
+        if(role){where.push("EXISTS(SELECT 1 FROM AspNetUserRoles ur JOIN AspNetRoles rr ON rr.Id=ur.RoleId WHERE ur.UserId=u.Id AND LOWER(REPLACE(REPLACE(rr.Name,' ',''),'_',''))=?)");values.push(role);}
+        if(status==="active")where.push("u.IsActive=1");
+        if(status==="inactive")where.push("u.IsActive=0");
+        const filter=where.length?" WHERE "+where.join(" AND "):"";
+        const [countResult,statsResult,freshAll]=await Promise.all([
+          db.query("SELECT COUNT(*) AS total FROM AspNetUsers u"+filter,values),
+          db.query("SELECT COUNT(*) AS total,SUM(CASE WHEN IsActive=1 THEN 1 ELSE 0 END) AS active,SUM(CASE WHEN IsActive=0 THEN 1 ELSE 0 END) AS inactive,SUM(CASE WHEN DATE(RegDate)=DATE(CONVERT_TZ(UTC_TIMESTAMP(),'+00:00','+03:30')) THEN 1 ELSE 0 END) AS today,MAX(RegDate) AS latest_registration FROM AspNetUsers"),
+          postgresOnlyAccounts(db,10000)
+        ]);
+        const count=countResult[0]?.[0]||{},stats=statsResult[0]?.[0]||{};
+        const matchesFresh=r=>(!role||r.role===role)&&(!status||(status==="active"?r.is_active:!r.is_active))&&(!search||[r.full_name,r.phone,r.email,r.username,r.national_code,r.legacy_id].some(v=>String(v||"").toLowerCase().includes(search.toLowerCase())));
+        const fresh=freshAll.filter(matchesFresh),freshToday=freshAll.filter(r=>new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Tehran",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date(r.created_at))===new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Tehran",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date())).length;
+        const offset=Math.max(0,(page-1)*pageSize-fresh.length),limit=pageSize+fresh.length;
+        const [legacyRows]=await db.query("SELECT u.Id,u.FirstName,u.LastName,u.Mobile,u.Phone,u.PhoneNumber,u.Email,u.NationalCode,u.UserName,u.IsActive,u.RegDate,u.CustomerId,u.AgentId,(SELECT GROUP_CONCAT(DISTINCT r.Name ORDER BY r.Name SEPARATOR ',') FROM AspNetUserRoles ur JOIN AspNetRoles r ON r.Id=ur.RoleId WHERE ur.UserId=u.Id) AS roles FROM AspNetUsers u"+filter+" ORDER BY u.RegDate DESC,u.Id DESC LIMIT ? OFFSET ?",[...values,limit,offset]);
+        const merged=[...fresh,...legacyRows.map(mapMariaDirectoryUser)].sort((a,b)=>new Date(b.created_at||0)-new Date(a.created_at||0));
+        const rows=merged.slice((page-1)*pageSize,page*pageSize),latest=freshAll[0]?.created_at&&(!stats.latest_registration||new Date(freshAll[0].created_at)>new Date(stats.latest_registration))?freshAll[0].created_at:(stats.latest_registration||null);
+        return json(res,200,{data:{rows,total:(Number(count.total)||0)+fresh.length,overallTotal:(Number(stats.total)||0)+freshAll.length,activeTotal:(Number(stats.active)||0)+freshAll.filter(r=>r.is_active).length,inactiveTotal:(Number(stats.inactive)||0)+freshAll.filter(r=>!r.is_active).length,todayTotal:(Number(stats.today)||0)+freshToday,latestRegistration:latest,page,pageSize,sourceTable:"MariaDB.AspNetUsers",additionalSource:"new PostgreSQL registrations",timezone:"Asia/Tehran"}});
       }
       if (req.method === "PATCH" && /^\/api\/v1\/admin\/users\/\d+$/.test(route)) {
         const id=Number(route.split("/").pop()),input=await body(req);
