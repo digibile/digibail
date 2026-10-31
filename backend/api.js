@@ -622,7 +622,7 @@ export async function handleApi(req, res, url) {
       }
       if (req.method === "POST" && route === "/api/v1/admin/loan-products") {
         const b=cleanLoanInput(await body(req));
-        const q=await pool.query("INSERT INTO loan_products(id,slug,name,title,description,badge,min_amount,max_amount,interval_days,tiers,conditions,documents,is_active,sort_order,interest_method,interest_percent,late_daily_coef,early_daily_coef,show_in_list,send_reminders,labels,full_description_html,operational_costs,image_url) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,$11::jsonb,$12::jsonb,$13,$14,$15,$16,$17,$18,$19,$20,$21::jsonb,$22,$23::jsonb,$24) RETURNING id",[crypto.randomUUID(),[b.slug,b.name,b.title,b.description,b.badge,b.minAmount,b.maxAmount,b.intervalDays,JSON.stringify(b.tiers),JSON.stringify(b.conditions),JSON.stringify(b.documents),b.isActive,b.sortOrder,b.interestMethod,b.interestPercent,b.lateDailyCoef,b.earlyDailyCoef,b.showInList,b.sendReminders,JSON.stringify(b.labels),b.fullDescriptionHtml,JSON.stringify(b.operationalCosts),b.imageUrl]);
+        const q=await pool.query("INSERT INTO loan_products(id,slug,name,title,description,badge,min_amount,max_amount,interval_days,tiers,conditions,documents,is_active,sort_order,interest_method,interest_percent,late_daily_coef,early_daily_coef,show_in_list,send_reminders,labels,full_description_html,operational_costs,image_url) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,$11::jsonb,$12::jsonb,$13,$14,$15,$16,$17,$18,$19,$20,$21::jsonb,$22,$23::jsonb,$24) RETURNING id",[crypto.randomUUID(),b.slug,b.name,b.title,b.description,b.badge,b.minAmount,b.maxAmount,b.intervalDays,JSON.stringify(b.tiers),JSON.stringify(b.conditions),JSON.stringify(b.documents),b.isActive,b.sortOrder,b.interestMethod,b.interestPercent,b.lateDailyCoef,b.earlyDailyCoef,b.showInList,b.sendReminders,JSON.stringify(b.labels),b.fullDescriptionHtml,JSON.stringify(b.operationalCosts),b.imageUrl]);
         return json(res,201,{id:q.rows[0].id});
       }
       const loanToggle=route.match(/^\/api\/v1\/admin\/loan-products\/([0-9a-f-]{36})\/toggle$/i);
@@ -1159,7 +1159,7 @@ export async function handleApi(req, res, url) {
       if (!phoneOk(phone)) return json(res, 400, { message: "شماره موبایل معتبر نیست." });
       if (!await consumeCaptcha(b.captchaId, b.captchaAnswer)) return json(res, 400, { message: "کد امنیتی نامعتبر یا منقضی شده است." });
       if (OTP_PEPPER.length < 32) return json(res, 503, { message: "تنظیم امنیتی OTP موجود نیست." });
-      const user = await pool.query("SELECT id FROM users WHERE phone=$1 AND is_active=TRUE LIMIT 1", [phone]);
+      const user = await pool.query("SELECT id FROM users WHERE phone=$1 AND is_active=TRUE ORDER BY CASE WHEN legacy_source='mariadb.AspNetUsers' THEN 0 WHEN legacy_source IS NULL THEN 1 ELSE 2 END,id LIMIT 1", [phone]);
       if (!user.rowCount) {
         await audit(req, "auth.password_reset.requested_unknown");
         resetLimit("reset:" + ip);
@@ -1192,13 +1192,17 @@ export async function handleApi(req, res, url) {
       const user = await pool.query("SELECT id FROM users WHERE phone=$1 AND is_active=TRUE LIMIT 1", [phone]);
       if (!user.rowCount) return json(res, 400, { message: "بازیابی برای این حساب ممکن نیست." });
       const passwordHash = await bcrypt.hash(password,12);
-      await pool.query("BEGIN");
+      const client=await pool.connect();
       try {
-        await pool.query("UPDATE users SET password_hash=$1,updated_at=NOW() WHERE id=$2",[passwordHash,user.rows[0].id]);
-        await pool.query("UPDATE otp_challenges SET consumed_at=NOW() WHERE id=$1",[challenge.id]);
-        await audit(req,"auth.password_reset.completed",user.rows[0].id);
-        await pool.query("COMMIT");
-      } catch(e) { await pool.query("ROLLBACK"); throw e; }
+        await client.query("BEGIN");
+        await client.query("UPDATE users SET password_hash=$1,updated_at=NOW() WHERE id=$2",[passwordHash,user.rows[0].id]);
+        await client.query("UPDATE otp_challenges SET consumed_at=NOW() WHERE id=$1",[challenge.id]);
+        await client.query("COMMIT");
+      } catch(e) {
+        await client.query("ROLLBACK").catch(()=>{});
+        throw e;
+      } finally { client.release(); }
+      await audit(req,"auth.password_reset.completed",user.rows[0].id);
       return json(res,200,{ok:true,message:"رمز عبور تغییر کرد. اکنون وارد شوید."});
     }
     if (req.method === "GET" && route === "/api/v1/security/captcha") {
@@ -1280,7 +1284,7 @@ export async function handleApi(req, res, url) {
         if (JWT_SECRET.length < 32) return json(res, 503, { message: "تنظیم امنیتی توکن موجود نیست." });
         return json(res, 200, { ticket: jwt.sign({ purpose: "register", phone }, JWT_SECRET, { expiresIn: "10m", issuer: "digibail" }) });
       }
-      const users = await pool.query("SELECT id,phone,full_name,role,is_active FROM users WHERE phone=$1", [phone]);
+      const users = await pool.query("SELECT id,phone,full_name,role,is_active FROM users WHERE phone=$1 ORDER BY CASE WHEN legacy_source='mariadb.AspNetUsers' THEN 0 WHEN legacy_source IS NULL THEN 1 ELSE 2 END,id LIMIT 1", [phone]);
       if (!users.rowCount || !users.rows[0].is_active) return json(res, 404, { message: "حسابی با این شماره نیست." });
       const u = users.rows[0]; await audit(req, "auth.otp.login.success", u.id);
       const token = tokenFor(u);
@@ -1299,6 +1303,8 @@ export async function handleApi(req, res, url) {
       if (fullName.length < 5 || fullName.length > 160) return json(res, 400, { message: "نام و نام خانوادگی را کامل وارد کنید." });
       if (!nationalCodeOk(nationalCode)) return json(res, 400, { message: "کد ملی معتبر نیست." });
       if (password.length < 10 || password.length > 128) return json(res, 400, { message: "رمز عبور باید حداقل ۱۰ نویسه باشد." });
+      const duplicate=await pool.query("SELECT id FROM users WHERE phone=$1 OR national_code=$2 LIMIT 1",[ticket.phone,nationalCode]);
+      if(duplicate.rowCount)return json(res,409,{message:"شماره موبایل یا کد ملی قبلاً ثبت شده است."});
       const passwordHash = await bcrypt.hash(password, 12);
       try {
         const created = await pool.query("INSERT INTO users(phone,full_name,national_code,email,password_hash) VALUES($1,$2,$3,$4,$5) RETURNING id,phone,full_name,role", [ticket.phone, fullName, nationalCode, email, passwordHash]);
@@ -1312,7 +1318,7 @@ export async function handleApi(req, res, url) {
         const token = tokenFor(u);
         return authJson(res, 201, token, { accessToken: token, user: { id: u.id, phone: u.phone, fullName: u.full_name, role: u.role } });
       } catch (error) {
-        if (error.code === "23505") return json(res, 409, { message: "شماره موبایل یا کد ملی قبلاً ثبت شده است." });
+        if (error.code === "23505" || error.code === "ER_DUP_ENTRY") return json(res, 409, { message: "شماره موبایل یا کد ملی قبلاً ثبت شده است." });
         throw error;
       }
     }
