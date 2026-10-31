@@ -79,9 +79,7 @@ function lookupAfterWrite(table, originalSql, values, result) {
   }
   if (op === "INSERT") {
     if (Number(result.insertId) > 0) return { key: "id", value: result.insertId };
-    if (table === "beta_inquiries") return { key: "reference", value: values[0] };
-    if (table === "loan_products") return { key: "slug", value: values[0] };
-    if (table === "customer_documents" || table === "customer_contracts") return { key: "id", value: values[0] };
+    if (table === "beta_inquiries" || table === "loan_products" || table === "customer_documents" || table === "customer_contracts") return { key: "id", value: values[0] };
   }
   return null;
 }
