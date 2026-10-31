@@ -142,14 +142,13 @@ function installSchema(mysqli $db,string $path,string $source,bool $skipExisting
             static fn($m)=>'CREATE '.($m[1]??'').'INDEX IF NOT EXISTS `'.$rename($m[2]).'` ON `'.$rename($m[3]).'`',$sql);
     }
     if($source==='vamcityc_transferDb_import_20261028'){
-        // MariaDB requires foreign-key constraint names to be unique across the entire database.
-        // The main and BlueVam databases already use the unprefixed ASP.NET constraint names.
+        // MariaDB requires foreign-key and index names to be unique across the database.
         $rename=static fn($name)=>shortName('OnlineMoneyTransfer__'.$name);
         $sql=preg_replace_callback('/\\b(ADD\\s+CONSTRAINT\\s+)\x60([^\x60]+)\x60/i',
             static fn($m)=>$m[1].'\x60'.$rename($m[2]).'\x60',$sql);
-        // MariaDB index names are database-wide; isolate transfer indexes and allow safe resume.
-        $sql=preg_replace_callback('/\\bCREATE\\s+(UNIQUE\\s+)?INDEX\\s+(?:IF\\s+NOT\\s+EXISTS\\s+)?\x60([^\x60]+)\x60\\s+ON\\s+(\x60[^\x60]+\x60)/i',
-            static fn($m)=>'CREATE '.($m[1]??'').'INDEX IF NOT EXISTS \x60'.$rename($m[2]).'\x60 ON '.$m[3],$sql);
+        // Prefix each transfer index and use IF NOT EXISTS for resumable schema installation.
+        $sql=preg_replace_callback('/\\bCREATE\\s+(UNIQUE\\s+)?INDEX\\s+(?:IF\\s+NOT\\s+EXISTS\\s+)?\x60([^\x60]+)\x60\\s+ON\\s+\x60([^\x60]+)\x60/i',
+            static fn($m)=>'CREATE '.($m[1]??'').'INDEX IF NOT EXISTS \x60'.$rename($m[2]).'\x60 ON \x60'.$m[3].'\x60',$sql);
         $sql=preg_replace('/\\bCREATE\\s+TABLE\\s+(?!IF\\s+NOT\\s+EXISTS)/i','CREATE TABLE IF NOT EXISTS ',$sql);
     }
     foreach(explode(';',$sql) as $statement) {
