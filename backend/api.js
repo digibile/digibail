@@ -124,6 +124,7 @@ export async function migrate() {
   await runMigrationStep("step-17", 
     "UPDATE users SET role='superadmin',is_active=TRUE,updated_at=NOW() WHERE lower(username)='admin'"
   );
+  await runMigrationStep("step-18", "CREATE TABLE IF NOT EXISTS user_role_overrides (user_id BIGINT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE, role_code VARCHAR(40) NOT NULL, updated_by BIGINT REFERENCES users(id) ON DELETE SET NULL, updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW())");
   // Legacy role reconciliation is performed during the controlled import, not on every app startup.
   // The explicit "admin" username promotion above is the only startup role adjustment.
   } finally {
@@ -333,7 +334,7 @@ export async function handleApi(req, res, url) {
     if (req.method === "GET" && route === "/api/v1/security/me") {
       const session = sessionFor(req);
       if (!session) return json(res, 401, { message: "وارد حساب خود شوید." });
-      const current = await pool.query("SELECT id,phone,full_name,username,role,is_active,password_reset_required,COALESCE((SELECT json_agg(role_code ORDER BY role_code) FROM user_role_assignments WHERE user_id=users.id),json_build_array(role)) AS roles FROM users WHERE id=$1 LIMIT 1", [Number(session.sub)]);
+      const current = await pool.query("SELECT id,phone,full_name,username,role,is_active,password_reset_required,COALESCE((SELECT json_agg(role_code ORDER BY role_code) FROM (SELECT role_code FROM user_role_overrides WHERE user_id=users.id UNION SELECT role_code FROM user_role_assignments WHERE user_id=users.id AND NOT EXISTS(SELECT 1 FROM user_role_overrides WHERE user_id=users.id)) rr),json_build_array(role)) AS roles FROM users WHERE id=$1 LIMIT 1", [Number(session.sub)]);
       if (!current.rowCount || !current.rows[0].is_active) return json(res, 401, { message: "حساب کاربری فعال نیست." });
       const u = current.rows[0];
       return json(res, 200, { data: { id: u.id, phone: u.phone, fullName: u.full_name, username: u.username, role: u.role, roles: u.roles || [u.role], passwordResetRequired: Boolean(u.password_reset_required) } });
@@ -686,12 +687,12 @@ export async function handleApi(req, res, url) {
         return json(res,200,{data:{rows:rows.rows,total:Number(count.rows[0]?.total)||0,page,pageSize,summary:summary.rows[0],statuses:statuses.rows}});
       }
       if (req.method === "GET" && route === "/api/v1/admin/summary") {
-        const q = await pool.query("SELECT COUNT(*)::int AS users,COUNT(*) FILTER (WHERE role IN ('admin','superadmin'))::int AS admins,COUNT(*) FILTER (WHERE role='agent' OR EXISTS (SELECT 1 FROM user_role_assignments a WHERE a.user_id=users.id AND a.role_code='agent'))::int AS agents,COUNT(*) FILTER (WHERE is_active)::int AS users_active,COUNT(*) FILTER (WHERE NOT is_active)::int AS users_inactive,COUNT(*) FILTER (WHERE (created_at AT TIME ZONE 'Asia/Tehran')::date=(NOW() AT TIME ZONE 'Asia/Tehran')::date)::int AS users_today,MAX(created_at) AS latest_user_registration,(SELECT COUNT(*)::int FROM sms_templates) AS sms_templates,(SELECT COUNT(*)::int FROM sms_logs) AS sms_logs FROM users");
+        const q = await pool.query("SELECT COUNT(*)::int AS users,COUNT(*) FILTER (WHERE COALESCE((SELECT role_code FROM user_role_overrides o WHERE o.user_id=users.id),role) IN ('admin','superadmin'))::int AS admins,COUNT(*) FILTER (WHERE COALESCE((SELECT role_code FROM user_role_overrides o WHERE o.user_id=users.id),role)='agent')::int AS agents,COUNT(*) FILTER (WHERE is_active)::int AS users_active,COUNT(*) FILTER (WHERE NOT is_active)::int AS users_inactive,COUNT(*) FILTER (WHERE (created_at AT TIME ZONE 'Asia/Tehran')::date=(NOW() AT TIME ZONE 'Asia/Tehran')::date)::int AS users_today,MAX(created_at) AS latest_user_registration,(SELECT COUNT(*)::int FROM sms_templates) AS sms_templates,(SELECT COUNT(*)::int FROM sms_logs) AS sms_logs FROM users");
         const db=legacyMaria(), [customerTenants]=await db.query("SELECT COUNT(*) AS total FROM Customers");
         return json(res,200,{data:{...q.rows[0],legacy_customers:Number(q.rows[0]?.users)||0,legacy_users:Number(q.rows[0]?.users)||0,legacy_customer_tenants:Number(customerTenants[0]?.total)||0,smsConfigured:Boolean(KAVENEGAR_API_KEY),identitySource:"postgres.users",businessDateTimezone:"Asia/Tehran"}});
       }
       if (req.method === "GET" && route === "/api/v1/admin/users") {
-        const q = await pool.query("SELECT id,username,legacy_username,phone,full_name,email,role,is_active,password_reset_required,created_at,legacy_source,legacy_id,COALESCE((SELECT json_agg(role_code ORDER BY role_code) FROM (SELECT role_code FROM user_role_assignments WHERE user_id=users.id UNION SELECT users.role) rr),json_build_array(role)) AS roles FROM users ORDER BY created_at DESC,id DESC LIMIT 500");
+        const q = await pool.query("SELECT id,username,legacy_username,phone,full_name,email,role,is_active,password_reset_required,created_at,legacy_source,legacy_id,COALESCE((SELECT json_agg(role_code ORDER BY role_code) FROM (SELECT role_code FROM user_role_overrides WHERE user_id=users.id UNION SELECT role_code FROM user_role_assignments WHERE user_id=users.id AND NOT EXISTS(SELECT 1 FROM user_role_overrides WHERE user_id=users.id)) rr),json_build_array(role)) AS roles FROM users ORDER BY created_at DESC,id DESC LIMIT 500");
         return json(res,200,{data:q.rows});
       }
       if (req.method === "GET" && route === "/api/v1/admin/roles") {
@@ -717,7 +718,7 @@ export async function handleApi(req, res, url) {
           pool.query("SELECT COUNT(*)::int AS total FROM users u"+filter,params),
           pool.query("SELECT COUNT(*)::int AS total,MAX(created_at) AS latest_registration FROM users"),
           pool.query("SELECT COUNT(*) FILTER(WHERE is_active)::int AS active,COUNT(*) FILTER(WHERE NOT is_active)::int AS inactive,COUNT(*) FILTER(WHERE (created_at AT TIME ZONE 'Asia/Tehran')::date=(NOW() AT TIME ZONE 'Asia/Tehran')::date)::int AS today FROM users"),
-          pool.query("SELECT u.id,u.username,u.legacy_username,u.phone,u.full_name,u.email,u.national_code,u.role,u.is_active,u.password_reset_required,u.created_at,u.updated_at,u.legacy_source,u.legacy_id,u.legacy_customer_id,u.legacy_agent_id,COALESCE((SELECT json_agg(role_code ORDER BY role_code) FROM (SELECT role_code FROM user_role_assignments WHERE user_id=u.id UNION SELECT u.role) rr),json_build_array(u.role)) AS roles FROM users u"+filter+" ORDER BY u.created_at DESC NULLS LAST,u.id DESC LIMIT $"+(params.length+1)+" OFFSET $"+(params.length+2),[...params,pageSize,(page-1)*pageSize])
+          pool.query("SELECT u.id,u.username,u.legacy_username,u.phone,u.full_name,u.email,u.national_code,u.role,u.is_active,u.password_reset_required,u.created_at,u.updated_at,u.legacy_source,u.legacy_id,u.legacy_customer_id,u.legacy_agent_id,COALESCE((SELECT json_agg(role_code ORDER BY role_code) FROM (SELECT role_code FROM user_role_overrides WHERE user_id=u.id UNION SELECT role_code FROM user_role_assignments WHERE user_id=u.id AND NOT EXISTS(SELECT 1 FROM user_role_overrides WHERE user_id=u.id)) rr),json_build_array(u.role)) AS roles FROM users u"+filter+" ORDER BY u.created_at DESC NULLS LAST,u.id DESC LIMIT $"+(params.length+1)+" OFFSET $"+(params.length+2),[...params,pageSize,(page-1)*pageSize])
         ]);
         return json(res,200,{data:{rows:rows.rows,total:Number(count.rows[0]?.total)||0,overallTotal:Number(overall.rows[0]?.total)||0,activeTotal:Number(stats.rows[0]?.active)||0,inactiveTotal:Number(stats.rows[0]?.inactive)||0,todayTotal:Number(stats.rows[0]?.today)||0,latestRegistration:overall.rows[0]?.latest_registration||null,page,pageSize,sourceTable:"users",timezone:"Asia/Tehran"}});
       }
@@ -743,7 +744,7 @@ export async function handleApi(req, res, url) {
         try{
           await client.query("BEGIN");
           const result=await client.query("UPDATE users SET full_name=COALESCE($1,full_name),phone=CASE WHEN $2::boolean THEN $3 ELSE phone END,email=CASE WHEN $4::boolean THEN $5 ELSE email END,role=COALESCE($6,role),is_active=COALESCE($7,is_active),updated_at=NOW() WHERE id=$8 RETURNING id,full_name,phone,email,role,is_active,updated_at",[fullName,input.phone!==undefined,phone,input.email!==undefined,email,role,active,id]);
-          updated=result.rows[0];await client.query("COMMIT");
+          updated=result.rows[0];if(role!==null)await client.query("INSERT INTO user_role_overrides(user_id,role_code,updated_by,updated_at) VALUES($1,$2,$3,NOW()) ON CONFLICT(user_id) DO UPDATE SET role_code=EXCLUDED.role_code,updated_by=EXCLUDED.updated_by,updated_at=NOW()",[id,role,actorId]);await client.query("COMMIT");
         }catch(error){await client.query("ROLLBACK");throw error;}finally{client.release();}
         await audit(req,"admin.user.updated",actorId,{targetUserId:id,changed:{fullName:fullName!==null,phone:input.phone!==undefined,email:input.email!==undefined,role:role!==null,isActive:active!==null}});
         return json(res,200,{data:updated,message:"اطلاعات حساب به‌روزرسانی شد."});
