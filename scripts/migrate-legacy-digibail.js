@@ -98,6 +98,7 @@ try{
  await pool.query("ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check");
  await pool.query("ALTER TABLE users ADD CONSTRAINT users_role_check CHECK (role IN ('customer','admin','superadmin','agent','marketer','customermarketer','member'))");
  await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS password_reset_required BOOLEAN NOT NULL DEFAULT FALSE");
+ await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS legacy_username TEXT");
  await pool.query("CREATE TABLE IF NOT EXISTS access_roles(code VARCHAR(40) PRIMARY KEY,display_name VARCHAR(120) NOT NULL,legacy_source TEXT,legacy_id TEXT,UNIQUE(legacy_source,legacy_id))");
  await pool.query("CREATE TABLE IF NOT EXISTS user_role_assignments(user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,role_code VARCHAR(40) NOT NULL REFERENCES access_roles(code) ON DELETE RESTRICT,legacy_source TEXT NOT NULL,legacy_user_id TEXT NOT NULL,legacy_role_id TEXT NOT NULL,PRIMARY KEY(user_id,role_code),UNIQUE(legacy_source,legacy_user_id,legacy_role_id))");
  const roleRows=input.identityRoles||[];
@@ -105,10 +106,24 @@ try{
  let usersImported=0,customersImported=0,smsImported=0;
  for(const u of input.users||[]){
   if(!u.legacyId)continue;
-  const username=String(u.username||u.email||("legacy_"+u.legacyId)).trim().slice(0,80),fullName=String(u.fullName||"").trim().replace(/\s+/g," ").slice(0,160)||username;
+  const legacyId=String(u.legacyId),sourceUsername=String(u.username||u.email||("legacy_"+legacyId)).trim().slice(0,80),fullName=String(u.fullName||"").trim().replace(/\s+/g," ").slice(0,160)||sourceUsername;
   const randomHash=await bcrypt.hash(crypto.randomBytes(48).toString("hex"),12);
-  const r=await pool.query("INSERT INTO users(username,phone,full_name,national_code,email,password_hash,role,is_active,created_at,legacy_source,legacy_id,password_reset_required) VALUES($1,$2,$3,$4,$5,$6,$7,$8,COALESCE($9::timestamptz,NOW()),'aspnetusers',$10,TRUE) ON CONFLICT(legacy_source,legacy_id) WHERE legacy_source IS NOT NULL AND legacy_id IS NOT NULL DO UPDATE SET phone=COALESCE(EXCLUDED.phone,users.phone),full_name=EXCLUDED.full_name,national_code=COALESCE(EXCLUDED.national_code,users.national_code),email=EXCLUDED.email,password_hash=EXCLUDED.password_hash,role=EXCLUDED.role,is_active=EXCLUDED.is_active,password_reset_required=TRUE,updated_at=NOW() RETURNING id",[username,normalizedPhone(u.phone),fullName,normalizedNationalCode(u.nationalCode),u.email||null,randomHash,primaryRole(u.roles),u.isActive!==false&&u.isActive!==0,dateOrNull(u.createdAt),String(u.legacyId)]);
-  usersImported+=r.rowCount;
+  let phone=normalizedPhone(u.phone),national=normalizedNationalCode(u.nationalCode);
+  const existing=await pool.query("SELECT id FROM users WHERE legacy_source='aspnetusers' AND legacy_id=$1 LIMIT 1",[legacyId]);
+  if(existing.rowCount){
+   const uid=existing.rows[0].id;
+   if(phone){const clash=await pool.query("SELECT 1 FROM users WHERE phone=$1 AND id<>$2 LIMIT 1",[phone,uid]);if(clash.rowCount)phone=null;}
+   if(national){const clash=await pool.query("SELECT 1 FROM users WHERE national_code=$1 AND id<>$2 LIMIT 1",[national,uid]);if(clash.rowCount)national=null;}
+   await pool.query("UPDATE users SET phone=COALESCE($1,phone),full_name=$2,legacy_username=$3,national_code=COALESCE($4,national_code),email=$5,password_hash=$6,role=$7,is_active=$8,password_reset_required=TRUE,updated_at=NOW() WHERE id=$9",[phone,fullName,sourceUsername,national,u.email||null,randomHash,primaryRole(u.roles),u.isActive!==false&&u.isActive!==0,uid]);
+  }else{
+   const usernameClash=await pool.query("SELECT 1 FROM users WHERE lower(username)=lower($1) LIMIT 1",[sourceUsername]);
+   const finalUsername=usernameClash.rowCount?("legacy_"+legacyId).slice(0,80):sourceUsername;
+   if(phone){const clash=await pool.query("SELECT 1 FROM users WHERE phone=$1 LIMIT 1",[phone]);if(clash.rowCount)phone=null;}
+   if(national){const clash=await pool.query("SELECT 1 FROM users WHERE national_code=$1 LIMIT 1",[national]);if(clash.rowCount)national=null;}
+   const r=await pool.query("INSERT INTO users(username,phone,full_name,national_code,email,password_hash,role,is_active,created_at,legacy_source,legacy_id,password_reset_required,legacy_username) VALUES($1,$2,$3,$4,$5,$6,$7,$8,COALESCE($9::timestamptz,NOW()),'aspnetusers',$10,TRUE,$11) RETURNING id",[finalUsername,phone,fullName,national,u.email||null,randomHash,primaryRole(u.roles),u.isActive!==false&&u.isActive!==0,dateOrNull(u.createdAt),legacyId,sourceUsername]);
+   if(!r.rowCount)throw new Error("Could not create legacy user "+legacyId);
+  }
+  usersImported++;
  }
  for(const p of input.identityUserRoles||[]){
   const userId=String(p.UserId??p.userId??""),roleId=String(p.RoleId??p.roleId??"");if(!userId||!roleId)continue;
