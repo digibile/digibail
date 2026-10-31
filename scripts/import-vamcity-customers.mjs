@@ -88,7 +88,7 @@ try {
     const dbCounts={tables:tables.length,rows:0};
     for(const t of tables) {
       const name=t.tableName;
-      const safeColumns=cols.filter(x=>x.schemaName===t.sourceSchema&&x.tableName===name&&!((db.name===SOURCE_DB&&name.toLowerCase()==="aspnetusers"&&["passwordhash","securitystamp","concurrencystamp","otp"].includes(String(x.columnName).toLowerCase()))||(db.name===SOURCE_DB&&name.toLowerCase()==="customers"&&String(x.columnName).toLowerCase()==="initpassword")));
+      const safeColumns=cols.filter(x=>x.schemaName===t.sourceSchema&&x.tableName===name&&!((name.toLowerCase()==="aspnetusers"&&["passwordhash","securitystamp","concurrencystamp","otp"].includes(String(x.columnName).toLowerCase()))||(name.toLowerCase()==="customers"&&String(x.columnName).toLowerCase()==="initpassword")));
       if(!safeColumns.length)throw new Error("No exportable columns for "+db.name+"."+t.sourceSchema+"."+name);
       const projection=safeColumns.map(x=>"["+x.columnName.replace(/]/g,"]]")+"]").join(",");
       const data=rows("SELECT "+projection+" FROM ["+t.sourceSchema.replace(/]/g,"]]")+ "].["+name.replace(/]/g,"]]")+"] FOR JSON PATH, INCLUDE_NULL_VALUES;",db.name+"."+t.sourceSchema+"."+name,db.name);
