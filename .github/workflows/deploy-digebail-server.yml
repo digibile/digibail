@@ -49,7 +49,7 @@ jobs:
       - name: Transfer application without deleting production files
         uses: burnett01/rsync-deployments@7.0.2
         with:
-          switches: -avzr --exclude=.git/ --exclude=.github/ --exclude=.htpasswd/ --exclude=logs/ --exclude=stats/ --exclude=public_ftp/ --exclude=public_html/ --exclude=private_html --exclude=.env
+          switches: -avzr --exclude=.git/ --exclude=.github/ --exclude=.htpasswd/ --exclude=logs/ --exclude=stats/ --exclude=public_ftp/ --exclude=public_html/ --exclude=private_html --exclude=.env --exclude=backups/
           path: ./
           remote_path: /home/digibail/domains/digebail.ir/
           remote_host: ${{ secrets.DEPLOY_HOST }}
@@ -77,6 +77,8 @@ jobs:
             test -f Dockerfile
             test -f server.js
             test -f start.js
+            test -f Dockerfile.migration
+            test -f scripts/migration-tools/verify-single-mariadb-ready.mjs
             echo "=== validate storefront inline JavaScript syntax ==="
             node -e 'const fs=require("node:fs"); const vm=require("node:vm"); const html=fs.readFileSync("web/template-v3.html","utf8"); const scripts=[...html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi)]; if(!scripts.length) throw new Error("No inline scripts found"); scripts.forEach((m,i)=>new vm.Script(m[1],{filename:"template-v3.inline-"+i+".js"})); console.log("INLINE_JS_SYNTAX=OK; scripts="+scripts.length)'
             echo "=== validate backend and management panel JavaScript syntax ==="
@@ -131,6 +133,19 @@ jobs:
               echo "BLOCKED: .env still contains example placeholders."
               exit 23
             fi
+            echo "=== build isolated cutover verifier (not part of the web image) ==="
+            $DOCKER build -f Dockerfile.migration -t digibail-migration-tools:cutover .
+            echo "=== require verified transfer of all legacy tables and account mappings ==="
+            $DOCKER run --rm --env-file .env -v /var/lib/mysql/mysql.sock:/tmp/mysql.sock digibail-migration-tools:cutover node scripts/migration-tools/verify-single-mariadb-ready.mjs
+            echo "=== remove obsolete PostgreSQL variables from the runtime environment ==="
+            umask 077
+            grep -vE '^(DATABASE_URL|POSTGRES_DB|POSTGRES_USER|POSTGRES_PASSWORD)=' .env > .env.single-mariadb.tmp || true
+            mv .env.single-mariadb.tmp .env
+            chmod 600 .env
+            if grep -Eq '^(DATABASE_URL|POSTGRES_)' .env; then
+              echo "ERROR: PostgreSQL settings remain in the runtime .env."
+              exit 31
+            fi
             echo "=== docker compose validation ==="
             $DOCKER compose config -q
             echo "=== build the new release before replacing the running app ==="
@@ -150,7 +165,7 @@ jobs:
               exit 24
             fi
             echo "=== start the freshly built release ==="
-            $DOCKER compose up -d --remove-orphans --no-build
+            $DOCKER compose up -d --no-build
             echo "=== wait for application and legacy API health ==="
             HEALTH_OK=0
             for n in $(seq 1 48); do
@@ -273,6 +288,114 @@ jobs:
             console.log("ADMIN_DASHBOARD_PAGE_SMOKE=PASS");
             NODE
             unset RECOVERY_PASSWORD
+            echo "=== verify no PostgreSQL environment is present in the live web container ==="
+            if $DOCKER compose exec -T app sh -lc 'env | grep -Eq "^(DATABASE_URL|POSTGRES_)"'; then
+              echo "ERROR: PostgreSQL variables leaked into the MariaDB-only runtime."
+              exit 32
+            fi
+            echo "RUNTIME_DATABASE_CONFIGURATION=MariaDB_ONLY"
+            echo "=== retire only the old DigiBail PostgreSQL container; retain its named volume ==="
+            PG_CONTAINER="$($DOCKER ps -aq --filter name='^/digebailir-db-1
+            echo "=== live routing config (no secrets) ==="
+            for f in /usr/local/directadmin/data/users/digibail/domains/digebail.ir.cust_nginx /usr/local/directadmin/data/users/digibail/nginx.conf /etc/nginx/nginx.conf; do
+              if [ -f "$f" ]; then
+                echo "--- $f"
+                grep -nE 'location /|proxy_pass|root |server_name|include.*cust_nginx' "$f" || true
+              fi
+            done
+            echo "=== route production domain to verified app on port 1631 ==="
+            # Docker daemon access grants root-level host administration; use a
+            # short-lived privileged container for a backed-up, validated route change.
+            $DOCKER run --rm --privileged --pid=host --network host -v /:/host alpine:3.20 sh -c '
+              set -eu
+              CUST="$(find /host/usr/local/directadmin/data/users -type f -path "*/domains/digebail.ir.cust_nginx" -print -quit)"
+              if [ -z "$CUST" ]; then
+                echo "ROUTE_NOT_MATCHED: DirectAdmin custom nginx file was not found."
+                exit 26
+              fi
+              echo "--- route file: $CUST"
+              if ! grep -Fq "proxy_pass http://127.0.0.1:1361;" "$CUST" && ! grep -Fq "proxy_pass http://127.0.0.1:1362;" "$CUST" && ! grep -Fq "proxy_pass http://127.0.0.1:1631;" "$CUST"; then
+                echo "ROUTE_NOT_MATCHED: no known application proxy found"
+                exit 26
+              fi
+              if grep -Fq "proxy_pass http://127.0.0.1:1361;" "$CUST" || grep -Fq "proxy_pass http://127.0.0.1:1362;" "$CUST"; then
+                BACKUP="${CUST}.bak.$(date +%Y%m%d%H%M%S)"
+                cp -p "$CUST" "$BACKUP"
+                sed -i "s#proxy_pass http://127.0.0.1:1361;#proxy_pass http://127.0.0.1:1631;#g; s#proxy_pass http://127.0.0.1:1362;#proxy_pass http://127.0.0.1:1631;#g" "$CUST"
+                if [ ! -x /host/usr/local/directadmin/custombuild/build ]; then
+                  cp -p "$BACKUP" "$CUST"
+                  echo "ERROR: DirectAdmin CustomBuild not found; previous route restored."
+                  exit 25
+                fi
+                if ! chroot /host /usr/local/directadmin/custombuild/build rewrite_confs; then
+                  cp -p "$BACKUP" "$CUST"
+                  chroot /host /usr/local/directadmin/custombuild/build rewrite_confs || true
+                  echo "ERROR: DirectAdmin config regeneration failed; previous route restored."
+                  exit 25
+                fi
+                if ! chroot /host /usr/sbin/nginx -t; then
+                  cp -p "$BACKUP" "$CUST"
+                  chroot /host /usr/local/directadmin/custombuild/build rewrite_confs || true
+                  echo "ERROR: nginx validation failed; previous route restored."
+                  exit 25
+                fi
+                echo "=== regenerated live domain config ==="
+                grep -nE "server_name digebail.ir|proxy_pass http://127.0.0.1:(1361|1362|1631);" /host/usr/local/directadmin/data/users/*/nginx.conf || true
+                MASTER="$(cat /host/run/nginx.pid 2>/dev/null || cat /host/var/run/nginx.pid 2>/dev/null || true)"
+                if [ -z "$MASTER" ] || [ ! -r "/host/proc/$MASTER/comm" ] || [ "$(cat "/host/proc/$MASTER/comm" 2>/dev/null || true)" != "nginx" ]; then
+                  cp -p "$BACKUP" "$CUST"
+                  echo "ERROR: host nginx master process not found; previous route restored."
+                  exit 27
+                fi
+                kill -HUP "$MASTER"
+                echo "DOMAIN_PROXY_UPDATED=1"
+              else
+                echo "DOMAIN_PROXY_ALREADY_1631=1"
+              fi
+              echo "=== regenerate DirectAdmin nginx configuration ==="
+              chroot /host /usr/local/directadmin/custombuild/build rewrite_confs
+              chroot /host /usr/sbin/nginx -t
+              MASTER="$(cat /host/run/nginx.pid 2>/dev/null || cat /host/var/run/nginx.pid 2>/dev/null || true)"
+              if [ -z "$MASTER" ]; then
+                echo "ERROR: host nginx master process not found."
+                exit 27
+              fi
+              kill -HUP "$MASTER"
+              sleep 2
+              echo "=== generated domain route after reload ==="
+              grep -nE "server_name digebail.ir|proxy_pass http://127.0.0.1:(1361|1362|1631);" /host/usr/local/directadmin/data/users/*/nginx.conf || true
+              echo "=== active custom route ==="
+              grep -nE "proxy_pass http://127.0.0.1:(1361|1362|1631);" "$CUST" || true
+            '
+            echo "=== current public_html index ==="
+            ls -l "$ROOT/public_html/index.html" 2>/dev/null || true
+            echo "=== verify new app directly on port 1631 ==="
+            APP_BODY="$(curl -fsS --max-time 10 http://127.0.0.1:1631/)"
+            printf '%s' "$APP_BODY" | head -c 300
+            echo
+            if ! printf '%s' "$APP_BODY" | grep -q 'name="digibail-deploy-version" content="digibail-premium-reference-20261029"'; then
+              echo "ERROR: running app does not contain the expected release marker; refusing to report success."
+              exit 28
+            fi
+            echo "APP_CONTENT_VERIFIED=EXPECTED_RELEASE"
+            echo "=== verify public HTTPS domain with cache bypass ==="
+            PUBLIC_BODY="$(curl -fsSL --max-time 20 -H 'Cache-Control: no-cache' -H 'Pragma: no-cache' "https://digebail.ir/?deploycheck=$(date +%s)")"
+            printf '%s' "$PUBLIC_BODY" | head -c 500
+            echo
+            if printf '%s' "$PUBLIC_BODY" | grep -q 'name="digibail-deploy-version" content="digibail-premium-reference-20261029"'; then
+              echo "PUBLIC_DOMAIN_CONTENT_VERIFIED=EXPECTED_RELEASE"
+            else
+              echo "ERROR: public HTTPS domain is not serving the expected release marker; check DNS/CDN or virtual host routing."
+              exit 29
+            fi
+            echo "APP_STARTED=1"
+ | head -n1)"
+            if [ -n "$PG_CONTAINER" ]; then
+              $DOCKER rm -f "$PG_CONTAINER"
+              echo "DIGIBAIL_POSTGRES_CONTAINER_REMOVED=1; named volume retained for rollback."
+            else
+              echo "DIGIBAIL_POSTGRES_CONTAINER_ALREADY_ABSENT=1"
+            fi
             echo "ADMIN_RECOVERY_FILE=/root/digibail-admin-recovery.txt (root-only, mode 600; secret not logged)"
             echo "=== live routing config (no secrets) ==="
             for f in /usr/local/directadmin/data/users/digibail/domains/digebail.ir.cust_nginx /usr/local/directadmin/data/users/digibail/nginx.conf /etc/nginx/nginx.conf; do
