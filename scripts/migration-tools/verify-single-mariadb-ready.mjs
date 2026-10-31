@@ -41,13 +41,32 @@ async function main(){
     if(!exists.length)throw new Error("Legacy account source table is missing: "+table);
     const sourceCount=await count("SELECT COUNT(*) AS n FROM \`"+table+"\`");
     const mapped=await count("SELECT COUNT(*) AS n FROM DigibailAppUserIdentity WHERE LegacySource=?",[source]);
-    if(sourceCount!==mapped)throw new Error("Identity mapping mismatch for "+table+": source="+sourceCount+" mapped="+mapped);
-    console.log("IDENTITY_MAPPING_VERIFIED="+table+" count="+mapped);
+    if(sourceCount!==mapped)throw new Error("Identity mapping count mismatch for "+table+": source="+sourceCount+" mapped="+mapped);
+    const broken=await count(
+      "SELECT COUNT(*) AS n FROM DigibailAppUserIdentity m "+
+      "LEFT JOIN users app ON app.id=m.AppUserId "+
+      "LEFT JOIN \`"+table+"\` legacy ON CAST(legacy.Id AS UNSIGNED)=m.MariaDbUserId "+
+      "WHERE m.LegacySource=? AND (app.id IS NULL OR legacy.Id IS NULL)",
+      [source]
+    );
+    if(broken!==0)throw new Error("Identity map contains missing app/source IDs for "+table+": "+broken);
+    const roleLinksTable=table.replace(/AspNetUsers$/,"AspNetUserRoles");
+    const rolesTable=table.replace(/AspNetUsers$/,"AspNetRoles");
+    const sourceRoleLinks=await count("SELECT COUNT(*) AS n FROM \`"+roleLinksTable+"\`");
+    const targetRoleLinks=await count("SELECT COUNT(*) AS n FROM user_role_assignments WHERE legacy_source=?",[source+".AspNetUserRoles"]);
+    if(sourceRoleLinks!==targetRoleLinks)throw new Error("Role-link mapping mismatch for "+table+": source="+sourceRoleLinks+" target="+targetRoleLinks);
+    const sourceRoleCount=await count("SELECT COUNT(*) AS n FROM \`"+rolesTable+"\`");
+    const targetRoleCount=await count("SELECT COUNT(*) AS n FROM access_roles WHERE legacy_source=?",[source+".AspNetRoles"]);
+    if(sourceRoleCount!==targetRoleCount)throw new Error("Role catalog mismatch for "+table+": source="+sourceRoleCount+" target="+targetRoleCount);
+    console.log("IDENTITY_MAPPING_VERIFIED="+table+" users="+mapped+" role_links="+targetRoleLinks+" roles="+targetRoleCount);
   }
   const [manifestRows]=await db.query(
     "SELECT source_table,source_rows,imported_rows FROM digibail_legacy_manifest WHERE source_schema='legacy_digibail' ORDER BY source_table"
   );
   for(const row of manifestRows){
+    if(Number(row.source_rows)!==Number(row.imported_rows)) {
+      throw new Error("Original import manifest is incomplete for "+row.source_table+": source="+row.source_rows+" imported="+row.imported_rows);
+    }
     const stored=await count(
       "SELECT COUNT(*) AS n FROM digibail_legacy_relational_rows WHERE source_schema='legacy_digibail' AND source_table=?",
       [row.source_table]
