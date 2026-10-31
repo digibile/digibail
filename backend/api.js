@@ -73,11 +73,11 @@ async function unifiedUserDirectory({page=1,pageSize=50,search="",role="",status
 
 function directoryRoleFromNames(value) {
   const names=(Array.isArray(value)?value:String(value||"").split(",")).map(x=>String(x||"").toLowerCase().replace(/[^a-z]/g,"")).filter(Boolean);
-  for(const code of ["superadmin","admin","agent","customermarketer","marketer","member","customer"])if(names.includes(code))return code;
+  for(const code of ["superadmin","admin","agent","customermarketer","marketer","member","customer","appapiuser","sponsor"])if(names.includes(code))return ["appapiuser","sponsor"].includes(code)?"legacy_"+code:code;
   return "customer";
 }
 function directoryAccountType(role) {
-  return role==="superadmin"||role==="admin"?"مدیر سامانه":role==="agent"?"نماینده":role==="marketer"||role==="customermarketer"?"بازاریاب":"مشتری / کاربر";
+  return role==="superadmin"||role==="admin"?"مدیر سامانه":role==="agent"?"نماینده":role==="marketer"||role==="customermarketer"?"بازاریاب":role==="legacy_appapiuser"||role==="legacy_sponsor"?"حساب سیستمی":"مشتری / کاربر";
 }
 function mapMariaDirectoryUser(r) {
   const roleNames=String(r.roles||"").split(",").filter(Boolean),role=directoryRoleFromNames(roleNames);
