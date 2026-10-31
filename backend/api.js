@@ -54,8 +54,8 @@ async function unifiedUserDirectory({page=1,pageSize=50,search="",role="",status
   const staffSql="(FIND_IN_SET('admin',roles_norm)>0 OR FIND_IN_SET('superadmin',roles_norm)>0 OR FIND_IN_SET('agent',roles_norm)>0 OR FIND_IN_SET('marketer',roles_norm)>0 OR FIND_IN_SET('customermarketer',roles_norm)>0 OR FIND_IN_SET('appapiuser',roles_norm)>0 OR FIND_IN_SET('sponsor',roles_norm)>0)";
   if(q){mWhere.push("(full_name LIKE ? OR username LIKE ? OR phone LIKE ? OR email LIKE ? OR national_code LIKE ? OR customer_code LIKE ? OR legacy_id LIKE ? OR roles_raw LIKE ? OR source_table LIKE ?)");for(let n=0;n<9;n++)mValues.push("%"+q+"%");}
   if(role==="customer")mWhere.push("source_key<>'transfer' AND NOT "+staffSql);
-  else if(role==="admin")mWhere.push("(FIND_IN_SET('admin',roles_norm)>0 OR FIND_IN_SET('superadmin',roles_norm)>0)");
-  else if(role){const raw=String(role).startsWith("legacy_")?String(role).slice(7):String(role);mWhere.push("FIND_IN_SET(?,roles_norm)>0");mValues.push(raw);}
+  else if(role==="admin")mWhere.push("source_key<>'transfer' AND (FIND_IN_SET('admin',roles_norm)>0 OR FIND_IN_SET('superadmin',roles_norm)>0)");
+  else if(role){if(["superadmin","agent","marketer","customermarketer"].includes(role))mWhere.push("source_key<>'transfer'");const raw=String(role).startsWith("legacy_")?String(role).slice(7):String(role);mWhere.push("FIND_IN_SET(?,roles_norm)>0");mValues.push(raw);}
   if(status==="active")mWhere.push("is_active=1");
   if(status==="inactive")mWhere.push("is_active=0");
   const mFilter=mWhere.length?" WHERE "+mWhere.join(" AND "):"";
