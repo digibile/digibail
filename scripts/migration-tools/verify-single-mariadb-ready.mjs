@@ -16,6 +16,16 @@ const db=createPool({
   bigNumberStrings:true
 });
 
+function canonicalRole(name) {
+  const key=String(name||"unknown").toLowerCase().replace(/[ _-]/g,"");
+  const known={
+    superadmin:"superadmin",admin:"admin",administrator:"admin",
+    agent:"agent",representative:"agent",marketer:"marketer",
+    customermarketer:"customermarketer",member:"member",
+    customer:"customer",user:"customer"
+  };
+  return known[key]||("legacy_"+key.slice(0,32));
+}
 async function count(sql,params=[]){
   const [rows]=await db.query(sql,params);
   return Number(rows[0]?.n||0);
@@ -59,10 +69,13 @@ async function main(){
     const sourceRoleLinks=await count("SELECT COUNT(*) AS n FROM \`"+roleLinksTable+"\`");
     const targetRoleLinks=await count("SELECT COUNT(*) AS n FROM user_role_assignments WHERE legacy_source=?",[source+".AspNetUserRoles"]);
     if(sourceRoleLinks!==targetRoleLinks)throw new Error("Role-link mapping mismatch for "+table+": source="+sourceRoleLinks+" target="+targetRoleLinks);
-    const sourceRoleCount=await count("SELECT COUNT(*) AS n FROM \`"+rolesTable+"\`");
-    const targetRoleCount=await count("SELECT COUNT(*) AS n FROM access_roles WHERE legacy_source=?",[source+".AspNetRoles"]);
-    if(sourceRoleCount!==targetRoleCount)throw new Error("Role catalog mismatch for "+table+": source="+sourceRoleCount+" target="+targetRoleCount);
-    console.log("IDENTITY_MAPPING_VERIFIED="+table+" users="+mapped+" role_links="+targetRoleLinks+" roles="+targetRoleCount);
+    const [sourceRoles]=await db.query("SELECT Name FROM \`"+rolesTable+"\`");
+    const expectedRoleCodes=[...new Set(sourceRoles.map(row=>canonicalRole(row.Name)))];
+    for(const code of expectedRoleCodes) {
+      const exists=await count("SELECT COUNT(*) AS n FROM access_roles WHERE code=?",[code]);
+      if(exists!==1)throw new Error("Canonical role code is missing for "+table+": "+code);
+    }
+    console.log("IDENTITY_MAPPING_VERIFIED="+table+" users="+mapped+" role_links="+targetRoleLinks+" distinct_roles="+expectedRoleCodes.length);
   }
   const [manifestRows]=await db.query(
     "SELECT source_table,source_rows,imported_rows FROM digibail_legacy_manifest WHERE source_schema='legacy_digibail' ORDER BY source_table"
