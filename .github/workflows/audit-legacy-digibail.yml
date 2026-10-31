@@ -112,3 +112,4 @@ jobs:
               echo "TARGET_POSTGRES_SERVICE=NOT_FOUND"
             fi
             echo "=== audit complete; no data modified ==="
+# Trigger read-only legacy database inventory run.
