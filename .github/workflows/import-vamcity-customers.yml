@@ -1,0 +1,46 @@
+name: Import VamCity customer directory
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "scripts/import-vamcity-customers.mjs"
+      - "scripts/migrate-legacy-digibail.js"
+      - ".github/workflows/import-vamcity-customers.yml"
+permissions:
+  contents: read
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Backup and import customer records
+        uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          command_timeout: 85m
+          script: |
+            set -euo pipefail
+            ROOT="/home/digibail/domains/digebail.ir"
+            cd "$ROOT"
+            if sudo -n docker info >/dev/null 2>&1; then D="sudo -n docker"; else D="docker"; fi
+            READY=0
+            for n in $(seq 1 90); do
+              APP_ID="$($D compose ps -q app 2>/dev/null || true)"
+              if [ -n "$APP_ID" ] && $D exec "$APP_ID" grep -q "legacy_customer_id" /app/scripts/migrate-legacy-digibail.js 2>/dev/null && curl -fsS http://127.0.0.1:1631/healthz >/dev/null 2>&1; then READY=1; break; fi
+              sleep 5
+            done
+            [ "$READY" -eq 1 ] || { echo "APP_RELEASE_NOT_READY"; exit 21; }
+            mkdir -p "$ROOT/.migration-backups" "$ROOT/var/migrations"
+            chmod 700 "$ROOT/.migration-backups" "$ROOT/var/migrations"
+            BACKUP="$ROOT/.migration-backups/digibail-before-vamcity-customers-$(date +%Y%m%d%H%M%S).dump"
+            $D compose exec -T db sh -lc 'export PGPASSWORD="$POSTGRES_PASSWORD"; pg_dump -Fc -U "$POSTGRES_USER" -d "$POSTGRES_DB"' > "$BACKUP"
+            chmod 600 "$BACKUP"
+            test -s "$BACKUP"
+            echo "PRODUCTION_BACKUP_CREATED=$BACKUP"
+            node --check "$ROOT/scripts/import-vamcity-customers.mjs"
+            node "$ROOT/scripts/import-vamcity-customers.mjs"
+            curl -fsS http://127.0.0.1:1631/healthz >/dev/null
+            echo "VAMCITY_CUSTOMERS_IMPORTED_AND_VERIFIED=1"
