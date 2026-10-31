@@ -146,9 +146,7 @@ function installSchema(mysqli $db,string $path,string $source,bool $skipExisting
         $rename=static fn($name)=>shortName('OnlineMoneyTransfer__'.$name);
         $sql=preg_replace_callback('/\b(ADD\s+CONSTRAINT\s+)\x60([^\x60]+)\x60/i',
             static fn($m)=>$m[1].chr(96).$rename($m[2]).chr(96),$sql);
-        // Prefix each transfer index and use IF NOT EXISTS for resumable schema installation.
-        $sql=preg_replace_callback('/\bCREATE\s+(UNIQUE\s+)?INDEX\s+(?:IF\s+NOT\s+EXISTS\s+)?\x60([^\x60]+)\x60\s+ON\s+\x60([^\x60]+)\x60/i',
-            static fn($m)=>'CREATE '.($m[1]??'').'INDEX IF NOT EXISTS '.chr(96).$rename($m[2]).chr(96).' ON '.chr(96).$m[3].chr(96),$sql);
+        // Existing transfer indexes are checked per table during schema execution.
         $sql=preg_replace('/\bCREATE\s+TABLE\s+(?!IF\s+NOT\s+EXISTS)/i','CREATE TABLE IF NOT EXISTS ',$sql);
     }
     foreach(explode(';',$sql) as $statement) {
@@ -158,6 +156,10 @@ function installSchema(mysqli $db,string $path,string $source,bool $skipExisting
         if(preg_match('/^ALTER\\s+TABLE\\s+`[^`]+`\\s+ADD\\s+CONSTRAINT\\s+`([^`]+)`/i',$statement,$cm)){
             $cq=$db->query("SELECT COUNT(*) n FROM information_schema.table_constraints WHERE constraint_schema=DATABASE() AND constraint_name=".qv($db,$cm[1]));
             if($cq && (int)$cq->fetch_assoc()['n']>0) continue;
+        }
+        if($source==='vamcityc_transferDb_import_20261028' && preg_match('/^CREATE\\s+(?:UNIQUE\\s+)?INDEX\\s+`([^`]+)`\\s+ON\\s+`([^`]+)`/i',$statement,$im)){
+            $iq=$db->query("SELECT COUNT(*) n FROM information_schema.statistics WHERE table_schema=DATABASE() AND table_name=".qv($db,$im[2])." AND index_name=".qv($db,$im[1]));
+            if($iq && (int)$iq->fetch_assoc()['n']>0) continue;
         }
         if(!$db->query($statement)) stopNow('Schema installation failed: '.$db->error.' | '.substr($statement,0,160));
     }
