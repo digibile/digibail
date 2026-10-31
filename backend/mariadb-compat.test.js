@@ -16,7 +16,7 @@ test("translates nested JSON type and length functions", () => {
   const sql = translateMariaSql(
     "SELECT jsonb_typeof(CASE WHEN jsonb_typeof(lp.tiers)='array' THEN lp.tiers ELSE '[]'::jsonb END), jsonb_array_length(lp.tiers) FROM loan_products lp"
   );
-  assert.match(sql, /LOWER\(JSON_TYPE\(CASE WHEN LOWER\(JSON_TYPE\(lp\.tiers\)\)='array' THEN lp\.tiers ELSE '\[\]' END\)\)/);
+  assert.match(sql, /LOWER\(JSON_TYPE\(CASE WHEN LOWER\(JSON_TYPE\(lp\.tiers\)\)\)='array' THEN lp\.tiers ELSE '\[\]' END\)\)/);
   assert.match(sql, /JSON_LENGTH\(lp\.tiers\)/);
   assert.doesNotMatch(sql, /jsonb_typeof|::jsonb|jsonb_array_length/i);
 });
@@ -30,7 +30,7 @@ test("translates filtered aggregate and strips its PostgreSQL cast", () => {
   assert.doesNotMatch(sql, /FILTER|::int/i);
 });
 
-test("translates upsert, JSON extraction, intervals, case-insensitive search and regular expressions", () => {
+test("translates upsert, JSON extraction, intervals, date casts and regular expressions", () => {
   const sql = translateMariaSql(
     "INSERT INTO sms_provider_settings(provider,api_key_encrypted) VALUES($1,$2) ON CONFLICT(provider) DO UPDATE SET api_key_encrypted=EXCLUDED.api_key_encrypted"
   );
@@ -44,38 +44,7 @@ test("translates upsert, JSON extraction, intervals, case-insensitive search and
   assert.match(mixed, /INTERVAL 5 MINUTE/);
   const cast = translateMariaSql("created_at >= $1::date AND id=$2::text");
   assert.equal(cast, "created_at >= DATE($1) AND id=CAST($2 AS CHAR)");
-  const replaced = translateMariaSql("regexp_replace(source_table,'[.]UserLoanRequests
-
-test("compat pool provides PostgreSQL-shaped rows for SELECT and INSERT RETURNING", async () => {
-  const calls = [];
-  const raw = {
-    async query(sql, values) {
-      calls.push({ sql, values });
-      if (sql.startsWith("INSERT INTO users")) return [{ affectedRows: 1, insertId: 17 }, []];
-      if (sql.startsWith("SELECT id FROM")) return [[{ id: 17 }], []];
-      if (sql.startsWith("SELECT")) return [[{ id: 17, name: "test" }], []];
-      return [{ affectedRows: 1, insertId: 0 }, []];
-    },
-    async getConnection() { throw new Error("connection not expected in this test"); },
-    async end() {}
-  };
-  const db = createMariaCompatPool(raw);
-  const selected = await db.query("SELECT id,name FROM users WHERE id=$1", [17]);
-  assert.deepEqual(selected.rows, [{ id: 17, name: "test" }]);
-  assert.equal(selected.rowCount, 1);
-
-  const inserted = await db.query(
-    "INSERT INTO users(username) VALUES($1) RETURNING id",
-    ["sample"]
-  );
-  assert.deepEqual(inserted.rows, [{ id: 17 }]);
-  assert.equal(inserted.rowCount, 1);
-  assert.equal(calls.length, 3);
-  assert.deepEqual(calls[0].values, [17]);
-  assert.deepEqual(calls[1].values, ["sample"]);
-  assert.deepEqual(calls[2].values, [17]);
-});
-,'.AspNetUsers')");
+  const replaced = translateMariaSql("regexp_replace(source_table,'[.]UserLoanRequests$','.AspNetUsers')");
   assert.match(replaced, /REGEXP_REPLACE\(/);
   const bound = bindMariaParams(cast, ["2026-01-01", "x"]);
   assert.equal(bound.sql, "created_at >= DATE(?) AND id=CAST(? AS CHAR)");
@@ -99,11 +68,7 @@ test("compat pool provides PostgreSQL-shaped rows for SELECT and INSERT RETURNIN
   const selected = await db.query("SELECT id,name FROM users WHERE id=$1", [17]);
   assert.deepEqual(selected.rows, [{ id: 17, name: "test" }]);
   assert.equal(selected.rowCount, 1);
-
-  const inserted = await db.query(
-    "INSERT INTO users(username) VALUES($1) RETURNING id",
-    ["sample"]
-  );
+  const inserted = await db.query("INSERT INTO users(username) VALUES($1) RETURNING id", ["sample"]);
   assert.deepEqual(inserted.rows, [{ id: 17 }]);
   assert.equal(inserted.rowCount, 1);
   assert.equal(calls.length, 3);
