@@ -1,7 +1,7 @@
 name: Deploy digebail.ir production site
 # ci: deploy customer import tooling before one-time import
 # Post-deploy customer import is gated by the dedicated import workflow.
-# run legacy import after the audited nullability-order fix
+# run legacy import after nullable column correction
 
 on:
   workflow_dispatch:
