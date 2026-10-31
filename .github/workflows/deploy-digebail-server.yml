@@ -236,6 +236,9 @@ jobs:
             const userPageBody = await userPageResponse.json();
             const userPage = userPageBody.data || {};
             if (!Array.isArray(userPage.rows) || !userPage.rows.length || Number(userPage.overallTotal) !== Number(summary.users)) throw new Error("Unified user directory total does not match live PostgreSQL users");
+            if (Number(summary.users) < 50000 || Number(userPage.overallTotal) < 50000 || Number(customerBody.data?.overallTotal) !== Number(summary.users)) throw new Error("Unified directory does not include the full MariaDB AspNetUsers population");
+            if (!userPage.rows.some(r => r.source === "mariadb") || !customerRows.some(r => r.source === "mariadb")) throw new Error("Unified directory is missing MariaDB source accounts");
+            console.log("UNIFIED_MARIADB_POSTGRES_DIRECTORY=PASS total=" + userPage.overallTotal + " customers_view=" + customerBody.data.overallTotal + " today=" + summary.users_today + " latest=" + summary.latest_user_registration);
             const rolesResponse = await fetch(base + "/api/v1/admin/roles", { headers: { Cookie: cookie } });
             if (!rolesResponse.ok) throw new Error("Identity role catalog failed: " + rolesResponse.status);
             const rolesBody = await rolesResponse.json();
@@ -251,6 +254,14 @@ jobs:
             console.log("MARIADB_ADMIN_CUSTOMERS_SMOKE=PASS rows=" + customerRows.length + " total=" + customerBody.data.overallTotal);
             const identityTables = ["AspNetUsers","AspNetRoles","AspNetUserRoles","Customers","Agents","AgentMetaDatas","AgentMetaData","CustomerMarketers"];
             console.log("MARIADB_IDENTITY_INVENTORY=" + JSON.stringify(tables.filter(t => identityTables.includes(t.source_table))));
+            const roleDataResponse = await fetch(base + "/api/v1/admin/legacy-source-data?table=AspNetRoles&limit=20", { headers: { Cookie: cookie } });
+            if (!roleDataResponse.ok) throw new Error("MariaDB role source inspection failed: " + roleDataResponse.status);
+            const roleDataBody = await roleDataResponse.json();
+            console.log("MARIADB_ROLE_NAMES=" + JSON.stringify((roleDataBody.data || []).map(r => r.payload?.Name).filter(Boolean)));
+            const agentMetaResponse = await fetch(base + "/api/v1/admin/legacy-source-data?table=AgentMetaData&limit=1", { headers: { Cookie: cookie } });
+            if (!agentMetaResponse.ok) throw new Error("MariaDB agent metadata inspection failed: " + agentMetaResponse.status);
+            const agentMetaBody = await agentMetaResponse.json();
+            console.log("MARIADB_AGENT_METADATA_COLUMNS=" + JSON.stringify(Object.keys(agentMetaBody.data?.[0]?.payload || {})));
             console.log("MARIADB_ADMIN_TABLES_SMOKE=PASS tables=" + tables.length);
             const page = await fetch(base + "/admin.html", { headers: { Cookie: cookie } });
             const html = await page.text();
