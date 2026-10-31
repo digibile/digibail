@@ -23,13 +23,13 @@ services:
       MARIADB_DATABASE: ${MARIADB_DATABASE:-digibail_vamcitydigibilepay}
       MARIADB_USER: ${MARIADB_USER:-digibail_vamcitydigibilepay}
       MARIADB_PASSWORD: ${MARIADB_PASSWORD:-}
-      MARIADB_SOCKET: /var/run/mysqld/mysqld.sock
+      MARIADB_SOCKET: /tmp/mysql.sock
       PORT: 1631
       HOST: 0.0.0.0
     group_add:
       - "${MARIADB_SOCKET_GID:?MariaDB socket group id is required}"
     volumes:
-      - /var/lib/mysql/mysql.sock:/var/run/mysqld/mysqld.sock
+      - /var/lib/mysql/mysql.sock:/tmp/mysql.sock
     ports:
       - "1631:1631"
     depends_on:
