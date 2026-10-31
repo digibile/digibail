@@ -25,7 +25,9 @@ $container = 'public_html-db-1';
 $batchSize = 500;
 
 $sources = [
-    ['source'=>'vamcityc_vamcity_import_20261028','target'=>'digibail_vamcitydigibilepay','schema'=>'schema-main.sql'],
+    ['source'=>'vamcityc_vamcity_import_20261028','target'=>'digibail_vamcitydigibilepay','schema'=>'schema-main.sql','prefix'=>''],
+    ['source'=>'vamcityc_bluvamdb_import_20261028','target'=>'digibail_vamcitydigibilepay','schema'=>'schema-bluvamdb.sql','prefix'=>'bluvamdb__'],
+    ['source'=>'vamcityc_transferDb_import_20261028','target'=>'digibail_vamcitydigibilepay','schema'=>'schema-transfer.sql','prefix'=>'OnlineMoneyTransfer__'],
 ];
 
 function logLine(string $s): void { echo '['.date('H:i:s').'] '.$s.PHP_EOL; }
@@ -35,8 +37,12 @@ function qv(mysqli $db, $v): string { return $v===null?'NULL':"'".$db->real_esca
 function shortName(string $s): string {
     return strlen($s)<=60?$s:substr($s,0,51).'_'.substr(hash('sha256',$s),0,8);
 }
-function mappedTable(string $schema,string $table): string {
-    return shortName(strtolower($schema)==='dbo'?$table:$schema.'__'.$table);
+function mappedTable(string $schema,string $table,string $source): string {
+    global $sources;
+    $prefix='';
+    foreach($sources as $item) if($item['source']===$source){$prefix=$item['prefix'];break;}
+    $base=strtolower($schema)==='dbo'?$table:$schema.'__'.$table;
+    return shortName($prefix.$base);
 }
 function dockerBin(): string {
     exec('docker info >/dev/null 2>&1', $x, $r);
@@ -121,11 +127,18 @@ function targetConnect(array $mysql,string $dbName): mysqli {
     $db->set_charset('utf8mb4');
     return $db;
 }
-function installSchema(mysqli $db,string $path): void {
+function installSchema(mysqli $db,string $path,string $source): void {
     if(!is_file($path)) stopNow('Schema file not found: '.$path);
     $sql=file_get_contents($path);
     $sql=preg_replace('/^\s*--.*$/m','',$sql);
     $sql=preg_replace('/;\s*--[^\r\n]*/',';',$sql);
+    if($source==='vamcityc_bluvamdb_import_20261028'){
+        $rename=static fn($name)=>shortName('bluvamdb__'.$name);
+        $sql=preg_replace_callback('/\b(CREATE\s+TABLE|ALTER\s+TABLE|REFERENCES)\s+\`([^\`]+)\`/i',
+            static fn($m)=>$m[1].' \`'.$rename($m[2]).'\`',$sql);
+        $sql=preg_replace_callback('/\b(CONSTRAINT\s+)\`([^\`]+)\`/i',
+            static fn($m)=>$m[1].'\`'.$rename($m[2]).'\`',$sql);
+    }
     foreach(explode(';',$sql) as $statement) {
         $statement=trim($statement);
         if($statement==='') continue;
@@ -134,13 +147,14 @@ function installSchema(mysqli $db,string $path): void {
 }
 function ensureState(mysqli $db): void {
     $sql="CREATE TABLE IF NOT EXISTS ".qi('__vamcity_migration_state')." (
+      source_database VARCHAR(128) NOT NULL,
       source_schema VARCHAR(128) NOT NULL,
       source_table VARCHAR(128) NOT NULL,
       expected_rows BIGINT UNSIGNED NOT NULL,
       imported_rows BIGINT UNSIGNED NOT NULL DEFAULT 0,
       status VARCHAR(16) NOT NULL DEFAULT 'pending',
       updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-      PRIMARY KEY(source_schema,source_table)
+      PRIMARY KEY(source_database,source_schema,source_table)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
     if(!$db->query($sql)) stopNow('Could not create migration checkpoint table: '.$db->error);
 }
@@ -241,20 +255,23 @@ foreach($sources as $s){
     $db=targetConnect($config['mysql'],$target);
     $m=$allMeta[$source];
 
-    $stateCheck=$db->query("SELECT COUNT(*) AS n FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name=".qv($db,'__vamcity_migration_state'));
-    $hasState=(int)$stateCheck->fetch_assoc()['n']>0;
-    $tableCheck=$db->query("SELECT COUNT(*) AS n FROM information_schema.tables WHERE table_schema=DATABASE() AND table_type='BASE TABLE' AND table_name NOT LIKE '\\_%'");
-    $existingTables=(int)$tableCheck->fetch_assoc()['n'];
-    if(!$hasState && $existingTables===0){
-        logLine('Installing schema for '.$target);
-        installSchema($db,__DIR__.'/../mysql/'.$s['schema']);
-    } elseif(!$hasState && $existingTables>0) {
-        foreach($m['tables'] as $t){
-            $tn=mappedTable($t['schema_name'],$t['table_name']);
-            $check=$db->query("SELECT COUNT(*) AS n FROM ".qi($tn));
-            if(!$check) stopNow('Expected table missing from '.$target.': '.$tn);
-            if((int)$check->fetch_assoc()['n']>0) stopNow('Target table already has data without a migration checkpoint: '.$tn);
-        }
+    $present=0;
+    foreach($m['tables'] as $t){
+        $tn=mappedTable($t['schema_name'],$t['table_name'],$source);
+        $exists=$db->query("SELECT COUNT(*) AS n FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name=".qv($db,$tn));
+        $present+=(int)$exists->fetch_assoc()['n'];
+    }
+    $expectedTableCount=count($m['tables']);
+    if($present===0){
+        logLine('Installing isolated schema for '.$source.' into '.$target);
+        installSchema($db,__DIR__.'/../mysql/'.$s['schema'],$source);
+    } elseif($present!==$expectedTableCount) {
+        stopNow('Partial schema detected for '.$source.' in '.$target.' (present='.$present.', expected='.$expectedTableCount.'); refusing to alter existing tables.');
+    }
+    foreach($m['tables'] as $t){
+        $tn=mappedTable($t['schema_name'],$t['table_name'],$source);
+        $exists=$db->query("SELECT COUNT(*) AS n FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name=".qv($db,$tn));
+        if((int)$exists->fetch_assoc()['n']!==1) stopNow('Schema table missing after install: '.$tn);
     }
     ensureState($db);
     $db->query('SET FOREIGN_KEY_CHECKS=0');
@@ -264,12 +281,12 @@ foreach($sources as $s){
 
     foreach($m['tables'] as $t){
         $key=$t['schema_name'].'.'.$t['table_name'];
-        $tn=mappedTable($t['schema_name'],$t['table_name']);
+        $tn=mappedTable($t['schema_name'],$t['table_name'],$source);
         $cols=$colsBy[$key]??[];
         $pk=$pkBy[$key]??[]; ksort($pk); $pk=array_values($pk);
         $expected=(int)$t['row_count'];
         $st=$db->query("SELECT expected_rows,imported_rows,status FROM ".qi('__vamcity_migration_state')
-            ." WHERE source_schema=".qv($db,$t['schema_name'])." AND source_table=".qv($db,$t['table_name']));
+            ." WHERE source_database=".qv($db,$source)." AND source_schema=".qv($db,$t['schema_name'])." AND source_table=".qv($db,$t['table_name']));
         if($st && $st->num_rows){
             $state=$st->fetch_assoc();
             if((int)$state['expected_rows']!==$expected)stopNow('Source row count changed; refusing resume for '.$key);
@@ -279,8 +296,8 @@ foreach($sources as $s){
             $count=$db->query('SELECT COUNT(*) AS n FROM '.qi($tn));
             if(!$count)stopNow('Missing target table '.$tn);
             if((int)$count->fetch_assoc()['n']!==0)stopNow('Target table is not empty and has no checkpoint: '.$tn);
-            $db->query("INSERT INTO ".qi('__vamcity_migration_state')." (source_schema,source_table,expected_rows,imported_rows,status) VALUES ("
-                .qv($db,$t['schema_name']).','.qv($db,$t['table_name']).','.$expected.",0,'pending')");
+            $db->query("INSERT INTO ".qi('__vamcity_migration_state')." (source_database,source_schema,source_table,expected_rows,imported_rows,status) VALUES ("
+                .qv($db,$source).','.qv($db,$t['schema_name']).','.qv($db,$t['table_name']).','.$expected.",0,'pending')");
             $offset=0;
         }
         while($offset<$expected){
@@ -291,18 +308,18 @@ foreach($sources as $s){
             $offset+=count($rows);
             $status=$offset>=$expected?'complete':'pending';
             $db->query("UPDATE ".qi('__vamcity_migration_state')." SET imported_rows=".$offset.",status=".qv($db,$status)
-                ." WHERE source_schema=".qv($db,$t['schema_name'])." AND source_table=".qv($db,$t['table_name']));
+                ." WHERE source_database=".qv($db,$source)." AND source_schema=".qv($db,$t['schema_name'])." AND source_table=".qv($db,$t['table_name']));
             if(!$db->commit())stopNow('Commit failed for '.$key);
             logLine('IMPORTED '.$key.' '.$offset.'/'.$expected);
             if(count($rows)<$batchSize && $offset<$expected)stopNow('Short batch before expected row count for '.$key);
         }
-        if($expected===0)$db->query("INSERT INTO ".qi('__vamcity_migration_state')." (source_schema,source_table,expected_rows,imported_rows,status) VALUES ("
-            .qv($db,$t['schema_name']).','.qv($db,$t['table_name']).",0,0,'complete') ON DUPLICATE KEY UPDATE status='complete'");
+        if($expected===0)$db->query("INSERT INTO ".qi('__vamcity_migration_state')." (source_database,source_schema,source_table,expected_rows,imported_rows,status) VALUES ("
+            .qv($db,$source).','.qv($db,$t['schema_name']).','.qv($db,$t['table_name']).",0,0,'complete') ON DUPLICATE KEY UPDATE status='complete'");
     }
 
     logLine('Checking row counts for '.$target);
     foreach($m['tables'] as $t){
-        $tn=mappedTable($t['schema_name'],$t['table_name']);
+        $tn=mappedTable($t['schema_name'],$t['table_name'],$source);
         $q=$db->query('SELECT COUNT(*) AS n FROM '.qi($tn));
         $actual=(int)$q->fetch_assoc()['n']; $expected=(int)$t['row_count'];
         if($actual!==$expected)stopNow('ROW COUNT MISMATCH '.$target.'.'.$tn.' source='.$expected.' target='.$actual);
