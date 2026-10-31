@@ -133,7 +133,7 @@ async function copyPublicTable(pg, mysql, table) {
     console.log("PUBLIC_TABLE_PROGRESS=" + table + " copied=" + copied + "/" + sourceCount);
   }
   const targetCount = Number((await mysql.query("SELECT COUNT(*) AS n FROM " + qi(table)))[0][0].n);
-  if (targetCount < sourceCount) throw new Error("Count verification failed for public." + table + ": source=" + sourceCount + " target=" + targetCount);
+  if (targetCount !== sourceCount) throw new Error("Count verification failed for public." + table + ": source=" + sourceCount + " target=" + targetCount);
   console.log("PUBLIC_TABLE_VERIFIED=" + table + " source=" + sourceCount + " target=" + targetCount);
   return { table, sourceCount, targetCount };
 }
@@ -213,7 +213,7 @@ async function copyLegacyRelationalTable(pg, mysql, table) {
       inserts.push(["legacy_digibail", table, legacyId, jsonSafe(row)]);
     }
     const sql = "INSERT INTO digibail_legacy_relational_rows(source_schema,source_table,legacy_id,payload) VALUES " +
-      inserts.map(() => "(?,?,?,CAST(? AS JSON))").join(",") +
+      inserts.map(() => "(?,?,?,?)").join(",") +
       " ON DUPLICATE KEY UPDATE payload=VALUES(payload)";
     await mysql.query(sql, inserts.flat());
     offset += result.rows.length;
@@ -224,7 +224,7 @@ async function copyLegacyRelationalTable(pg, mysql, table) {
     "SELECT COUNT(*) AS n FROM digibail_legacy_relational_rows WHERE source_schema=? AND source_table=?",
     ["legacy_digibail", table]
   );
-  if (Number(targetRows.n) < sourceCount) {
+  if (Number(targetRows.n) !== sourceCount) {
     throw new Error("Legacy relational count mismatch for " + table + ": source=" + sourceCount + " destination=" + targetRows.n);
   }
   return { table, sourceCount, targetCount: Number(targetRows.n) };
@@ -303,11 +303,11 @@ async function main() {
         if (!sourceExists.rowCount) continue;
         const expected=Number((await pg.query("SELECT COUNT(*)::bigint AS n FROM public."+qi(table))).rows[0].n);
         const actual=Number((await mysql.query("SELECT COUNT(*) AS n FROM "+qi(table)))[0][0].n);
-        if (actual < expected) throw new Error("Final verification failed for "+table+": "+actual+" < "+expected);
+        if (actual !== expected) throw new Error("Final verification failed for "+table+": source="+expected+" destination="+actual);
       }
       const sourceUsers=Number((await pg.query("SELECT COUNT(*)::bigint AS n FROM public.users")).rows[0].n);
       const destUsers=Number((await mysql.query("SELECT COUNT(*) AS n FROM users"))[0][0].n);
-      if(destUsers<sourceUsers)throw new Error("Users verification failed.");
+      if(destUsers!==sourceUsers)throw new Error("Users verification failed: source="+sourceUsers+" destination="+destUsers);
       console.log("DIGIBAIL_MARIADB_MIGRATION=PASS public_users="+sourceUsers+" target_users="+destUsers);
     } else {
       console.log("DRY_RUN_ONLY=1 no data was changed; pass --apply and verified backup flag to migrate.");
