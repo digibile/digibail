@@ -796,7 +796,8 @@ export async function handleApi(req, res, url) {
         const classify=roles=>{const r=String(roles||"").toLowerCase().replace(/[^a-z,]/g,"").split(",");return r.some(x=>x==="superadmin"||x==="admin")?"مدیر سامانه":r.includes("agent")?"نماینده":r.some(x=>x.includes("marketer"))?"بازاریاب":"مشتری سامانه";};
         const merged=[...fresh,...legacyRows.map(r=>({...r,roles:String(r.roles||"").split(",").filter(Boolean),account_type:classify(r.roles),source_table:"AspNetUsers"}))].sort((a,b)=>new Date(b.registered_at||0)-new Date(a.registered_at||0));
         const rows=merged.slice((page-1)*pageSize,page*pageSize);
-        return json(res,200,{data:{rows,total:(Number(count.total)||0)+fresh.length,page,pageSize,sourceTable:"MariaDB.AspNetUsers",additionalSource:"new PostgreSQL registrations",timezone:"Asia/Tehran"}});
+        const total=(Number(count.total)||0)+fresh.length;
+        return json(res,200,{data:{rows,total,overallTotal:total,todayTotal:null,page,pageSize,sourceTable:"MariaDB.AspNetUsers",additionalSource:"new PostgreSQL registrations",timezone:"Asia/Tehran"}});
       }
       if (req.method === "GET" && route === "/api/v1/admin/legacy-agents-page") {
         const page=Math.max(1,Number.parseInt(url.searchParams.get("page")||"1",10)||1),pageSize=Math.min(100,Math.max(10,Number.parseInt(url.searchParams.get("pageSize")||"25",10)||25)),search=String(url.searchParams.get("q")||"").trim().slice(0,120),status=String(url.searchParams.get("status")||"").trim();
