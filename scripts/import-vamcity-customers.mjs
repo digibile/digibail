@@ -44,12 +44,14 @@ try {
   }
   function rows(query,label) { return jsonRows(sql("SET NOCOUNT ON; "+query),label); }
   function count(table) {
-    const raw=sql("SET NOCOUNT ON; SELECT COUNT_BIG(*) FROM dbo.["+table+"]; ",["-h","-1"]);
-    const n=Number(raw.replace(/[^0-9]/g,""));
+    const raw=sql("SET NOCOUNT ON; SELECT COUNT_BIG(*) FROM dbo.["+table+"]; ");
+    const numericLines=raw.split(/\r?\n/).map(x=>x.trim()).filter(x=>/^\d+$/.test(x));
+    const n=Number(numericLines[numericLines.length-1]);
     if(!Number.isSafeInteger(n)) throw new Error("Could not count source table "+table);
     return n;
   }
-  const online=sql("SET NOCOUNT ON; SELECT COUNT(*) FROM sys.databases WHERE name=N'"+SOURCE_DB+"' AND state_desc='ONLINE';",["-h","-1"]).replace(/\s/g,"");
+  const onlineRaw=sql("SET NOCOUNT ON; SELECT COUNT(*) FROM sys.databases WHERE name=N'"+SOURCE_DB+"' AND state_desc='ONLINE';");
+  const online=onlineRaw.split(/\r?\n/).map(x=>x.trim()).filter(x=>/^\d+$/.test(x)).slice(-1)[0]||"";
   if(online!=="1") throw new Error("Main VamCity source database is not ONLINE");
   const counts={
     users:count("AspNetUsers"),
