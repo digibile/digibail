@@ -704,19 +704,19 @@ export async function handleApi(req, res, url) {
       }
       if (req.method === "GET" && route === "/api/v1/admin/summary") {
         const db=legacyMaria();
-        const [[mariaStats],[roleStats],fresh]=await Promise.all([
+        const [mariaStatsResult,roleStatsResult,fresh]=await Promise.all([
           db.query("SELECT COUNT(*) AS total,SUM(CASE WHEN COALESCE(IsActive,1)=1 THEN 1 ELSE 0 END) AS active,SUM(CASE WHEN COALESCE(IsActive,1)=0 THEN 1 ELSE 0 END) AS inactive,MAX(RegDate) AS latest_registration,SUM(CASE WHEN DATE(RegDate)=DATE(CONVERT_TZ(UTC_TIMESTAMP(),'+00:00','+03:30')) THEN 1 ELSE 0 END) AS today FROM AspNetUsers"),
           db.query("SELECT LOWER(r.Name) AS role,COUNT(DISTINCT u.Id) AS total FROM AspNetUsers u JOIN AspNetUserRoles ur ON ur.UserId=u.Id JOIN AspNetRoles r ON r.Id=ur.RoleId GROUP BY LOWER(r.Name)"),
           postgresOnlyAccounts(db,10000)
         ]);
-        const roleMap=new Map(roleStats.map(r=>[String(r.role||"").replace(/[^a-z]/g,""),Number(r.total)||0]));
+        const mariaStats=mariaStatsResult[0]||{},roleStats=roleStatsResult,roleMap=new Map(roleStats.map(r=>[String(r.role||"").replace(/[^a-z]/g,""),Number(r.total)||0]));
         const freshToday=fresh.filter(r=>{const d=new Date(r.created_at);return !Number.isNaN(d.getTime())&&new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Tehran",year:"numeric",month:"2-digit",day:"2-digit"}).format(d)===new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Tehran",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date());}).length;
-        const mariaTotal=Number(mariaStats[0]?.total)||0,freshTotal=fresh.length;
-        const mariaLatest=mariaStats[0]?.latest_registration||null,freshLatest=fresh[0]?.created_at||null;
+        const mariaTotal=Number(mariaStats.total)||0,freshTotal=fresh.length;
+        const mariaLatest=mariaStats.latest_registration||null,freshLatest=fresh[0]?.created_at||null;
         const latestRegistration=freshLatest&&(!mariaLatest||new Date(freshLatest)>new Date(mariaLatest))?freshLatest:mariaLatest;
         const users=mariaTotal+freshTotal,admins=(roleMap.get("admin")||0)+(roleMap.get("superadmin")||0)+fresh.filter(r=>["admin","superadmin"].includes(r.effective_role)).length,agents=(roleMap.get("agent")||0)+fresh.filter(r=>r.effective_role==="agent").length;
         const [[customerTenants]]=await db.query("SELECT COUNT(*) AS total FROM Customers");
-        return json(res,200,{data:{users,admins,agents,legacy_customers:users,legacy_users:users,users_active:(Number(mariaStats[0]?.active)||0)+fresh.filter(r=>r.is_active).length,users_inactive:(Number(mariaStats[0]?.inactive)||0)+fresh.filter(r=>!r.is_active).length,users_today:(Number(mariaStats[0]?.today)||0)+freshToday,latest_user_registration:latestRegistration,latestRegistration,legacy_customer_tenants:Number(customerTenants[0]?.total)||0,smsConfigured:Boolean(KAVENEGAR_API_KEY),identitySource:"MariaDB.AspNetUsers+new PostgreSQL registrations",businessDateTimezone:"Asia/Tehran"}});
+        return json(res,200,{data:{users,admins,agents,legacy_customers:users,legacy_users:users,users_active:(Number(mariaStats.active)||0)+fresh.filter(r=>r.is_active).length,users_inactive:(Number(mariaStats.inactive)||0)+fresh.filter(r=>!r.is_active).length,users_today:(Number(mariaStats.today)||0)+freshToday,latest_user_registration:latestRegistration,latestRegistration,legacy_customer_tenants:Number(customerTenants[0]?.total)||0,smsConfigured:Boolean(KAVENEGAR_API_KEY),identitySource:"MariaDB.AspNetUsers+new PostgreSQL registrations",businessDateTimezone:"Asia/Tehran"}});
       }
       if (req.method === "GET" && route === "/api/v1/admin/users") {
         const q = await pool.query("SELECT id,username,legacy_username,phone,full_name,email,role,is_active,password_reset_required,created_at,legacy_source,legacy_id,COALESCE((SELECT json_agg(role_code ORDER BY role_code) FROM (SELECT role_code FROM user_role_overrides WHERE user_id=users.id UNION SELECT role_code FROM user_role_assignments WHERE user_id=users.id AND NOT EXISTS(SELECT 1 FROM user_role_overrides WHERE user_id=users.id)) rr),json_build_array(role)) AS roles FROM users ORDER BY created_at DESC,id DESC LIMIT 500");
@@ -779,7 +779,7 @@ export async function handleApi(req, res, url) {
       }
       if (req.method === "GET" && route === "/api/v1/admin/legacy-customers") {
         const db=legacyMaria();
-        const [[maria],[fresh]]=await Promise.all([db.query("SELECT COUNT(*) AS total FROM AspNetUsers"),postgresOnlyAccounts(db,10000)]);
+        const [mariaResult,fresh]=await Promise.all([db.query("SELECT COUNT(*) AS total FROM AspNetUsers"),postgresOnlyAccounts(db,10000)]);const maria=mariaResult[0]||{};
         const total=(Number(maria[0]?.total)||0)+fresh.length;
         const [todayRows]=await db.query("SELECT COUNT(*) AS total FROM AspNetUsers WHERE DATE(RegDate)=DATE(CONVERT_TZ(UTC_TIMESTAMP(),'+00:00','+03:30'))");
         const latest=[...(await db.query("SELECT MAX(RegDate) AS latest FROM AspNetUsers"))[0],...(fresh.length?[{latest:fresh[0].created_at}]:[])].map(x=>x.latest).filter(Boolean).sort((a,b)=>new Date(b)-new Date(a))[0]||null;
@@ -789,13 +789,13 @@ export async function handleApi(req, res, url) {
         const page=Math.max(1,Number.parseInt(url.searchParams.get("page")||"1",10)||1),pageSize=Math.min(100,Math.max(10,Number.parseInt(url.searchParams.get("pageSize")||"50",10)||50)),search=String(url.searchParams.get("q")||"").trim().slice(0,120),db=legacyMaria(),where=[],values=[];
         if(search){where.push("(u.FirstName LIKE ? OR u.LastName LIKE ? OR CONCAT_WS(' ',u.FirstName,u.LastName) LIKE ? OR u.Mobile LIKE ? OR u.Phone LIKE ? OR u.PhoneNumber LIKE ? OR u.Email LIKE ? OR u.UserName LIKE ? OR u.NationalCode LIKE ? OR u.UserCode LIKE ? OR CAST(u.Id AS CHAR) LIKE ? OR u.AffiliateCode LIKE ?)");for(let i=0;i<12;i++)values.push("%"+search+"%");}
         const filter=where.length?" WHERE "+where.join(" AND "):"";
-        const [[count],[fresh]]=await Promise.all([db.query("SELECT COUNT(*) AS total FROM AspNetUsers u"+filter,values),postgresOnlyAccounts(db,10000)]);
+        const [countResult,fresh]=await Promise.all([db.query("SELECT COUNT(*) AS total FROM AspNetUsers u"+filter,values),postgresOnlyAccounts(db,10000)]);const count=countResult[0]||{};
         const offset=Math.max(0,(page-1)*pageSize-fresh.length),limit=pageSize+fresh.length;
         const [legacyRows]=await db.query("SELECT CAST(u.Id AS CHAR) AS legacy_id,COALESCE(NULLIF(TRIM(CONCAT_WS(' ',u.FirstName,u.LastName)),''),NULLIF(u.UserName,''),NULLIF(u.Mobile,''),'کاربر بدون نام') AS name,COALESCE(NULLIF(u.Mobile,''),NULLIF(u.Phone,''),NULLIF(u.PhoneNumber,'')) AS mobile,u.Email AS email,COALESCE(NULLIF(u.UserCode,''),CAST(u.Id AS CHAR)) AS customer_code,u.RegDate AS registered_at,CAST(u.CustomerId AS CHAR) AS customer_id,CAST(u.AgentId AS CHAR) AS agent_id,u.UserName AS legacy_username,u.IsActive AS is_active,(SELECT GROUP_CONCAT(DISTINCT r.Name ORDER BY r.Name SEPARATOR ',') FROM AspNetUserRoles ur JOIN AspNetRoles r ON r.Id=ur.RoleId WHERE ur.UserId=u.Id) AS roles FROM AspNetUsers u"+filter+" ORDER BY u.RegDate DESC,u.Id DESC LIMIT ? OFFSET ?",[...values,limit,offset]);
         const classify=roles=>{const r=String(roles||"").toLowerCase().replace(/[^a-z,]/g,"").split(",");return r.some(x=>x==="superadmin"||x==="admin")?"مدیر سامانه":r.includes("agent")?"نماینده":r.some(x=>x.includes("marketer"))?"بازاریاب":"مشتری سامانه";};
         const merged=[...fresh,...legacyRows.map(r=>({...r,roles:String(r.roles||"").split(",").filter(Boolean),account_type:classify(r.roles),source_table:"AspNetUsers"}))].sort((a,b)=>new Date(b.registered_at||0)-new Date(a.registered_at||0));
         const rows=merged.slice((page-1)*pageSize,page*pageSize);
-        return json(res,200,{data:{rows,total:(Number(count[0]?.total)||0)+fresh.length,page,pageSize,sourceTable:"MariaDB.AspNetUsers",additionalSource:"new PostgreSQL registrations",timezone:"Asia/Tehran"}});
+        return json(res,200,{data:{rows,total:(Number(count.total)||0)+fresh.length,page,pageSize,sourceTable:"MariaDB.AspNetUsers",additionalSource:"new PostgreSQL registrations",timezone:"Asia/Tehran"}});
       }
       if (req.method === "GET" && route === "/api/v1/admin/legacy-agents-page") {
         const page=Math.max(1,Number.parseInt(url.searchParams.get("page")||"1",10)||1),pageSize=Math.min(100,Math.max(10,Number.parseInt(url.searchParams.get("pageSize")||"25",10)||25)),search=String(url.searchParams.get("q")||"").trim().slice(0,120),status=String(url.searchParams.get("status")||"").trim();
