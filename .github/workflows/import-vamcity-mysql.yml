@@ -51,7 +51,7 @@ jobs:
             php -r '
             $c=require "database/migration/config.php";
             $m=$c["mysql"];
-            $targets=["vamcitydigibilepay","vamcitydigibilepay_bluvamdb","vamcitydigibilepay_transferdb"];
+            $targets=["digibail_vamcitydigibilepay"];
             foreach($targets as $name){
               $db=new mysqli($m["host"]??"localhost",$m["user"],$m["password"],$name,(int)($m["port"]??3306),$m["socket"]??null);
               if($db->connect_errno){fwrite(STDERR,"VERIFY_CONNECT_FAILED ".$name."\n");exit(40);}
