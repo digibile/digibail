@@ -820,8 +820,9 @@ export async function handleApi(req, res, url) {
             transfer:"mariadb.OnlineMoneyTransfer__AspNetUsers"
           }[sourceKey];
           if(identitySource){
+            const mappingColumn=sourceKey==="transfer"?"MariaDbUserKey":"MariaDbUserId";
             const [mappingRows]=await db.query(
-              "SELECT AppUserId FROM DigibailAppUserIdentity WHERE LegacySource=? AND MariaDbUserId=? LIMIT 1",
+              "SELECT AppUserId FROM DigibailAppUserIdentity WHERE LegacySource=? AND "+mappingColumn+"=? LIMIT 1",
               [identitySource,legacyId]
             );
             if(mappingRows.length){
