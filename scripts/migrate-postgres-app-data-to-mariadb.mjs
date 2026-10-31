@@ -52,6 +52,9 @@ function qpg(value) { return '"' + String(value).replace(/"/g, '""') + '"'; }
 function jsonSafe(value) {
   return JSON.stringify(value, (_key, item) => {
     if (Buffer.isBuffer(item)) return { __digibail_binary_base64: item.toString("base64") };
+    if (item && item.type === "Buffer" && Array.isArray(item.data)) {
+      return { __digibail_binary_base64: Buffer.from(item.data).toString("base64") };
+    }
     if (item instanceof Date) return item.toISOString();
     return item;
   });
