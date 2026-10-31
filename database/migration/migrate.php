@@ -158,6 +158,34 @@ function ensureState(mysqli $db): void {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
     if(!$db->query($sql)) stopNow('Could not create migration checkpoint table: '.$db->error);
 }
+function widenTextColumns(mysqli $db,string $table,array $columns): void {
+    foreach($columns as $c){
+        $sourceType=strtolower((string)$c['data_type']);
+        if(!in_array($sourceType,['varchar','nvarchar','char','nchar'],true)) continue;
+        $bytes=(int)$c['max_length'];
+        $desired=$bytes===-1?-1:(in_array($sourceType,['nvarchar','nchar'],true)?intdiv($bytes,2):$bytes);
+        if($desired===0) continue;
+        $q=$db->query("SELECT DATA_TYPE,CHARACTER_MAXIMUM_LENGTH,IS_NULLABLE,COLUMN_DEFAULT FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name=".qv($db,$table)." AND column_name=".qv($db,(string)$c['column_name']));
+        if(!$q || !$q->num_rows) continue;
+        $target=$q->fetch_assoc();
+        $targetType=strtolower((string)$target['DATA_TYPE']);
+        $targetLength=$target['CHARACTER_MAXIMUM_LENGTH']===null?null:(int)$target['CHARACTER_MAXIMUM_LENGTH'];
+        if($desired!==-1 && !in_array($targetType,['char','varchar'],true)) continue;
+        if($desired===-1 && !in_array($targetType,['char','varchar','tinytext','text','mediumtext'],true)) continue;
+        if($desired!==-1 && $targetLength!==null && $targetLength >= $desired) continue;
+        $newType=$desired===-1?'LONGTEXT':($desired>16000?'TEXT':'VARCHAR('.$desired.')');
+        $nullSql=$target['IS_NULLABLE']==='YES'?' NULL':' NOT NULL';
+        $defaultSql='';
+        if($target['COLUMN_DEFAULT']!==null){
+            $default=(string)$target['COLUMN_DEFAULT'];
+            $defaultSql=' DEFAULT '.(preg_match('/^CURRENT_TIMESTAMP(?:\\(\\d+\\))?$/i',$default)?$default:qv($db,$default));
+        }
+        $sql='ALTER TABLE '.qi($table).' MODIFY COLUMN '.qi((string)$c['column_name']).' '.$newType.$nullSql.$defaultSql;
+        if(!$db->query($sql)) stopNow('Could not widen '.$table.'.'.$c['column_name'].': '.$db->error);
+        logLine('WIDENED '.$table.'.'.$c['column_name'].' to '.$newType);
+    }
+}
+
 function temporalRaw(array $c): bool {
     return in_array($c['data_type'],['datetime2','datetime'],true)
       || ($c['data_type']==='time' && (int)$c['scale']>6);
@@ -273,12 +301,6 @@ foreach($sources as $s){
         $exists=$db->query("SELECT COUNT(*) AS n FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name=".qv($db,$tn));
         if((int)$exists->fetch_assoc()['n']!==1) stopNow('Schema table missing after install: '.$tn);
     }
-    // SQL Server EF migration identifiers can exceed the default MySQL scaffold width of 75.
-    // Widen this metadata column before resuming the checkpointed import; this preserves all source values.
-    if($source==='vamcityc_vamcity_import_20261028'){
-        if(!$db->query('ALTER TABLE '.qi('__EFMigrationsHistory').' MODIFY '.qi('MigrationId').' VARCHAR(255) NOT NULL'))
-            stopNow('Could not widen __EFMigrationsHistory.MigrationId: '.$db->error);
-    }
     ensureState($db);
     $db->query('SET FOREIGN_KEY_CHECKS=0');
 
@@ -289,6 +311,7 @@ foreach($sources as $s){
         $key=$t['schema_name'].'.'.$t['table_name'];
         $tn=mappedTable($t['schema_name'],$t['table_name'],$source);
         $cols=$colsBy[$key]??[];
+        widenTextColumns($db,$tn,$cols);
         $pk=$pkBy[$key]??[]; ksort($pk); $pk=array_values($pk);
         $expected=(int)$t['row_count'];
         $st=$db->query("SELECT expected_rows,imported_rows,status FROM ".qi('__vamcity_migration_state')
