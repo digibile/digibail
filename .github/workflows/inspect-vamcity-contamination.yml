@@ -50,6 +50,11 @@ jobs:
               SELECT u.id,u.legacy_id FROM users u JOIN v_user_ids v ON v.legacy_id=u.legacy_id
               WHERE u.legacy_source='aspnetusers'
             ),
+            v_only_user_rows AS (
+              SELECT u.id,u.legacy_id FROM users u JOIN v_user_ids v ON v.legacy_id=u.legacy_id
+              WHERE u.legacy_source='aspnetusers'
+                AND NOT EXISTS (SELECT 1 FROM legacy_source_data d WHERE d.source_table='dbo.AspNetUsers' AND d.payload->>'Id'=u.legacy_id)
+            ),
             v_customer_rows AS (
               SELECT lc.legacy_id FROM legacy_customers lc
               WHERE left(COALESCE(lc.legacy_source_table,''),9)='vamcityc_'
@@ -77,6 +82,13 @@ jobs:
             UNION ALL SELECT 'contracts_owned_by_vamcity_users',count(*) FROM customer_contracts c JOIN v_user_rows u ON u.id=c.user_id
             UNION ALL SELECT 'audit_logs_by_vamcity_users',count(*) FROM audit_logs a JOIN v_user_rows u ON u.id=a.user_id
             UNION ALL SELECT 'role_assignments_for_vamcity_users',count(*) FROM user_role_assignments a JOIN v_user_rows u ON u.id=a.user_id
+            UNION ALL SELECT 'audit_logs_for_vamcity_only_users',count(*) FROM audit_logs a JOIN v_only_user_rows u ON u.id=a.user_id
+            UNION ALL SELECT 'role_assignments_for_vamcity_only_users',count(*) FROM user_role_assignments a JOIN v_only_user_rows u ON u.id=a.user_id
+            UNION ALL SELECT 'documents_for_vamcity_only_users',count(*) FROM customer_documents d JOIN v_only_user_rows u ON u.id=d.user_id
+            UNION ALL SELECT 'contracts_for_vamcity_only_users',count(*) FROM customer_contracts c JOIN v_only_user_rows u ON u.id=c.user_id
+            UNION ALL SELECT 'beta_inquiries_for_vamcity_only_users',count(*) FROM beta_inquiries b JOIN v_only_user_rows u ON u.id=b.user_id
+            UNION ALL SELECT 'sms_logs_created_by_vamcity_only_users',count(*) FROM sms_logs s JOIN v_only_user_rows u ON u.id=s.created_by
+            UNION ALL SELECT 'sms_settings_updated_by_vamcity_only_users',count(*) FROM sms_provider_settings s JOIN v_only_user_rows u ON u.id=s.updated_by
             UNION ALL SELECT 'vamcity_users_overlapping_original_digibail_ids',count(*) FROM v_user_rows u WHERE EXISTS (SELECT 1 FROM legacy_source_data d WHERE d.source_table='dbo.AspNetUsers' AND d.payload->>'Id'=u.legacy_id)
             UNION ALL SELECT 'vamcity_users_not_in_original_digibail',count(*) FROM v_user_rows u WHERE NOT EXISTS (SELECT 1 FROM legacy_source_data d WHERE d.source_table='dbo.AspNetUsers' AND d.payload->>'Id'=u.legacy_id)
             UNION ALL SELECT 'vamcity_customers_overlapping_original_digibail_ids',count(*) FROM v_customer_rows c WHERE EXISTS (SELECT 1 FROM legacy_source_data d WHERE d.source_table='dbo.Customers' AND d.payload->>'Id'=c.legacy_id::text)
@@ -91,6 +103,7 @@ jobs:
             JOIN information_schema.constraint_column_usage ccu ON ccu.constraint_name=tc.constraint_name AND ccu.constraint_schema=tc.constraint_schema
             JOIN information_schema.referential_constraints rc ON rc.constraint_name=tc.constraint_name AND rc.constraint_schema=tc.constraint_schema
             WHERE tc.constraint_type='FOREIGN KEY'
-              AND ccu.table_name IN ('loan_requests','loan_products','legacy_customers','users','sms_templates')
-            ORDER BY ccu.table_name,tc.table_name;
+              AND (tc.table_name IN ('loan_requests','loan_request_status_history','loan_request_comments','loan_products','legacy_customers','users','sms_templates')
+                   OR ccu.table_name IN ('loan_requests','loan_products','legacy_customers','users','sms_templates'))
+            ORDER BY tc.table_name,ccu.table_name;
             SQL
