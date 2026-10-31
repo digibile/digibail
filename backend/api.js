@@ -27,6 +27,54 @@ async function postgresOnlyAccounts(mariaDb, limit=10000) {
   const known=new Set(existing.flatMap(r=>[r.mobile,r.phone,r.phone_number].map(norm)).filter(Boolean));
   return q.rows.filter(r=>!r.phone||!known.has(norm(r.phone))).map(r=>({...r,legacy_id:String(r.id),mobile:r.phone,email:r.email,legacy_username:r.username,customer_code:String(r.id),registered_at:r.created_at,roles:[r.effective_role],account_type:r.effective_role==="agent"?"نماینده":(["admin","superadmin"].includes(r.effective_role)?"مدیر سامانه":(["marketer","customermarketer"].includes(r.effective_role)?"بازاریاب":"مشتری / کاربر")),source_table:"postgres.users"}));
 }
+
+function legacyRoleCode(value) {
+  const key=String(value||"").toLowerCase().replace(/[^a-z0-9]/g,"");
+  const known={superadmin:"superadmin",admin:"admin",administrator:"admin",agent:"agent",representative:"agent",marketer:"marketer",customermarketer:"customermarketer",member:"member",customer:"customer",user:"customer"};
+  return known[key]||("legacy_"+key.slice(0,32));
+}
+function legacyRoleLabel(code) {
+  return ({superadmin:"مدیر ارشد",admin:"مدیر",agent:"نماینده",marketer:"بازاریاب",customermarketer:"بازاریاب مشتری",member:"عضو",customer:"مشتری"})[code]||String(code||"نقش قدیمی");
+}
+function accountTypeForRoles(roles) {
+  const r=roles||[];
+  if(r.includes("superadmin"))return "مدیر ارشد";
+  if(r.includes("admin"))return "مدیر سامانه";
+  if(r.includes("agent"))return "نماینده";
+  if(r.includes("marketer")||r.includes("customermarketer"))return "بازاریاب";
+  return "مشتری / کاربر";
+}
+async function unifiedUserDirectory({page=1,pageSize=50,search="",role="",status=""}={}) {
+  const db=legacyMaria(),mWhere=[],mValues=[];
+  const q=String(search||"").trim().slice(0,120);
+  if(q){mWhere.push("(u.FirstName LIKE ? OR u.LastName LIKE ? OR CONCAT_WS(' ',u.FirstName,u.LastName) LIKE ? OR u.Mobile LIKE ? OR u.Phone LIKE ? OR u.PhoneNumber LIKE ? OR u.Email LIKE ? OR u.UserName LIKE ? OR u.NationalCode LIKE ? OR u.UserCode LIKE ? OR CAST(u.Id AS CHAR) LIKE ? OR u.AffiliateCode LIKE ?)");for(let i=0;i<12;i++)mValues.push("%"+q+"%");}
+  if(role){const raw=String(role).startsWith("legacy_")?String(role).slice(7):String(role);mWhere.push("EXISTS(SELECT 1 FROM AspNetUserRoles urx JOIN AspNetRoles rx ON rx.Id=urx.RoleId WHERE urx.UserId=u.Id AND LOWER(REPLACE(REPLACE(REPLACE(rx.Name,' ',''),'-',''),'_',''))=?)");mValues.push(raw);}
+  if(status==="active")mWhere.push("COALESCE(u.IsActive,1)=1");
+  if(status==="inactive")mWhere.push("COALESCE(u.IsActive,1)=0");
+  const mFilter=mWhere.length?" WHERE "+mWhere.join(" AND "):"";
+  const [mCountRows,mStatsRows,mRows]=await Promise.all([
+    db.query("SELECT COUNT(*) AS total FROM AspNetUsers u"+mFilter,mValues),
+    db.query("SELECT COUNT(*) AS total,SUM(CASE WHEN COALESCE(IsActive,1)=1 THEN 1 ELSE 0 END) AS active,SUM(CASE WHEN COALESCE(IsActive,1)=0 THEN 1 ELSE 0 END) AS inactive,SUM(CASE WHEN DATE(RegDate)=DATE(CONVERT_TZ(UTC_TIMESTAMP(),'+00:00','+03:30')) THEN 1 ELSE 0 END) AS today,DATE_FORMAT(MAX(RegDate),'%Y-%m-%dT%H:%i:%s+03:30') AS latest_registration FROM AspNetUsers"),
+    db.query("SELECT CAST(u.Id AS CHAR) AS legacy_id,COALESCE(NULLIF(TRIM(CONCAT_WS(' ',u.FirstName,u.LastName)),''),NULLIF(u.UserName,''),NULLIF(u.Mobile,''),'کاربر بدون نام') AS full_name,u.UserName AS username,u.UserName AS legacy_username,COALESCE(NULLIF(u.Mobile,''),NULLIF(u.Phone,''),NULLIF(u.PhoneNumber,'')) AS phone,u.Email AS email,u.NationalCode AS national_code,u.UserCode AS customer_code,u.AgentId AS legacy_agent_id,CAST(u.CustomerId AS CHAR) AS legacy_customer_id,COALESCE(u.IsActive,1) AS is_active,DATE_FORMAT(u.RegDate,'%Y-%m-%dT%H:%i:%s+03:30') AS created_at,DATE_FORMAT(u.RegDate,'%Y-%m-%dT%H:%i:%s+03:30') AS registered_at,(SELECT GROUP_CONCAT(DISTINCT r.Name ORDER BY r.Name SEPARATOR ',') FROM AspNetUserRoles ur JOIN AspNetRoles r ON r.Id=ur.RoleId WHERE ur.UserId=u.Id) AS roles_raw,(SELECT r.Name FROM AspNetUserRoles ur JOIN AspNetRoles r ON r.Id=ur.RoleId WHERE ur.UserId=u.Id ORDER BY CASE LOWER(REPLACE(REPLACE(REPLACE(r.Name,' ',''),'-',''),'_','')) WHEN 'superadmin' THEN 1 WHEN 'admin' THEN 2 WHEN 'agent' THEN 3 WHEN 'marketer' THEN 4 WHEN 'customermarketer' THEN 5 WHEN 'member' THEN 6 ELSE 7 END,r.Name LIMIT 1) AS primary_role FROM AspNetUsers u"+mFilter+" ORDER BY u.RegDate DESC,u.Id DESC LIMIT ?",[...mValues,Math.min(10000,page*pageSize)])
+  ]);
+  const mariaRows=mRows[0].map(r=>{const roles=String(r.roles_raw||"").split(",").filter(Boolean).map(legacyRoleCode);const roleCode=legacyRoleCode(r.primary_role||"customer");return {...r,id:"legacy:"+String(r.legacy_id),role:roleCode,roles:roles.length?roles:[roleCode],account_type:accountTypeForRoles(roles.length?roles:[roleCode]),legacy_source:"AspNetUsers",source:"mariadb",password_reset_required:false,is_active:Boolean(Number(r.is_active))};});
+  const fresh=await postgresOnlyAccounts(db,10000);
+  const norm=v=>String(v||"").toLowerCase();
+  const freshFiltered=fresh.filter(r=>{
+    if(role&&String(r.effective_role||r.role)!==role)return false;
+    if(status==="active"&&!r.is_active)return false;
+    if(status==="inactive"&&r.is_active)return false;
+    if(q&&!([r.full_name,r.username,r.phone,r.email,r.national_code,r.id].some(v=>norm(v).includes(norm(q)))))return false;
+    return true;
+  });
+  const dateValue=v=>{const n=new Date(v||0).getTime();return Number.isFinite(n)?n:0;};
+  const merged=[...mariaRows,...freshFiltered].sort((a,b)=>dateValue(b.created_at)-dateValue(a.created_at)||String(b.id).localeCompare(String(a.id)));
+  const mStats=mStatsRows[0][0]||{},latestFresh=fresh[0]?.created_at||null,latestMaria=mStats.latest_registration||null;
+  const latestRegistration=latestFresh&&(!latestMaria||dateValue(latestFresh)>dateValue(latestMaria))?latestFresh:latestMaria;
+  const todayFresh=fresh.filter(r=>new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Tehran",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date(r.created_at))===new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Tehran",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date())).length;
+  return {rows:merged.slice((page-1)*pageSize,page*pageSize),total:(Number(mCountRows[0][0]?.total)||0)+freshFiltered.length,overallTotal:(Number(mStats.total)||0)+fresh.length,activeTotal:(Number(mStats.active)||0)+fresh.filter(r=>r.is_active).length,inactiveTotal:(Number(mStats.inactive)||0)+fresh.filter(r=>!r.is_active).length,todayTotal:(Number(mStats.today)||0)+todayFresh,latestRegistration,page,pageSize,sourceTable:"MariaDB.AspNetUsers+PostgreSQL.users",timezone:"Asia/Tehran"};
+}
+
 const sqlIdent = value => "`" + String(value).replace(/`/g, "``") + "`";
 
 const JWT_SECRET = process.env.JWT_SECRET || "";
