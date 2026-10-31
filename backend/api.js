@@ -2,8 +2,21 @@ import crypto from "node:crypto";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { Pool } from "pg";
+import { createPool } from "mysql2/promise";
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL, max: 10, connectionTimeoutMillis: 5000 });
+let legacyMariaPool = null;
+function legacyMaria() {
+  const database = process.env.MARIADB_DATABASE || "digibail_vamcitydigibilepay";
+  const user = process.env.MARIADB_USER || "";
+  const password = process.env.MARIADB_PASSWORD || "";
+  const socketPath = process.env.MARIADB_SOCKET || "/var/run/mysqld/mysqld.sock";
+  if (!user || !password) throw Object.assign(new Error("اتصال پایگاه داده اصلی تنظیم نشده است."), { status: 503, code: "mariadb_not_configured" });
+  if (!legacyMariaPool) legacyMariaPool = createPool({ socketPath, user, password, database, waitForConnections: true, connectionLimit: 4, queueLimit: 20, charset: "utf8mb4", connectTimeout: 8000 });
+  return legacyMariaPool;
+}
+const sqlIdent = value => "`" + String(value).replace(/`/g, "``") + "`";
+
 const JWT_SECRET = process.env.JWT_SECRET || "";
 const OTP_PEPPER = process.env.OTP_PEPPER || "";
 const CAPTCHA_PEPPER = process.env.CAPTCHA_PEPPER || "";
@@ -744,23 +757,31 @@ export async function handleApi(req, res, url) {
         return json(res,200,{data:{rows:rowsQ.rows,total:Number(totalQ.rows[0]?.total)||0,page,pageSize}});
       }
       if (req.method === "GET" && route === "/api/v1/admin/legacy-source-tables") {
-        const q = await pool.query(
-          "SELECT s.payload->>'sourceTable' AS source_table,COALESCE(d.row_count,0)::int AS row_count FROM legacy_source_data s LEFT JOIN (SELECT source_table,COUNT(*)::int AS row_count FROM legacy_source_data WHERE source_table<>'__legacy_schema__' GROUP BY source_table) d ON d.source_table=s.payload->>'sourceTable' WHERE s.source_table='__legacy_schema__' ORDER BY s.payload->>'sourceTable'"
-        );
-        return json(res, 200, { data: q.rows });
+        const db = legacyMaria(), database = process.env.MARIADB_DATABASE || "digibail_vamcitydigibilepay";
+        const [tables] = await db.query("SELECT TABLE_NAME FROM information_schema.tables WHERE TABLE_SCHEMA=? AND TABLE_TYPE='BASE TABLE' AND TABLE_NAME NOT LIKE '__vamcity\\_%' ORDER BY TABLE_NAME", [database]);
+        const data = [];
+        for (const item of tables) {
+          const table = String(item.TABLE_NAME);
+          const [counts] = await db.query("SELECT COUNT(*) AS row_count FROM " + sqlIdent(table));
+          data.push({ source_table: table, row_count: Number(counts[0]?.row_count) || 0 });
+        }
+        return json(res, 200, { data });
       }
       if (req.method === "GET" && route === "/api/v1/admin/legacy-source-data") {
         const sourceTable = String(url.searchParams.get("table") || "");
-        if (!/^[A-Za-z0-9_.]{1,120}$/.test(sourceTable)) {
-          return json(res, 400, { message: "نوع داده قدیمی معتبر نیست." });
-        }
+        if (!/^[A-Za-z0-9_]{1,120}$/.test(sourceTable)) return json(res, 400, { message: "نوع داده قدیمی معتبر نیست." });
         const limit = Math.min(500, Math.max(1, Number.parseInt(url.searchParams.get("limit") || "500", 10) || 500));
         const offset = Math.max(0, Number.parseInt(url.searchParams.get("offset") || "0", 10) || 0);
-        const q = await pool.query(
-          "SELECT legacy_id,payload,imported_at FROM legacy_source_data WHERE source_table=$1 ORDER BY imported_at DESC,legacy_id LIMIT $2 OFFSET $3",
-          [sourceTable, limit, offset]
-        );
-        return json(res, 200, { data: q.rows });
+        const db = legacyMaria(), database = process.env.MARIADB_DATABASE || "digibail_vamcitydigibilepay";
+        const [exists] = await db.query("SELECT TABLE_NAME FROM information_schema.tables WHERE TABLE_SCHEMA=? AND TABLE_NAME=? AND TABLE_TYPE='BASE TABLE' LIMIT 1", [database, sourceTable]);
+        if (!exists.length) return json(res, 404, { message: "جدول منتقل‌شده پیدا نشد." });
+        const [keys] = await db.query("SELECT COLUMN_NAME FROM information_schema.key_column_usage WHERE TABLE_SCHEMA=? AND TABLE_NAME=? AND CONSTRAINT_NAME='PRIMARY' ORDER BY ORDINAL_POSITION", [database, sourceTable]);
+        const [columns] = await db.query("SELECT COLUMN_NAME FROM information_schema.columns WHERE TABLE_SCHEMA=? AND TABLE_NAME=? ORDER BY ORDINAL_POSITION", [database, sourceTable]);
+        const primary = keys.map(x => x.COLUMN_NAME);
+        const order = primary.length ? primary.map(sqlIdent).join(",") : (columns[0] ? sqlIdent(columns[0].COLUMN_NAME) : "1");
+        const [countRows] = await db.query("SELECT COUNT(*) AS total FROM " + sqlIdent(sourceTable));
+        const [rows] = await db.query("SELECT * FROM " + sqlIdent(sourceTable) + " ORDER BY " + order + " LIMIT ? OFFSET ?", [limit, offset]);
+        return json(res, 200, { data: rows.map((payload,index)=>({ legacy_id: primary.length ? primary.map(k=>String(payload[k] ?? "")).join(" / ") : String(offset+index+1), payload, imported_at: null })), total: Number(countRows[0]?.total)||0 });
       }
       if (req.method === "GET" && route === "/api/v1/admin/legacy-relational-tables") {
         const q = await pool.query("SELECT source_schema,source_table,source_rows,imported_rows,imported_at FROM legacy_digibail._import_manifest ORDER BY source_schema,source_table");
