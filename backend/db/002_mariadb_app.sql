@@ -4,11 +4,11 @@ SET NAMES utf8mb4;
 
 CREATE TABLE IF NOT EXISTS users (
  id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
- username VARCHAR(80) NULL,
- phone VARCHAR(16) NULL,
+ username VARCHAR(160) NULL,
+ phone VARCHAR(64) NULL,
  full_name VARCHAR(160) NOT NULL,
- national_code CHAR(10) NULL,
- email VARCHAR(254) NULL,
+ national_code VARCHAR(32) NULL,
+ email VARCHAR(320) NULL,
  password_hash LONGTEXT NOT NULL,
  role VARCHAR(32) NOT NULL DEFAULT 'customer',
  is_active TINYINT(1) NOT NULL DEFAULT 1,
@@ -22,10 +22,10 @@ CREATE TABLE IF NOT EXISTS users (
  legacy_agent_metadata_id VARCHAR(128) NULL,
  created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
  updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
- UNIQUE KEY uq_digibail_users_username(username),
- UNIQUE KEY uq_digibail_users_phone(phone),
- UNIQUE KEY uq_digibail_users_national_code(national_code),
  UNIQUE KEY uq_digibail_users_legacy(legacy_source,legacy_id),
+ KEY ix_digibail_users_username(username),
+ KEY ix_digibail_users_phone(phone),
+ KEY ix_digibail_users_national_code(national_code),
  KEY ix_digibail_users_created(created_at),
  KEY ix_digibail_users_role_active(role,is_active)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -60,11 +60,13 @@ CREATE TABLE IF NOT EXISTS user_role_overrides (
 
 CREATE TABLE IF NOT EXISTS DigibailAppUserIdentity (
  AppUserId BIGINT NOT NULL PRIMARY KEY,
+ LegacySource VARCHAR(80) NOT NULL,
  MariaDbUserId BIGINT NOT NULL,
  RoleCode VARCHAR(40) NOT NULL,
  CreatedAt DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
  UpdatedAt DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
- UNIQUE KEY uq_DigibailAppUserIdentity_MariaDbUserId(MariaDbUserId)
+ UNIQUE KEY uq_DigibailAppUserIdentity_SourceUser(LegacySource,MariaDbUserId),
+ KEY ix_DigibailAppUserIdentity_MariaUser(MariaDbUserId)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS sms_provider_settings (
