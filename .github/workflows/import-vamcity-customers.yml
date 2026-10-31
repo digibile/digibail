@@ -9,10 +9,13 @@ on:
       - scripts/migrate-legacy-digibail.js
       - scripts/digibail-legacy-schema.json
       - scripts/import-vamcity-customers.mjs
-      - .github/workflows/import-vamcity-customers.yml
 
 permissions:
   contents: read
+
+concurrency:
+  group: digibail-vamcity-identity-import
+  cancel-in-progress: false
 jobs:
   import:
     runs-on: ubuntu-latest
@@ -33,7 +36,7 @@ jobs:
             READY=0
             for n in $(seq 1 90); do
               APP_ID="$($D compose ps -q app 2>/dev/null || true)"
-              if [ -n "$APP_ID" ] && $D exec "$APP_ID" grep -q "DIGIBAIL_IMPORT_FIX_20261031_NULLABLE_MIRROR_V2" /app/scripts/migrate-legacy-digibail.js 2>/dev/null && curl -fsS http://127.0.0.1:1631/healthz >/dev/null 2>&1; then READY=1; break; fi
+              if [ -n "$APP_ID" ] && $D exec "$APP_ID" grep -q "DIGIBAIL_IMPORT_FIX_20261031_PRESERVE_IDENTITY_NULLABILITY_V3" /app/scripts/migrate-legacy-digibail.js 2>/dev/null && curl -fsS http://127.0.0.1:1631/healthz >/dev/null 2>&1; then READY=1; break; fi
               sleep 5
             done
             [ "$READY" -eq 1 ] || { echo "APP_RELEASE_NOT_READY"; exit 21; }
