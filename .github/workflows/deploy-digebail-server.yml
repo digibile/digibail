@@ -95,25 +95,33 @@ jobs:
               ls -l /var/run/docker.sock 2>/dev/null || true
               exit 20
             fi
-            if $DOCKER ps -a --format '{{.Names}}' | grep -E 'digibail.*db|db.*digibail' >/dev/null; then DB_EXISTS=1; fi
-            if [ ! -f .env ] || ! grep -qE '^JWT_SECRET=.+$' .env || ! grep -qE '^OTP_PEPPER=.+$' .env || ! grep -qE '^CAPTCHA_PEPPER=.+$' .env; then
-                exit 21
+            # MariaDB is the only database. Preserve an existing .env and fill only missing app secrets.
+            if [ ! -f .env ]; then umask 077; : > .env; fi
+            chmod 600 .env
+            for key in JWT_SECRET OTP_PEPPER CAPTCHA_PEPPER; do
+              if ! grep -qE "^\${key}=.+" .env; then
+                case "$key" in
+                  JWT_SECRET) value="$(openssl rand -hex 48)" ;;
+                  OTP_PEPPER) value="$(openssl rand -hex 32)" ;;
+                  CAPTCHA_PEPPER) value="$(openssl rand -hex 32)" ;;
+                esac
+                printf '%s=%s\n' "$key" "$value" >> .env
+                unset value
               fi
-              umask 077
-              JWT="$(openssl rand -hex 48)"
-              OTP="$(openssl rand -hex 32)"
-              CAPTCHA="$(openssl rand -hex 32)"
-              {
-                printf 'PORT=1631\nHOST=0.0.0.0\n'
-                printf 'JWT_SECRET=%s\nOTP_PEPPER=%s\nCAPTCHA_PEPPER=%s\n' "$JWT" "$OTP" "$CAPTCHA"
-                printf 'BRAND_NAME=دیجی‌بایل پی\n'
-                printf 'KAVENEGAR_API_KEY=\nKAVENEGAR_TEMPLATE=\n'
-              } > .env
-              chmod 600 .env
-              echo "SECURE_ENV_CREATED=1 (secret values hidden)"
-            fi
+            done
+            for key in PORT HOST BRAND_NAME KAVENEGAR_API_KEY KAVENEGAR_TEMPLATE; do
+              if ! grep -q "^\${key}=" .env; then
+                case "$key" in
+                  PORT) printf 'PORT=1631\n' >> .env ;;
+                  HOST) printf 'HOST=0.0.0.0\n' >> .env ;;
+                  BRAND_NAME) printf 'BRAND_NAME=دیجی‌بایل پی\n' >> .env ;;
+                  KAVENEGAR_API_KEY) printf 'KAVENEGAR_API_KEY=\n' >> .env ;;
+                  KAVENEGAR_TEMPLATE) printf 'KAVENEGAR_TEMPLATE=\n' >> .env ;;
+                esac
+              fi
+            done
             if [ -z "${MYSQL_PASS:-}" ]; then
-              echo "BLOCKED: VAMCITY_MYSQL_PASSWORD is required for the live admin data connection."
+              echo "BLOCKED: MariaDB password secret is required for the application database."
               exit 25
             fi
             umask 077
@@ -173,12 +181,11 @@ jobs:
             done
             if [ "$HEALTH_OK" -ne 1 ]; then
               echo "ERROR: application health did not recover within 4 minutes."
-              echo "=== database active queries and lock waits ==="
-              $DOCKER compose exec -T db sh -lc 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -x -c "SELECT pid, state, wait_event_type, wait_event, now()-query_start AS duration, left(query,300) AS query FROM pg_stat_activity WHERE datname=current_database() ORDER BY query_start NULLS LAST" || true'
+              echo "=== MariaDB socket connectivity ==="
+              if command -v mariadb-admin >/dev/null 2>&1; then MYSQL_PWD="$MYSQL_PASS" mariadb-admin --protocol=SOCKET --socket=/var/lib/mysql/mysql.sock --user=digibail_vamcitydigibilepay ping || true; fi
               echo "=== application processes and startup log ==="
               $DOCKER compose ps
               $DOCKER compose exec -T app sh -lc 'ps -ef; (wget -qO- http://127.0.0.1:1632/healthz || true)'
-              $DOCKER compose logs --tail=200 app db
               exit 23
             fi
             echo "=== provision secure admin recovery access ==="
