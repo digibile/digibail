@@ -1,0 +1,8 @@
+FROM node:22-alpine
+ENV NODE_ENV=production
+WORKDIR /app
+COPY scripts/migration-tools/verifier-package.json ./package.json
+RUN npm install --omit=dev --no-audit --no-fund && npm cache clean --force
+COPY scripts/migration-tools/verify-single-mariadb-ready.mjs ./verify-single-mariadb-ready.mjs
+RUN node --check verify-single-mariadb-ready.mjs
+CMD ["node", "verify-single-mariadb-ready.mjs"]
