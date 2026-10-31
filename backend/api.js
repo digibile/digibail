@@ -859,6 +859,10 @@ export async function handleApi(req, res, url) {
           const result=await client.query("UPDATE users SET full_name=COALESCE($1,full_name),phone=CASE WHEN $2::boolean THEN $3 ELSE phone END,email=CASE WHEN $4::boolean THEN $5 ELSE email END,role=COALESCE($6,role),is_active=COALESCE($7,is_active),updated_at=NOW() WHERE id=$8 RETURNING id,full_name,phone,email,role,is_active,updated_at",[fullName,input.phone!==undefined,phone,input.email!==undefined,email,role,active,id]);
           updated=result.rows[0];if(role!==null)await client.query("INSERT INTO user_role_overrides(user_id,role_code,updated_by,updated_at) VALUES($1,$2,$3,NOW()) ON CONFLICT(user_id) DO UPDATE SET role_code=EXCLUDED.role_code,updated_by=EXCLUDED.updated_by,updated_at=NOW()",[id,role,actorId]);await client.query("COMMIT");
         }catch(error){await client.query("ROLLBACK");throw error;}finally{client.release();}
+        try{
+          const mirror=await pool.query("SELECT id,username,phone,full_name,national_code,email,is_active,COALESCE((SELECT role_code FROM user_role_overrides o WHERE o.user_id=users.id),role) AS effective_role,to_char(created_at AT TIME ZONE 'Asia/Tehran','YYYY-MM-DD HH24:MI:SS.US') AS created_at_tehran FROM users WHERE id=$1",[id]);
+          if(mirror.rowCount)await syncUserToMariaDB(legacyMaria(),mirror.rows[0]);
+        }catch(mirrorError){console.error("MARIADB_ADMIN_USER_MIRROR_FAILED="+String(mirrorError.code||mirrorError.name||"unknown"));}
         await audit(req,"admin.user.updated",actorId,{targetUserId:id,source:"postgres.users",changed:{fullName:fullName!==null,phone:input.phone!==undefined,email:input.email!==undefined,role:role!==null,isActive:active!==null}});
         return json(res,200,{data:updated,message:"اطلاعات حساب به‌روزرسانی شد."});
       }
