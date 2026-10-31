@@ -686,9 +686,10 @@ export async function handleApi(req, res, url) {
         return json(res,200,{data:{rows:rows.rows,total:Number(count.rows[0]?.total)||0,page,pageSize,summary:summary.rows[0],statuses:statuses.rows}});
       }
       if (req.method === "GET" && route === "/api/v1/admin/summary") {
-        const q = await pool.query("SELECT (SELECT COUNT(*) FROM users) AS users,(SELECT COUNT(*) FROM users WHERE lower(role) IN ('admin','superadmin')) AS admins,(SELECT COUNT(*) FROM legacy_customers) AS legacy_customers,(SELECT COUNT(*) FROM sms_templates) AS sms_templates,(SELECT COUNT(*) FROM sms_logs) AS sms_logs");
+        const q = await pool.query("SELECT (SELECT COUNT(*) FROM users) AS users,(SELECT COUNT(*) FROM users WHERE lower(role) IN ('admin','superadmin')) AS admins,(SELECT COUNT(*) FROM sms_templates) AS sms_templates,(SELECT COUNT(*) FROM sms_logs) AS sms_logs");
+        const db=legacyMaria(), [customers]=await db.query("SELECT COUNT(*) AS total FROM Customers"), [legacyUsers]=await db.query("SELECT COUNT(*) AS total FROM AspNetUsers");
         const configured = Boolean(KAVENEGAR_API_KEY);
-        return json(res, 200, { data: { ...q.rows[0], smsConfigured: configured } });
+        return json(res, 200, { data: { ...q.rows[0], legacy_customers:Number(customers[0]?.total)||0, legacy_users:Number(legacyUsers[0]?.total)||0, smsConfigured: configured } });
       }
       if (req.method === "GET" && route === "/api/v1/admin/users") {
         const q = await pool.query("SELECT id,username,legacy_username,phone,full_name,email,role,is_active,password_reset_required,created_at,legacy_source,COALESCE((SELECT json_agg(role_code ORDER BY role_code) FROM user_role_assignments WHERE user_id=users.id),json_build_array(role)) AS roles FROM users ORDER BY created_at DESC,id DESC LIMIT 500");
