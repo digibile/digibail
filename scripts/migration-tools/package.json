@@ -2,8 +2,10 @@
   "name": "digibail-one-time-migration-tools",
   "private": true,
   "type": "module",
-  "description": "Isolated one-time reader for the retired PostgreSQL source; not part of the web runtime.",
   "dependencies": {
-    "pg": "^8.13.1"
+    "pg": "^8.13.1",
+    "mysql2": "^3.15.3",
+    "bcryptjs": "^2.4.3",
+    "jsonwebtoken": "^9.0.2"
   }
 }
