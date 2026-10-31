@@ -36,7 +36,7 @@ jobs:
               (SELECT count(*) FROM legacy_digibail._import_manifest) AS relational_manifest_tables,
               (SELECT count(*) FILTER (WHERE imported_rows>0) FROM legacy_digibail._import_manifest) AS tables_with_imported_rows,
               (SELECT coalesce(sum(imported_rows),0) FROM legacy_digibail._import_manifest) AS total_relational_rows,
-              (SELECT count(*) FROM information_schema.tables WHERE table_schema=chr(108)||chr(101)||chr(103)||chr(97)||chr(99)||chr(121)||chr(95)||chr(100)||chr(105)||chr(103)||chr(105)||chr(98)||chr(97)||chr(105) AND table_type=chr(66)||chr(65)||chr(83)||chr(69)||chr(32)||chr(84)||chr(65)||chr(66)||chr(76)||chr(69)) AS physical_relational_tables,
+              (SELECT count(*) FROM pg_catalog.pg_tables WHERE schemaname=chr(108)||chr(101)||chr(103)||chr(97)||chr(99)||chr(121)||chr(95)||chr(100)||chr(105)||chr(103)||chr(105)||chr(98)||chr(97)||chr(105)) AS physical_relational_tables,
               (SELECT count(*) FROM legacy_source_data WHERE source_table=chr(100)||chr(98)||chr(111)||chr(46)||chr(65)||chr(115)||chr(112)||chr(78)||chr(101)||chr(116)||chr(85)||chr(115)||chr(101)||chr(114)||chr(115)) AS original_users,
               (SELECT count(*) FROM legacy_source_data WHERE source_table=chr(65)||chr(115)||chr(112)||chr(78)||chr(101)||chr(116)||chr(82)||chr(111)||chr(108)||chr(101)||chr(115)) AS original_roles,
               (SELECT count(*) FROM legacy_source_data WHERE source_table=chr(65)||chr(115)||chr(112)||chr(78)||chr(101)||chr(116)||chr(85)||chr(115)||chr(101)||chr(114)||chr(82)||chr(111)||chr(108)||chr(101)||chr(115)) AS original_user_role_links,
@@ -80,32 +80,57 @@ jobs:
             console.log("MANIFEST_RESPONSE_TYPE=" + (Array.isArray(tables) ? "array" : typeof tables));
             console.log("MANIFEST_RESPONSE_COUNT=" + (Array.isArray(tables) ? tables.length : "n/a"));
             if (!Array.isArray(tables) || tables.length < 50) throw new Error("Relational table manifest incomplete: " + JSON.stringify(tables).slice(0,1200));
-            const selected = tables.find(t => Number(t.imported_rows) > 0) || tables[0];
-            if (!selected || !selected.source_schema || !selected.source_table) throw new Error("No usable relational table found");
-            const tableName = selected.source_schema + "." + selected.source_table;
-            const dataResponse = await fetch(base + "/api/v1/admin/legacy-relational-data?table=" + encodeURIComponent(tableName) + "&offset=0&limit=50", { headers });
-            if (!dataResponse.ok) {
-              const detail = await dataResponse.text();
-              console.log("RELATIONAL_DATA_ERROR_BODY=" + detail.slice(0,3000));
-              throw new Error("Relational table data API failed: " + dataResponse.status);
+            const populated = tables.filter(t => Number(t.imported_rows) > 0);
+            if (populated.length !== 11) throw new Error("Unexpected number of populated source tables: " + populated.length);
+            let testedRows = 0;
+            let paginationTested = false;
+            for (const table of populated) {
+              if (!table.source_schema || !table.source_table) throw new Error("Malformed manifest entry");
+              const tableName = table.source_schema + "." + table.source_table;
+              const endpoint = base + "/api/v1/admin/legacy-relational-data?table=" + encodeURIComponent(tableName);
+              const response = await fetch(endpoint + "&offset=0&limit=50", { headers });
+              if (!response.ok) {
+                const detail = await response.text();
+                console.log("RELATIONAL_DATA_ERROR table=" + tableName + " body=" + detail.slice(0,1500));
+                throw new Error("Relational table data API failed for " + tableName + ": " + response.status);
+              }
+              const data = await response.json();
+              if (!Array.isArray(data.columns) || data.columns.length === 0) throw new Error("Relational column metadata missing for " + tableName);
+              if (!Array.isArray(data.rows) || !Array.isArray(data.primaryKeys) || !Array.isArray(data.foreignKeys) || data.primaryKeys.length === 0) throw new Error("Relational data shape or primary key invalid for " + tableName);
+              if (Number(data.total) !== Number(table.imported_rows)) throw new Error("Relational row count mismatch for " + tableName);
+              const expected = Math.min(50, Number(table.imported_rows));
+              if (data.rows.length !== expected) throw new Error("Relational first page count mismatch for " + tableName);
+              testedRows += data.rows.length;
+              if (!paginationTested && Number(data.total) > 50) {
+                const nextResponse = await fetch(endpoint + "&offset=50&limit=50", { headers });
+                if (!nextResponse.ok) throw new Error("Relational pagination API failed for " + tableName);
+                const next = await nextResponse.json();
+                if (next.rows.length !== Math.min(50, Number(data.total)-50) || Number(next.total) !== Number(data.total)) throw new Error("Relational pagination count mismatch for " + tableName);
+                paginationTested = true;
+              }
+              console.log("RELATIONAL_TABLE_PASS=" + tableName + " rows=" + data.total + " columns=" + data.columns.length + " pk=" + data.primaryKeys.length + " fk=" + data.foreignKeys.length);
             }
-            const data = await dataResponse.json();
-            if (!Array.isArray(data.columns) || data.columns.length === 0) throw new Error("Relational column metadata missing");
-            if (!Array.isArray(data.rows) || !Array.isArray(data.primaryKeys) || !Array.isArray(data.foreignKeys)) throw new Error("Relational data shape invalid");
-            if (Number(data.total) !== Number(selected.imported_rows)) throw new Error("Relational table row count mismatch: " + data.total + " != " + selected.imported_rows);
-            if (data.rows.length > 50) throw new Error("Relational explorer exceeded page limit");
+            if (!paginationTested) throw new Error("No populated table available for pagination test");
             const page = await fetch(base + "/admin.html", { headers });
             const html = await page.text();
             if (!page.ok || !html.includes("تمام داده‌های منتقل‌شده")) throw new Error("Admin relational explorer page not found");
             console.log("ADMIN_LOGIN=PASS");
             console.log("ADMIN_SUMMARY_API=PASS");
-            console.log("RELATIONAL_TABLE_MANIFEST=PASS tables=" + tables.length);
-            console.log("RELATIONAL_DATA_API=PASS table=" + tableName + " columns=" + data.columns.length + " page_rows=" + data.rows.length + " total=" + data.total);
+            console.log("RELATIONAL_TABLE_MANIFEST=PASS tables=" + tables.length + " populated=" + populated.length);
+            console.log("RELATIONAL_DATA_API=PASS populated_tables=" + populated.length + " first_page_rows=" + testedRows + " pagination=PASS");
             console.log("ADMIN_EXPLORER_PAGE=PASS");
             NODE
             unset RECOVERY_PASSWORD
             echo "=== No schema migration or data rewrite is run during final verification ==="
             echo "=== Final database and disk metrics ==="
             $D compose exec -T db sh -lc 'psql -X -U "$POSTGRES_USER" -d "$POSTGRES_DB" -P pager=off -c "SELECT pg_size_pretty(pg_database_size(current_database())) AS database_size"'
+            echo "=== Docker storage usage (read-only) ==="
+            $D system df
+            echo "=== Top-level filesystem usage (read-only) ==="
             df -h /home/digibail
+            for path in /home /var /opt /root; do
+              if [ -d "$path" ]; then du -xhd1 "$path" 2>/dev/null | sort -h | tail -n 12; fi
+            done
+            echo "=== Docker data directory usage (read-only) ==="
+            if [ -d /var/lib/docker ]; then du -xhd1 /var/lib/docker 2>/dev/null | sort -h | tail -n 12; fi
             echo "DIGIBAIL_PRODUCTION_FINAL_VERIFICATION=PASS"
