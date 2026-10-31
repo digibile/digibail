@@ -25,7 +25,7 @@ jobs:
           script: |
             set -eu
             if sudo -n docker info >/dev/null 2>&1; then D='sudo -n docker'; else D='docker'; fi
-            SQLC="vamcity-stage-sql"
+            SQLC="public_html-db-1"
             echo "=== HOST CAPABILITIES ==="
             for x in python3 python3-pip mysql mariadb mysqldump bcp sqlcmd 7z unzip gzip; do command -v "$x" 2>/dev/null || true; done
             echo "=== SQL CONTAINER CAPABILITIES ==="
