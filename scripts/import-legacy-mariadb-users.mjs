@@ -150,8 +150,26 @@ async function main(){
     await pool.query("SELECT 1");
     if(process.argv.includes("--apply"))await migrate();
     const manifestCount=await scalar("SELECT COUNT(*) AS n FROM digibail_legacy_manifest WHERE source_schema='legacy_digibail'");
-    if(process.argv.includes("--apply")&&manifestCount!==59) {
-      throw new Error("The 59-table legacy data migration has not been verified; found "+manifestCount+" manifest rows.");
+    if(process.argv.includes("--apply")) {
+      if(manifestCount!==59)throw new Error("The 59-table legacy data migration has not been verified; found "+manifestCount+" manifest rows.");
+      const [transferMarker]=await pool.query(
+        "SELECT status,details FROM digibail_migration_control WHERE migration_key='legacy-app-data-transfer' LIMIT 1"
+      );
+      if(!transferMarker.length||transferMarker[0].status!=="verified") {
+        throw new Error("Verified application data migration is missing; migrate public application tables first.");
+      }
+      const transferDetails=typeof transferMarker[0].details==="string"?JSON.parse(transferMarker[0].details):transferMarker[0].details;
+      const required=["users","audit_logs","captcha_challenges","otp_challenges","sms_provider_settings","legacy_customers","sms_templates","legacy_source_data"];
+      const copied=new Set(transferDetails?.public_table_names||[]);
+      const missing=required.filter(name=>!copied.has(name));
+      if(missing.length||Number(transferDetails?.legacy_tables)!==59||Number(transferDetails?.legacy_manifest_rows)!==59) {
+        throw new Error("Application data transfer marker is incomplete: missing="+missing.join(",")+" legacy_tables="+String(transferDetails?.legacy_tables));
+      }
+      await pool.query(
+        "INSERT INTO digibail_migration_control(migration_key,status,details,completed_at) VALUES('single-mariadb-cutover','in_progress',?,NULL) "+
+        "ON DUPLICATE KEY UPDATE status='in_progress',details=VALUES(details),completed_at=NULL",
+        [JSON.stringify({started_at_utc:new Date().toISOString(),legacy_tables:manifestCount,account_sources:sets.length})]
+      );
     }
     for(const set of sets){
       const [exists]=await pool.query(
