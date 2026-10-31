@@ -144,4 +144,17 @@ jobs:
             done
             echo "=== Docker storage driver and root (read-only) ==="
             $D info --format 'DockerRootDir={{.DockerRootDir}} StorageDriver={{.Driver}}' || true
+            echo "=== Filesystem mount map (read-only) ==="
+            df -hT
+            if command -v findmnt >/dev/null 2>&1; then findmnt -R / | head -n 100 || true; fi
+            echo "=== Docker/containerd mount points (read-only) ==="
+            for path in /var/lib/docker /var/lib/containerd /var/lib/docker/overlay2 /var/lib/docker/containers /var/lib/docker/volumes /var/lib/containerd/io.containerd.snapshotter.v1.overlayfs; do
+              if [ -e "$path" ]; then echo "--- $path"; readlink -f "$path" || true; findmnt -T "$path" || true; $SUDO du -sh "$path" 2>/dev/null || true; ls -ld "$path" || true; fi
+            done
+            echo "=== Docker container/image/volume inventory (read-only) ==="
+            $D ps -a --size --format 'table {{.Names}}\\t{{.Status}}\\t{{.Size}}' || true
+            $D images --format 'table {{.Repository}}:{{.Tag}}\\t{{.Size}}' || true
+            $D volume ls || true
+            echo "=== Deleted but still-open files (read-only) ==="
+            if command -v lsof >/dev/null 2>&1; then $SUDO lsof -nP +L1 2>/dev/null | head -n 100 || true; else echo "LSOF_NOT_INSTALLED=1"; fi
             echo "DIGIBAIL_PRODUCTION_FINAL_VERIFICATION=PASS"
