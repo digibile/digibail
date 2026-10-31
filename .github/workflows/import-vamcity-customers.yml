@@ -3,16 +3,11 @@ name: Import VamCity customer directory
 # run legacy import after the unified identity directory is deployed; preserve a full PostgreSQL backup first.
 on:
   workflow_dispatch:
-  workflow_run:
-    workflows: ["Deploy digebail.ir production site"]
-    types: [completed]
-    branches: [main]
 
 permissions:
   contents: read
 jobs:
   import:
-    if: "${{ github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && contains(github.event.workflow_run.head_commit.message, 'run legacy import')) }}"
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
