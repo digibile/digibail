@@ -80,6 +80,11 @@ try{
   for(const col of cols){await pool.query("ALTER TABLE "+table+" ALTER COLUMN "+qid(col.columnName)+" DROP NOT NULL");}
   if(!pk.length)await pool.query("ALTER TABLE "+table+" ALTER COLUMN "+qid("__legacy_row_number")+" SET NOT NULL");
  }
+ // Older partial attempts may have left NOT NULL attributes on the mirror.
+ // Preserve source NULL values; retain NOT NULL only on primary-key columns.
+ const constrained=await pool.query("SELECT c.table_name,c.column_name FROM information_schema.columns c WHERE c.table_schema=$1 AND c.is_nullable='NO' AND NOT EXISTS (SELECT 1 FROM pg_constraint con JOIN unnest(con.conkey) AS k(attnum) ON TRUE JOIN pg_attribute a ON a.attrelid=con.conrelid AND a.attnum=k.attnum WHERE con.contype='p' AND con.conrelid=to_regclass(format('%I.%I',c.table_schema,c.table_name)) AND a.attname=c.column_name)",[TARGET_SCHEMA]);
+ for(const col of constrained.rows)await pool.query("ALTER TABLE "+qid(TARGET_SCHEMA)+"."+qid(col.table_name)+" ALTER COLUMN "+qid(col.column_name)+" DROP NOT NULL");
+ console.log("LEGACY_NULLABILITY_NORMALIZED="+constrained.rowCount);
  for(const item of tables){
   const [s,t]=String(item.sourceTable).split("."),key=sourceKey(s,t),cols=colGroups.get(key)||[],pk=(pkGroups.get(key)||[]).map(x=>x.columnName),table=qtable(s,t),rows=Array.isArray(item.rows)?item.rows:[];
   if(!pk.length){const existing=await pool.query("SELECT COUNT(*)::bigint AS n FROM "+table);if(Number(existing.rows[0]?.n)>rows.length)throw new Error("Refusing to remove existing rows from non-key source table "+s+"."+t);}
