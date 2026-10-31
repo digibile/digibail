@@ -31,8 +31,25 @@ jobs:
             curl -fsS --max-time 15 https://digebail.ir/healthz
             echo
             curl -fsS --max-time 15 -o /dev/null -w 'PUBLIC_LOGIN_HTTP=%{http_code}\n' https://digebail.ir/login.html
-            echo "=== Actual relational manifest counts in PostgreSQL ==="
-            $D compose exec -T db sh -lc 'psql -X -U "$POSTGRES_USER" -d "$POSTGRES_DB" -P pager=off -c "SELECT count(*) AS manifest_rows, count(*) FILTER (WHERE imported_rows>0) AS tables_with_imported_rows, coalesce(sum(imported_rows),0) AS total_imported_rows FROM legacy_digibail._import_manifest"'
+            echo "=== Actual relational manifest and original Digibail entity counts ==="
+            $D compose exec -T db sh -lc 'psql -X -U "$POSTGRES_USER" -d "$POSTGRES_DB" -P pager=off -c "SELECT
+              (SELECT count(*) FROM legacy_digibail._import_manifest) AS relational_manifest_tables,
+              (SELECT count(*) FILTER (WHERE imported_rows>0) FROM legacy_digibail._import_manifest) AS tables_with_imported_rows,
+              (SELECT coalesce(sum(imported_rows),0) FROM legacy_digibail._import_manifest) AS total_relational_rows,
+              (SELECT count(*) FROM information_schema.tables WHERE table_schema=chr(108)||chr(101)||chr(103)||chr(97)||chr(99)||chr(121)||chr(95)||chr(100)||chr(105)||chr(103)||chr(105)||chr(98)||chr(97)||chr(105) AND table_type=chr(66)||chr(65)||chr(83)||chr(69)||chr(32)||chr(84)||chr(65)||chr(66)||chr(76)||chr(69)) AS physical_relational_tables,
+              (SELECT count(*) FROM legacy_source_data WHERE source_table=chr(100)||chr(98)||chr(111)||chr(46)||chr(65)||chr(115)||chr(112)||chr(78)||chr(101)||chr(116)||chr(85)||chr(115)||chr(101)||chr(114)||chr(115)) AS original_users,
+              (SELECT count(*) FROM legacy_source_data WHERE source_table=chr(65)||chr(115)||chr(112)||chr(78)||chr(101)||chr(116)||chr(82)||chr(111)||chr(108)||chr(101)||chr(115)) AS original_roles,
+              (SELECT count(*) FROM legacy_source_data WHERE source_table=chr(65)||chr(115)||chr(112)||chr(78)||chr(101)||chr(116)||chr(85)||chr(115)||chr(101)||chr(114)||chr(82)||chr(111)||chr(108)||chr(101)||chr(115)) AS original_user_role_links,
+              (SELECT count(*) FROM legacy_source_data WHERE source_table=chr(100)||chr(98)||chr(111)||chr(46)||chr(67)||chr(117)||chr(115)||chr(116)||chr(111)||chr(109)||chr(101)||chr(114)||chr(115)) AS original_customers,
+              (SELECT count(*) FROM legacy_source_data WHERE source_table=chr(100)||chr(98)||chr(111)||chr(46)||chr(83)||chr(109)||chr(115)||chr(80)||chr(97)||chr(116)||chr(116)||chr(101)||chr(114)||chr(110)||chr(115)) AS original_sms_patterns,
+              (SELECT count(*) FROM legacy_source_data WHERE source_table=chr(100)||chr(98)||chr(111)||chr(46)||chr(65)||chr(103)||chr(101)||chr(110)||chr(76)||chr(111)||chr(97)||chr(110)||chr(115)) AS original_agent_loans,
+              (SELECT count(*) FROM legacy_source_data WHERE source_table=chr(100)||chr(98)||chr(111)||chr(46)||chr(65)||chr(103)||chr(101)||chr(110)||chr(77)||chr(101)||chr(116)||chr(97)||chr(68)||chr(97)||chr(116)||chr(97)) AS original_agent_metadata,
+              (SELECT count(*) FROM legacy_source_data WHERE source_table=chr(100)||chr(98)||chr(111)||chr(46)||chr(83)||chr(117)||chr(98)||chr(65)||chr(103)||chr(101)||chr(110)||chr(116)||chr(84)||chr(114)||chr(97)||chr(110)||chr(115)||chr(97)||chr(99)||chr(116)||chr(105)||chr(111)||chr(110)||chr(115)) AS original_subagent_transactions,
+              (SELECT count(*) FROM users WHERE legacy_source=chr(97)||chr(115)||chr(112)||chr(110)||chr(101)||chr(116)||chr(117)||chr(115)||chr(101)||chr(114)||chr(115)) AS canonical_legacy_users,
+              (SELECT count(*) FROM access_roles) AS canonical_roles,
+              (SELECT count(*) FROM user_role_assignments) AS canonical_role_assignments,
+              (SELECT count(*) FROM legacy_customers) AS canonical_legacy_customers,
+              (SELECT count(*) FROM legacy_source_data WHERE left(source_table,9)=chr(118)||chr(97)||chr(109)||chr(99)||chr(105)||chr(116)||chr(121)||chr(99)||chr(95)) AS remaining_vamcity_archive_rows"'
             echo "=== Authenticated admin and relational explorer API smoke ==="
             RECOVERY_PASSWORD="$($D run --rm -v /:/host alpine:3.20 sh -c "sed -n 's/^password=//p' /host/root/digibail-admin-recovery.txt | head -n 1")"
             if ! printf '%s' "$RECOVERY_PASSWORD" | grep -Eq '^[a-f0-9]{48}$'; then echo "ERROR: recovery credential file is invalid."; exit 30; fi
@@ -87,11 +104,7 @@ jobs:
             console.log("ADMIN_EXPLORER_PAGE=PASS");
             NODE
             unset RECOVERY_PASSWORD
-            echo "=== PostgreSQL statistics refresh with parallel workers disabled ==="
-            for table in legacy_source_data legacy_customers users loan_requests loan_request_status_history loan_products; do
-              $D compose exec -T db sh -lc "PGOPTIONS='-c max_parallel_workers=0 -c max_parallel_maintenance_workers=0 -c max_parallel_workers_per_gather=0' psql -X -v ON_ERROR_STOP=1 -U \"\$POSTGRES_USER\" -d \"\$POSTGRES_DB\" -P pager=off -c 'ANALYZE $table'"
-              echo "ANALYZE_OK=$table"
-            done
+            echo "=== No schema migration or data rewrite is run during final verification ==="
             echo "=== Final database and disk metrics ==="
             $D compose exec -T db sh -lc 'psql -X -U "$POSTGRES_USER" -d "$POSTGRES_DB" -P pager=off -c "SELECT pg_size_pretty(pg_database_size(current_database())) AS database_size"'
             df -h /home/digibail
