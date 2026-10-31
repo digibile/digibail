@@ -147,6 +147,8 @@ function installSchema(mysqli $db,string $path,string $source,bool $skipExisting
         $rename=static fn($name)=>shortName('OnlineMoneyTransfer__'.$name);
         $sql=preg_replace_callback('/\\b(ADD\\s+CONSTRAINT\\s+)`([^`]+)`/i',
             static fn($m)=>$m[1].'`'.$rename($m[2]).'`',$sql);
+        // Transfer schema may already be partially installed; preserve existing tables for safe resume.
+        $sql=preg_replace('/\\bCREATE\\s+TABLE\\s+(?!IF\\s+NOT\\s+EXISTS)/i','CREATE TABLE IF NOT EXISTS ',$sql);
     }
     foreach(explode(';',$sql) as $statement) {
         $statement=trim($statement);
