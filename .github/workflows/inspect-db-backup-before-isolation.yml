@@ -35,11 +35,11 @@ jobs:
             $D compose exec -T db sh -lc 'psql -X -U "$POSTGRES_USER" -d "$POSTGRES_DB" -P pager=off -c "SELECT pg_size_pretty(pg_database_size(current_database())) AS database_size,pg_database_size(current_database()) AS bytes"'
             if [ -e "$BACKUP" ]; then echo "BLOCKED: backup path already exists; refusing to overwrite."; exit 21; fi
             echo "=== Creating consistent custom-format backup ==="
-            $D compose exec -T db sh -lc 'pg_dump -Fc -U "$POSTGRES_USER" -d "$POSTGRES_DB"' > "$BACKUP"
-            chmod 600 "$BACKUP"
-            test -s "$BACKUP"
+            $D compose exec -T db sh -lc 'pg_dump -Fc -U "$POSTGRES_USER" -d "$POSTGRES_DB"' | sudo -n tee "$BACKUP" >/dev/null
+            sudo -n chmod 600 "$BACKUP"
+            sudo -n test -s "$BACKUP"
             echo "=== Verify archive structure ==="
-            cat "$BACKUP" | $D compose exec -T db pg_restore --list - >/dev/null
+            sudo -n cat "$BACKUP" | $D compose exec -T db pg_restore --list - >/dev/null
             echo "BACKUP_VERIFIED=1"
             echo "BACKUP_PATH=$BACKUP"
             echo "BACKUP_BYTES=$(sudo -n stat -c %s "$BACKUP")"
