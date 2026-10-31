@@ -36,6 +36,17 @@ async function main(){
     "SELECT status,details,completed_at FROM digibail_migration_control WHERE migration_key='single-mariadb-cutover' LIMIT 1"
   );
   if(!marker.length||marker[0].status!=="verified")throw new Error("The verified single-MariaDB cutover marker is missing.");
+  const [transferMarker]=await db.query(
+    "SELECT status,details FROM digibail_migration_control WHERE migration_key='legacy-app-data-transfer' LIMIT 1"
+  );
+  if(!transferMarker.length||transferMarker[0].status!=="verified")throw new Error("The application data transfer marker is missing or incomplete.");
+  const transferDetails=typeof transferMarker[0].details==="string"?JSON.parse(transferMarker[0].details):transferMarker[0].details;
+  const requiredCore=["users","audit_logs","captcha_challenges","otp_challenges","sms_provider_settings","legacy_customers","sms_templates","legacy_source_data"];
+  const copied=new Set(transferDetails?.public_table_names||[]);
+  const missingCore=requiredCore.filter(name=>!copied.has(name));
+  if(missingCore.length||Number(transferDetails?.legacy_tables)!==59||Number(transferDetails?.legacy_manifest_rows)!==59) {
+    throw new Error("Application transfer manifest is incomplete: missing="+missingCore.join(",")+" legacy_tables="+String(transferDetails?.legacy_tables));
+  }
   const manifest=await count("SELECT COUNT(*) AS n FROM digibail_legacy_manifest WHERE source_schema='legacy_digibail'");
   if(manifest!==59)throw new Error("Expected 59 legacy table manifests; found "+manifest);
   const sources=[
@@ -92,6 +103,7 @@ async function main(){
   }
   const details=typeof marker[0].details==="string"?JSON.parse(marker[0].details):marker[0].details;
   console.log("DIGIBAIL_SINGLE_DATABASE_READY=PASS");
+  console.log("APPLICATION_TABLES_COPIED="+Number(transferDetails?.public_tables||0));
   console.log("LEGACY_TABLE_MANIFESTS="+manifest);
   console.log("IDENTITY_SOURCE_TABLES="+sources.length);
   console.log("CUTOVER_COMPLETED_AT="+String(marker[0].completed_at||""));
