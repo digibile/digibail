@@ -38,6 +38,8 @@ jobs:
           script: |
             set -eu
             ROOT="/home/digibail/domains/digebail.ir"
+            echo "=== CURRENT DISK SPACE ==="
+            df -h "$ROOT" /tmp
             echo "=== ARCHIVE FILES ==="
             for f in \
               "$ROOT/vamcityc_bluvamdb_2026-10-29_19-19-45.zip" \
@@ -50,6 +52,9 @@ jobs:
                 echo "ARCHIVE_ENTRIES_BEGIN"
                 unzip -Z1 "$f" 2>/dev/null | head -n 35 || true
                 echo "ARCHIVE_ENTRIES_END"
+                echo "ARCHIVE_DETAILED_LIST_BEGIN"
+                if command -v 7zz >/dev/null 2>&1; then 7zz l -slt "$f" | tail -n 35; elif command -v 7z >/dev/null 2>&1; then 7z l -slt "$f" | tail -n 35; else zipinfo -v "$f" | tail -n 35; fi
+                echo "ARCHIVE_DETAILED_LIST_END"
               else
                 echo "MISSING=$(basename "$f")"
               fi
