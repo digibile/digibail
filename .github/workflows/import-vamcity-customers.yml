@@ -12,6 +12,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   import:
+    if: false # Retired: DigiBail now uses the single MariaDB database.
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
