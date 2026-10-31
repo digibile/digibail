@@ -1,0 +1,43 @@
+name: Inspect Digibail PostgreSQL locks
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/inspect-db-locks.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Read-only inspect of database sessions and Docker containers
+        uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          command_timeout: 4m
+          script: |
+            set -eu
+            ROOT="/home/digibail/domains/digebail.ir"
+            cd "$ROOT"
+            if sudo -n docker info >/dev/null 2>&1; then D="sudo -n docker"; elif docker info >/dev/null 2>&1; then D="docker"; else echo "BLOCKED: Docker unavailable"; exit 20; fi
+            echo "=== PostgreSQL sessions, lock waits, and blockers (read-only) ==="
+            $D compose exec -T db sh -lc 'psql -X -U "$POSTGRES_USER" -d "$POSTGRES_DB" -P pager=off -x -c "SELECT a.pid,a.usename,a.application_name,a.client_addr,a.client_port,a.backend_start,a.xact_start,a.query_start,a.state,a.wait_event_type,a.wait_event,pg_blocking_pids(a.pid) AS blocking_pids,COALESCE(c.relname,\x27\x27) AS locked_relation,left(a.query,1200) AS query FROM pg_stat_activity a LEFT JOIN pg_locks l ON l.pid=a.pid AND NOT l.granted LEFT JOIN pg_class c ON c.oid=l.relation WHERE a.datname=current_database() AND a.pid<>pg_backend_pid() ORDER BY a.query_start NULLS LAST"'
+            echo "=== Blocking session pairs ==="
+            $D compose exec -T db sh -lc 'psql -X -U "$POSTGRES_USER" -d "$POSTGRES_DB" -P pager=off -x -c "SELECT blocked.pid AS blocked_pid,blocker.pid AS blocker_pid,blocked.application_name AS blocked_app,blocker.application_name AS blocker_app,blocked.client_addr AS blocked_addr,blocker.client_addr AS blocker_addr,now()-blocked.query_start AS blocked_for,left(blocked.query,500) AS blocked_query,left(blocker.query,500) AS blocker_query FROM pg_stat_activity blocked CROSS JOIN LATERAL unnest(pg_blocking_pids(blocked.pid)) AS b(pid) JOIN pg_stat_activity blocker ON blocker.pid=b.pid WHERE blocked.datname=current_database()"'
+            echo "=== Docker containers ==="
+            $D ps -a --format 'table {{.Names}}\t{{.Image}}\t{{.Status}}'
+            echo "=== Docker network addresses ==="
+            for id in $($D ps -q); do $D inspect --format '{{.Name}} {{range .NetworkSettings.Networks}}{{.IPAddress}} {{end}}' "$id"; done
+            echo "=== Container process summaries (no command arguments) ==="
+            for id in $($D ps -q); do
+              name="$($D inspect --format '{{.Name}}' "$id")"
+              echo "--- $name"
+              $D top "$id" -eo pid,ppid,etime,comm 2>/dev/null || true
+            done
