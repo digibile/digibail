@@ -128,7 +128,7 @@ jobs:
               printf 'MARIADB_DATABASE=digibail_vamcitydigibilepay\n'
               printf 'MARIADB_USER=digibail_vamcitydigibilepay\n'
               printf 'MARIADB_PASSWORD=%s\n' "$MYSQL_PASS"
-              printf 'MARIADB_SOCKET=/var/run/mysqld/mysqld.sock\n'
+              printf 'MARIADB_SOCKET=/tmp/mysql.sock\n'
               printf 'MARIADB_SOCKET_GID=%s\n' "$(stat -c '%g' /var/lib/mysql/mysql.sock)"
             } >> .env.mariadb.tmp
             mv .env.mariadb.tmp .env
