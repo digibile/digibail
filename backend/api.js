@@ -1,21 +1,35 @@
 import crypto from "node:crypto";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
-import { Pool } from "pg";
 import { createPool } from "mysql2/promise";
+import { createMariaCompatPool } from "./mariadb-compat.js";
 import { syncUserToMariaDB } from "./mariadb-user-sync.js";
 
-const pool = new Pool({ connectionString: process.env.DATABASE_URL, max: 10, connectionTimeoutMillis: 5000 });
-let legacyMariaPool = null;
-function legacyMaria() {
-  const database = process.env.MARIADB_DATABASE || "digibail_vamcitydigibilepay";
-  const user = process.env.MARIADB_USER || "";
-  const password = process.env.MARIADB_PASSWORD || "";
-  const socketPath = process.env.MARIADB_SOCKET || "/var/run/mysqld/mysqld.sock";
-  if (!user || !password) throw Object.assign(new Error("اتصال پایگاه داده اصلی تنظیم نشده است."), { status: 503, code: "mariadb_not_configured" });
-  if (!legacyMariaPool) legacyMariaPool = createPool({ socketPath, user, password, database, waitForConnections: true, connectionLimit: 4, queueLimit: 20, charset: "utf8mb4", connectTimeout: 8000 });
-  return legacyMariaPool;
+const mariadbDatabase = process.env.MARIADB_DATABASE || "digibail_vamcitydigibilepay";
+const mariadbUser = process.env.MARIADB_USER || "";
+const mariadbPassword = process.env.MARIADB_PASSWORD || "";
+const mariadbSocket = process.env.MARIADB_SOCKET || "/tmp/mysql.sock";
+if (!mariadbUser || !mariadbPassword) {
+  throw Object.assign(new Error("اتصال MariaDB در تنظیمات محرمانه سرور تکمیل نشده است."), {
+    status: 503, code: "mariadb_not_configured"
+  });
 }
+const mariadbPool = createPool({
+  socketPath: mariadbSocket,
+  user: mariadbUser,
+  password: mariadbPassword,
+  database: mariadbDatabase,
+  waitForConnections: true,
+  connectionLimit: 10,
+  queueLimit: 50,
+  charset: "utf8mb4",
+  connectTimeout: 8000,
+  timezone: "Z",
+  supportBigNumbers: true,
+  bigNumberStrings: false
+});
+const pool = createMariaCompatPool(mariadbPool);
+function legacyMaria() { return mariadbPool; }
 async function postgresOnlyAccounts(mariaDb, limit=100000) {
   // Keep every successful registration in the new identity database visible.
   // A phone match in the historical database is not proof that this distinct
@@ -123,116 +137,21 @@ const KAVENEGAR_TEMPLATE = process.env.KAVENEGAR_TEMPLATE || "";
 const AI_STORY_RATE = new Map();
 
 export async function migrate() {
-  const client = await pool.connect();
-  const runMigrationStep = async (label, ...args) => {
-    console.log("DB_MIGRATION_START=" + label);
-    try {
-      const result = await client.query(...args);
-      console.log("DB_MIGRATION_DONE=" + label);
-      return result;
-    } catch (error) {
-      console.error("DB_MIGRATION_FAILED=" + label, error?.code || "", error?.message || error);
-      throw error;
-    }
-  };
-  try {
-    await client.query("SET lock_timeout = '10s'; SET statement_timeout = '180s'");
   const { readFile } = await import("node:fs/promises");
   const { fileURLToPath } = await import("node:url");
   const path = await import("node:path");
   const root = path.dirname(fileURLToPath(import.meta.url));
-  await runMigrationStep("step-1", await readFile(path.join(root, "db", "001_init.sql"), "utf8"));
-  // Existing production databases may still have the original VARCHAR(400) image column.
-  // Persist generated/optimized image data URLs safely without truncation failures.
-  await runMigrationStep("step-2", "ALTER TABLE loan_products ALTER COLUMN image_url TYPE TEXT");
-  await runMigrationStep("step-3", `
-    ALTER TABLE users ADD COLUMN IF NOT EXISTS password_reset_required BOOLEAN NOT NULL DEFAULT FALSE;
-    ALTER TABLE users ADD COLUMN IF NOT EXISTS legacy_username TEXT;
-    ALTER TABLE users ADD COLUMN IF NOT EXISTS legacy_customer_id UUID;
-    ALTER TABLE users ADD COLUMN IF NOT EXISTS legacy_agent_id BIGINT;
-    ALTER TABLE users ADD COLUMN IF NOT EXISTS legacy_customer_marketer_id BIGINT;
-    ALTER TABLE users ADD COLUMN IF NOT EXISTS legacy_agent_metadata_id UUID;
-    ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;
-    ALTER TABLE users ADD CONSTRAINT users_role_check CHECK (role IN ('customer','admin','superadmin','agent','marketer','customermarketer','member'));
-    CREATE TABLE IF NOT EXISTS access_roles (
-      code VARCHAR(40) PRIMARY KEY, display_name VARCHAR(120) NOT NULL,
-      legacy_source TEXT, legacy_id TEXT, UNIQUE(legacy_source,legacy_id)
-    );
-    CREATE TABLE IF NOT EXISTS user_role_assignments (
-      user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-      role_code VARCHAR(40) NOT NULL REFERENCES access_roles(code) ON DELETE RESTRICT,
-      legacy_source TEXT NOT NULL, legacy_user_id TEXT NOT NULL, legacy_role_id TEXT NOT NULL,
-      PRIMARY KEY(user_id,role_code), UNIQUE(legacy_source,legacy_user_id,legacy_role_id)
-    );
-  `);
-  // Materialize legacy loan requests into this application's indexed PostgreSQL database.
-  // The original rows are already imported locally; the page never calls the old site.
-  await runMigrationStep("step-4", `
-    CREATE TABLE IF NOT EXISTS loan_requests (
-      id BIGINT GENERATED BY DEFAULT AS IDENTITY UNIQUE,
-      request_key TEXT PRIMARY KEY,
-      source_table VARCHAR(160) NOT NULL,
-      legacy_id VARCHAR(160) NOT NULL,
-      applicant_name TEXT NOT NULL DEFAULT '',
-      mobile TEXT NOT NULL DEFAULT '',
-      national_code TEXT NOT NULL DEFAULT '',
-      status TEXT NOT NULL DEFAULT '',
-      amount NUMERIC(20,2),
-      created_at TIMESTAMPTZ,
-      payload JSONB NOT NULL DEFAULT '{}'::jsonb,
-      imported_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      UNIQUE(source_table, legacy_id)
-    );
-    ALTER TABLE loan_requests ADD COLUMN IF NOT EXISTS id BIGINT GENERATED BY DEFAULT AS IDENTITY;
-    CREATE UNIQUE INDEX IF NOT EXISTS loan_requests_internal_id_idx ON loan_requests(id);
-    CREATE INDEX IF NOT EXISTS loan_requests_created_idx ON loan_requests(created_at DESC NULLS LAST);
-    CREATE INDEX IF NOT EXISTS loan_requests_created_id_idx ON loan_requests(created_at DESC NULLS LAST, id DESC);
-    CREATE INDEX IF NOT EXISTS loan_requests_status_created_idx ON loan_requests(status, created_at DESC NULLS LAST);
-    CREATE INDEX IF NOT EXISTS loan_requests_mobile_idx ON loan_requests(mobile);
-    CREATE INDEX IF NOT EXISTS loan_requests_national_code_idx ON loan_requests(national_code);
-    CREATE INDEX IF NOT EXISTS loan_requests_source_idx ON loan_requests(source_table, legacy_id);
-    CREATE TABLE IF NOT EXISTS loan_request_comments (id BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY, loan_request_id BIGINT NOT NULL REFERENCES loan_requests(id) ON DELETE RESTRICT, author_user_id BIGINT, author_name TEXT NOT NULL DEFAULT '', comment TEXT NOT NULL CHECK(length(comment) BETWEEN 1 AND 5000), created_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
-    CREATE INDEX IF NOT EXISTS loan_request_comments_request_idx ON loan_request_comments(loan_request_id, created_at DESC);
-    CREATE TABLE IF NOT EXISTS loan_request_status_history (id BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY, loan_request_id BIGINT NOT NULL REFERENCES loan_requests(id) ON DELETE RESTRICT, old_status TEXT NOT NULL DEFAULT '', new_status TEXT NOT NULL, note TEXT NOT NULL DEFAULT '', changed_by BIGINT, changed_by_name TEXT NOT NULL DEFAULT '', changed_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
-    CREATE INDEX IF NOT EXISTS loan_request_status_history_request_idx ON loan_request_status_history(loan_request_id, changed_at DESC);
-    ALTER TABLE loan_request_status_history ADD COLUMN IF NOT EXISTS legacy_source_table TEXT;
-    ALTER TABLE loan_request_status_history ADD COLUMN IF NOT EXISTS legacy_id TEXT;
-    CREATE UNIQUE INDEX IF NOT EXISTS loan_request_status_history_legacy_unique_idx ON loan_request_status_history(legacy_source_table, legacy_id) WHERE legacy_source_table IS NOT NULL AND legacy_id IS NOT NULL;
-    -- Heavy legacy request rows are imported by scripts/backfill-legacy-customers.mjs after app health.
-
-  `);
-  await runMigrationStep("step-5", "CREATE INDEX IF NOT EXISTS legacy_customers_registered_idx ON legacy_customers(registered_at DESC NULLS LAST)");
-  await runMigrationStep("step-6", "CREATE INDEX IF NOT EXISTS legacy_customers_mobile_idx ON legacy_customers(mobile)");
-  await runMigrationStep("step-7", "CREATE INDEX IF NOT EXISTS legacy_customers_name_idx ON legacy_customers(name)");
-  // Extend local customer schema here; bulk customer import runs after source tables are loaded.
-  await runMigrationStep("step-8", "ALTER TABLE legacy_customers ADD COLUMN IF NOT EXISTS legacy_username TEXT");
-  await runMigrationStep("step-9", "ALTER TABLE legacy_customers ADD COLUMN IF NOT EXISTS account_type TEXT NOT NULL DEFAULT 'مشتری / کاربر منتقل‌شده'");
-  await runMigrationStep("step-10", "ALTER TABLE legacy_customers ADD COLUMN IF NOT EXISTS legacy_source_table TEXT");
-  await runMigrationStep("step-11", "CREATE INDEX IF NOT EXISTS legacy_customers_registered_idx ON legacy_customers(registered_at DESC NULLS LAST)");
-  await runMigrationStep("step-12", "CREATE INDEX IF NOT EXISTS legacy_customers_mobile_idx ON legacy_customers(mobile)");
-  await runMigrationStep("step-13", "CREATE INDEX IF NOT EXISTS legacy_customers_name_idx ON legacy_customers(name)");
-  await runMigrationStep("step-14", "CREATE INDEX IF NOT EXISTS legacy_customers_username_idx ON legacy_customers(legacy_username)");
-
-  await runMigrationStep("step-15", "ANALYZE loan_requests");
-  // Provision a password-only initial superadmin without relying on SMS delivery.
-  // The password itself is never stored in source; only a salted scrypt verifier is.
-  await runMigrationStep("step-16", 
-    "INSERT INTO users(username,full_name,password_hash,role,is_active) VALUES($1,$2,$3,'superadmin',TRUE) ON CONFLICT(username) DO UPDATE SET password_hash=EXCLUDED.password_hash,role='superadmin',is_active=TRUE,updated_at=NOW() WHERE users.password_hash='scrypt$16384$8$1$ae0n_OnykLU21Q2-sXeXsA$c2gmp32g3QG-xokwTmTSQhirE-ZjBLOVx2e1OgS8oGOAC7uW0fIQcJrN6QnkNdqn'",
-    ["digibail-admin", "مدیر ارشد دیجی‌بایل", "scrypt$16384$8$1$ZGC9mkowEkz4tWjuufSPZA$jNjHElydJ79QieOQkOW23cy-niXHxJNaV9aJfhSfJYg"]
-  );
-  // Keep the explicitly named legacy administrator's authorization after identity import.
-  // This changes only the role of the known legacy username; it never changes the password.
-  await runMigrationStep("step-17", 
-    "UPDATE users SET role='superadmin',is_active=TRUE,updated_at=NOW() WHERE lower(username)='admin'"
-  );
-  await runMigrationStep("step-18", "CREATE TABLE IF NOT EXISTS user_role_overrides (user_id BIGINT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE, role_code VARCHAR(40) NOT NULL, updated_by BIGINT REFERENCES users(id) ON DELETE SET NULL, updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW())");
-  // Legacy role reconciliation is performed during the controlled import, not on every app startup.
-  // The explicit "admin" username promotion above is the only startup role adjustment.
-  } finally {
-    client.release();
+  const schema = await readFile(path.join(root, "db", "002_mariadb_app.sql"), "utf8");
+  const statements = schema
+    .split(/;\\s*(?:\\r?\\n|$)/)
+    .map(statement => statement.trim())
+    .filter(statement => statement && !statement.startsWith("--"));
+  for (const statement of statements) {
+    await mariadbPool.query(statement);
   }
+  await mariadbPool.query("ANALYZE TABLE users, sms_templates, legacy_source_data, loan_products");
 }
-export async function dbHealth() { await pool.query("SELECT 1"); return true; }
+export async function dbHealth() { await mariadbPool.query("SELECT 1"); return true; }
 function hash(value, pepper) { return crypto.createHmac("sha256", pepper).update(String(value)).digest("hex"); }
 function json(res, status, value, extraHeaders = {}) {
   res.writeHead(status, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", ...extraHeaders });
@@ -1380,4 +1299,4 @@ export async function handleApi(req, res, url) {
     return json(res, status, { message: status === 500 ? "خطای داخلی سرور." : error.message, code: error.code || undefined });
   }
 }
-export async function closePool() { await pool.end(); }
+export async function closePool() { await mariadbPool.end(); }
