@@ -1,5 +1,6 @@
 name: Import all VamCity databases into the single Digibail MariaDB
 # Triggered migration continuation after empty-table key-width fix; keep audited single-database import.
+# Retry after correcting the empty-table guard to read row_count from source metadata.
 
 on:
   workflow_dispatch:
