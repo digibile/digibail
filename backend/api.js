@@ -1323,7 +1323,7 @@ export async function handleApi(req, res, url) {
       if(duplicate.rowCount)return json(res,409,{message:"شماره موبایل یا کد ملی قبلاً ثبت شده است."});
       const passwordHash = await bcrypt.hash(password, 12);
       try {
-        const created = await pool.query("INSERT INTO users(phone,full_name,national_code,email,password_hash) VALUES($1,$2,$3,$4,$5) RETURNING id,phone,full_name,role", [ticket.phone, fullName, nationalCode, email, passwordHash]);
+        const created = await pool.query("INSERT INTO users(phone,full_name,national_code,email,password_hash) VALUES($1,$2,$3,$4,$5) RETURNING id,phone,full_name,role,username,national_code,email,created_at", [ticket.phone, fullName, nationalCode, email, passwordHash]);
         const u = created.rows[0];
         try{
           const mirror=await pool.query("SELECT id,username,phone,full_name,national_code,email,is_active,COALESCE((SELECT role_code FROM user_role_overrides o WHERE o.user_id=users.id),role) AS effective_role,to_char(created_at AT TIME ZONE 'Asia/Tehran','YYYY-MM-DD HH24:MI:SS.US') AS created_at_tehran FROM users WHERE id=$1",[u.id]);
