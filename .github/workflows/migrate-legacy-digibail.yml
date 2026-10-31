@@ -8,6 +8,7 @@ permissions:
 
 jobs:
   migrate:
+    if: false # Retired: DigiBail now uses the single MariaDB database.
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
