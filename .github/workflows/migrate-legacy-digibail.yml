@@ -42,7 +42,7 @@ jobs:
             READY=0
             for n in $(seq 1 90); do
               APP_ID="$($DOCKER compose ps -q app 2>/dev/null || true)"
-              if [ -n "$APP_ID" ] && $DOCKER exec "$APP_ID" test -f /app/web/admin.html 2>/dev/null && $DOCKER exec "$APP_ID" test -f /app/scripts/migrate-legacy-digibail.js 2>/dev/null && $DOCKER exec "$APP_ID" grep -q "DIGIBAIL_RELATIONAL_IMPORT" /app/scripts/migrate-legacy-digibail.js 2>/dev/null; then
+              if [ -n "$APP_ID" ] && $DOCKER exec "$APP_ID" test -f /app/web/admin.html 2>/dev/null && $DOCKER exec "$APP_ID" test -f /app/scripts/migrate-legacy-digibail.js 2>/dev/null && $DOCKER exec "$APP_ID" grep -q "DIGIBAIL_RELATIONAL_EXPORT_V2" /app/scripts/migrate-legacy-digibail.js 2>/dev/null; then
                 if $DOCKER compose exec -T db sh -lc 'export PGPASSWORD="$POSTGRES_PASSWORD"; psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Atc "SELECT to_regclass('\''public.sms_templates'\'') IS NOT NULL AND to_regclass('\''public.legacy_customers'\'') IS NOT NULL"' 2>/dev/null | grep -qx t; then READY=1; break; fi
               fi
               sleep 10
