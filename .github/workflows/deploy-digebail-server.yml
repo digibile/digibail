@@ -258,6 +258,12 @@ jobs:
             if (!roleDataResponse.ok) throw new Error("MariaDB role source inspection failed: " + roleDataResponse.status);
             const roleDataBody = await roleDataResponse.json();
             console.log("MARIADB_ROLE_NAMES=" + JSON.stringify((roleDataBody.data || []).map(r => r.payload?.Name).filter(Boolean)));
+            const agentDirectoryResponse = await fetch(base + "/api/v1/admin/legacy-agents-page?page=1&pageSize=10", { headers: { Cookie: cookie } });
+            if (!agentDirectoryResponse.ok) throw new Error("MariaDB representative directory failed: " + agentDirectoryResponse.status);
+            const agentDirectoryBody = await agentDirectoryResponse.json();
+            const agentDirectory = agentDirectoryBody.data || {};
+            if (!Array.isArray(agentDirectory.rows) || Number(agentDirectory.overallTotal) < 1) throw new Error("No real representative accounts were returned from MariaDB");
+            console.log("MARIADB_AGENT_DIRECTORY=PASS total=" + agentDirectory.overallTotal + " sample=" + agentDirectory.rows.length + " customers=" + agentDirectory.customerTotal);
             const agentMetaResponse = await fetch(base + "/api/v1/admin/legacy-source-data?table=AgentMetaData&limit=1", { headers: { Cookie: cookie } });
             if (!agentMetaResponse.ok) throw new Error("MariaDB agent metadata inspection failed: " + agentMetaResponse.status);
             const agentMetaBody = await agentMetaResponse.json();
