@@ -67,7 +67,11 @@ jobs:
             if (!selected || !selected.source_schema || !selected.source_table) throw new Error("No usable relational table found");
             const tableName = selected.source_schema + "." + selected.source_table;
             const dataResponse = await fetch(base + "/api/v1/admin/legacy-relational-data?table=" + encodeURIComponent(tableName) + "&offset=0&limit=50", { headers });
-            if (!dataResponse.ok) throw new Error("Relational table data API failed: " + dataResponse.status);
+            if (!dataResponse.ok) {
+              const detail = await dataResponse.text();
+              console.log("RELATIONAL_DATA_ERROR_BODY=" + detail.slice(0,3000));
+              throw new Error("Relational table data API failed: " + dataResponse.status);
+            }
             const data = await dataResponse.json();
             if (!Array.isArray(data.columns) || data.columns.length === 0) throw new Error("Relational column metadata missing");
             if (!Array.isArray(data.rows) || !Array.isArray(data.primaryKeys) || !Array.isArray(data.foreignKeys)) throw new Error("Relational data shape invalid");
