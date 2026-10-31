@@ -810,7 +810,8 @@ export async function handleApi(req, res, url) {
               await conn.query("INSERT INTO "+linksTable+"(UserId,RoleId) VALUES(?,?)",[legacyId,selected.Id]);
             }
             await conn.commit();
-            const [result]=await conn.query("SELECT CAST(u.Id AS CHAR) AS legacy_id,COALESCE(NULLIF(TRIM(CONCAT_WS(' ',u.FirstName,u.LastName)),''),u.UserName) AS full_name,COALESCE(NULLIF(u.Mobile,''),NULLIF(u.Phone,''),NULLIF(u.PhoneNumber,'')) AS phone,u.Email AS email,COALESCE(u.IsActive,1) AS is_active,(SELECT GROUP_CONCAT(DISTINCT r.Name ORDER BY r.Name SEPARATOR ',') FROM "+linksTable+" ur JOIN "+rolesTable+" r ON r.Id=ur.RoleId WHERE ur.UserId=u.Id) AS role_names FROM "+usersTable+" u WHERE u.Id=?",[legacyId]);
+            const phoneExpression=sourceKey==="transfer"?"NULLIF(u.PhoneNumber,'')":"COALESCE(NULLIF(u.Mobile,''),NULLIF(u.Phone,''),NULLIF(u.PhoneNumber,''))";
+            const [result]=await conn.query("SELECT CAST(u.Id AS CHAR) AS legacy_id,COALESCE(NULLIF(TRIM(CONCAT_WS(' ',u.FirstName,u.LastName)),''),u.UserName) AS full_name,"+phoneExpression+" AS phone,u.Email AS email,COALESCE(u.IsActive,1) AS is_active,(SELECT GROUP_CONCAT(DISTINCT r.Name ORDER BY r.Name SEPARATOR ',') FROM "+linksTable+" ur JOIN "+rolesTable+" r ON r.Id=ur.RoleId WHERE ur.UserId=u.Id) AS role_names FROM "+usersTable+" u WHERE u.Id=?",[legacyId]);
             const names=String(result[0]?.role_names||"").split(",").filter(Boolean),roles=names.map(legacyRoleCode),primary=directoryRoleFromNames(names);
             updated={...result[0],id:rawId,role:primary,roles:roles.length?roles:[primary],is_active:Boolean(Number(result[0]?.is_active)),source:sourceKey,legacy_source:config.users,role_editable:config.roleEditable};
           }catch(error){await conn.rollback().catch(()=>{});throw error;}finally{conn.release();}
