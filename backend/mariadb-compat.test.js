@@ -42,6 +42,44 @@ test("translates upsert, JSON extraction, intervals, case-insensitive search and
   assert.match(mixed, /name LIKE \?/);
   assert.match(mixed, /source_table REGEXP/);
   assert.match(mixed, /INTERVAL 5 MINUTE/);
+  const cast = translateMariaSql("created_at >= $1::date AND id=$2::text");
+  assert.equal(cast, "created_at >= DATE($1) AND id=CAST($2 AS CHAR)");
+  const replaced = translateMariaSql("regexp_replace(source_table,'[.]UserLoanRequests
+
+test("compat pool provides PostgreSQL-shaped rows for SELECT and INSERT RETURNING", async () => {
+  const calls = [];
+  const raw = {
+    async query(sql, values) {
+      calls.push({ sql, values });
+      if (sql.startsWith("INSERT INTO users")) return [{ affectedRows: 1, insertId: 17 }, []];
+      if (sql.startsWith("SELECT id FROM")) return [[{ id: 17 }], []];
+      if (sql.startsWith("SELECT")) return [[{ id: 17, name: "test" }], []];
+      return [{ affectedRows: 1, insertId: 0 }, []];
+    },
+    async getConnection() { throw new Error("connection not expected in this test"); },
+    async end() {}
+  };
+  const db = createMariaCompatPool(raw);
+  const selected = await db.query("SELECT id,name FROM users WHERE id=$1", [17]);
+  assert.deepEqual(selected.rows, [{ id: 17, name: "test" }]);
+  assert.equal(selected.rowCount, 1);
+
+  const inserted = await db.query(
+    "INSERT INTO users(username) VALUES($1) RETURNING id",
+    ["sample"]
+  );
+  assert.deepEqual(inserted.rows, [{ id: 17 }]);
+  assert.equal(inserted.rowCount, 1);
+  assert.equal(calls.length, 3);
+  assert.deepEqual(calls[0].values, [17]);
+  assert.deepEqual(calls[1].values, ["sample"]);
+  assert.deepEqual(calls[2].values, [17]);
+});
+,'.AspNetUsers')");
+  assert.match(replaced, /REGEXP_REPLACE\(/);
+  const bound = bindMariaParams(cast, ["2026-01-01", "x"]);
+  assert.equal(bound.sql, "created_at >= DATE(?) AND id=CAST(? AS CHAR)");
+  assert.deepEqual(bound.values, ["2026-01-01", "x"]);
 });
 
 test("compat pool provides PostgreSQL-shaped rows for SELECT and INSERT RETURNING", async () => {
