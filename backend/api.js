@@ -834,51 +834,67 @@ export async function handleApi(req, res, url) {
         if(phone!==null&&!phoneOk(phone))return json(res,400,{message:"شماره موبایل باید با قالب ۰۹ و ۱۱ رقم وارد شود."});
         if(email!==null&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))return json(res,400,{message:"نشانی ایمیل معتبر نیست."});
         if(rawId.startsWith("legacy:")){
-          const legacyId=rawId.slice(7),db=legacyMaria(),conn=await db.getConnection();let updated;
+          const parts=rawId.split(":");
+          const sourceKey=parts.length>=3?parts[1]:"main";
+          const legacyId=parts.length>=3?parts.slice(2).join(":"):parts[1];
+          const configs={
+            main:{users:"AspNetUsers",roles:"AspNetRoles",links:"AspNetUserRoles",roleEditable:true},
+            bluvam:{users:"bluvamdb__AspNetUsers",roles:"bluvamdb__AspNetRoles",links:"bluvamdb__AspNetUserRoles",roleEditable:true},
+            transfer:{users:"OnlineMoneyTransfer__AspNetUsers",roles:"OnlineMoneyTransfer__AspNetRoles",links:"OnlineMoneyTransfer__AspNetUserRoles",roleEditable:false}
+          };
+          const config=configs[sourceKey];
+          if(!config||!legacyId)return json(res,400,{message:"منبع یا شناسه حساب معتبر نیست."});
+          if(role!==null&&!config.roleEditable)return json(res,403,{message:"نقش حساب‌های انتقال وجه از این پنل قابل تغییر نیست."});
+          const db=legacyMaria(),conn=await db.getConnection();let updated;
+          const usersTable=sqlIdent(config.users),rolesTable=sqlIdent(config.roles),linksTable=sqlIdent(config.links);
           try{
             await conn.beginTransaction();
-            const [currentRows]=await conn.query("SELECT u.Id,u.IsActive,(SELECT GROUP_CONCAT(DISTINCT r.Name ORDER BY r.Name SEPARATOR ',') FROM AspNetUserRoles ur JOIN AspNetRoles r ON r.Id=ur.RoleId WHERE ur.UserId=u.Id) AS role_names FROM AspNetUsers u WHERE u.Id=? LIMIT 1",[legacyId]);
+            const [currentRows]=await conn.query("SELECT u.Id,u.IsActive,(SELECT GROUP_CONCAT(DISTINCT r.Name ORDER BY r.Name SEPARATOR ',') FROM "+linksTable+" ur JOIN "+rolesTable+" r ON r.Id=ur.RoleId WHERE ur.UserId=u.Id) AS role_names FROM "+usersTable+" u WHERE u.Id=? LIMIT 1",[legacyId]);
             if(!currentRows.length){await conn.rollback();return json(res,404,{message:"حساب کاربری پیدا نشد."});}
-            const current=currentRows[0],currentRoles=String(current.role_names||"").split(",").filter(Boolean).map(legacyRoleCode);
+            const current=currentRows[0],currentRoleNames=String(current.role_names||"").split(",").filter(Boolean),currentRoles=currentRoleNames.map(legacyRoleCode);
             if((currentRoles.includes("superadmin")||role==="superadmin")&&admin.role!=="superadmin"){await conn.rollback();return json(res,403,{message:"مدیریت حساب مدیر ارشد فقط برای مدیر ارشد مجاز است."});}
-            const [columnRows]=await conn.query("SELECT COLUMN_NAME FROM information_schema.columns WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='AspNetUsers'");
+            if(sourceKey==="main"&&(active===false||(role!==null&&role!==directoryRoleFromNames(currentRoleNames)))){
+              try{
+                const [actorMap]=await conn.query("SELECT MariaDbUserId FROM DigibailUserIdentity WHERE PostgresUserId=? LIMIT 1",[actorId]);
+                if(actorMap.length&&String(actorMap[0].MariaDbUserId)===String(legacyId)){await conn.rollback();return json(res,400,{message:"امکان تغییر نقش یا غیرفعال‌کردن حساب مدیر واردشده وجود ندارد."});}
+              }catch{}
+            }
+            if(currentRoles.includes("superadmin")&&(active===false||(role!==null&&role!=="superadmin"))){
+              const [lastAdmin]=await conn.query("SELECT (SELECT COUNT(DISTINCT u.Id) FROM AspNetUsers u JOIN AspNetUserRoles ur ON ur.UserId=u.Id JOIN AspNetRoles r ON r.Id=ur.RoleId WHERE LOWER(REPLACE(REPLACE(REPLACE(r.Name,' ',''),'-',''),'_',''))='superadmin' AND COALESCE(u.IsActive,1)=1)+(SELECT COUNT(DISTINCT u.Id) FROM bluvamdb__AspNetUsers u JOIN bluvamdb__AspNetUserRoles ur ON ur.UserId=u.Id JOIN bluvamdb__AspNetRoles r ON r.Id=ur.RoleId WHERE LOWER(REPLACE(REPLACE(REPLACE(r.Name,' ',''),'-',''),'_',''))='superadmin' AND COALESCE(u.IsActive,1)=1) AS total");
+              if(Number(lastAdmin[0]?.total||0)<=1){await conn.rollback();return json(res,400,{message:"حداقل یک مدیر ارشد فعال باید در سامانه باقی بماند."});}
+            }
+            const [columnRows]=await conn.query("SELECT COLUMN_NAME FROM information_schema.columns WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=?",[config.users]);
             const columns=new Set(columnRows.map(x=>String(x.COLUMN_NAME)));
             const sets=[],values=[];
             if(fullName!==null){const parts=fullName.split(" "),first=parts.shift()||"",last=parts.join(" ");if(columns.has("FirstName")){sets.push("FirstName=?");values.push(first);}if(columns.has("LastName")){sets.push("LastName=?");values.push(last);}}
             if(input.phone!==undefined){for(const col of ["Mobile","Phone","PhoneNumber"])if(columns.has(col)){sets.push(sqlIdent(col)+"=?");values.push(phone);}}
             if(input.email!==undefined&&columns.has("Email")){sets.push("Email=?");values.push(email);}
-            if(active!==null){if(!columns.has("IsActive"))throw new Error("AspNetUsers.IsActive column is missing");sets.push("IsActive=?");values.push(active?1:0);}
-            if(sets.length){values.push(legacyId);await conn.query("UPDATE AspNetUsers SET "+sets.join(",")+" WHERE Id=?",values);}
+            if(active!==null){if(!columns.has("IsActive"))throw new Error(config.users+".IsActive column is missing");sets.push("IsActive=?");values.push(active?1:0);}
+            if(sets.length){values.push(legacyId);await conn.query("UPDATE "+usersTable+" SET "+sets.join(",")+" WHERE Id=?",values);}
             if(role!==null){
-              const [roleRows]=await conn.query("SELECT Id,Name FROM AspNetRoles");
+              const [roleRows]=await conn.query("SELECT Id,Name FROM "+rolesTable);
               const selected=roleRows.find(r=>legacyRoleCode(r.Name)===role);
-              if(!selected)throw Object.assign(new Error("نقش انتخاب‌شده در فهرست نقش‌های پایگاه داده وجود ندارد."),{status:400});
+              if(!selected)throw Object.assign(new Error("نقش انتخاب‌شده در منبع حساب وجود ندارد."),{status:400});
               const coreRoleIds=roleRows.filter(r=>["customer","member","agent","marketer","customermarketer","admin","superadmin"].includes(legacyRoleCode(r.Name))).map(r=>r.Id);
-              if(coreRoleIds.length)await conn.query("DELETE FROM AspNetUserRoles WHERE UserId=? AND RoleId IN (?)",[legacyId,coreRoleIds]);
-              await conn.query("INSERT INTO AspNetUserRoles(UserId,RoleId) VALUES(?,?)",[legacyId,selected.Id]);
+              if(coreRoleIds.length)await conn.query("DELETE FROM "+linksTable+" WHERE UserId=? AND RoleId IN (?)",[legacyId,coreRoleIds]);
+              await conn.query("INSERT INTO "+linksTable+"(UserId,RoleId) VALUES(?,?)",[legacyId,selected.Id]);
             }
             await conn.commit();
-            const [result]=await conn.query("SELECT CAST(u.Id AS CHAR) AS id,COALESCE(NULLIF(TRIM(CONCAT_WS(' ',u.FirstName,u.LastName)),''),u.UserName) AS full_name,COALESCE(NULLIF(u.Mobile,''),NULLIF(u.Phone,''),NULLIF(u.PhoneNumber,'')) AS phone,u.Email AS email,COALESCE(u.IsActive,1) AS is_active,(SELECT r.Name FROM AspNetUserRoles ur JOIN AspNetRoles r ON r.Id=ur.RoleId WHERE ur.UserId=u.Id ORDER BY r.Name LIMIT 1) AS role_name FROM AspNetUsers u WHERE u.Id=?",[legacyId]);
-            const roles=[result[0]?.role_name].filter(Boolean).map(legacyRoleCode);
-            updated={...result[0],id:"legacy:"+legacyId,role:roles[0]||"customer",roles,is_active:Boolean(Number(result[0]?.is_active))};
+            const [result]=await conn.query("SELECT CAST(u.Id AS CHAR) AS legacy_id,COALESCE(NULLIF(TRIM(CONCAT_WS(' ',u.FirstName,u.LastName)),''),u.UserName) AS full_name,COALESCE(NULLIF(u.Mobile,''),NULLIF(u.Phone,''),NULLIF(u.PhoneNumber,'')) AS phone,u.Email AS email,COALESCE(u.IsActive,1) AS is_active,(SELECT GROUP_CONCAT(DISTINCT r.Name ORDER BY r.Name SEPARATOR ',') FROM "+linksTable+" ur JOIN "+rolesTable+" r ON r.Id=ur.RoleId WHERE ur.UserId=u.Id) AS role_names FROM "+usersTable+" u WHERE u.Id=?",[legacyId]);
+            const names=String(result[0]?.role_names||"").split(",").filter(Boolean),roles=names.map(legacyRoleCode),primary=directoryRoleFromNames(names);
+            updated={...result[0],id:rawId,role:primary,roles:roles.length?roles:[primary],is_active:Boolean(Number(result[0]?.is_active)),source:sourceKey,legacy_source:config.users,role_editable:config.roleEditable};
           }catch(error){await conn.rollback().catch(()=>{});throw error;}finally{conn.release();}
-          try{
-            const [mappingRows]=await db.query("SELECT PostgresUserId FROM DigibailUserIdentity WHERE MariaDbUserId=? LIMIT 1",[legacyId]);
-            if(mappingRows.length){
-              const pgId=Number(mappingRows[0].PostgresUserId);
-              await pool.query("UPDATE users SET full_name=COALESCE($1,full_name),phone=CASE WHEN $2::boolean THEN $3 ELSE phone END,email=CASE WHEN $4::boolean THEN $5 ELSE email END,role=COALESCE($6,role),is_active=COALESCE($7,is_active),updated_at=NOW() WHERE id=$8",[fullName,input.phone!==undefined,phone,input.email!==undefined,email,role,active,pgId]);
-              if(role!==null)await pool.query("INSERT INTO user_role_overrides(user_id,role_code,updated_by,updated_at) VALUES($1,$2,$3,NOW()) ON CONFLICT(user_id) DO UPDATE SET role_code=EXCLUDED.role_code,updated_by=EXCLUDED.updated_by,updated_at=NOW()",[pgId,role,actorId]);
-            }
-          }catch(syncError){console.error("POSTGRES_MAPPED_USER_UPDATE_FAILED="+String(syncError.code||syncError.name||"unknown"));}
-          try{
-            const [mappingRows]=await db.query("SELECT PostgresUserId FROM DigibailUserIdentity WHERE MariaDbUserId=? LIMIT 1",[legacyId]);
-            if(mappingRows.length){
-              const pgId=Number(mappingRows[0].PostgresUserId);
-              await pool.query("UPDATE users SET full_name=COALESCE($1,full_name),phone=CASE WHEN $2::boolean THEN $3 ELSE phone END,email=CASE WHEN $4::boolean THEN $5 ELSE email END,role=COALESCE($6,role),is_active=COALESCE($7,is_active),updated_at=NOW() WHERE id=$8",[fullName,input.phone!==undefined,phone,input.email!==undefined,email,role,active,pgId]);
-              if(role!==null)await pool.query("INSERT INTO user_role_overrides(user_id,role_code,updated_by,updated_at) VALUES($1,$2,$3,NOW()) ON CONFLICT(user_id) DO UPDATE SET role_code=EXCLUDED.role_code,updated_by=EXCLUDED.updated_by,updated_at=NOW()",[pgId,role,actorId]);
-            }
-          }catch(syncError){console.error("POSTGRES_MAPPED_USER_UPDATE_FAILED="+String(syncError.code||syncError.name||"unknown"));}
-          await audit(req,"admin.user.updated",actorId,{targetUserId:rawId,source:"mariadb.AspNetUsers",changed:{fullName:fullName!==null,phone:input.phone!==undefined,email:input.email!==undefined,role:role!==null,isActive:active!==null}});
+          if(sourceKey==="main"){
+            try{
+              const [mappingRows]=await db.query("SELECT PostgresUserId FROM DigibailUserIdentity WHERE MariaDbUserId=? LIMIT 1",[legacyId]);
+              if(mappingRows.length){
+                const pgId=Number(mappingRows[0].PostgresUserId);
+                await pool.query("UPDATE users SET full_name=COALESCE($1,full_name),phone=CASE WHEN $2::boolean THEN $3 ELSE phone END,email=CASE WHEN $4::boolean THEN $5 ELSE email END,role=COALESCE($6,role),is_active=COALESCE($7,is_active),updated_at=NOW() WHERE id=$8",[fullName,input.phone!==undefined,phone,input.email!==undefined,email,role,active,pgId]);
+                if(role!==null)await pool.query("INSERT INTO user_role_overrides(user_id,role_code,updated_by,updated_at) VALUES($1,$2,$3,NOW()) ON CONFLICT(user_id) DO UPDATE SET role_code=EXCLUDED.role_code,updated_by=EXCLUDED.updated_by,updated_at=NOW()",[pgId,role,actorId]);
+              }
+            }catch(syncError){console.error("POSTGRES_MAPPED_USER_UPDATE_FAILED="+String(syncError.code||syncError.name||"unknown"));}
+          }
+          await audit(req,"admin.user.updated",actorId,{targetUserId:rawId,source:"mariadb."+config.users,changed:{fullName:fullName!==null,phone:input.phone!==undefined,email:input.email!==undefined,role:role!==null,isActive:active!==null}});
           return json(res,200,{data:updated,message:"اطلاعات حساب به‌روزرسانی شد."});
         }
         const id=Number(rawId.startsWith("pg:")?rawId.slice(3):rawId);
