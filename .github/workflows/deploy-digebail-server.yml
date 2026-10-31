@@ -142,7 +142,7 @@ jobs:
             $DOCKER compose up -d --no-build
             echo "=== wait for application and legacy API health ==="
             HEALTH_OK=0
-            for n in $(seq 1 120); do
+            for n in $(seq 1 48); do
               if curl -fsS --max-time 5 http://127.0.0.1:1631/healthz >/dev/null; then
                 HEALTH_OK=1
                 echo "APP_HEALTH=healthy elapsed_seconds=$((n * 5))"
@@ -155,7 +155,10 @@ jobs:
               sleep 5
             done
             if [ "$HEALTH_OK" -ne 1 ]; then
-              echo "ERROR: application health did not recover within 10 minutes."
+              echo "ERROR: application health did not recover within 4 minutes."
+              echo "=== database active queries and lock waits ==="
+              $DOCKER compose exec -T db sh -lc 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -x -c "SELECT pid, state, wait_event_type, wait_event, now()-query_start AS duration, left(query,300) AS query FROM pg_stat_activity WHERE datname=current_database() ORDER BY query_start NULLS LAST" || true'
+              echo "=== application processes and startup log ==="
               $DOCKER compose ps
               $DOCKER compose exec -T app sh -lc 'ps -ef; (wget -qO- http://127.0.0.1:1632/healthz || true)'
               $DOCKER compose logs --tail=200 app db
