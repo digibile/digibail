@@ -1,5 +1,7 @@
 name: Inspect VamCity database archives and live deployment
 
+# Re-run after the server disk-space cleanup on 2026-10-31.
+
 on:
   push:
     branches: [main]
