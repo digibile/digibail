@@ -771,18 +771,20 @@ export async function handleApi(req, res, url) {
         const match=/^([A-Za-z0-9_]{1,63})\.([A-Za-z0-9_]{1,63})$/.exec(sourceTable);
         if(!match)return json(res,400,{message:"نام جدول معتبر نیست."});
         const [,sourceSchema,tableName]=match;
+        const physicalTable=sourceSchema+"__"+tableName;
         const manifest=await pool.query("SELECT source_rows,imported_rows FROM legacy_digibail._import_manifest WHERE source_schema=$1 AND source_table=$2",[sourceSchema,tableName]);
         if(!manifest.rowCount)return json(res,404,{message:"جدول در ساختار منتقل‌شده پیدا نشد."});
         const limit=Math.min(100,Math.max(1,Number.parseInt(url.searchParams.get("limit")||"50",10)||50));
         const offset=Math.max(0,Number.parseInt(url.searchParams.get("offset")||"0",10)||0);
-        const columns=await pool.query("SELECT column_name,data_type,is_nullable,ordinal_position FROM information_schema.columns WHERE table_schema='legacy_digibail' AND table_name=$1 ORDER BY ordinal_position",[tableName]);
-        const primary=await pool.query("SELECT kcu.column_name FROM information_schema.table_constraints tc JOIN information_schema.key_column_usage kcu ON tc.constraint_name=kcu.constraint_name AND tc.table_schema=kcu.table_schema AND tc.table_name=kcu.table_name WHERE tc.constraint_type='PRIMARY KEY' AND tc.table_schema='legacy_digibail' AND tc.table_name=$1 ORDER BY kcu.ordinal_position",[tableName]);
-        const foreign=await pool.query("SELECT kcu.column_name,ccu.table_schema AS referenced_schema,ccu.table_name AS referenced_table,ccu.column_name AS referenced_column FROM information_schema.table_constraints tc JOIN information_schema.key_column_usage kcu ON tc.constraint_name=kcu.constraint_name AND tc.table_schema=kcu.table_schema AND tc.table_name=kcu.table_name JOIN information_schema.constraint_column_usage ccu ON ccu.constraint_name=tc.constraint_name AND ccu.constraint_schema=tc.constraint_schema WHERE tc.constraint_type='FOREIGN KEY' AND tc.table_schema='legacy_digibail' AND tc.table_name=$1 ORDER BY tc.constraint_name,kcu.ordinal_position",[tableName]);
+        const columns=await pool.query("SELECT column_name,data_type,is_nullable,ordinal_position FROM information_schema.columns WHERE table_schema='legacy_digibail' AND table_name=$1 ORDER BY ordinal_position",[physicalTable]);
+        const primary=await pool.query("SELECT kcu.column_name FROM information_schema.table_constraints tc JOIN information_schema.key_column_usage kcu ON tc.constraint_name=kcu.constraint_name AND tc.table_schema=kcu.table_schema AND tc.table_name=kcu.table_name WHERE tc.constraint_type='PRIMARY KEY' AND tc.table_schema='legacy_digibail' AND tc.table_name=$1 ORDER BY kcu.ordinal_position",[physicalTable]);
+        const foreign=await pool.query("SELECT kcu.column_name,ccu.table_schema AS referenced_schema,ccu.table_name AS referenced_table,ccu.column_name AS referenced_column FROM information_schema.table_constraints tc JOIN information_schema.key_column_usage kcu ON tc.constraint_name=kcu.constraint_name AND tc.table_schema=kcu.table_schema AND tc.table_name=kcu.table_name JOIN information_schema.constraint_column_usage ccu ON ccu.constraint_name=tc.constraint_name AND ccu.constraint_schema=tc.constraint_schema WHERE tc.constraint_type='FOREIGN KEY' AND tc.table_schema='legacy_digibail' AND tc.table_name=$1 ORDER BY tc.constraint_name,kcu.ordinal_position",[physicalTable]);
         const qid=v=>'"'+String(v).replace(/"/g,'""')+'"';
-        const order=primary.rows.length?primary.rows.map(x=>qid(x.column_name)).join(","):"ctid";
-        const sql="SELECT * FROM "+qid("legacy_digibail")+"."+qid(tableName)+" ORDER BY "+order+" LIMIT $1 OFFSET $2";
+        const order=primary.rows.length?primary.rows.map(x=>qid(x.column_name)).join(","):qid("__legacy_row_number");
+        const sql="SELECT * FROM "+qid("legacy_digibail")+"."+qid(physicalTable)+" ORDER BY "+order+" LIMIT $1 OFFSET $2";
         const rows=await pool.query(sql,[limit,offset]);
-        return json(res,200,{sourceTable,rows:rows.rows,columns:columns.rows,primaryKeys:primary.rows.map(x=>x.column_name),foreignKeys:foreign.rows,total:Number(manifest.rows[0].imported_rows)||0,offset,limit});
+        const foreignKeys=foreign.rows.map(x=>({...x,referenced_table:String(x.referenced_table).replace(/^([^_]+)__(.+)$/,"$1.$2")}));
+        return json(res,200,{sourceTable,rows:rows.rows,columns:columns.rows,primaryKeys:primary.rows.map(x=>x.column_name),foreignKeys,total:Number(manifest.rows[0].imported_rows)||0,offset,limit});
       }
       if (req.method === "GET" && route === "/api/v1/admin/beta-inquiries") {
         const q = await pool.query("SELECT id,reference,user_id,national_code,status,status_note,created_at FROM beta_inquiries ORDER BY created_at DESC LIMIT 500");
