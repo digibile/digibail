@@ -140,6 +140,10 @@ async function main(){
   try{
     await pool.query("SELECT 1");
     if(process.argv.includes("--apply"))await migrate();
+    const manifestCount=await scalar("SELECT COUNT(*) AS n FROM digibail_legacy_manifest WHERE source_schema='legacy_digibail'");
+    if(process.argv.includes("--apply")&&manifestCount!==59) {
+      throw new Error("The 59-table legacy data migration has not been verified; found "+manifestCount+" manifest rows.");
+    }
     for(const set of sets){
       const [exists]=await pool.query(
         "SELECT 1 FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name=?",
@@ -150,8 +154,20 @@ async function main(){
       console.log("LEGACY_USER_SOURCE_PLAN="+set.key+" count="+n);
       if(process.argv.includes("--apply"))await importSet(set);
     }
-    if(!process.argv.includes("--apply"))console.log("DRY_RUN_ONLY=1 no account rows were changed.");
-    else console.log("DIGIBAIL_LEGACY_ACCOUNT_IMPORT=PASS all account sources are mapped into MariaDB users.");
+    if(!process.argv.includes("--apply")) {
+      console.log("DRY_RUN_ONLY=1 no account rows were changed.");
+    } else {
+      await pool.query(
+        "INSERT INTO digibail_migration_control(migration_key,status,details,completed_at) "+
+        "VALUES('single-mariadb-cutover','verified',JSON_OBJECT('legacy_tables',?,'account_sources',?,'verified_at_utc',UTC_TIMESTAMP(6)),UTC_TIMESTAMP(6)) "+
+        "ON DUPLICATE KEY UPDATE status=VALUES(status),details=VALUES(details),completed_at=VALUES(completed_at)",
+        [manifestCount,sets.length]
+      );
+      const ready=await scalar("SELECT COUNT(*) AS n FROM digibail_migration_control WHERE migration_key='single-mariadb-cutover' AND status='verified'");
+      if(ready!==1)throw new Error("Single-database cutover verification marker was not written.");
+      console.log("DIGIBAIL_LEGACY_ACCOUNT_IMPORT=PASS all account sources are mapped into MariaDB.");
+      console.log("DIGIBAIL_SINGLE_DATABASE_READY=PASS legacy_tables="+manifestCount+" account_sources="+sets.length);
+    }
   }finally{await Promise.allSettled([pool.end(),closePool()]);}
 }
 main().catch(error=>{
