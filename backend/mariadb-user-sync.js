@@ -33,7 +33,7 @@ export async function syncUserToMariaDB(pool,user) {
   try {
     await conn.beginTransaction();
     const [mapping]=await conn.query(
-      "SELECT MariaDbUserId FROM DigibailAppUserIdentity WHERE AppUserId=? LIMIT 1",
+      "SELECT MariaDbUserId FROM DigibailAppUserIdentity WHERE AppUserId=? AND LegacySource='mariadb.AspNetUsers' LIMIT 1",
       [appUserId]
     );
     const name=splitName(user.full_name);
@@ -103,7 +103,7 @@ export async function syncUserToMariaDB(pool,user) {
     await conn.query("DELETE FROM AspNetUserRoles WHERE UserId=?",[mariaId]);
     await conn.query("INSERT INTO AspNetUserRoles(UserId,RoleId) VALUES(?,?)",[mariaId,selected.Id]);
     await conn.query(
-      "INSERT INTO DigibailAppUserIdentity(AppUserId,MariaDbUserId,RoleCode) VALUES(?,?,?) ON DUPLICATE KEY UPDATE MariaDbUserId=VALUES(MariaDbUserId),RoleCode=VALUES(RoleCode)",
+      "INSERT INTO DigibailAppUserIdentity(AppUserId,LegacySource,MariaDbUserId,RoleCode) VALUES(?,'mariadb.AspNetUsers',?,?) ON DUPLICATE KEY UPDATE MariaDbUserId=VALUES(MariaDbUserId),RoleCode=VALUES(RoleCode)",
       [appUserId,mariaId,role]
     );
     await conn.commit();
