@@ -72,6 +72,13 @@ try{
   const exists=await pool.query("SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname=$1 AND c.relname=$2",[TARGET_SCHEMA,idx]);
   if(!exists.rowCount)await pool.query("CREATE UNIQUE INDEX "+qid(idx)+" ON "+qtable(f.referencedSchemaName,f.referencedTableName)+" ("+refCols.map(qid).join(",")+")");
  }
+ // Apply source nullability before inserting rows. PostgreSQL rejects ALTER TABLE while
+ // FK trigger events from earlier INSERT statements are still pending in this transaction.
+ for(const def of input.schemaDefinitions){
+  const [s,t]=String(def.sourceTable).split("."),cols=colGroups.get(sourceKey(s,t))||[],pk=(pkGroups.get(sourceKey(s,t))||[]).map(x=>x.columnName),table=qtable(s,t);
+  for(const col of cols)if(!Boolean(col.isNullable))await pool.query("ALTER TABLE "+table+" ALTER COLUMN "+qid(col.columnName)+" SET NOT NULL");
+  if(!pk.length)await pool.query("ALTER TABLE "+table+" ALTER COLUMN "+qid("__legacy_row_number")+" SET NOT NULL");
+ }
  for(const item of tables){
   const [s,t]=String(item.sourceTable).split("."),key=sourceKey(s,t),cols=colGroups.get(key)||[],pk=(pkGroups.get(key)||[]).map(x=>x.columnName),table=qtable(s,t),rows=Array.isArray(item.rows)?item.rows:[];
   if(!pk.length)await pool.query("TRUNCATE TABLE "+table);
@@ -85,8 +92,6 @@ try{
    }
   }
   for(const c of cols)if(Boolean(c.isIdentity)){const rel=qid(TARGET_SCHEMA)+"."+qid(s+"__"+t);await pool.query("SELECT setval(pg_get_serial_sequence($1,$2),COALESCE(MAX("+qid(c.columnName)+"),1),MAX("+qid(c.columnName)+") IS NOT NULL) FROM "+table,[rel,c.columnName]);}
-  for(const c of cols)if(!Boolean(c.isNullable))await pool.query("ALTER TABLE "+table+" ALTER COLUMN "+qid(c.columnName)+" SET NOT NULL");
-  if(!pk.length)await pool.query("ALTER TABLE "+table+" ALTER COLUMN "+qid("__legacy_row_number")+" SET NOT NULL");
   manifest.push({schemaName:s,tableName:t,sourceRows:rows.length,importedRows:rows.length});mirrorRows+=rows.length;mirrorTables++;
  }
  for(const f of fkGroups.values()){
