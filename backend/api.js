@@ -1215,36 +1215,25 @@ export async function handleApi(req, res, url) {
       const password = String(b.password || "");
       // Prefer the exact account name or phone. The legacy "admin" alias is only a fallback,
       // otherwise it can accidentally select the bootstrap account instead of the real migrated admin.
-      let result = await pool.query(
-        "SELECT id,phone,full_name,username,password_hash,role,is_active FROM users WHERE phone=$1 OR lower(username)=lower($1) ORDER BY CASE WHEN lower(username)=lower($1) THEN 0 ELSE 1 END LIMIT 1",
+      const candidates = await pool.query(
+        "SELECT id,phone,full_name,username,password_hash,role,is_active,legacy_source FROM users WHERE phone=$1 OR lower(username)=lower($1) ORDER BY CASE WHEN lower(username)=lower($1) THEN 0 ELSE 1 END,CASE WHEN legacy_source='mariadb.AspNetUsers' THEN 0 WHEN legacy_source IS NULL THEN 1 WHEN legacy_source='mariadb.bluvamdb__AspNetUsers' THEN 2 ELSE 3 END,id ASC LIMIT 20",
         [username]
       );
-      if (!result.rowCount && username.toLowerCase() === "admin") {
-        result = await pool.query("SELECT id,phone,full_name,username,password_hash,role,is_active FROM users WHERE lower(username)='digibail-admin' LIMIT 1");
+      if (username.toLowerCase() === "admin") {
+        const alias = await pool.query("SELECT id,phone,full_name,username,password_hash,role,is_active,legacy_source FROM users WHERE lower(username)='digibail-admin' LIMIT 1");
+        candidates.rows.push(...alias.rows);
       }
-      if (!result.rowCount || !result.rows[0].is_active) {
-        await audit(req, "auth.login.failed"); return json(res, 401, { message: "نام کاربری یا رمز عبور نادرست است." });
+      let u=null;
+      for(const candidate of candidates.rows){
+        if(!candidate.is_active)continue;
+        if(await verifyPassword(password,candidate.password_hash)){u=candidate;break;}
       }
-      const u = result.rows[0];
-      let passwordValid = await verifyPassword(password, u.password_hash);
-      let verifiedLegacyHash = null;
-      if (!passwordValid) {
-        // If a legacy identity collided with an existing modern username, verify against
-        // the preserved ASP.NET Identity hash and upgrade only after a successful login.
-        const legacy = await pool.query(
-          "SELECT payload->>'PasswordHash' AS password_hash FROM legacy_source_data WHERE source_table LIKE '%AspNetUsers' AND (lower(COALESCE(payload->>'UserName',payload->>'username',''))=lower($1) OR COALESCE(payload->>'Mobile',payload->>'Phone',payload->>'mobile',payload->>'phone','')=$1) ORDER BY imported_at DESC LIMIT 1",
-          [username]
-        );
-        if (legacy.rowCount && legacy.rows[0].password_hash) {
-          verifiedLegacyHash = String(legacy.rows[0].password_hash);
-          passwordValid = await verifyPassword(password, "aspnet:" + verifiedLegacyHash);
-        }
-      }
-      if (!passwordValid) {
-        await audit(req, "auth.login.failed"); return json(res, 401, { message: "نام کاربری یا رمز عبور نادرست است." });
+      if(!u){
+        await audit(req, "auth.login.failed");
+        return json(res, 401, { message: "نام کاربری یا رمز عبور نادرست است." });
       }
       resetLimit("login:" + ip);
-      if (String(u.password_hash).startsWith("aspnet:") || verifiedLegacyHash) {
+      if (String(u.password_hash).startsWith("aspnet:")) {
         const upgraded = await bcrypt.hash(password, 12);
         await pool.query("UPDATE users SET password_hash=$1,updated_at=NOW() WHERE id=$2", [upgraded, u.id]);
       }
