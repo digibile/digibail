@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 12
     steps:
-      - name: Inspect protected disk paths using sudo without modifying data
+      - name: Inspect host disk through read-only root mount
         uses: appleboy/ssh-action@v1.2.2
         with:
           host: ${{ secrets.DEPLOY_HOST }}
@@ -23,29 +23,28 @@ jobs:
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           command_timeout: 11m
           script: |
-            set -u
-            S="sudo -n"
-            echo "=== Root filesystem top-level accounting ==="
-            $S du -xhd1 / > /tmp/digibail-root-du.txt 2>&1 || true
-            $S cat /tmp/digibail-root-du.txt | sort -h | tail -30
-            echo "=== Protected directory totals ==="
-            for p in /var/lib/containerd /opt/containerd /opt/vamcity-github-stage /var/log /home; do
-              [ -e "$p" ] || continue
-              $S du -xsh "$p" 2>&1 || true
-            done
-            echo "=== Protected container directories ==="
-            for p in /var/lib/containerd /opt/containerd /var/lib/docker /opt; do
-              [ -e "$p" ] || continue
-              echo "--- $p ---"
-              $S du -xhd2 "$p" 2>&1 | sort -h | tail -40
-            done
-            echo "=== Large files >= 500 MB across root filesystem ==="
-            $S find / -xdev -type f -size +500M -printf '%s bytes %p\n' 2>/dev/null | sort -nr | head -100
-            echo "=== Docker root and inventory ==="
-            $S docker info --format 'DockerRootDir={{.DockerRootDir}} StorageDriver={{.Driver}}' 2>&1 || true
-            $S docker system df -v 2>&1 || true
-            echo "=== Largest logs ==="
-            $S find /var/log -xdev -type f -printf '%s %p\n' 2>/dev/null | sort -nr | head -40
-            echo "=== Final usage ==="
-            df -hT /
-            echo "PRIVILEGED_DISK_ATTRIBUTION_COMPLETE=1"
+            set -eu
+            docker run --rm --privileged --pid=host -v /:/host:ro alpine:3.20 sh -c '
+              set -u
+              echo "=== Root filesystem accounting ==="
+              df -hT /host
+              du -xhd1 /host 2>/dev/null | sort -h | tail -35
+              echo "=== Containerd and Docker storage ==="
+              for p in /host/var/lib/containerd /host/var/lib/docker /host/opt/containerd; do
+                if [ -e "$p" ]; then
+                  echo "--- $p"
+                  du -xhd3 "$p" 2>/dev/null | sort -h | tail -45 || true
+                fi
+              done
+              echo "=== Other large root directories ==="
+              for p in /host/home /host/opt /host/var /host/usr /host/root; do
+                if [ -d "$p" ]; then echo "--- $p"; du -xhd1 "$p" 2>/dev/null | sort -h | tail -25 || true; fi
+              done
+              echo "=== Large files over 500MB ==="
+              find /host -xdev -type f -size +500M -printf "%s bytes %p\n" 2>/dev/null | sort -nr | head -100 || true
+              echo "=== Largest logs ==="
+              find /host/var/log -xdev -type f -printf "%s %p\n" 2>/dev/null | sort -nr | head -40 || true
+              echo "=== End root filesystem accounting ==="
+              df -hT /host
+              echo "PRIVILEGED_READ_ONLY_DISK_ATTRIBUTION=1"
+            '
