@@ -36,6 +36,7 @@ const pkGroups=new Map();for(const p of primaryKeys){const k=sourceKey(p.schemaN
 for(const p of pkGroups.values())p.sort((a,b)=>Number(a.keyOrdinal)-Number(b.keyOrdinal));
 const fkGroups=new Map();for(const f of foreignKeys){const k=sourceKey(f.schemaName,f.tableName)+"|"+String(f.constraintName);if(!fkGroups.has(k))fkGroups.set(k,{...f,parts:[]});fkGroups.get(k).parts.push(f);}
 for(const f of fkGroups.values())f.parts.sort((a,b)=>Number(a.keyOrdinal)-Number(b.keyOrdinal));
+// run legacy import with source-null preservation and no destructive table truncation.
 let mirrorRows=0,mirrorTables=0,mirrorColumns=0,mirrorFks=0;
 const manifest=[];
 try{
