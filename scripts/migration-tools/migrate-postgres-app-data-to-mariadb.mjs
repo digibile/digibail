@@ -52,7 +52,13 @@ function jsonValue(value) {
 function mysqlValue(value, pgType) {
   if (value === undefined || value === null) return null;
   if (pgType === "json" || pgType === "jsonb" || pgType === "ARRAY") return jsonValue(value);
-  if (value instanceof Date) return value;
+  if (value instanceof Date) {
+    if (value.getUTCFullYear() < 1000) return "1000-01-01 00:00:00.000000";
+    return value;
+  }
+  if (typeof value === "string" && /^000[0-9]-\\d{2}-\\d{2}(?:[ T].*)?$/.test(value)) {
+    return "1000-01-01 00:00:00.000000";
+  }
   if (typeof value === "boolean") return value ? 1 : 0;
   return value;
 }
