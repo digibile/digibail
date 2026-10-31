@@ -36,7 +36,10 @@ const sets=[
     phone:"COALESCE(NULLIF(u.Mobile,''),NULLIF(u.Phone,''),NULLIF(u.PhoneNumber,''))",
     customerId:"CAST(u.CustomerId AS CHAR)",
     agentId:"u.AgentId",
-    created:"u.RegDate"
+    created:"u.RegDate",
+    mariaId:"CAST(u.Id AS UNSIGNED)",
+    mariaKey:"NULL",
+    identityJoin:"map.MariaDbUserId=CAST(u.Id AS UNSIGNED)"
   },
   {
     key:"mariadb.OnlineMoneyTransfer__AspNetUsers",
