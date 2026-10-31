@@ -1,5 +1,5 @@
 name: Import all VamCity databases into the single Digibail MariaDB
-# Triggered migration continuation after empty-table key-width fix; keep audited single-database import.
+# Trigger migration continuation after transfer FK namespace fix; keep audited single-database import.
 # Resume safely after fixing BlueVam table and index namespace isolation.
 
 on:
