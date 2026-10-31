@@ -66,9 +66,12 @@ export function translateMariaSql(source) {
     sql = replaceFunctionCalls(sql, "json_build_array", arg => "JSON_ARRAY(" + arg + ")");
   }
 
+  sql = sql.replace(/\$(\d+)::date\b/gi, "DATE($$1)");
+  sql = sql.replace(/\$(\d+)::text\b/gi, "CAST($$1 AS CHAR)");
   sql = sql.replace(/\b([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)?)::date\b/gi, "DATE($1)");
   sql = sql.replace(/\b([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)?)::text\b/gi, "CAST($1 AS CHAR)");
   sql = sql.replace(/::\s*(?:jsonb|json|boolean|bool|int|integer|bigint|smallint|numeric|uuid|timestamptz|timestamp(?: with time zone)?|double precision)\b/gi, "");
+  sql = sql.replace(/\bregexp_replace\s*\(/gi, "REGEXP_REPLACE(");
   sql = sql.replace(/EXTRACT\s*\(\s*EPOCH\s+FROM\s*\(([^()]+)-NOW\(\)\)\s*\)::int/gi, "TIMESTAMPDIFF(SECOND,NOW(),$1)");
   sql = sql.replace(/to_char\(\s*([A-Za-z_][A-Za-z0-9_.]*)\s+AT TIME ZONE 'Asia\/Tehran'\s*,\s*'YYYY-MM-DD HH24:MI:SS\.US'\s*\)/gi,
     "DATE_FORMAT(CONVERT_TZ($1,'+00:00','+03:30'),'%Y-%m-%d %H:%i:%s.%f')");
