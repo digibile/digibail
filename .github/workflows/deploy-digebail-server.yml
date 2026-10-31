@@ -95,31 +95,21 @@ jobs:
               ls -l /var/run/docker.sock 2>/dev/null || true
               exit 20
             fi
-            DB_EXISTS=0
-            if $DOCKER volume ls --format '{{.Name}}' | grep -E '(^|[-_])digibail_pgdata$' >/dev/null; then DB_EXISTS=1; fi
             if $DOCKER ps -a --format '{{.Names}}' | grep -E 'digibail.*db|db.*digibail' >/dev/null; then DB_EXISTS=1; fi
-            if [ ! -f .env ] || ! grep -qE '^POSTGRES_DB=.+$' .env || ! grep -qE '^POSTGRES_USER=.+$' .env || ! grep -qE '^POSTGRES_PASSWORD=.+$' .env || ! grep -qE '^DATABASE_URL=.+$' .env || ! grep -qE '^JWT_SECRET=.+$' .env || ! grep -qE '^OTP_PEPPER=.+$' .env || ! grep -qE '^CAPTCHA_PEPPER=.+$' .env; then
-              if [ "$DB_EXISTS" -eq 1 ]; then
-                echo "BLOCKED: database volume/container exists but production environment is incomplete; preserving data."
+            if [ ! -f .env ] || ! grep -qE '^JWT_SECRET=.+$' .env || ! grep -qE '^OTP_PEPPER=.+$' .env || ! grep -qE '^CAPTCHA_PEPPER=.+$' .env; then
                 exit 21
               fi
               umask 077
-              DB_PASS="$(openssl rand -hex 32)"
               JWT="$(openssl rand -hex 48)"
               OTP="$(openssl rand -hex 32)"
               CAPTCHA="$(openssl rand -hex 32)"
               {
-                printf 'POSTGRES_DB=digibail_prod\n'
-                printf 'POSTGRES_USER=digibail_app\n'
-                printf 'POSTGRES_PASSWORD=%s\n' "$DB_PASS"
-                printf 'DATABASE_URL=postgresql://digibail_app:%s@db:5432/digibail_prod\n' "$DB_PASS"
                 printf 'PORT=1631\nHOST=0.0.0.0\n'
                 printf 'JWT_SECRET=%s\nOTP_PEPPER=%s\nCAPTCHA_PEPPER=%s\n' "$JWT" "$OTP" "$CAPTCHA"
                 printf 'BRAND_NAME=دیجی‌بایل پی\n'
                 printf 'KAVENEGAR_API_KEY=\nKAVENEGAR_TEMPLATE=\n'
               } > .env
               chmod 600 .env
-              unset DB_PASS JWT OTP CAPTCHA
               echo "SECURE_ENV_CREATED=1 (secret values hidden)"
             fi
             if [ -z "${MYSQL_PASS:-}" ]; then
@@ -137,7 +127,7 @@ jobs:
             } >> .env.mariadb.tmp
             mv .env.mariadb.tmp .env
             chmod 600 .env
-            for key in POSTGRES_DB POSTGRES_USER POSTGRES_PASSWORD DATABASE_URL JWT_SECRET OTP_PEPPER CAPTCHA_PEPPER; do
+            for key in MARIADB_DATABASE MARIADB_USER MARIADB_PASSWORD MARIADB_SOCKET MARIADB_SOCKET_GID JWT_SECRET OTP_PEPPER CAPTCHA_PEPPER; do
               if ! grep -qE "^${key}=.+" .env; then
                 echo "BLOCKED: missing or empty required setting: $key"
                 exit 22
@@ -162,7 +152,7 @@ jobs:
             if [ "$BUILD_OK" -ne 1 ]; then
               echo "ERROR: new release could not be built after 3 attempts. Keeping current app running, but failing deployment."
               $DOCKER compose ps || true
-              $DOCKER compose logs --tail=80 db app || true
+              $DOCKER compose logs --tail=120 app || true
               exit 24
             fi
             echo "=== start the freshly built release ==="
@@ -235,10 +225,10 @@ jobs:
             if (!userPageResponse.ok) throw new Error("Unified user directory failed: " + userPageResponse.status);
             const userPageBody = await userPageResponse.json();
             const userPage = userPageBody.data || {};
-            if (!Array.isArray(userPage.rows) || !userPage.rows.length || Number(userPage.overallTotal) !== Number(summary.users)) throw new Error("Unified user directory total does not match live PostgreSQL users");
+            if (!Array.isArray(userPage.rows) || !userPage.rows.length || Number(userPage.overallTotal) !== Number(summary.users)) throw new Error("Unified user directory total does not match MariaDB users");
             if (Number(summary.users) < 50000 || Number(userPage.overallTotal) < 50000 || Number(customerBody.data?.overallTotal) !== Number(summary.users)) throw new Error("Unified directory does not include the full MariaDB AspNetUsers population");
             if (!userPage.rows.some(r => r.source === "mariadb") || !customerRows.some(r => r.source === "mariadb")) throw new Error("Unified directory is missing MariaDB source accounts");
-            console.log("UNIFIED_MARIADB_POSTGRES_DIRECTORY=PASS total=" + userPage.overallTotal + " customers_view=" + customerBody.data.overallTotal + " today=" + summary.users_today + " latest=" + summary.latest_user_registration);
+            console.log("UNIFIED_MARIADB_DIRECTORY=PASS total=" + userPage.overallTotal + " customers_view=" + customerBody.data.overallTotal + " today=" + summary.users_today + " latest=" + summary.latest_user_registration);
             const rolesResponse = await fetch(base + "/api/v1/admin/roles", { headers: { Cookie: cookie } });
             if (!rolesResponse.ok) throw new Error("Identity role catalog failed: " + rolesResponse.status);
             const rolesBody = await rolesResponse.json();
