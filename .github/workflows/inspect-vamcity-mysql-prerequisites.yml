@@ -52,12 +52,16 @@ jobs:
               $D run --rm --network host -v /var/lib/mysql/mysql.sock:/var/lib/mysql/mysql.sock -v /usr/local/directadmin/conf/mysql.conf:/tmp/da-mysql.conf:ro mariadb:10.6 sh -lc '
                 getv(){ sed -n "s/^[[:space:]]*$1[[:space:]]*=[[:space:]]*//p" /tmp/da-mysql.conf | head -n 1; }
                 U="$(getv user)"; P="$(getv passwd)"; H="$(getv host)"; PORT="$(getv port)"; S="$(getv socket)"
+                echo "DA_MYSQL_USER=$U HOST=${H:-localhost} PORT=${PORT:-3306} PASSWORD_LENGTH=${#P} SOCKET=${S:-/var/lib/mysql/mysql.sock}"
                 test -n "$U" && test -n "$P" || { echo MYSQL_DA_CREDENTIAL_PARSE=FAILED; exit 2; }
                 printf "[client]\\nuser=%s\\npassword=%s\\nhost=%s\\nport=%s\\nsocket=%s\\n" "$U" "$P" "${H:-localhost}" "${PORT:-3306}" "${S:-/var/lib/mysql/mysql.sock}" > /tmp/client.cnf
                 chmod 600 /tmp/client.cnf
-                mariadb --defaults-extra-file=/tmp/client.cnf -NBe "SELECT VERSION(),CURRENT_USER()"
-                mariadb --defaults-extra-file=/tmp/client.cnf -NBe "SHOW DATABASES" | grep -E "^(vamcitydigibilepay|vamcitydigibilepay_bluvamdb|vamcitydigibilepay_transferdb)$" || true
-                echo MYSQL_DA_CREDENTIAL_TEST=SUCCESS
+                if mariadb --defaults-extra-file=/tmp/client.cnf -NBe "SELECT VERSION(),CURRENT_USER()"; then
+                  echo MYSQL_DA_CREDENTIAL_TEST=SUCCESS
+                  mariadb --defaults-extra-file=/tmp/client.cnf -NBe "SHOW DATABASES" | grep -E "^(vamcitydigibilepay|vamcitydigibilepay_bluvamdb|vamcitydigibilepay_transferdb)$" || true
+                else
+                  echo MYSQL_DA_CREDENTIAL_TEST=FAILED
+                fi
               '
             else
               echo MYSQL_SOCKET_MISSING
