@@ -35,6 +35,11 @@ jobs:
             $D ps -a --format 'table {{.Names}}\t{{.Image}}\t{{.Status}}'
             echo "=== Docker network addresses ==="
             for id in $($D ps -q); do $D inspect --format '{{.Name}} {{range .NetworkSettings.Networks}}{{.IPAddress}} {{end}}' "$id"; done
+            echo "=== Identify long-running Digibail one-off containers (read-only) ==="
+            for id in $($D ps -aq --filter name=digebailir-app-run-); do
+              $D inspect --format 'name={{.Name}} image={{.Config.Image}} path={{.Path}} args={{json .Args}} created={{.Created}} restart={{.HostConfig.RestartPolicy.Name}} labels={{json .Config.Labels}}' "$id"
+              $D top "$id" -eo pid,ppid,etime,args 2>/dev/null || true
+            done
             echo "=== Container process summaries (no command arguments) ==="
             for id in $($D ps -q); do
               name="$($D inspect --format '{{.Name}}' "$id")"
