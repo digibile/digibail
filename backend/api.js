@@ -860,11 +860,19 @@ export async function handleApi(req, res, url) {
       }
       if (req.method === "GET" && route === "/api/v1/admin/legacy-customers") {
         const db=legacyMaria();
-        const [mariaResult,fresh]=await Promise.all([db.query("SELECT COUNT(*) AS total FROM AspNetUsers"),postgresOnlyAccounts(db,10000)]);const maria=mariaResult[0]||{};
-        const total=(Number(maria[0]?.total)||0)+fresh.length;
-        const [todayRows]=await db.query("SELECT COUNT(*) AS total FROM AspNetUsers WHERE DATE(RegDate)=DATE(CONVERT_TZ(UTC_TIMESTAMP(),'+00:00','+03:30'))");
-        const latest=[...(await db.query("SELECT MAX(RegDate) AS latest FROM AspNetUsers"))[0],...(fresh.length?[{latest:fresh[0].created_at}]:[])].map(x=>x.latest).filter(Boolean).sort((a,b)=>new Date(b)-new Date(a))[0]||null;
-        return json(res,200,{data:{legacy_customers:total,legacy_users:total,today:(Number(todayRows[0]?.total)||0)+fresh.filter(r=>new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Tehran",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date(r.created_at))===new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Tehran",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date())).length,latestRegistration:latest,sourceTable:"MariaDB.AspNetUsers",additionalSource:"new PostgreSQL registrations",timezone:"Asia/Tehran"}});
+        const [mariaResult,fresh,staffRows,todayRows,latestRows]=await Promise.all([
+          db.query("SELECT COUNT(*) AS total FROM AspNetUsers"),
+          postgresOnlyAccounts(db,10000),
+          db.query("SELECT COUNT(DISTINCT u.Id) AS total FROM AspNetUsers u WHERE EXISTS(SELECT 1 FROM AspNetUserRoles ur JOIN AspNetRoles r ON r.Id=ur.RoleId WHERE ur.UserId=u.Id AND LOWER(REPLACE(REPLACE(REPLACE(r.Name,' ',''),'-',''),'_','')) IN ('admin','superadmin','agent','marketer','customermarketer'))"),
+          db.query("SELECT COUNT(*) AS total FROM AspNetUsers WHERE DATE(RegDate)=DATE(CONVERT_TZ(UTC_TIMESTAMP(),'+00:00','+03:30'))"),
+          db.query("SELECT DATE_FORMAT(MAX(RegDate),'%Y-%m-%dT%H:%i:%s+03:30') AS latest FROM AspNetUsers")
+        ]);
+        const mariaTotal=Number(mariaResult[0][0]?.total)||0,total=mariaTotal+fresh.length;
+        const freshStaff=fresh.filter(r=>["admin","superadmin","agent","marketer","customermarketer"].includes(r.effective_role)).length;
+        const customerTotal=Math.max(0,mariaTotal-(Number(staffRows[0][0]?.total)||0))+fresh.length-freshStaff;
+        const freshToday=fresh.filter(r=>new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Tehran",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date(r.created_at))===new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Tehran",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date())).length;
+        const latest=[latestRows[0][0]?.latest,fresh[0]?.created_at].filter(Boolean).sort((x,y)=>new Date(y)-new Date(x))[0]||null;
+        return json(res,200,{data:{legacy_customers:customerTotal,legacy_users:total,today:(Number(todayRows[0][0]?.total)||0)+freshToday,latestRegistration:latest,sourceTable:"MariaDB.AspNetUsers",additionalSource:"new PostgreSQL registrations",timezone:"Asia/Tehran"}});
       }
       if (req.method === "GET" && route === "/api/v1/admin/legacy-customers-page") {
         const page=Math.max(1,Number.parseInt(url.searchParams.get("page")||"1",10)||1);
