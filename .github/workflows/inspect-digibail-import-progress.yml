@@ -10,7 +10,6 @@ permissions:
 jobs:
   recover:
     if: false # Retired: DigiBail now uses the single MariaDB database.
-    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 12
     steps:
