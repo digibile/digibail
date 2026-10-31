@@ -26,7 +26,7 @@ function normalizedPhone(v){let n=digits(v);if(n.startsWith("0098"))n="0"+n.slic
 function normalizedNationalCode(v){const n=digits(v);if(!/^\d{10}$/.test(n)||/^(\d)\1{9}$/.test(n))return null;const sum=n.slice(0,9).split("").reduce((a,d,i)=>a+Number(d)*(10-i),0)%11;return (sum<2?Number(n[9])===sum:Number(n[9])===11-sum)?n:null;}
 function dateOrNull(v){if(!v)return null;const d=new Date(v);return Number.isNaN(d.getTime())?null:d.toISOString();}
 function sqlAction(v){const x=String(v||"").toUpperCase();if(x.includes("CASCADE"))return "CASCADE";if(x.includes("SET_NULL"))return "SET NULL";if(x.includes("SET_DEFAULT"))return "SET DEFAULT";return "NO ACTION";}
-const columns=(input.columnDefinitions||[]).filter(c=>!(String(c.schemaName).toLowerCase()==="dbo"&&String(c.tableName).toLowerCase()==="aspnetusers"&&String(c.columnName).toLowerCase()==="passwordhash"));
+const columns=(input.columnDefinitions||[]).filter(c=>!(String(c.schemaName).toLowerCase()==="dbo"&&((String(c.tableName).toLowerCase()==="aspnetusers"&&["passwordhash","securitystamp","concurrencystamp","otp"].includes(String(c.columnName).toLowerCase()))||(String(c.tableName).toLowerCase()==="customers"&&String(c.columnName).toLowerCase()==="initpassword"))));
 const tables=input.genericTables||[], primaryKeys=input.primaryKeys||[], foreignKeys=input.foreignKeys||[];
 if((tables.length||columns.length||input.schemaDefinitions?.length)&&(!tables.length||!columns.length||!input.schemaDefinitions?.length))throw new Error("Incomplete relational export: table rows and full schema metadata are required.");
 const expected=new Set(input.schemaDefinitions.map(x=>x.sourceTable));
@@ -99,6 +99,10 @@ try{
  await pool.query("ALTER TABLE users ADD CONSTRAINT users_role_check CHECK (role IN ('customer','admin','superadmin','agent','marketer','customermarketer','member'))");
  await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS password_reset_required BOOLEAN NOT NULL DEFAULT FALSE");
  await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS legacy_username TEXT");
+ await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS legacy_customer_id UUID");
+ await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS legacy_agent_id BIGINT");
+ await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS legacy_customer_marketer_id BIGINT");
+ await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS legacy_agent_metadata_id UUID");
  await pool.query("CREATE TABLE IF NOT EXISTS access_roles(code VARCHAR(40) PRIMARY KEY,display_name VARCHAR(120) NOT NULL,legacy_source TEXT,legacy_id TEXT,UNIQUE(legacy_source,legacy_id))");
  await pool.query("CREATE TABLE IF NOT EXISTS user_role_assignments(user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,role_code VARCHAR(40) NOT NULL REFERENCES access_roles(code) ON DELETE RESTRICT,legacy_source TEXT NOT NULL,legacy_user_id TEXT NOT NULL,legacy_role_id TEXT NOT NULL,PRIMARY KEY(user_id,role_code),UNIQUE(legacy_source,legacy_user_id,legacy_role_id))");
  const roleRows=input.identityRoles||[];
@@ -108,6 +112,7 @@ try{
  for(const u of input.users||[]){
   if(!u.legacyId)continue;
   const legacyId=String(u.legacyId),sourceUsername=String(u.username||u.email||("legacy_"+legacyId)).trim().slice(0,80),fullName=String(u.fullName||"").trim().replace(/\s+/g," ").slice(0,160)||sourceUsername;
+  const legacyCustomerId=u.customerId?String(u.customerId).toLowerCase():null,legacyAgentId=u.agentId?String(u.agentId):null,legacyCustomerMarketerId=u.customerMarketerId?String(u.customerMarketerId):null,legacyAgentMetaDataId=u.agentMetaDataId?String(u.agentMetaDataId).toLowerCase():null;
   const randomHash=inaccessibleLegacyPasswordHash;
   let phone=normalizedPhone(u.phone),national=normalizedNationalCode(u.nationalCode);
   const existing=await pool.query("SELECT id FROM users WHERE legacy_source='aspnetusers' AND legacy_id=$1 LIMIT 1",[legacyId]);
@@ -117,7 +122,7 @@ try{
    if(email){const clash=await pool.query("SELECT 1 FROM users WHERE lower(email)=lower($1) AND id<>$2 LIMIT 1",[email,uid]);if(clash.rowCount)email=null;}
    if(phone){const clash=await pool.query("SELECT 1 FROM users WHERE phone=$1 AND id<>$2 LIMIT 1",[phone,uid]);if(clash.rowCount)phone=null;}
    if(national){const clash=await pool.query("SELECT 1 FROM users WHERE national_code=$1 AND id<>$2 LIMIT 1",[national,uid]);if(clash.rowCount)national=null;}
-   await pool.query("UPDATE users SET phone=COALESCE($1,phone),full_name=$2,legacy_username=$3,national_code=COALESCE($4,national_code),email=COALESCE($5,email),password_hash=$6,role=$7,is_active=$8,password_reset_required=TRUE,updated_at=NOW() WHERE id=$9",[phone,fullName,sourceUsername,national,email,randomHash,primaryRole(u.roles),u.isActive!==false&&u.isActive!==0,uid]);
+   await pool.query("UPDATE users SET phone=COALESCE($1,phone),full_name=$2,legacy_username=$3,national_code=COALESCE($4,national_code),email=COALESCE($5,email),password_hash=$6,role=$7,is_active=$8,password_reset_required=TRUE,legacy_customer_id=COALESCE($10,legacy_customer_id),legacy_agent_id=COALESCE($11,legacy_agent_id),legacy_customer_marketer_id=COALESCE($12,legacy_customer_marketer_id),legacy_agent_metadata_id=COALESCE($13,legacy_agent_metadata_id),updated_at=NOW() WHERE id=$9",[phone,fullName,sourceUsername,national,email,randomHash,primaryRole(u.roles),u.isActive!==false&&u.isActive!==0,uid,legacyCustomerId,legacyAgentId,legacyCustomerMarketerId,legacyAgentMetaDataId]);
   }else{
    const usernameClash=await pool.query("SELECT 1 FROM users WHERE lower(username)=lower($1) LIMIT 1",[sourceUsername]);
    const finalUsername=usernameClash.rowCount?("legacy_"+legacyId).slice(0,80):sourceUsername;
@@ -125,7 +130,7 @@ try{
    if(national){const clash=await pool.query("SELECT 1 FROM users WHERE national_code=$1 LIMIT 1",[national]);if(clash.rowCount)national=null;}
    let email=u.email?String(u.email).trim().slice(0,254):null;
    if(email){const clash=await pool.query("SELECT 1 FROM users WHERE lower(email)=lower($1) LIMIT 1",[email]);if(clash.rowCount)email=null;}
-   const r=await pool.query("INSERT INTO users(username,phone,full_name,national_code,email,password_hash,role,is_active,created_at,legacy_source,legacy_id,password_reset_required,legacy_username) VALUES($1,$2,$3,$4,$5,$6,$7,$8,COALESCE($9::timestamptz,NOW()),'aspnetusers',$10,TRUE,$11) RETURNING id",[finalUsername,phone,fullName,national,email,randomHash,primaryRole(u.roles),u.isActive!==false&&u.isActive!==0,dateOrNull(u.createdAt),legacyId,sourceUsername]);
+   const r=await pool.query("INSERT INTO users(username,phone,full_name,national_code,email,password_hash,role,is_active,created_at,legacy_source,legacy_id,password_reset_required,legacy_username,legacy_customer_id,legacy_agent_id,legacy_customer_marketer_id,legacy_agent_metadata_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8,COALESCE($9::timestamptz,NOW()),'aspnetusers',$10,TRUE,$11,$12,$13,$14,$15) RETURNING id",[finalUsername,phone,fullName,national,email,randomHash,primaryRole(u.roles),u.isActive!==false&&u.isActive!==0,dateOrNull(u.createdAt),legacyId,sourceUsername,legacyCustomerId,legacyAgentId,legacyCustomerMarketerId,legacyAgentMetaDataId]);
    if(!r.rowCount)throw new Error("Could not create legacy user "+legacyId);
   }
   usersImported++;
