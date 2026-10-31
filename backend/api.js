@@ -905,28 +905,56 @@ export async function handleApi(req, res, url) {
         return json(res, 200, { data: rows.map((payload,index)=>({ legacy_id: primary.length ? primary.map(k=>String(payload[k] ?? "")).join(" / ") : String(offset+index+1), payload, imported_at: null })), total: Number(countRows[0]?.total)||0, columns: columns.map(x=>({name:x.COLUMN_NAME,type:x.DATA_TYPE})) });
       }
       if (req.method === "GET" && route === "/api/v1/admin/legacy-relational-tables") {
-        const q = await pool.query("SELECT source_schema,source_table,source_rows,imported_rows,imported_at FROM legacy_digibail._import_manifest ORDER BY source_schema,source_table");
+        const q=await pool.query(
+          "SELECT source_schema,source_table,source_rows,imported_rows,imported_at FROM digibail_legacy_manifest ORDER BY source_schema,source_table"
+        );
         return json(res,200,q.rows);
       }
       if (req.method === "GET" && route === "/api/v1/admin/legacy-relational-data") {
         const sourceTable=String(url.searchParams.get("table")||"");
-        const match=/^([A-Za-z0-9_]{1,63})\.([A-Za-z0-9_]{1,63})$/.exec(sourceTable);
+        const match=/^([A-Za-z0-9_]{1,63})\\.([A-Za-z0-9_]{1,63})$/.exec(sourceTable);
         if(!match)return json(res,400,{message:"نام جدول معتبر نیست."});
         const [,sourceSchema,tableName]=match;
-        const physicalTable=sourceSchema+"__"+tableName;
-        const manifest=await pool.query("SELECT source_rows,imported_rows FROM legacy_digibail._import_manifest WHERE source_schema=$1 AND source_table=$2",[sourceSchema,tableName]);
+        const manifest=await pool.query(
+          "SELECT source_rows,imported_rows FROM digibail_legacy_manifest WHERE source_schema=$1 AND source_table=$2",
+          [sourceSchema,tableName]
+        );
         if(!manifest.rowCount)return json(res,404,{message:"جدول در ساختار منتقل‌شده پیدا نشد."});
         const limit=Math.min(100,Math.max(1,Number.parseInt(url.searchParams.get("limit")||"50",10)||50));
         const offset=Math.max(0,Number.parseInt(url.searchParams.get("offset")||"0",10)||0);
-        const columns=await pool.query("SELECT column_name,data_type,is_nullable,ordinal_position FROM information_schema.columns WHERE table_schema='legacy_digibail' AND table_name=$1 ORDER BY ordinal_position",[physicalTable]);
-        const primary=await pool.query("SELECT kcu.column_name FROM information_schema.table_constraints tc JOIN information_schema.key_column_usage kcu ON tc.constraint_name=kcu.constraint_name AND tc.table_schema=kcu.table_schema AND tc.table_name=kcu.table_name WHERE tc.constraint_type='PRIMARY KEY' AND tc.table_schema='legacy_digibail' AND tc.table_name=$1 ORDER BY kcu.ordinal_position",[physicalTable]);
-        const foreign=await pool.query("SELECT kcu.column_name,ccu.table_schema AS referenced_schema,ccu.table_name AS referenced_table,ccu.column_name AS referenced_column FROM information_schema.table_constraints tc JOIN information_schema.key_column_usage kcu ON tc.constraint_name=kcu.constraint_name AND tc.table_schema=kcu.table_schema AND tc.table_name=kcu.table_name JOIN information_schema.constraint_column_usage ccu ON ccu.constraint_name=tc.constraint_name AND ccu.constraint_schema=tc.constraint_schema WHERE tc.constraint_type='FOREIGN KEY' AND tc.table_schema='legacy_digibail' AND tc.table_name=$1 ORDER BY tc.constraint_name,kcu.ordinal_position",[physicalTable]);
-        const qid=v=>'"'+String(v).replace(/"/g,'""')+'"';
-        const order=primary.rows.length?primary.rows.map(x=>qid(x.column_name)).join(","):qid("__legacy_row_number");
-        const sql="SELECT * FROM "+qid("legacy_digibail")+"."+qid(physicalTable)+" ORDER BY "+order+" LIMIT $1 OFFSET $2";
-        const rows=await pool.query(sql,[limit,offset]);
-        const foreignKeys=foreign.rows.map(x=>({...x,referenced_table:String(x.referenced_table).replace(/^([^_]+)__(.+)$/,"$1.$2")}));
-        return json(res,200,{sourceTable,rows:rows.rows,columns:columns.rows,primaryKeys:primary.rows.map(x=>x.column_name),foreignKeys,total:Number(manifest.rows[0].imported_rows)||0,offset,limit});
+        const [columns,rows]=await Promise.all([
+          pool.query(
+            "SELECT column_name,data_type,is_nullable,ordinal_position,primary_key_order,referenced_schema,referenced_table,referenced_column FROM digibail_legacy_columns WHERE source_schema=$1 AND source_table=$2 ORDER BY ordinal_position",
+            [sourceSchema,tableName]
+          ),
+          pool.query(
+            "SELECT legacy_id,payload FROM digibail_legacy_relational_rows WHERE source_schema=$1 AND source_table=$2 ORDER BY legacy_id LIMIT $3 OFFSET $4",
+            [sourceSchema,tableName,limit,offset]
+          )
+        ]);
+        const primaryKeys=columns.rows.filter(x=>x.primary_key_order!==null&&x.primary_key_order!==undefined)
+          .sort((a,b)=>Number(a.primary_key_order)-Number(b.primary_key_order)).map(x=>x.column_name);
+        const foreignKeys=columns.rows.filter(x=>x.referenced_table).map(x=>({
+          column_name:x.column_name,
+          referenced_schema:x.referenced_schema,
+          referenced_table:String(x.referenced_table).replace(/^([^_]+)__(.+)$/,"$1.$2"),
+          referenced_column:x.referenced_column
+        }));
+        const dataRows=rows.rows.map(row=>({
+          legacy_id:row.legacy_id,
+          payload:typeof row.payload==="string"?(JSON.parse(row.payload||"{}")):row.payload
+        }));
+        return json(res,200,{
+          sourceTable,
+          rows:dataRows,
+          columns:columns.rows.map(x=>({column_name:x.column_name,data_type:x.data_type,is_nullable:x.is_nullable,ordinal_position:x.ordinal_position})),
+          primaryKeys,
+          foreignKeys,
+          total:Number(manifest.rows[0].imported_rows)||0,
+          sourceRows:Number(manifest.rows[0].source_rows)||0,
+          offset,
+          limit
+        });
       }
       if (req.method === "GET" && route === "/api/v1/admin/beta-inquiries") {
         const q = await pool.query("SELECT id,reference,user_id,national_code,status,status_note,created_at FROM beta_inquiries ORDER BY created_at DESC LIMIT 500");
