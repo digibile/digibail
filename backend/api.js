@@ -23,6 +23,7 @@ export async function migrate() {
   await pool.query("ALTER TABLE loan_products ALTER COLUMN image_url TYPE TEXT");
   await pool.query(`
     ALTER TABLE users ADD COLUMN IF NOT EXISTS password_reset_required BOOLEAN NOT NULL DEFAULT FALSE;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS legacy_username TEXT;
     ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;
     ALTER TABLE users ADD CONSTRAINT users_role_check CHECK (role IN ('customer','admin','superadmin','agent','marketer','customermarketer','member'));
     CREATE TABLE IF NOT EXISTS access_roles (
@@ -660,7 +661,7 @@ export async function handleApi(req, res, url) {
         return json(res, 200, { data: { ...q.rows[0], smsConfigured: configured } });
       }
       if (req.method === "GET" && route === "/api/v1/admin/users") {
-        const q = await pool.query("SELECT id,username,phone,full_name,email,role,is_active,password_reset_required,created_at,legacy_source,COALESCE((SELECT json_agg(role_code ORDER BY role_code) FROM user_role_assignments WHERE user_id=users.id),json_build_array(role)) AS roles FROM users ORDER BY created_at DESC,id DESC LIMIT 500");
+        const q = await pool.query("SELECT id,username,legacy_username,phone,full_name,email,role,is_active,password_reset_required,created_at,legacy_source,COALESCE((SELECT json_agg(role_code ORDER BY role_code) FROM user_role_assignments WHERE user_id=users.id),json_build_array(role)) AS roles FROM users ORDER BY created_at DESC,id DESC LIMIT 500");
         return json(res, 200, { data: q.rows });
       }
       if (req.method === "GET" && route === "/api/v1/admin/legacy-customers-page") {
