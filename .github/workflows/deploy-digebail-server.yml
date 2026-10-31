@@ -10,6 +10,7 @@ on:
       - '.github/workflows/identify-vamcity-production.yml'
       - '.github/workflows/deep-inspect-vamcity.yml'
       - '.github/workflows/probe-vamcity-runtime.yml'
+      - '.github/workflows/import-vamcity-customers.yml'
 
 permissions:
   contents: read
