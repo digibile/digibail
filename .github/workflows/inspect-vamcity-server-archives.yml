@@ -63,6 +63,21 @@ jobs:
             if sudo -n docker info >/dev/null 2>&1; then D='sudo -n docker'; elif docker info >/dev/null 2>&1; then D='docker'; else D=''; fi
             if [ -n "$D" ]; then
               $D ps -a --format 'table {{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}' | grep -Ei 'NAMES|vamcity|ghestine|digibail|sql|postgres|mssql' || true
+              echo "=== SQL SERVER DATABASES ==="
+              SQLC="public_html-db-1"
+              if $D inspect "$SQLC" >/dev/null 2>&1; then
+                SQLCMD="$($D exec "$SQLC" sh -lc 'command -v /opt/mssql-tools18/bin/sqlcmd || command -v /opt/mssql-tools/bin/sqlcmd || command -v sqlcmd' 2>/dev/null | head -n 1)"
+                PASS="$($D exec "$SQLC" printenv MSSQL_SA_PASSWORD 2>/dev/null || true)"
+                [ -n "$PASS" ] || PASS="$($D exec "$SQLC" printenv SA_PASSWORD 2>/dev/null || true)"
+                if [ -n "$SQLCMD" ] && [ -n "$PASS" ]; then
+                  $D exec -e SQLCMDPASSWORD="$PASS" "$SQLC" "$SQLCMD" -S localhost -U sa -C -W -s '|' -Q "SET NOCOUNT ON; SELECT name,state_desc FROM sys.databases ORDER BY name;" 2>&1 | tail -n 40
+                else echo "SQLCMD_OR_SA_PASSWORD_UNAVAILABLE"; fi
+                unset PASS
+              fi
+              echo "=== DIRECTADMIN MYSQL TARGET ==="
+              if [ -f /usr/local/directadmin/conf/mysql.conf ]; then
+                mysql --defaults-extra-file=/usr/local/directadmin/conf/mysql.conf --protocol=socket -NBe "SELECT VERSION(),CURRENT_USER(); SHOW DATABASES LIKE 'vamcitydigibilepay';" 2>&1 || true
+              else echo "DIRECTADMIN_MYSQL_CONFIG_NOT_FOUND"; fi
               echo "=== COMPOSE FILE LOCATIONS ==="
               find "$ROOT" -maxdepth 4 -type f \( -name 'compose.yml' -o -name 'compose.yaml' -o -name 'docker-compose.yml' -o -name 'docker-compose.yaml' \) -print 2>/dev/null | head -n 50
             else
