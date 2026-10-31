@@ -5,7 +5,7 @@ import { migrate, closePool } from "../../backend/api.js";
 
 const APPLY = process.argv.includes("--apply");
 const BATCH = Math.max(1, Math.min(250, Number(process.env.DIGIBAIL_MIGRATION_BATCH_SIZE || 100)));
-const pgUrl = process.env.DATABASE_URL || "";
+const pgUrl = process.env.DIGIBAIL_SOURCE_DATABASE_URL || process.env.DATABASE_URL || "";
 const mysqlOptions = {
   ...(process.env.MARIADB_HOST
     ? { host: process.env.MARIADB_HOST, port: Number(process.env.MARIADB_PORT || 3306) }
@@ -259,7 +259,7 @@ async function importExistingMariaIdentityMap(mysql) {
 }
 async function main() {
   if(!pgUrl.startsWith("postgres://")&&!pgUrl.startsWith("postgresql://")) {
-    throw new Error("Temporary source DATABASE_URL is missing or is not a PostgreSQL URL.");
+    throw new Error("Temporary DIGIBAIL_SOURCE_DATABASE_URL is missing or is not a PostgreSQL URL.");
   }
   if(!mysqlOptions.user||!mysqlOptions.password)throw new Error("MariaDB credentials are not configured.");
   if(APPLY&&process.env.DIGIBAIL_MIGRATION_BACKUP_VERIFIED!=="YES") {
