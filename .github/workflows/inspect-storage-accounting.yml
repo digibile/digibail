@@ -1,0 +1,37 @@
+name: Inspect Digibail storage accounting
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/inspect-storage-accounting.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Read-only storage accounting
+        uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          command_timeout: 7m
+          script: |
+            set -u
+            echo "=== /var/lib usage ==="
+            du -xhd3 /var/lib 2>/dev/null | sort -h | tail -60 || true
+            echo "=== /usr/local usage ==="
+            du -xhd2 /usr/local 2>/dev/null | sort -h | tail -35 || true
+            echo "=== Journal size ==="
+            journalctl --disk-usage 2>/dev/null || true
+            echo "=== Open deleted files ==="
+            find /proc/[0-9]*/fd -lname '* (deleted)' -printf '%p -> %l\n' 2>/dev/null | head -80 || true
+            echo "=== Filesystem ==="
+            df -hT /
+            echo "STORAGE_ACCOUNTING_COMPLETE=1"
