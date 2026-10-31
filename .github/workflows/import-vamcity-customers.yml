@@ -11,7 +11,7 @@ permissions:
   contents: read
 jobs:
   import:
-    if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && contains(github.event.workflow_run.head_commit.message, 'ci: deploy customer import tooling before one-time import'))
+    if: "${{ github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && contains(github.event.workflow_run.head_commit.message, 'ci: deploy customer import tooling before one-time import')) }}"
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
