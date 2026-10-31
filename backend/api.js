@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { Pool } from "pg";
 import { createPool } from "mysql2/promise";
+import { syncUserToMariaDB } from "./mariadb-user-sync.js";
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL, max: 10, connectionTimeoutMillis: 5000 });
 let legacyMariaPool = null;
@@ -1302,7 +1303,13 @@ export async function handleApi(req, res, url) {
       const passwordHash = await bcrypt.hash(password, 12);
       try {
         const created = await pool.query("INSERT INTO users(phone,full_name,national_code,email,password_hash) VALUES($1,$2,$3,$4,$5) RETURNING id,phone,full_name,role", [ticket.phone, fullName, nationalCode, email, passwordHash]);
-        const u = created.rows[0]; await audit(req, "auth.register.success", u.id);
+        const u = created.rows[0];
+        try{
+          const mirror=await pool.query("SELECT id,username,phone,full_name,national_code,email,is_active,COALESCE((SELECT role_code FROM user_role_overrides o WHERE o.user_id=users.id),role) AS effective_role,to_char(created_at AT TIME ZONE 'Asia/Tehran','YYYY-MM-DD HH24:MI:SS.US') AS created_at_tehran FROM users WHERE id=$1",[u.id]);
+          await syncUserToMariaDB(legacyMaria(),mirror.rows[0]);
+          console.log("MARIADB_NEW_REGISTRATION_MIRROR=PASS");
+        }catch(mirrorError){console.error("MARIADB_NEW_REGISTRATION_MIRROR_FAILED="+String(mirrorError.code||mirrorError.name||"unknown"));}
+        await audit(req, "auth.register.success", u.id);
         const token = tokenFor(u);
         return authJson(res, 201, token, { accessToken: token, user: { id: u.id, phone: u.phone, fullName: u.full_name, role: u.role } });
       } catch (error) {
