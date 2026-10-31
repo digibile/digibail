@@ -11,6 +11,7 @@ on:
       - '.github/workflows/deep-inspect-vamcity.yml'
       - '.github/workflows/probe-vamcity-runtime.yml'
       - '.github/workflows/import-vamcity-customers.yml'
+      - '.github/workflows/migrate-legacy-digibail.yml'
 
 permissions:
   contents: read
