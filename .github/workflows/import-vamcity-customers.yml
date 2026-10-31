@@ -9,6 +9,7 @@ on:
       - scripts/migrate-legacy-digibail.js
       - scripts/digibail-legacy-schema.json
       - scripts/import-vamcity-customers.mjs
+      - .github/workflows/import-vamcity-customers.yml
 
 permissions:
   contents: read
