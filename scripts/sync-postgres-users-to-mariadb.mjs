@@ -20,7 +20,9 @@ try{
   }
   const [counts]=await maria.query("SELECT COUNT(*) AS total FROM AspNetUsers");
   const [maps]=await maria.query("SELECT COUNT(*) AS total FROM DigibailUserIdentity");
-  console.log("MARIADB_POSTGRES_IDENTITY_SYNC=PASS scanned="+q.rowCount+" mirrored="+mirrored+" updated="+updated+" mapped="+Number(maps[0]?.total||0)+" aspnetusers="+Number(counts[0]?.total||0)+" passwords_copied=0");
+  const [roleLinks]=await maria.query("SELECT COUNT(DISTINCT m.PostgresUserId) AS total FROM DigibailUserIdentity m JOIN AspNetUserRoles ur ON ur.UserId=m.MariaDbUserId");
+  if(Number(maps[0]?.total||0)!==q.rowCount||Number(roleLinks[0]?.total||0)!==q.rowCount)throw new Error("Identity mapping or role-link count does not match PostgreSQL registration count");
+  console.log("MARIADB_POSTGRES_IDENTITY_SYNC=PASS scanned="+q.rowCount+" mirrored="+mirrored+" updated="+updated+" mapped="+Number(maps[0]?.total||0)+" role_links="+Number(roleLinks[0]?.total||0)+" aspnetusers="+Number(counts[0]?.total||0)+" passwords_copied=0");
 }catch(error){
   console.error("MARIADB_POSTGRES_IDENTITY_SYNC_FAILED="+String(error.code||error.name||"unknown")+":"+String(error.message||"").slice(0,400));
   process.exitCode=1;
