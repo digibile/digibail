@@ -1,0 +1,92 @@
+name: Audit VamCity data boundaries in Digibail
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/inspect-vamcity-contamination.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Read-only audit of cross-project records and foreign-key dependencies
+        uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          command_timeout: 4m
+          script: |
+            set -eu
+            ROOT="/home/digibail/domains/digebail.ir"
+            cd "$ROOT"
+            if sudo -n docker info >/dev/null 2>&1; then D="sudo -n docker"; elif docker info >/dev/null 2>&1; then D="docker"; else echo "BLOCKED: Docker unavailable"; exit 20; fi
+            echo "=== Database size and host free space ==="
+            $D compose exec -T db sh -lc 'psql -X -U "$POSTGRES_USER" -d "$POSTGRES_DB" -P pager=off -c "SELECT current_database(),pg_size_pretty(pg_database_size(current_database())) AS database_size,pg_database_size(current_database()) AS bytes"'
+            df -h /home/digibail/backups
+            echo "=== VamCity source table inventory ==="
+            $D compose exec -T db sh -lc 'psql -X -U "$POSTGRES_USER" -d "$POSTGRES_DB" -P pager=off -c "SELECT source_table,count(*) AS rows FROM legacy_source_data WHERE source_table LIKE chr(118)||chr(97)||chr(109)||chr(99)||chr(105)||chr(116)||chr(121)||chr(99)||chr(95)||chr(37) GROUP BY source_table ORDER BY rows DESC LIMIT 60"'
+            echo "=== VamCity-derived canonical records and dependent references ==="
+            $D compose exec -T db sh -lc 'psql -X -U "$POSTGRES_USER" -d "$POSTGRES_DB" -P pager=off -x' <<'SQL'
+            WITH v_user_ids AS (
+              SELECT DISTINCT payload->>'Id' AS legacy_id FROM legacy_source_data
+              WHERE source_table ~* '^vamcityc_.*[.]dbo[.]AspNetUsers$'
+            ),
+            v_customer_ids AS (
+              SELECT DISTINCT payload->>'Id' AS legacy_id FROM legacy_source_data
+              WHERE source_table ~* '^vamcityc_.*[.]dbo[.]Customers$'
+            ),
+            v_sms_ids AS (
+              SELECT DISTINCT legacy_id FROM legacy_source_data
+              WHERE source_table ~* '^vamcityc_.*[.]dbo[.]SmsPatterns$'
+            ),
+            v_user_rows AS (
+              SELECT u.id,u.legacy_id FROM users u JOIN v_user_ids v ON v.legacy_id=u.legacy_id
+              WHERE u.legacy_source='aspnetusers'
+            ),
+            v_customer_rows AS (
+              SELECT lc.legacy_id FROM legacy_customers lc
+              WHERE left(COALESCE(lc.legacy_source_table,''),9)='vamcityc_'
+                 OR EXISTS (SELECT 1 FROM v_customer_ids v WHERE v.legacy_id=lc.legacy_id::text)
+                 OR EXISTS (SELECT 1 FROM v_user_ids v WHERE v.legacy_id=lc.legacy_id::text)
+            ),
+            v_sms_rows AS (
+              SELECT st.id,st.legacy_id FROM sms_templates st JOIN v_sms_ids v ON v.legacy_id=st.legacy_id::text
+            ),
+            v_requests AS (
+              SELECT id FROM loan_requests WHERE source_table LIKE 'vamcityc_%'
+            ),
+            v_products AS (
+              SELECT id FROM loan_products WHERE legacy_source_table LIKE 'vamcityc_%'
+            )
+            SELECT 'users_matched_to_vamcity_AspNetUsers' AS item,count(*)::bigint AS rows FROM v_user_rows
+            UNION ALL SELECT 'legacy_customers_vamcity_marked_or_id_matched',count(*) FROM v_customer_rows
+            UNION ALL SELECT 'sms_templates_matched_to_vamcity_SmsPatterns',count(*) FROM v_sms_rows
+            UNION ALL SELECT 'loan_requests_vamcity',count(*) FROM v_requests
+            UNION ALL SELECT 'loan_request_status_history_vamcity',count(*) FROM loan_request_status_history WHERE legacy_source_table LIKE 'vamcityc_%'
+            UNION ALL SELECT 'loan_products_vamcity',count(*) FROM v_products
+            UNION ALL SELECT 'comments_referencing_vamcity_requests',count(*) FROM loan_request_comments c JOIN v_requests r ON r.id=c.loan_request_id
+            UNION ALL SELECT 'applications_referencing_vamcity_products',count(*) FROM customer_loan_applications a JOIN v_products p ON p.id=a.loan_product_id
+            UNION ALL SELECT 'sms_logs_referencing_vamcity_templates',count(*) FROM sms_logs l JOIN v_sms_rows s ON s.id=l.template_id
+            UNION ALL SELECT 'documents_owned_by_vamcity_users',count(*) FROM customer_documents d JOIN v_user_rows u ON u.id=d.user_id
+            UNION ALL SELECT 'contracts_owned_by_vamcity_users',count(*) FROM customer_contracts c JOIN v_user_rows u ON u.id=c.user_id
+            UNION ALL SELECT 'audit_logs_by_vamcity_users',count(*) FROM audit_logs a JOIN v_user_rows u ON u.id=a.user_id
+            UNION ALL SELECT 'role_assignments_for_vamcity_users',count(*) FROM user_role_assignments a JOIN v_user_rows u ON u.id=a.user_id;
+            SQL
+            echo "=== Foreign keys referencing cleanup candidate tables ==="
+            $D compose exec -T db sh -lc 'psql -X -U "$POSTGRES_USER" -d "$POSTGRES_DB" -P pager=off' <<'SQL'
+            SELECT tc.table_name,kcu.column_name,ccu.table_name AS referenced_table,ccu.column_name AS referenced_column,rc.delete_rule
+            FROM information_schema.table_constraints tc
+            JOIN information_schema.key_column_usage kcu ON tc.constraint_name=kcu.constraint_name AND tc.constraint_schema=kcu.constraint_schema
+            JOIN information_schema.constraint_column_usage ccu ON ccu.constraint_name=tc.constraint_name AND ccu.constraint_schema=tc.constraint_schema
+            JOIN information_schema.referential_constraints rc ON rc.constraint_name=tc.constraint_name AND rc.constraint_schema=tc.constraint_schema
+            WHERE tc.constraint_type='FOREIGN KEY'
+              AND ccu.table_name IN ('loan_requests','loan_products','legacy_customers','users','sms_templates')
+            ORDER BY ccu.table_name,tc.table_name;
+            SQL
