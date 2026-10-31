@@ -1,4 +1,4 @@
-FROM node:22-alpine
+FROM node:22-alpine AS migration-tools
 ENV NODE_ENV=production
 WORKDIR /app
 COPY scripts/migration-tools/package.json ./package.json
@@ -9,3 +9,14 @@ COPY scripts/migration-tools/migrate-postgres-app-data-to-mariadb.mjs ./scripts/
 COPY scripts/migration-tools/verify-single-mariadb-ready.mjs ./scripts/migration-tools/verify-single-mariadb-ready.mjs
 RUN node --check scripts/migration-tools/migrate-postgres-app-data-to-mariadb.mjs && node --check scripts/migration-tools/verify-single-mariadb-ready.mjs && node --check scripts/import-legacy-mariadb-users.mjs
 CMD ["node", "scripts/migration-tools/migrate-postgres-app-data-to-mariadb.mjs"]
+
+# Default/final stage is deliberately MariaDB-only. Production deploy jobs use
+# this stage to verify the cutover marker without carrying the legacy pg driver.
+FROM node:22-alpine AS cutover-verifier
+ENV NODE_ENV=production
+WORKDIR /app
+COPY scripts/migration-tools/verifier-package.json ./package.json
+RUN npm install --omit=dev --no-audit --no-fund && npm cache clean --force
+COPY scripts/migration-tools/verify-single-mariadb-ready.mjs ./scripts/migration-tools/verify-single-mariadb-ready.mjs
+RUN node --check scripts/migration-tools/verify-single-mariadb-ready.mjs
+CMD ["node", "scripts/migration-tools/verify-single-mariadb-ready.mjs"]
