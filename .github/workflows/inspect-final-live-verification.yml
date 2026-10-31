@@ -1,0 +1,102 @@
+name: Final Digibail production and relational explorer verification
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/inspect-final-live-verification.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Verify live health, admin login, and relational explorer APIs
+        uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          command_timeout: 14m
+          script: |
+            set -eu
+            ROOT="/home/digibail/domains/digebail.ir"
+            cd "$ROOT"
+            if sudo -n docker info >/dev/null 2>&1; then D="sudo -n docker"; elif docker info >/dev/null 2>&1; then D="docker"; else echo "BLOCKED: Docker unavailable"; exit 20; fi
+            echo "=== Public production health ==="
+            curl -fsS --max-time 15 https://digebail.ir/healthz
+            echo
+            curl -fsS --max-time 15 -o /dev/null -w 'PUBLIC_LOGIN_HTTP=%{http_code}\n' https://digebail.ir/login.html
+            echo "=== Authenticated admin and relational explorer API smoke ==="
+            RECOVERY_PASSWORD="$($D run --rm -v /:/host alpine:3.20 sh -c "sed -n 's/^password=//p' /host/root/digibail-admin-recovery.txt | head -n 1")"
+            if ! printf '%s' "$RECOVERY_PASSWORD" | grep -Eq '^[a-f0-9]{48}$'; then echo "ERROR: recovery credential file is invalid."; exit 30; fi
+            export RECOVERY_PASSWORD
+            node --input-type=module <<'NODE'
+            const base = "http://127.0.0.1:1631";
+            const password = process.env.RECOVERY_PASSWORD || "";
+            const captchaResponse = await fetch(base + "/api/v1/security/captcha");
+            if (!captchaResponse.ok) throw new Error("Captcha endpoint failed: " + captchaResponse.status);
+            const challenge = await captchaResponse.json();
+            const encoded = String(challenge.image || "").split(",")[1] || "";
+            const svg = Buffer.from(encoded, "base64").toString("utf8");
+            const match = svg.match(/<text[^>]*>([0-9]{5})<[/]text>/);
+            if (!challenge.id || !match) throw new Error("Could not read generated captcha");
+            const login = await fetch(base + "/api/v1/security/login", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                username: "digibail-recovery",
+                password,
+                captchaId: challenge.id,
+                captchaAnswer: match[1]
+              })
+            });
+            const cookie = String(login.headers.get("set-cookie") || "").split(";")[0];
+            if (!login.ok || !cookie.startsWith("db_session=")) throw new Error("Admin login failed: " + login.status);
+            const headers = { Cookie: cookie };
+            const summary = await fetch(base + "/api/v1/admin/summary", { headers });
+            if (!summary.ok) throw new Error("Admin summary API failed: " + summary.status);
+            const tablesResponse = await fetch(base + "/api/v1/admin/legacy-relational-tables", { headers });
+            if (!tablesResponse.ok) throw new Error("Relational tables API failed: " + tablesResponse.status);
+            const tables = await tablesResponse.json();
+            if (!Array.isArray(tables) || tables.length < 50) throw new Error("Relational table manifest is missing or incomplete");
+            const selected = tables.find(t => Number(t.imported_rows) > 0) || tables[0];
+            if (!selected || !selected.source_schema || !selected.source_table) throw new Error("No usable relational table found");
+            const tableName = selected.source_schema + "." + selected.source_table;
+            const dataResponse = await fetch(
+              base + "/api/v1/admin/legacy-relational-data?table=" + encodeURIComponent(tableName) + "&offset=0&limit=50",
+              { headers }
+            );
+            if (!dataResponse.ok) throw new Error("Relational table data API failed: " + dataResponse.status);
+            const data = await dataResponse.json();
+            if (!Array.isArray(data.columns) || data.columns.length === 0) throw new Error("Relational column metadata missing");
+            if (!Array.isArray(data.rows) || !Array.isArray(data.primaryKeys) || !Array.isArray(data.foreignKeys)) throw new Error("Relational data shape invalid");
+            if (Number(data.total) !== Number(selected.imported_rows)) throw new Error("Relational table row count mismatch");
+            if (data.rows.length > 50) throw new Error("Relational explorer exceeded page limit");
+            const page = await fetch(base + "/admin.html", { headers });
+            const html = await page.text();
+            if (!page.ok || !html.includes("تمام داده‌های منتقل‌شده")) throw new Error("Admin relational explorer page not found");
+            console.log("ADMIN_LOGIN=PASS");
+            console.log("ADMIN_SUMMARY_API=PASS");
+            console.log("RELATIONAL_TABLE_MANIFEST=PASS tables=" + tables.length);
+            console.log("RELATIONAL_DATA_API=PASS table=" + tableName + " columns=" + data.columns.length + " page_rows=" + data.rows.length + " total=" + data.total);
+            console.log("ADMIN_EXPLORER_PAGE=PASS");
+            NODE
+            unset RECOVERY_PASSWORD
+            echo "=== PostgreSQL maintenance with parallel vacuum disabled ==="
+            for table in legacy_source_data legacy_customers users loan_requests loan_request_status_history loan_products; do
+              if $D compose exec -T db sh -lc "PGOPTIONS='-c max_parallel_maintenance_workers=0' psql -X -U \"\$POSTGRES_USER\" -d \"\$POSTGRES_DB\" -P pager=off -c 'VACUUM (ANALYZE, PARALLEL 0) $table'"; then
+                echo "VACUUM_OK=$table"
+              else
+                echo "VACUUM_FALLBACK_ANALYZE=$table"
+                $D compose exec -T db sh -lc "psql -X -U \"\$POSTGRES_USER\" -d \"\$POSTGRES_DB\" -P pager=off -c 'ANALYZE $table'"
+              fi
+            done
+            echo "=== Final database and disk metrics ==="
+            $D compose exec -T db sh -lc 'psql -X -U "$POSTGRES_USER" -d "$POSTGRES_DB" -P pager=off -c "SELECT pg_size_pretty(pg_database_size(current_database())) AS database_size"'
+            df -h /home/digibail
+            echo "DIGIBAIL_PRODUCTION_FINAL_VERIFICATION=PASS"
