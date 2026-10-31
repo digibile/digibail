@@ -296,6 +296,21 @@ async function main() {
     }
 
     if (APPLY) {
+      const [oldMapExists]=await mysql.query(
+        "SELECT 1 FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name='DigibailUserIdentity'"
+      );
+      if(oldMapExists.length){
+        const [oldMaps]=await mysql.query("SELECT PostgresUserId,MariaDbUserId,RoleCode FROM DigibailUserIdentity");
+        for(const row of oldMaps){
+          const [appRows]=await mysql.query("SELECT id FROM users WHERE id=? LIMIT 1",[row.PostgresUserId]);
+          if(!appRows.length)continue;
+          await mysql.query(
+            "INSERT INTO DigibailAppUserIdentity(AppUserId,LegacySource,MariaDbUserId,RoleCode) VALUES(?,'mariadb.AspNetUsers',?,?) ON DUPLICATE KEY UPDATE MariaDbUserId=VALUES(MariaDbUserId),RoleCode=VALUES(RoleCode)",
+            [row.PostgresUserId,row.MariaDbUserId,row.RoleCode||"customer"]
+          );
+        }
+        console.log("EXISTING_ACCOUNT_MAPS_IMPORTED="+oldMaps.length);
+      }
       const manifestCount = await copyLegacyManifest(pg, mysql);
       console.log("LEGACY_MANIFEST_ROWS=" + manifestCount);
       for (const table of publicTables) {
