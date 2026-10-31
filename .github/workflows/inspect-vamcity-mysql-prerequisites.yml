@@ -1,0 +1,58 @@
+name: Inspect VamCity MySQL import prerequisites
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/inspect-vamcity-mysql-prerequisites.yml
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Inspect source SQL Server and DirectAdmin MySQL access without printing secrets
+        uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          command_timeout: 5m
+          script: |
+            set -eu
+            if sudo -n docker info >/dev/null 2>&1; then D='sudo -n docker'; else D='docker'; fi
+            echo "=== SQL SERVER CONTAINERS ==="
+            $D ps -a --format '{{.Names}}|{{.Image}}|{{.Status}}' | grep -Ei 'sql|mssql|vamcity|public_html' || true
+            for C in vamcity-stage-sql public_html-db-1; do
+              if $D inspect "$C" >/dev/null 2>&1; then
+                echo "SOURCE_CONTAINER_PRESENT=$C"
+                for K in MSSQL_SA_PASSWORD SA_PASSWORD; do
+                  V="$($D exec "$C" printenv "$K" 2>/dev/null || true)"
+                  if [ -n "$V" ]; then echo "SOURCE_SECRET_${K}=SET"; else echo "SOURCE_SECRET_${K}=EMPTY"; fi
+                done
+                $D inspect "$C" --format 'SOURCE_IMAGE={{.Config.Image}} SOURCE_STATE={{.State.Status}}'
+              else
+                echo "SOURCE_CONTAINER_ABSENT=$C"
+              fi
+            done
+            echo "=== DIRECTADMIN MYSQL CONFIG ==="
+            for F in /usr/local/directadmin/conf/mysql.conf /usr/local/directadmin/conf/mysql.conf.d; do
+              if [ -f "$F" ]; then
+                echo "MYSQL_CONFIG_PRESENT=$F"
+                stat -c 'MYSQL_CONFIG_MODE=%a OWNER=%U:%G SIZE=%s' "$F"
+                sed -n 's/^[[:space:]]*\([A-Za-z_][A-Za-z0-9_]*\)[[:space:]]*=.*/MYSQL_CONFIG_KEY=\1/p' "$F"
+              fi
+            done
+            echo "=== MYSQL CLIENT AND DATABASE NAMES ==="
+            command -v mysql || true
+            command -v mariadb || true
+            if [ -s /usr/local/directadmin/conf/mysql.conf ] && command -v mysql >/dev/null 2>&1; then
+              sudo -n mysql --defaults-extra-file=/usr/local/directadmin/conf/mysql.conf -NBe "SHOW DATABASES" 2>/dev/null | grep -E '^(vamcitydigibilepay|vamcitydigibilepay_bluvamdb|vamcitydigibilepay_transferdb)$' || true
+            else
+              echo "MYSQL_ADMIN_SOCKET_PROBE=UNAVAILABLE"
+            fi
+            echo "MYSQL_PREREQUISITE_INSPECTION_COMPLETE=1"
