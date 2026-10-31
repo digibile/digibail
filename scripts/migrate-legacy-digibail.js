@@ -37,6 +37,7 @@ let mirrorRows=0,mirrorTables=0,mirrorColumns=0,mirrorFks=0;
 const manifest=[];
 try{
  await pool.query("BEGIN");
+ await pool.query("SELECT pg_advisory_xact_lock(hashtext('digibail_legacy_relational_import'))");
  await pool.query("CREATE SCHEMA IF NOT EXISTS "+qid(TARGET_SCHEMA));
  await pool.query("CREATE TABLE IF NOT EXISTS "+qid(TARGET_SCHEMA)+".\"_import_manifest\" (source_schema TEXT NOT NULL,source_table TEXT NOT NULL,source_rows BIGINT NOT NULL,imported_rows BIGINT NOT NULL,imported_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),PRIMARY KEY(source_schema,source_table))");
  await pool.query("CREATE TABLE IF NOT EXISTS "+qid(TARGET_SCHEMA)+".\"_column_manifest\" (source_schema TEXT NOT NULL,source_table TEXT NOT NULL,column_name TEXT NOT NULL,source_type TEXT NOT NULL,nullable BOOLEAN NOT NULL,identity_column BOOLEAN NOT NULL,PRIMARY KEY(source_schema,source_table,column_name))");
