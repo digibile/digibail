@@ -27,12 +27,14 @@ test -n "$SOURCE_URL"
 printf 'DIGIBAIL_SOURCE_DATABASE_URL=%s\n' "$SOURCE_URL" > "$BACKUP_DIR/source.env"
 unset SOURCE_URL
 chmod 600 "$BACKUP_DIR/source.env"
-docker build -f Dockerfile.migration -t digibail-migration-tools:cutover .
+docker build -f Dockerfile.migration --target migration-tools -t digibail-migration-tools:cutover .
 docker stop digebailir-app-1
 docker run --rm --network "$PG_NETWORK" --env-file .env --env-file "$BACKUP_DIR/source.env" -e DIGIBAIL_MIGRATION_BACKUP_VERIFIED=YES -v /var/lib/mysql/mysql.sock:/tmp/mysql.sock digibail-migration-tools:cutover node scripts/migration-tools/migrate-postgres-app-data-to-mariadb.mjs --apply
 docker run --rm --network "$PG_NETWORK" --env-file .env --env-file "$BACKUP_DIR/source.env" -e DIGIBAIL_LEGACY_USERS_BACKUP_VERIFIED=YES -v /var/lib/mysql/mysql.sock:/tmp/mysql.sock digibail-migration-tools:cutover node scripts/import-legacy-mariadb-users.mjs --apply
-docker run --rm --env-file .env -v /var/lib/mysql/mysql.sock:/tmp/mysql.sock digibail-migration-tools:cutover node scripts/migration-tools/verify-single-mariadb-ready.mjs
+docker build -f Dockerfile.migration -t digibail-cutover-verifier:cutover .
+docker run --rm --env-file .env -v /var/lib/mysql/mysql.sock:/tmp/mysql.sock digibail-cutover-verifier:cutover
 shred -u "$BACKUP_DIR/source.env" 2>/dev/null || rm -f "$BACKUP_DIR/source.env"
+docker image rm digibail-migration-tools:cutover
 ```
 
 فرمان‌های اول باید نسخهٔ سالم هر دو دیتابیس را بسازند. فرمان مهاجرت باید با کد خروج صفر پایان یابد، فرمان واردسازی نقش‌ها باید `DIGIBAIL_SINGLE_DATABASE_READY=PASS` چاپ کند و فرمان راستی‌آزمایی نیز همین نشانگر را چاپ کند.
