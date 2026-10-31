@@ -144,12 +144,12 @@ function installSchema(mysqli $db,string $path,string $source,bool $skipExisting
     if($source==='vamcityc_transferDb_import_20261028'){
         // MariaDB requires foreign-key and index names to be unique across the database.
         $rename=static fn($name)=>shortName('OnlineMoneyTransfer__'.$name);
-        $sql=preg_replace_callback('/\\b(ADD\\s+CONSTRAINT\\s+)\x60([^\x60]+)\x60/i',
-            static fn($m)=>$m[1].'\x60'.$rename($m[2]).'\x60',$sql);
+        $sql=preg_replace_callback('/\b(ADD\s+CONSTRAINT\s+)\x60([^\x60]+)\x60/i',
+            static fn($m)=>$m[1].chr(96).$rename($m[2]).chr(96),$sql);
         // Prefix each transfer index and use IF NOT EXISTS for resumable schema installation.
-        $sql=preg_replace_callback('/\\bCREATE\\s+(UNIQUE\\s+)?INDEX\\s+(?:IF\\s+NOT\\s+EXISTS\\s+)?\x60([^\x60]+)\x60\\s+ON\\s+\x60([^\x60]+)\x60/i',
-            static fn($m)=>'CREATE '.($m[1]??'').'INDEX IF NOT EXISTS \x60'.$rename($m[2]).'\x60 ON \x60'.$m[3].'\x60',$sql);
-        $sql=preg_replace('/\\bCREATE\\s+TABLE\\s+(?!IF\\s+NOT\\s+EXISTS)/i','CREATE TABLE IF NOT EXISTS ',$sql);
+        $sql=preg_replace_callback('/\bCREATE\s+(UNIQUE\s+)?INDEX\s+(?:IF\s+NOT\s+EXISTS\s+)?\x60([^\x60]+)\x60\s+ON\s+\x60([^\x60]+)\x60/i',
+            static fn($m)=>'CREATE '.($m[1]??'').'INDEX IF NOT EXISTS '.chr(96).$rename($m[2]).chr(96).' ON '.chr(96).$m[3].chr(96),$sql);
+        $sql=preg_replace('/\bCREATE\s+TABLE\s+(?!IF\s+NOT\s+EXISTS)/i','CREATE TABLE IF NOT EXISTS ',$sql);
     }
     foreach(explode(';',$sql) as $statement) {
         $statement=trim($statement);
