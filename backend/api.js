@@ -796,25 +796,10 @@ export async function handleApi(req, res, url) {
         return json(res,200,{data:[...map.values()]});
       }
       if (req.method === "GET" && route === "/api/v1/admin/users-page") {
-        const page=Math.max(1,Number.parseInt(url.searchParams.get("page")||"1",10)||1),pageSize=Math.min(100,Math.max(10,Number.parseInt(url.searchParams.get("pageSize")||"50",10)||50)),search=String(url.searchParams.get("q")||"").trim().slice(0,120),role=String(url.searchParams.get("role")||"").trim().toLowerCase(),status=String(url.searchParams.get("status")||"").trim().toLowerCase(),db=legacyMaria(),where=[],values=[];
-        if(search){where.push("(u.FirstName LIKE ? OR u.LastName LIKE ? OR CONCAT_WS(' ',u.FirstName,u.LastName) LIKE ? OR u.Mobile LIKE ? OR u.Phone LIKE ? OR u.PhoneNumber LIKE ? OR u.Email LIKE ? OR u.UserName LIKE ? OR u.NationalCode LIKE ? OR CAST(u.Id AS CHAR) LIKE ? OR u.AffiliateCode LIKE ?)");for(let i=0;i<11;i++)values.push("%"+search+"%");}
-        if(role){where.push("EXISTS(SELECT 1 FROM AspNetUserRoles ur JOIN AspNetRoles rr ON rr.Id=ur.RoleId WHERE ur.UserId=u.Id AND LOWER(REPLACE(REPLACE(rr.Name,' ',''),'_',''))=?)");values.push(role);}
-        if(status==="active")where.push("u.IsActive=1");
-        if(status==="inactive")where.push("u.IsActive=0");
-        const filter=where.length?" WHERE "+where.join(" AND "):"";
-        const [countResult,statsResult,freshAll]=await Promise.all([
-          db.query("SELECT COUNT(*) AS total FROM AspNetUsers u"+filter,values),
-          db.query("SELECT COUNT(*) AS total,SUM(CASE WHEN IsActive=1 THEN 1 ELSE 0 END) AS active,SUM(CASE WHEN IsActive=0 THEN 1 ELSE 0 END) AS inactive,SUM(CASE WHEN DATE(RegDate)=DATE(CONVERT_TZ(UTC_TIMESTAMP(),'+00:00','+03:30')) THEN 1 ELSE 0 END) AS today,MAX(RegDate) AS latest_registration FROM AspNetUsers"),
-          postgresOnlyAccounts(db,10000)
-        ]);
-        const count=countResult[0]?.[0]||{},stats=statsResult[0]?.[0]||{};
-        const matchesFresh=r=>(!role||r.role===role)&&(!status||(status==="active"?r.is_active:!r.is_active))&&(!search||[r.full_name,r.phone,r.email,r.username,r.national_code,r.legacy_id].some(v=>String(v||"").toLowerCase().includes(search.toLowerCase())));
-        const fresh=freshAll.filter(matchesFresh),freshToday=freshAll.filter(r=>new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Tehran",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date(r.created_at))===new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Tehran",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date())).length;
-        const offset=Math.max(0,(page-1)*pageSize-fresh.length),limit=pageSize+fresh.length;
-        const [legacyRows]=await db.query("SELECT u.Id,u.FirstName,u.LastName,u.Mobile,u.Phone,u.PhoneNumber,u.Email,u.NationalCode,u.UserName,u.IsActive,u.RegDate,u.CustomerId,u.AgentId,(SELECT GROUP_CONCAT(DISTINCT r.Name ORDER BY r.Name SEPARATOR ',') FROM AspNetUserRoles ur JOIN AspNetRoles r ON r.Id=ur.RoleId WHERE ur.UserId=u.Id) AS roles FROM AspNetUsers u"+filter+" ORDER BY u.RegDate DESC,u.Id DESC LIMIT ? OFFSET ?",[...values,limit,offset]);
-        const merged=[...fresh,...legacyRows.map(mapMariaDirectoryUser)].sort((a,b)=>new Date(b.created_at||0)-new Date(a.created_at||0));
-        const rows=merged.slice((page-1)*pageSize,page*pageSize),latest=freshAll[0]?.created_at&&(!stats.latest_registration||new Date(freshAll[0].created_at)>new Date(stats.latest_registration))?freshAll[0].created_at:(stats.latest_registration||null);
-        return json(res,200,{data:{rows,total:(Number(count.total)||0)+fresh.length,overallTotal:(Number(stats.total)||0)+freshAll.length,activeTotal:(Number(stats.active)||0)+freshAll.filter(r=>r.is_active).length,inactiveTotal:(Number(stats.inactive)||0)+freshAll.filter(r=>!r.is_active).length,todayTotal:(Number(stats.today)||0)+freshToday,latestRegistration:latest,page,pageSize,sourceTable:"MariaDB.AspNetUsers",additionalSource:"new PostgreSQL registrations",timezone:"Asia/Tehran"}});
+        const page=Math.max(1,Number.parseInt(url.searchParams.get("page")||"1",10)||1);
+        const pageSize=Math.min(100,Math.max(10,Number.parseInt(url.searchParams.get("pageSize")||"50",10)||50));
+        const data=await unifiedUserDirectory({page,pageSize,search:url.searchParams.get("q")||"",role:url.searchParams.get("role")||"",status:url.searchParams.get("status")||""});
+        return json(res,200,{data});
       }
       if (req.method === "PATCH" && /^\/api\/v1\/admin\/users\/[^/]+$/.test(route)) {
         const rawId=decodeURIComponent(route.split("/").pop()),input=await body(req),actorId=Number(admin.sub);
