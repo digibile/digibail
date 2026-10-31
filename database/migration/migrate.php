@@ -145,9 +145,11 @@ function installSchema(mysqli $db,string $path,string $source,bool $skipExisting
         // MariaDB requires foreign-key constraint names to be unique across the entire database.
         // The main and BlueVam databases already use the unprefixed ASP.NET constraint names.
         $rename=static fn($name)=>shortName('OnlineMoneyTransfer__'.$name);
-        $sql=preg_replace_callback('/\\b(ADD\\s+CONSTRAINT\\s+)`([^`]+)`/i',
-            static fn($m)=>$m[1].'`'.$rename($m[2]).'`',$sql);
-        // Transfer schema may already be partially installed; preserve existing tables for safe resume.
+        $sql=preg_replace_callback('/\\b(ADD\\s+CONSTRAINT\\s+)\x60([^\x60]+)\x60/i',
+            static fn($m)=>$m[1].'\x60'.$rename($m[2]).'\x60',$sql);
+        // MariaDB index names are database-wide; isolate transfer indexes and allow safe resume.
+        $sql=preg_replace_callback('/\\bCREATE\\s+(UNIQUE\\s+)?INDEX\\s+(?:IF\\s+NOT\\s+EXISTS\\s+)?\x60([^\x60]+)\x60\\s+ON\\s+(\x60[^\x60]+\x60)/i',
+            static fn($m)=>'CREATE '.($m[1]??'').'INDEX IF NOT EXISTS \x60'.$rename($m[2]).'\x60 ON '.$m[3],$sql);
         $sql=preg_replace('/\\bCREATE\\s+TABLE\\s+(?!IF\\s+NOT\\s+EXISTS)/i','CREATE TABLE IF NOT EXISTS ',$sql);
     }
     foreach(explode(';',$sql) as $statement) {
