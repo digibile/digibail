@@ -26,7 +26,13 @@ jobs:
             set -u
             S="sudo -n"
             echo "=== Root filesystem top-level accounting ==="
-            $S du -xhd1 / 2>&1 | sort -h | tail -40
+            $S du -xhd1 / > /tmp/digibail-root-du.txt 2>&1 || true
+            $S cat /tmp/digibail-root-du.txt | sort -h | tail -30
+            echo "=== Protected directory totals ==="
+            for p in /var/lib/containerd /opt/containerd /opt/vamcity-github-stage /var/log /home; do
+              [ -e "$p" ] || continue
+              $S du -xsh "$p" 2>&1 || true
+            done
             echo "=== Protected container directories ==="
             for p in /var/lib/containerd /opt/containerd /var/lib/docker /opt; do
               [ -e "$p" ] || continue
