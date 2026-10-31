@@ -5,6 +5,7 @@ import { Pool } from "pg";
 
 // DIGIBAIL_RELATIONAL_EXPORT_V3_WITH_SCHEMA
 // DIGIBAIL_IMPORT_FIX_20261031_NULLABLE_MIRROR_V2
+// DIGIBAIL_IMPORT_FIX_20261031_PRESERVE_IDENTITY_NULLABILITY_V3
 
 const input = JSON.parse(await readFile(process.argv[2] || "/tmp/legacy-migration.json", "utf8"));
 const auditedSchema = JSON.parse(await readFile(new URL("./digibail-legacy-schema.json", import.meta.url), "utf8"));
@@ -78,7 +79,7 @@ try{
  // FK trigger events from earlier INSERT statements are still pending in this transaction.
  for(const def of input.schemaDefinitions){
   const [s,t]=String(def.sourceTable).split("."),cols=colGroups.get(sourceKey(s,t))||[],pk=(pkGroups.get(sourceKey(s,t))||[]).map(x=>x.columnName),table=qtable(s,t);
-  for(const col of cols){if(pk.includes(col.columnName))continue;await pool.query("ALTER TABLE "+table+" ALTER COLUMN "+qid(col.columnName)+" DROP NOT NULL");}
+  for(const col of cols){if(pk.includes(col.columnName)||Boolean(col.isIdentity))continue;await pool.query("ALTER TABLE "+table+" ALTER COLUMN "+qid(col.columnName)+" DROP NOT NULL");}
   if(!pk.length)await pool.query("ALTER TABLE "+table+" ALTER COLUMN "+qid("__legacy_row_number")+" SET NOT NULL");
  }
  for(const item of tables){
