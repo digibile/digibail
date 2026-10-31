@@ -733,18 +733,19 @@ export async function handleApi(req, res, url) {
         return json(res,200,{data:{rows:mapped,total:Number(count.rows[0]?.total)||0,overallTotal:Number(overall.rows[0]?.total)||0,activeTotal:Number(active.rows[0]?.total)||0,customerTotal:customerTotal||Number(customers.rows[0]?.total)||0,page,pageSize}});
       }
       if (req.method === "GET" && route === "/api/v1/admin/legacy-customers") {
-        const search = String(url.searchParams.get("q") || "").trim().slice(0,120);
-        const page = Math.max(1, Number.parseInt(url.searchParams.get("page") || "1",10) || 1);
-        const pageSize = Math.min(100,Math.max(10,Number.parseInt(url.searchParams.get("pageSize") || "50",10) || 50));
-        const params = [];
-        let filter = "";
-        if (search) {
-          params.push("%"+search+"%");
-          filter = " WHERE name ILIKE $1 OR mobile ILIKE $1 OR email ILIKE $1 OR customer_code::text ILIKE $1 OR affiliate_code ILIKE $1";
+        const search=String(url.searchParams.get("q")||"").trim().slice(0,120);
+        const page=Math.max(1,Number.parseInt(url.searchParams.get("page")||"1",10)||1);
+        const pageSize=Math.min(100,Math.max(10,Number.parseInt(url.searchParams.get("pageSize")||"50",10)||50));
+        const db=legacyMaria(),where=[],values=[];
+        if(search){
+          where.push("(u.FirstName LIKE ? OR u.LastName LIKE ? OR CONCAT_WS(' ',u.FirstName,u.LastName) LIKE ? OR u.Mobile LIKE ? OR u.Phone LIKE ? OR u.PhoneNumber LIKE ? OR u.Email LIKE ? OR u.UserName LIKE ? OR u.NationalCode LIKE ? OR u.UserCode LIKE ? OR CAST(u.Id AS CHAR) LIKE ? OR u.AffiliateCode LIKE ?)");
+          for(let i=0;i<12;i++)values.push("%"+search+"%");
         }
-        const totalQ = await pool.query("SELECT COUNT(*)::int AS total FROM legacy_customers"+filter,params);
-        const rowsQ = await pool.query("SELECT legacy_id,name,mobile,email,customer_code,registered_at,expires_at,is_permanent,purchased,affiliate_code,parked_domain FROM legacy_customers"+filter+" ORDER BY registered_at DESC NULLS LAST,legacy_id LIMIT $"+(params.length+1)+" OFFSET $"+(params.length+2),[...params,pageSize,(page-1)*pageSize]);
-        return json(res,200,{data:{rows:rowsQ.rows,total:Number(totalQ.rows[0]?.total)||0,page,pageSize}});
+        const filter=where.length?" WHERE "+where.join(" AND "):"";
+        const [count]=await db.query("SELECT COUNT(*) AS total FROM AspNetUsers u"+filter,values);
+        const [rows]=await db.query("SELECT CAST(u.Id AS CHAR) AS legacy_id,COALESCE(NULLIF(TRIM(CONCAT_WS(' ',u.FirstName,u.LastName)),''),NULLIF(u.UserName,''),NULLIF(u.Mobile,''),'کاربر بدون نام') AS name,COALESCE(NULLIF(u.Mobile,''),NULLIF(u.Phone,''),NULLIF(u.PhoneNumber,'')) AS mobile,u.Email AS email,COALESCE(NULLIF(u.UserCode,''),CAST(u.Id AS CHAR)) AS customer_code,u.RegDate AS registered_at,CAST(u.CustomerId AS CHAR) AS customer_id,u.UserName AS legacy_username,'مشتری سامانه' AS account_type FROM AspNetUsers u"+filter+" ORDER BY u.RegDate DESC,u.Id DESC LIMIT ? OFFSET ?",[...values,pageSize,(page-1)*pageSize]);
+        const total=Number(count[0]?.total)||0;
+        return json(res,200,{data:{rows,total,legacy_customers:total,page,pageSize,sourceTable:"AspNetUsers"}});
       }
       if (req.method === "GET" && route === "/api/v1/admin/legacy-source-tables") {
         const db = legacyMaria(), database = process.env.MARIADB_DATABASE || "digibail_vamcitydigibilepay";
