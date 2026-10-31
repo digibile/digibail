@@ -95,10 +95,12 @@ async function importSet(set){
     " CASE WHEN COALESCE(u.PasswordHash,'')='' THEN 1 ELSE 0 END,?,CAST(u.Id AS CHAR),NULLIF(u.UserName,''),"+
     set.customerId+","+set.agentId+",COALESCE("+set.created+",CURRENT_TIMESTAMP(6)) "+
     "FROM "+quote(set.users)+" u LEFT JOIN ("+aggregate+") rr ON rr.UserId=u.Id "+
-    "WHERE NOT EXISTS(SELECT 1 FROM users target WHERE target.legacy_source=? AND target.legacy_id=CAST(u.Id AS CHAR))";
-  const [result]=await pool.query(sql,[set.key,set.key]);
+    "WHERE NOT EXISTS(SELECT 1 FROM users target WHERE target.legacy_source=? AND target.legacy_id=CAST(u.Id AS CHAR)) "+
+    "AND NOT EXISTS(SELECT 1 FROM DigibailAppUserIdentity linked WHERE linked.LegacySource=? AND linked.MariaDbUserId=CAST(u.Id AS UNSIGNED))";
+  const [result]=await pool.query(sql,[set.key,set.key,set.key]);
   const linkedUsers=await scalar("SELECT COUNT(*) AS n FROM users WHERE legacy_source=?",[set.key]);
-  if(linkedUsers!==userCount) throw new Error("User import mismatch "+set.key+" source="+userCount+" target="+linkedUsers);
+  const preMappedUsers=await scalar("SELECT COUNT(*) AS n FROM DigibailAppUserIdentity WHERE LegacySource=?",[set.key]);
+  if(linkedUsers+preMappedUsers!==userCount) throw new Error("User import mismatch "+set.key+" source="+userCount+" imported="+linkedUsers+" preMapped="+preMappedUsers);
   console.log("LEGACY_USERS_VERIFIED="+set.key+" count="+userCount+" inserted="+Number(result.affectedRows||0));
 
   const rolesCount=await scalar("SELECT COUNT(*) AS n FROM "+quote(set.roles));
@@ -107,25 +109,26 @@ async function importSet(set){
     "ON DUPLICATE KEY UPDATE display_name=VALUES(display_name)";
   await pool.query(rolesSql,[set.key+".AspNetRoles"]);
 
+  const mappingSql="INSERT INTO DigibailAppUserIdentity(AppUserId,LegacySource,MariaDbUserId,RoleCode) "+
+    "SELECT app.id,?,CAST(u.Id AS UNSIGNED),app.role FROM "+quote(set.users)+" u "+
+    "JOIN users app ON app.legacy_source=? AND app.legacy_id=CAST(u.Id AS CHAR) "+
+    "ON DUPLICATE KEY UPDATE RoleCode=VALUES(RoleCode)";
+  await pool.query(mappingSql,[set.key,set.key]);
+  const targetMappings=await scalar("SELECT COUNT(*) AS n FROM DigibailAppUserIdentity WHERE LegacySource=?",[set.key]);
+  if(targetMappings!==userCount)throw new Error("Identity-map mismatch "+set.key+" source="+userCount+" target="+targetMappings);
+
   const assignmentSql="INSERT INTO user_role_assignments(user_id,role_code,legacy_source,legacy_user_id,legacy_role_id) "+
     "SELECT app.id,"+roleCode+",?,CAST(u.Id AS CHAR),CAST(r.Id AS CHAR) "+
     "FROM "+quote(set.users)+" u "+
     "JOIN "+quote(set.links)+" ur ON ur.UserId=u.Id "+
     "JOIN "+quote(set.roles)+" r ON r.Id=ur.RoleId "+
-    "JOIN users app ON app.legacy_source=? AND app.legacy_id=CAST(u.Id AS CHAR) "+
+    "JOIN DigibailAppUserIdentity map ON map.LegacySource=? AND map.MariaDbUserId=CAST(u.Id AS UNSIGNED) "+
+    "JOIN users app ON app.id=map.AppUserId "+
     "ON DUPLICATE KEY UPDATE role_code=VALUES(role_code)";
   await pool.query(assignmentSql,[set.key+".AspNetUserRoles",set.key]);
   const sourceLinks=await scalar("SELECT COUNT(*) AS n FROM "+quote(set.links));
   const targetLinks=await scalar("SELECT COUNT(*) AS n FROM user_role_assignments WHERE legacy_source=?",[set.key+".AspNetUserRoles"]);
   if(targetLinks!==sourceLinks)throw new Error("Role-link import mismatch "+set.key+" source="+sourceLinks+" target="+targetLinks);
-
-  const mappingSql="INSERT INTO DigibailAppUserIdentity(AppUserId,LegacySource,MariaDbUserId,RoleCode) "+
-    "SELECT app.id,?,CAST(u.Id AS UNSIGNED),app.role FROM "+quote(set.users)+" u "+
-    "JOIN users app ON app.legacy_source=? AND app.legacy_id=CAST(u.Id AS CHAR) "+
-    "ON DUPLICATE KEY UPDATE AppUserId=VALUES(AppUserId),RoleCode=VALUES(RoleCode)";
-  await pool.query(mappingSql,[set.key,set.key]);
-  const targetMappings=await scalar("SELECT COUNT(*) AS n FROM DigibailAppUserIdentity WHERE LegacySource=?",[set.key]);
-  if(targetMappings!==userCount)throw new Error("Identity-map mismatch "+set.key+" source="+userCount+" target="+targetMappings);
   console.log("LEGACY_ROLES_VERIFIED="+set.key+" role_tables="+rolesCount+" role_links="+sourceLinks+" mappings="+targetMappings);
 }
 
