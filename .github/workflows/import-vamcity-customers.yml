@@ -3,12 +3,6 @@ name: Import VamCity customer directory
 # run legacy import after the unified identity directory is deployed; preserve a full PostgreSQL backup first.
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - scripts/migrate-legacy-digibail.js
-      - scripts/digibail-legacy-schema.json
-      - scripts/import-vamcity-customers.mjs
       - .github/workflows/import-vamcity-customers.yml
 
 permissions:
