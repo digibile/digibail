@@ -273,6 +273,12 @@ foreach($sources as $s){
         $exists=$db->query("SELECT COUNT(*) AS n FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name=".qv($db,$tn));
         if((int)$exists->fetch_assoc()['n']!==1) stopNow('Schema table missing after install: '.$tn);
     }
+    // SQL Server EF migration identifiers can exceed the default MySQL scaffold width of 75.
+    // Widen this metadata column before resuming the checkpointed import; this preserves all source values.
+    if($source==='vamcityc_vamcity_import_20261028'){
+        if(!$db->query('ALTER TABLE '.qi('__EFMigrationsHistory').' MODIFY '.qi('MigrationId').' VARCHAR(255) NOT NULL'))
+            stopNow('Could not widen __EFMigrationsHistory.MigrationId: '.$db->error);
+    }
     ensureState($db);
     $db->query('SET FOREIGN_KEY_CHECKS=0');
 
