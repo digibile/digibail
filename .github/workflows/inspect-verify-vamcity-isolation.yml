@@ -1,0 +1,62 @@
+name: Verify Digibail data isolation and refresh PostgreSQL statistics
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/inspect-verify-vamcity-isolation.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Verify source preservation, absence of VamCity rows, and database health
+        uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          command_timeout: 14m
+          script: |
+            set -eu
+            ROOT="/home/digibail/domains/digebail.ir"
+            cd "$ROOT"
+            if sudo -n docker info >/dev/null 2>&1; then D="sudo -n docker"; elif docker info >/dev/null 2>&1; then D="docker"; else echo "BLOCKED: Docker unavailable"; exit 20; fi
+            echo "=== Verify post-isolation row counts ==="
+            $D compose exec -T db sh -lc 'psql -X -U "$POSTGRES_USER" -d "$POSTGRES_DB" -P pager=off -c "SELECT
+              (SELECT count(*) FROM legacy_source_data WHERE left(source_table,9)=chr(118)||chr(97)||chr(109)||chr(99)||chr(105)||chr(116)||chr(121)||chr(99)||chr(95)) AS remaining_vamcity_source_rows,
+              (SELECT count(*) FROM loan_requests WHERE left(source_table,9)=chr(118)||chr(97)||chr(109)||chr(99)||chr(105)||chr(116)||chr(121)||chr(99)||chr(95)) AS remaining_vamcity_loan_requests,
+              (SELECT count(*) FROM loan_request_status_history WHERE left(COALESCE(legacy_source_table,chr(32)),9)=chr(118)||chr(97)||chr(109)||chr(99)||chr(105)||chr(116)||chr(121)||chr(99)||chr(95)) AS remaining_vamcity_status_history,
+              (SELECT count(*) FROM loan_products WHERE left(COALESCE(legacy_source_table,chr(32)),9)=chr(118)||chr(97)||chr(109)||chr(99)||chr(105)||chr(116)||chr(121)||chr(99)||chr(95)) AS remaining_vamcity_loan_products,
+              (SELECT count(*) FROM legacy_customers WHERE left(COALESCE(legacy_source_table,chr(32)),9)=chr(118)||chr(97)||chr(109)||chr(99)||chr(105)||chr(116)||chr(121)||chr(99)||chr(95)) AS remaining_marked_vamcity_customers,
+              (SELECT count(*) FROM users u WHERE u.legacy_source=chr(97)||chr(115)||chr(112)||chr(110)||chr(101)||chr(116)||chr(117)||chr(115)||chr(101)||chr(114)||chr(115) AND NOT EXISTS (SELECT 1 FROM legacy_source_data d WHERE d.source_table=chr(100)||chr(98)||chr(111)||chr(46)||chr(65)||chr(115)||chr(112)||chr(78)||chr(101)||chr(116)||chr(85)||chr(115)||chr(101)||chr(114)||chr(115) AND d.payload->>chr(73)||chr(100)=u.legacy_id)) AS users_without_original_digibail_source,
+              (SELECT count(*) FROM legacy_source_data WHERE source_table=chr(100)||chr(98)||chr(111)||chr(46)||chr(65)||chr(115)||chr(112)||chr(78)||chr(101)||chr(116)||chr(85)||chr(115)||chr(101)||chr(114)||chr(115)) AS original_digibail_aspnetusers,
+              (SELECT count(*) FROM legacy_source_data WHERE source_table=chr(100)||chr(98)||chr(111)||chr(46)||chr(67)||chr(117)||chr(115)||chr(116)||chr(111)||chr(109)||chr(101)||chr(114)||chr(115)) AS original_digibail_customers,
+              (SELECT count(*) FROM legacy_source_data WHERE source_table=chr(100)||chr(98)||chr(111)||chr(46)||chr(83)||chr(109)||chr(115)||chr(80)||chr(97)||chr(116)||chr(116)||chr(101)||chr(114)||chr(110)||chr(115)) AS original_digibail_sms_patterns,
+              (SELECT count(*) FROM legacy_source_data WHERE source_table=chr(65)||chr(115)||chr(112)||chr(78)||chr(101)||chr(116)||chr(82)||chr(111)||chr(108)||chr(101)||chr(115)) AS original_digibail_roles,
+              (SELECT count(*) FROM legacy_source_data WHERE source_table=chr(65)||chr(115)||chr(112)||chr(78)||chr(101)||chr(116)||chr(85)||chr(115)||chr(101)||chr(114)||chr(82)||chr(111)||chr(108)||chr(101)||chr(115)) AS original_digibail_user_roles,
+              (SELECT count(*) FROM legacy_source_data WHERE source_table=chr(65)||chr(115)||chr(112)||chr(78)||chr(101)||chr(116)||chr(85)||chr(115)||chr(101)||chr(114)||chr(67)||chr(108)||chr(97)||chr(105)||chr(109)||chr(115)) AS original_digibail_user_claims,
+              (SELECT count(*) FROM legacy_source_data WHERE source_table=chr(67)||chr(117)||chr(115)||chr(116)||chr(111)||chr(109)||chr(101)||chr(114)||chr(80)||chr(117)||chr(114)||chr(99)||chr(104)||chr(97)||chr(115)||chr(101)||chr(80)||chr(108)||chr(97)||chr(110)) AS original_digibail_purchase_plans,
+              (SELECT count(*) FROM legacy_source_data WHERE source_table=chr(76)||chr(111)||chr(97)||chr(110)||chr(82)||chr(101)||chr(113)||chr(117)||chr(101)||chr(115)||chr(116)||chr(83)||chr(116)||chr(97)||chr(116)||chr(117)||chr(115)||chr(101)||chr(115)) AS original_digibail_loan_statuses,
+              (SELECT count(*) FROM information_schema.tables WHERE table_schema=chr(108)||chr(101)||chr(103)||chr(97)||chr(99)||chr(121)||chr(95)||chr(100)||chr(105)||chr(103)||chr(105)||chr(98)||chr(97)||chr(105)||chr(108) AND table_type=chr(66)||chr(65)||chr(83)||chr(69)||chr(32)||chr(84)||chr(65)||chr(66)||chr(76)||chr(69)) AS preserved_relational_tables,
+              (SELECT count(*) FROM users) AS total_users,
+              (SELECT count(*) FROM legacy_customers) AS total_legacy_customers,
+              (SELECT count(*) FROM sms_templates) AS total_sms_templates,
+              (SELECT count(*) FROM user_role_assignments) AS total_user_role_assignments"'
+            echo "=== Refresh PostgreSQL statistics after committed cleanup ==="
+            $D compose exec -T db sh -lc 'psql -X -U "$POSTGRES_USER" -d "$POSTGRES_DB" -P pager=off -c "VACUUM (ANALYZE) legacy_source_data"'
+            $D compose exec -T db sh -lc 'psql -X -U "$POSTGRES_USER" -d "$POSTGRES_DB" -P pager=off -c "VACUUM (ANALYZE) legacy_customers"'
+            $D compose exec -T db sh -lc 'psql -X -U "$POSTGRES_USER" -d "$POSTGRES_DB" -P pager=off -c "VACUUM (ANALYZE) users"'
+            $D compose exec -T db sh -lc 'psql -X -U "$POSTGRES_USER" -d "$POSTGRES_DB" -P pager=off -c "VACUUM (ANALYZE) loan_requests"'
+            $D compose exec -T db sh -lc 'psql -X -U "$POSTGRES_USER" -d "$POSTGRES_DB" -P pager=off -c "VACUUM (ANALYZE) loan_request_status_history"'
+            $D compose exec -T db sh -lc 'psql -X -U "$POSTGRES_USER" -d "$POSTGRES_DB" -P pager=off -c "VACUUM (ANALYZE) loan_products"'
+            echo "=== Live HTTPS health ==="
+            curl -fsS --max-time 15 https://digebail.ir/healthz
+            echo
+            df -h /home/digibail
+            echo "DIGIBAIL_VAMCITY_ISOLATION_VERIFIED=1"
