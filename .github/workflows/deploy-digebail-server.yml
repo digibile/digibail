@@ -262,6 +262,13 @@ jobs:
             if (!agentMetaResponse.ok) throw new Error("MariaDB agent metadata inspection failed: " + agentMetaResponse.status);
             const agentMetaBody = await agentMetaResponse.json();
             console.log("MARIADB_AGENT_METADATA_COLUMNS=" + JSON.stringify(Object.keys(agentMetaBody.data?.[0]?.payload || {})));
+            for (const tableName of ["AspNetUsers","UserLoanRequests"]) {
+              const schemaResponse = await fetch(base + "/api/v1/admin/legacy-source-data?table=" + tableName + "&limit=1", { headers: { Cookie: cookie } });
+              if (!schemaResponse.ok) throw new Error("MariaDB schema inspection failed for " + tableName);
+              const schemaBody = await schemaResponse.json();
+              console.log("MARIADB_TABLE_SCHEMA_" + tableName.toUpperCase() + "=" + JSON.stringify(schemaBody.columns || []));
+            }
+            console.log("MARIADB_AGENT_METADATA_SCHEMA=" + JSON.stringify(agentMetaBody.columns || []));
             console.log("MARIADB_ADMIN_TABLES_SMOKE=PASS tables=" + tables.length);
             const page = await fetch(base + "/admin.html", { headers: { Cookie: cookie } });
             const html = await page.text();
