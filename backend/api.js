@@ -709,7 +709,7 @@ export async function handleApi(req, res, url) {
           db.query("SELECT LOWER(r.Name) AS role,COUNT(DISTINCT u.Id) AS total FROM AspNetUsers u JOIN AspNetUserRoles ur ON ur.UserId=u.Id JOIN AspNetRoles r ON r.Id=ur.RoleId GROUP BY LOWER(r.Name)"),
           postgresOnlyAccounts(db,10000)
         ]);
-        const mariaStats=mariaStatsResult[0]||{},roleStats=roleStatsResult,roleMap=new Map(roleStats.map(r=>[String(r.role||"").replace(/[^a-z]/g,""),Number(r.total)||0]));
+        const mariaStats=mariaStatsResult[0]?.[0]||{},roleStats=roleStatsResult[0]||[],roleMap=new Map(roleStats.map(r=>[String(r.role||"").replace(/[^a-z]/g,""),Number(r.total)||0]));
         const freshToday=fresh.filter(r=>{const d=new Date(r.created_at);return !Number.isNaN(d.getTime())&&new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Tehran",year:"numeric",month:"2-digit",day:"2-digit"}).format(d)===new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Tehran",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date());}).length;
         const mariaTotal=Number(mariaStats.total)||0,freshTotal=fresh.length;
         const mariaLatest=mariaStats.latest_registration||null,freshLatest=fresh[0]?.created_at||null;
