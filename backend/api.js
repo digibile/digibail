@@ -765,7 +765,7 @@ export async function handleApi(req, res, url) {
           db.query("SELECT COUNT(DISTINCT u.Id) AS total FROM AspNetUsers u WHERE EXISTS(SELECT 1 FROM AspNetUserRoles ur JOIN AspNetRoles r ON r.Id=ur.RoleId WHERE ur.UserId=u.Id AND LOWER(REPLACE(REPLACE(REPLACE(r.Name,' ',''),'-',''),'_','')) IN ('admin','superadmin','agent','marketer','customermarketer'))"),
           postgresOnlyAccounts(db,10000)
         ]);
-        const mariaStats=mariaStatsResult[0]||{},roleMap=new Map(roleStatsResult[0].map(r=>[String(r.role||"").replace(/[^a-z]/g,""),Number(r.total)||0]));
+        const mariaStats=mariaStatsResult[0]?.[0]||{},roleMap=new Map(roleStatsResult[0].map(r=>[String(r.role||"").replace(/[^a-z]/g,""),Number(r.total)||0]));
         const freshToday=fresh.filter(r=>new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Tehran",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date(r.created_at))===new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Tehran",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date())).length;
         const mariaTotal=Number(mariaStats.total)||0,freshTotal=fresh.length,users=mariaTotal+freshTotal;
         const admins=(roleMap.get("admin")||0)+(roleMap.get("superadmin")||0)+fresh.filter(r=>["admin","superadmin"].includes(r.effective_role)).length;
