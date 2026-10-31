@@ -369,3 +369,11 @@ CREATE TABLE IF NOT EXISTS digibail_legacy_relational_rows (
  PRIMARY KEY(source_schema,source_table,legacy_id),
  KEY ix_digibail_legacy_rows_source(source_schema,source_table)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS digibail_migration_control (
+ migration_key VARCHAR(100) NOT NULL PRIMARY KEY,
+ status VARCHAR(24) NOT NULL,
+ details JSON NOT NULL,
+ completed_at DATETIME(6) NULL,
+ updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
