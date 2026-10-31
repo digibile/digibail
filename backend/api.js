@@ -15,17 +15,12 @@ function legacyMaria() {
   if (!legacyMariaPool) legacyMariaPool = createPool({ socketPath, user, password, database, waitForConnections: true, connectionLimit: 4, queueLimit: 20, charset: "utf8mb4", connectTimeout: 8000 });
   return legacyMariaPool;
 }
-async function postgresOnlyAccounts(mariaDb, limit=10000) {
+async function postgresOnlyAccounts(mariaDb, limit=100000) {
+  // Keep every successful registration in the new identity database visible.
+  // A phone match in the historical database is not proof that this distinct
+  // PostgreSQL account is the same row; hiding it made new registrations vanish.
   const q=await pool.query("SELECT u.id,u.username,u.phone,u.full_name,u.email,u.national_code,u.role,u.is_active,u.created_at,COALESCE((SELECT role_code FROM user_role_overrides o WHERE o.user_id=u.id),u.role) AS effective_role FROM users u WHERE u.legacy_source IS NULL ORDER BY u.created_at DESC,u.id DESC LIMIT $1",[limit]);
-  const phones=[...new Set(q.rows.map(r=>String(r.phone||"").trim()).filter(Boolean))];
-  let existing=[];
-  if(phones.length){
-    const [found]=await mariaDb.query("SELECT Mobile AS mobile,Phone AS phone,PhoneNumber AS phone_number FROM AspNetUsers WHERE Mobile IN (?) OR Phone IN (?) OR PhoneNumber IN (?)",[phones,phones,phones]);
-    existing=found;
-  }
-  const norm=v=>String(v||"").replace(/\D/g,"");
-  const known=new Set(existing.flatMap(r=>[r.mobile,r.phone,r.phone_number].map(norm)).filter(Boolean));
-  return q.rows.filter(r=>!r.phone||!known.has(norm(r.phone))).map(r=>({...r,role:r.effective_role,id:"pg:"+String(r.id),legacy_id:String(r.id),mobile:r.phone,email:r.email,legacy_username:r.username,customer_code:String(r.id),registered_at:r.created_at,roles:[r.effective_role],account_type:directoryAccountType(r.effective_role),source_table:"postgres.users"}));
+  return q.rows.map(r=>({...r,role:r.effective_role,id:"pg:"+String(r.id),legacy_id:String(r.id),mobile:r.phone,email:r.email,legacy_username:r.username,customer_code:String(r.id),registered_at:r.created_at,roles:[r.effective_role],account_type:directoryAccountType(r.effective_role),source_table:"postgres.users"}));
 }
 
 function legacyRoleCode(value) {
@@ -55,7 +50,7 @@ async function unifiedUserDirectory({page=1,pageSize=50,search="",role="",status
   const [mCountRows,mStatsRows,mRows]=await Promise.all([
     db.query("SELECT COUNT(*) AS total FROM AspNetUsers u"+mFilter,mValues),
     db.query("SELECT COUNT(*) AS total,SUM(CASE WHEN COALESCE(IsActive,1)=1 THEN 1 ELSE 0 END) AS active,SUM(CASE WHEN COALESCE(IsActive,1)=0 THEN 1 ELSE 0 END) AS inactive,SUM(CASE WHEN DATE(RegDate)=DATE(CONVERT_TZ(UTC_TIMESTAMP(),'+00:00','+03:30')) THEN 1 ELSE 0 END) AS today,DATE_FORMAT(MAX(RegDate),'%Y-%m-%dT%H:%i:%s+03:30') AS latest_registration FROM AspNetUsers"),
-    db.query("SELECT CAST(u.Id AS CHAR) AS legacy_id,COALESCE(NULLIF(TRIM(CONCAT_WS(' ',u.FirstName,u.LastName)),''),NULLIF(u.UserName,''),NULLIF(u.Mobile,''),'کاربر بدون نام') AS full_name,u.UserName AS username,u.UserName AS legacy_username,COALESCE(NULLIF(u.Mobile,''),NULLIF(u.Phone,''),NULLIF(u.PhoneNumber,'')) AS phone,u.Email AS email,u.NationalCode AS national_code,u.UserCode AS customer_code,u.AgentId AS legacy_agent_id,CAST(u.CustomerId AS CHAR) AS legacy_customer_id,COALESCE(u.IsActive,1) AS is_active,DATE_FORMAT(u.RegDate,'%Y-%m-%dT%H:%i:%s+03:30') AS created_at,DATE_FORMAT(u.RegDate,'%Y-%m-%dT%H:%i:%s+03:30') AS registered_at,(SELECT GROUP_CONCAT(DISTINCT r.Name ORDER BY r.Name SEPARATOR ',') FROM AspNetUserRoles ur JOIN AspNetRoles r ON r.Id=ur.RoleId WHERE ur.UserId=u.Id) AS roles_raw,(SELECT r.Name FROM AspNetUserRoles ur JOIN AspNetRoles r ON r.Id=ur.RoleId WHERE ur.UserId=u.Id ORDER BY CASE LOWER(REPLACE(REPLACE(REPLACE(r.Name,' ',''),'-',''),'_','')) WHEN 'superadmin' THEN 1 WHEN 'admin' THEN 2 WHEN 'agent' THEN 3 WHEN 'marketer' THEN 4 WHEN 'customermarketer' THEN 5 WHEN 'member' THEN 6 ELSE 7 END,r.Name LIMIT 1) AS primary_role FROM AspNetUsers u"+mFilter+" ORDER BY u.RegDate DESC,u.Id DESC LIMIT ?",[...mValues,Math.min(60000,page*pageSize)])
+    db.query("SELECT CAST(u.Id AS CHAR) AS legacy_id,COALESCE(NULLIF(TRIM(CONCAT_WS(' ',u.FirstName,u.LastName)),''),NULLIF(u.UserName,''),NULLIF(u.Mobile,''),'کاربر بدون نام') AS full_name,u.UserName AS username,u.UserName AS legacy_username,COALESCE(NULLIF(u.Mobile,''),NULLIF(u.Phone,''),NULLIF(u.PhoneNumber,'')) AS phone,u.Email AS email,u.NationalCode AS national_code,u.UserCode AS customer_code,u.AgentId AS legacy_agent_id,CAST(u.CustomerId AS CHAR) AS legacy_customer_id,COALESCE(u.IsActive,1) AS is_active,DATE_FORMAT(u.RegDate,'%Y-%m-%dT%H:%i:%s+03:30') AS created_at,DATE_FORMAT(u.RegDate,'%Y-%m-%dT%H:%i:%s+03:30') AS registered_at,(SELECT GROUP_CONCAT(DISTINCT r.Name ORDER BY r.Name SEPARATOR ',') FROM AspNetUserRoles ur JOIN AspNetRoles r ON r.Id=ur.RoleId WHERE ur.UserId=u.Id) AS roles_raw,(SELECT r.Name FROM AspNetUserRoles ur JOIN AspNetRoles r ON r.Id=ur.RoleId WHERE ur.UserId=u.Id ORDER BY CASE LOWER(REPLACE(REPLACE(REPLACE(r.Name,' ',''),'-',''),'_','')) WHEN 'superadmin' THEN 1 WHEN 'admin' THEN 2 WHEN 'agent' THEN 3 WHEN 'marketer' THEN 4 WHEN 'customermarketer' THEN 5 WHEN 'member' THEN 6 ELSE 7 END,r.Name LIMIT 1) AS primary_role FROM AspNetUsers u"+mFilter+" ORDER BY u.RegDate DESC,u.Id DESC LIMIT ?",[...mValues,Math.min(200000,page*pageSize)])
   ]);
   const mariaRows=mRows[0].map(r=>{const roles=String(r.roles_raw||"").split(",").filter(Boolean).map(legacyRoleCode);const roleCode=legacyRoleCode(r.primary_role||"customer");return {...r,id:"legacy:"+String(r.legacy_id),name:r.full_name,mobile:r.phone,customer_number:r.customer_code,role:roleCode,roles:roles.length?roles:[roleCode],account_type:accountTypeForRoles(roles.length?roles:[roleCode]),legacy_source:"AspNetUsers",source:"mariadb",password_reset_required:false,is_active:Boolean(Number(r.is_active))};});
   const fresh=(await postgresOnlyAccounts(db,10000)).map(r=>({...r,name:r.full_name,mobile:r.phone,customer_number:r.customer_code,source:"postgres"}));
