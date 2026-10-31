@@ -25,21 +25,24 @@ jobs:
           script: |
             set -eu
             ROOT="/home/digibail/domains/digebail.ir"
-            BACKUP_DIR="/home/digibail/backups"
+            BACKUP_DIR="/home/digibail/.local/backups"
             BACKUP="$BACKUP_DIR/digibail_before_vamcity_isolation_20261031.dump"
             TEMP="/tmp/digibail_before_vamcity_isolation_20261031.dump"
             cd "$ROOT"
             if sudo -n docker info >/dev/null 2>&1; then D="sudo -n docker"; elif docker info >/dev/null 2>&1; then D="docker"; else echo "BLOCKED: Docker unavailable"; exit 20; fi
+            mkdir -p "$BACKUP_DIR"
+            chmod 700 "$BACKUP_DIR"
             echo "=== Pre-backup disk and database size ==="
             df -h /home/digibail
             $D compose exec -T db sh -lc 'psql -X -U "$POSTGRES_USER" -d "$POSTGRES_DB" -P pager=off -c "SELECT pg_size_pretty(pg_database_size(current_database())) AS database_size,pg_database_size(current_database()) AS bytes"'
             DB_ID="$($D compose ps -q db)"
-            if $D cp "$BACKUP" "$DB_ID:/tmp/digibail-host-backup.dump" >/dev/null 2>&1; then
+            if [ -s "$BACKUP" ] && $D cp "$BACKUP" "$DB_ID:/tmp/digibail-host-backup.dump" >/dev/null 2>&1; then
               echo "BACKUP_ALREADY_PRESENT=1"
             else
               echo "=== Create custom-format snapshot inside PostgreSQL container ==="
               $D compose exec -T db sh -lc 'pg_dump -Fc -U "$POSTGRES_USER" -d "$POSTGRES_DB" -f /tmp/digibail_before_vamcity_isolation_20261031.dump && chmod 600 /tmp/digibail_before_vamcity_isolation_20261031.dump && pg_restore --list /tmp/digibail_before_vamcity_isolation_20261031.dump >/dev/null'
               $D cp "$DB_ID:$TEMP" "$BACKUP"
+              chmod 600 "$BACKUP"
               $D cp "$BACKUP" "$DB_ID:/tmp/digibail-host-backup.dump"
             fi
             echo "=== Verify copied archive from the host ==="
