@@ -81,13 +81,13 @@ try{
  }
  for(const item of tables){
   const [s,t]=String(item.sourceTable).split("."),key=sourceKey(s,t),cols=colGroups.get(key)||[],pk=(pkGroups.get(key)||[]).map(x=>x.columnName),table=qtable(s,t),rows=Array.isArray(item.rows)?item.rows:[];
-  if(!pk.length)await pool.query("TRUNCATE TABLE "+table);
+  if(!pk.length){const existing=await pool.query("SELECT COUNT(*)::bigint AS n FROM "+table);if(Number(existing.rows[0]?.n)>rows.length)throw new Error("Refusing to remove existing rows from non-key source table "+s+"."+t);}
   for(let offset=0;offset<rows.length;offset+=100){
    const batch=rows.slice(offset,offset+100);
    for(let j=0;j<batch.length;j++){
     const row=batch[j]||{},names=cols.map(c=>c.columnName),vals=cols.map(c=>convert(c,row[c.columnName]));
     if(!pk.length){names.push("__legacy_row_number");vals.push(offset+j+1);}
-    const conflict=pk.length?(" ON CONFLICT ("+pk.map(qid).join(",")+") "+(names.some(n=>!pk.includes(n))?"DO UPDATE SET "+names.filter(n=>!pk.includes(n)).map(n=>qid(n)+"=EXCLUDED."+qid(n)).join(","):"DO NOTHING")):"";
+    const conflict=pk.length?(" ON CONFLICT ("+pk.map(qid).join(",")+") "+(names.some(n=>!pk.includes(n))?"DO UPDATE SET "+names.filter(n=>!pk.includes(n)).map(n=>qid(n)+"=EXCLUDED."+qid(n)).join(","):"DO NOTHING")):(" ON CONFLICT ("+qid("__legacy_row_number")+") DO UPDATE SET "+cols.map(c=>qid(c.columnName)+"=EXCLUDED."+qid(c.columnName)).join(","));
     await pool.query("INSERT INTO "+table+" ("+names.map(qid).join(",")+") VALUES ("+vals.map((_,i)=>"$"+(i+1)).join(",")+")"+conflict,vals);
    }
   }
