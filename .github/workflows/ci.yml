@@ -73,7 +73,6 @@ jobs:
           node --check backend/api.js
           node --check backend/mariadb-user-sync.js
           node --check backend/mariadb-compat.js
-          node --check scripts/migrate-postgres-app-data-to-mariadb.mjs
           node --check scripts/import-legacy-mariadb-users.mjs
           node -e "const s=require('node:fs').readFileSync('scripts/digibail-legacy-schema.json','utf8'); const d=JSON.parse(s); if(d.columnDefinitions.length!==614||d.primaryKeys.length!==70||d.foreignKeys.length!==104||d.schemaDefinitions.length!==59) throw new Error('Legacy schema inventory mismatch'); console.log('Legacy schema metadata verified')"
       - name: Validate shell installers and sample configuration
