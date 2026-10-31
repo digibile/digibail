@@ -42,6 +42,8 @@ function mappedTable(string $schema,string $table,string $source): string {
     $prefix='';
     foreach($sources as $item) if($item['source']===$source){$prefix=$item['prefix'];break;}
     $base=strtolower($schema)==='dbo'?$table:$schema.'__'.$table;
+    // Transfer source table names are already prefixed in its reviewed schema; never double-prefix them.
+    if($prefix!=='' && str_starts_with($base,$prefix)) return shortName($base);
     return shortName($prefix.$base);
 }
 function dockerBin(): string {
