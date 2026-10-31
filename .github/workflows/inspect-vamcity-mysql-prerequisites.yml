@@ -47,6 +47,13 @@ jobs:
                 sed -n 's/^[[:space:]]*\([A-Za-z_][A-Za-z0-9_]*\)[[:space:]]*=.*/MYSQL_CONFIG_KEY=\1/p' "$F"
               fi
             done
+            echo "=== HOST MYSQL SOCKETS ==="
+            for S in /var/lib/mysql/mysql.sock /run/mysqld/mysqld.sock /var/run/mysqld/mysqld.sock; do
+              if [ -S "$S" ]; then echo "MYSQL_SOCKET_FOUND=$S"; fi
+            done
+            if [ -S /var/lib/mysql/mysql.sock ]; then
+              $D run --rm --network host -v /var/lib/mysql/mysql.sock:/run/mysqld/mysqld.sock mariadb:10.6 mariadb --protocol=socket -uroot --socket=/run/mysqld/mysqld.sock -NBe "SELECT VERSION(), CURRENT_USER()" 2>&1 || true
+            fi
             echo "=== MYSQL CLIENT AND DATABASE NAMES ==="
             if sudo -n mysql -NBe "SELECT VERSION(), CURRENT_USER()" 2>/dev/null; then
               echo "MYSQL_SOCKET_ROOT_ACCESS=AVAILABLE"
