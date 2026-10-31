@@ -20,7 +20,9 @@ async function postgresOnlyAccounts(mariaDb, limit=100000) {
   // A phone match in the historical database is not proof that this distinct
   // PostgreSQL account is the same row; hiding it made new registrations vanish.
   const q=await pool.query("SELECT u.id,u.username,u.phone,u.full_name,u.email,u.national_code,u.role,u.is_active,u.created_at,COALESCE((SELECT role_code FROM user_role_overrides o WHERE o.user_id=u.id),u.role) AS effective_role FROM users u WHERE u.legacy_source IS NULL ORDER BY u.created_at DESC,u.id DESC LIMIT $1",[limit]);
-  return q.rows.map(r=>({...r,role:r.effective_role,id:"pg:"+String(r.id),legacy_id:String(r.id),mobile:r.phone,email:r.email,legacy_username:r.username,customer_code:String(r.id),registered_at:r.created_at,roles:[r.effective_role],account_type:directoryAccountType(r.effective_role),source_table:"postgres.users"}));
+  let mappedIds=new Set();
+  try{const [mapped]=await mariaDb.query("SELECT PostgresUserId FROM DigibailUserIdentity");mappedIds=new Set(mapped.map(r=>String(r.PostgresUserId)));}catch(error){if(error.code!=="ER_NO_SUCH_TABLE")throw error;}
+  return q.rows.filter(r=>!mappedIds.has(String(r.id))).map(r=>({...r,role:r.effective_role,id:"pg:"+String(r.id),legacy_id:String(r.id),mobile:r.phone,email:r.email,legacy_username:r.username,customer_code:String(r.id),registered_at:r.created_at,roles:[r.effective_role],account_type:directoryAccountType(r.effective_role),source_table:"postgres.users"}));
 }
 
 function legacyRoleCode(value) {
