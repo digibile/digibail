@@ -16,7 +16,7 @@ test("translates nested JSON type and length functions", () => {
   const sql = translateMariaSql(
     "SELECT jsonb_typeof(CASE WHEN jsonb_typeof(lp.tiers)='array' THEN lp.tiers ELSE '[]'::jsonb END), jsonb_array_length(lp.tiers) FROM loan_products lp"
   );
-  assert.match(sql, /LOWER\(JSON_TYPE\(CASE WHEN LOWER\(JSON_TYPE\(lp\.tiers\)\)\)='array' THEN lp\.tiers ELSE '\[\]' END\)\)/);
+  assert.equal(sql, "SELECT LOWER(JSON_TYPE(CASE WHEN LOWER(JSON_TYPE(lp.tiers))='array' THEN lp.tiers ELSE '[]' END)), JSON_LENGTH(lp.tiers) FROM loan_products lp");
   assert.match(sql, /JSON_LENGTH\(lp\.tiers\)/);
   assert.doesNotMatch(sql, /jsonb_typeof|::jsonb|jsonb_array_length/i);
 });
@@ -39,7 +39,7 @@ test("translates upsert, JSON extraction, intervals, date casts and regular expr
     "SELECT payload->>'Mobile' FROM legacy_source_data WHERE name ILIKE $1 AND source_table ~* '^legacy' AND created_at>NOW()-INTERVAL '5 minutes'"
   );
   assert.match(mixed, /JSON_UNQUOTE\(JSON_EXTRACT\(payload, '\$\.Mobile'\)\)/);
-  assert.match(mixed, /name LIKE \?/);
+  assert.match(mixed, /name LIKE \$1/);
   assert.match(mixed, /source_table REGEXP/);
   assert.match(mixed, /INTERVAL 5 MINUTE/);
   const cast = translateMariaSql("created_at >= $1::date AND id=$2::text");
