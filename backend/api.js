@@ -696,15 +696,13 @@ export async function handleApi(req, res, url) {
       }
       if (req.method === "GET" && route === "/api/v1/admin/legacy-customers-page") {
         const page=Math.max(1,Number.parseInt(url.searchParams.get("page")||"1",10)||1), pageSize=Math.min(100,Math.max(10,Number.parseInt(url.searchParams.get("pageSize")||"50",10)||50)), search=String(url.searchParams.get("q")||"").trim().slice(0,120);
-        const params=[], where=[];
-        if(search){params.push("%"+search+"%");where.push("(name ILIKE $"+params.length+" OR mobile ILIKE $"+params.length+" OR email ILIKE $"+params.length+" OR customer_code::text ILIKE $"+params.length+" OR legacy_id::text ILIKE $"+params.length+" OR legacy_username ILIKE $"+params.length+" OR affiliate_code ILIKE $"+params.length+" OR legacy_source_table ILIKE $"+params.length+")");}
-        const from=String(url.searchParams.get("from")||"").trim(), to=String(url.searchParams.get("to")||"").trim();
-        if(from && /^\d{4}-\d{2}-\d{2}$/.test(from)){params.push(from);where.push("registered_at >= $"+params.length+"::date");}
-        if(to && /^\d{4}-\d{2}-\d{2}$/.test(to)){params.push(to);where.push("registered_at < ($"+params.length+"::date + INTERVAL '1 day')");}
+        const db=legacyMaria(), where=[], values=[];
+        if(search){where.push("(Name LIKE ? OR Mobile LIKE ? OR Email LIKE ? OR CAST(Code AS CHAR) LIKE ? OR Id LIKE ? OR AffCode LIKE ?)");for(let i=0;i<6;i++)values.push("%"+search+"%");}
         const filter=where.length?" WHERE "+where.join(" AND "):"";
-        const [count,overall]=await Promise.all([pool.query("SELECT COUNT(*)::int AS total FROM legacy_customers"+filter,params),pool.query("SELECT COUNT(*)::int AS total,MAX(registered_at) AS latest_registration FROM legacy_customers")]);
-        const rows=await pool.query("WITH numbered AS (SELECT legacy_id,name,mobile,email,customer_code,registered_at,expires_at,is_permanent,purchased,affiliate_code,parked_domain,legacy_username,account_type,legacy_source_table,ROW_NUMBER() OVER (ORDER BY registered_at ASC NULLS FIRST,legacy_id ASC) AS customer_number FROM legacy_customers) SELECT legacy_id,name,mobile,email,customer_code,customer_number,registered_at,expires_at,is_permanent,purchased,affiliate_code,parked_domain,legacy_username,account_type,legacy_source_table FROM numbered"+filter+" ORDER BY registered_at DESC NULLS LAST,legacy_id DESC LIMIT $"+(params.length+1)+" OFFSET $"+(params.length+2),[...params,pageSize,(page-1)*pageSize]);
-        return json(res,200,{data:{rows:rows.rows,total:Number(count.rows[0]?.total)||0,overallTotal:Number(overall.rows[0]?.total)||0,latestRegistration:overall.rows[0]?.latest_registration||null,page,pageSize}});
+        const [count]=await db.query("SELECT COUNT(*) AS total FROM Customers"+filter,values);
+        const [overall]=await db.query("SELECT COUNT(*) AS total,MAX(RegDate) AS latest_registration FROM Customers");
+        const [rows]=await db.query("SELECT Id AS legacy_id,Name AS name,Mobile AS mobile,Email AS email,Code AS customer_code,Code AS customer_number,RegDate AS registered_at,ExpireDate AS expires_at,Permanent AS is_permanent,Purchased AS purchased,AffCode AS affiliate_code,ParkDomain AS parked_domain,NULL AS legacy_username,'مشتری منتقل‌شده' AS account_type,'Customers' AS legacy_source_table FROM Customers"+filter+" ORDER BY RegDate DESC,Code DESC LIMIT ? OFFSET ?",[...values,pageSize,(page-1)*pageSize]);
+        return json(res,200,{data:{rows,total:Number(count[0]?.total)||0,overallTotal:Number(overall[0]?.total)||0,latestRegistration:overall[0]?.latest_registration||null,page,pageSize}});
       }
       if (req.method === "GET" && route === "/api/v1/admin/legacy-agents-page") {
         const page=Math.max(1,Number.parseInt(url.searchParams.get("page")||"1",10)||1);
