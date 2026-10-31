@@ -1,0 +1,65 @@
+name: Import audited VamCity databases into MySQL
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/import-vamcity-mysql.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vamcity-mysql-import
+  cancel-in-progress: false
+
+jobs:
+  import:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 100
+    steps:
+      - name: Run resumable SQL Server to MySQL import on production host
+        uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          command_timeout: 90m
+          script: |
+            set -eu
+            ROOT="/home/digibail/domains/digebail.ir"
+            cd "$ROOT"
+            SCRIPT="database/migration/migrate.php"
+            CONFIG="database/migration/config.php"
+            test -s "$SCRIPT" || { echo "BLOCKED: MySQL migration script missing"; exit 30; }
+            php -v | head -n 1
+            php -l "$SCRIPT"
+            echo "=== DISK CAPACITY BEFORE MYSQL IMPORT ==="
+            df -h "$ROOT"
+            echo "=== SOURCE METADATA DRY RUN (NO TARGET WRITES) ==="
+            php "$SCRIPT" --dry-run
+            if [ ! -s "$CONFIG" ]; then
+              echo "BLOCKED: $CONFIG is missing. MySQL credentials are not configured on the server; no target rows were written."
+              exit 31
+            fi
+            chmod 600 "$CONFIG"
+            echo "=== START RESUMABLE MYSQL IMPORT ==="
+            php "$SCRIPT" --execute
+            echo "=== MYSQL IMPORT FINISHED; VERIFY TARGET DATABASE COUNTS ==="
+            php -r '
+            $c=require "database/migration/config.php";
+            $m=$c["mysql"];
+            $targets=["vamcitydigibilepay","vamcitydigibilepay_bluvamdb","vamcitydigibilepay_transferdb"];
+            foreach($targets as $name){
+              $db=new mysqli($m["host"]??"localhost",$m["user"],$m["password"],$name,(int)($m["port"]??3306),$m["socket"]??null);
+              if($db->connect_errno){fwrite(STDERR,"VERIFY_CONNECT_FAILED ".$name."\n");exit(40);}
+              $q=$db->query("SELECT COUNT(*) n FROM information_schema.tables WHERE table_schema=DATABASE() AND table_type='BASE TABLE' AND table_name NOT LIKE '\\\\_%'");
+              $tables=(int)$q->fetch_assoc()["n"];
+              $q=$db->query("SELECT COALESCE(SUM(imported_rows),0) n, COUNT(*) c FROM __vamcity_migration_state WHERE status='complete'");
+              $state=$q->fetch_assoc();
+              echo "MYSQL_TARGET_VERIFIED=".$name." tables=".$tables." completed_tables=".$state["c"]." imported_rows=".$state["n"]."\n";
+              $db->close();
+            }'
+            echo "VAMCITY_MYSQL_IMPORT_WORKFLOW_COMPLETE=1"
