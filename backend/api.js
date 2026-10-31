@@ -796,9 +796,9 @@ export async function handleApi(req, res, url) {
             const [columnRows]=await conn.query("SELECT COLUMN_NAME FROM information_schema.columns WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=?",[config.users]);
             const columns=new Set(columnRows.map(x=>String(x.COLUMN_NAME)));
             const sets=[],values=[];
-            if(fullName!==null){const parts=fullName.split(" "),first=parts.shift()||"",last=parts.join(" ");if(columns.has("FirstName")){sets.push("FirstName=?");values.push(first);}if(columns.has("LastName")){sets.push("LastName=?");values.push(last);}}
-            if(input.phone!==undefined){const sourcePhone=sourceKey==="transfer"&&phone?phone.replace(/^0/,"").slice(0,10):phone;for(const col of ["Mobile","Phone","PhoneNumber"])if(columns.has(col)){sets.push(sqlIdent(col)+"=?");values.push(sourcePhone);}}
-            if(input.email!==undefined&&columns.has("Email")){sets.push("Email=?");values.push(email);}
+            if(fullName!==null){const parts=fullName.split(" "),first=parts.shift()||"",last=parts.join(" "),nameLimit=sourceKey==="transfer"?50:160;if(columns.has("FirstName")){sets.push("FirstName=?");values.push(first.slice(0,nameLimit));}if(columns.has("LastName")){sets.push("LastName=?");values.push(last.slice(0,nameLimit));}}
+            if(input.phone!==undefined){for(const col of ["Mobile","Phone","PhoneNumber"])if(columns.has(col)){const storedPhone=col==="Phone"||sourceKey==="transfer"?(phone?phone.replace(/^0/,"").slice(0,10):null):phone;sets.push(sqlIdent(col)+"=?");values.push(storedPhone);}}
+            if(input.email!==undefined&&columns.has("Email")){sets.push("Email=?");values.push(email?email.slice(0,128):null);}
             if(active!==null){if(!columns.has("IsActive"))throw new Error(config.users+".IsActive column is missing");sets.push("IsActive=?");values.push(active?1:0);}
             if(sets.length){values.push(legacyId);await conn.query("UPDATE "+usersTable+" SET "+sets.join(",")+" WHERE Id=?",values);}
             if(role!==null){
@@ -830,7 +830,7 @@ export async function handleApi(req, res, url) {
               const appId=Number(mappingRows[0].AppUserId);
               await pool.query(
                 "UPDATE users SET full_name=COALESCE($1,full_name),phone=CASE WHEN $2=1 THEN $3 ELSE phone END,email=CASE WHEN $4=1 THEN $5 ELSE email END,role=COALESCE($6,role),is_active=COALESCE($7,is_active),updated_at=NOW() WHERE id=$8",
-                [fullName,input.phone!==undefined?1:0,phone,input.email!==undefined?1:0,email,role,active,appId]
+                [updated.full_name,input.phone!==undefined?1:0,updated.phone,input.email!==undefined?1:0,updated.email,role,active,appId]
               );
               if(role!==null)await pool.query(
                 "INSERT INTO user_role_overrides(user_id,role_code,updated_by,updated_at) VALUES($1,$2,$3,NOW()) ON DUPLICATE KEY UPDATE role_code=VALUES(role_code),updated_by=VALUES(updated_by),updated_at=NOW()",
