@@ -271,7 +271,14 @@ async function main() {
   try {
     await pg.query("SELECT 1");
     await mysql.query("SELECT 1");
-    if(APPLY)await migrate();
+    if(APPLY) {
+      await migrate();
+      await mysql.query(
+        "INSERT INTO digibail_migration_control(migration_key,status,details,completed_at) VALUES('legacy-app-data-transfer','in_progress',?,NULL) "+
+        "ON DUPLICATE KEY UPDATE status='in_progress',details=VALUES(details),completed_at=NULL",
+        [JSON.stringify({started_at_utc:new Date().toISOString()})]
+      );
+    }
 
     const publicResults=[];
     for(const table of applicationTables) {
@@ -311,7 +318,28 @@ async function main() {
           "WHERE source_schema=? AND source_table=?",["legacy_digibail",table]);
         if(targetCount!==sourceCount)throw new Error("FINAL_LEGACY_VERIFY_FAILED="+table+" source="+sourceCount+" destination="+targetCount);
       }
-      console.log("DIGIBAIL_SOURCE_MIGRATION=PASS application_tables="+publicResults.length+" legacy_tables="+legacyTables.length+" manifest_rows="+manifestRows+" preserved_identity_links="+oldMaps);
+      const publicTableNames=publicResults.map(x=>x.table);
+      const requiredCoreTables=["users","audit_logs","captcha_challenges","otp_challenges","sms_provider_settings","legacy_customers","sms_templates","legacy_source_data"];
+      const missingCore=requiredCoreTables.filter(name=>!publicTableNames.includes(name));
+      if(missingCore.length)throw new Error("Required source application tables were not copied: "+missingCore.join(","));
+      const transferDetails={
+        public_tables:publicTableNames.length,
+        public_table_names:publicTableNames,
+        public_rows:publicResults.reduce((sum,item)=>sum+Number(item.sourceCount||0),0),
+        legacy_tables:operationalTables.length,
+        legacy_table_names:operationalTables,
+        legacy_manifest_rows:manifestRows,
+        preserved_identity_links:oldMaps,
+        verified_at_utc:new Date().toISOString()
+      };
+      await mysql.query(
+        "INSERT INTO digibail_migration_control(migration_key,status,details,completed_at) VALUES('legacy-app-data-transfer','verified',?,UTC_TIMESTAMP(6)) "+
+        "ON DUPLICATE KEY UPDATE status='verified',details=VALUES(details),completed_at=VALUES(completed_at)",
+        [JSON.stringify(transferDetails)]
+      );
+      const [transferMarker]=await mysql.query("SELECT status FROM digibail_migration_control WHERE migration_key='legacy-app-data-transfer' LIMIT 1");
+      if(!transferMarker.length||transferMarker[0].status!=="verified")throw new Error("Legacy application data transfer marker was not committed.");
+      console.log("DIGIBAIL_SOURCE_MIGRATION=PASS application_tables="+publicResults.length+" public_rows="+transferDetails.public_rows+" legacy_tables="+legacyTables.length+" manifest_rows="+manifestRows+" preserved_identity_links="+oldMaps);
     } else {
       console.log("DRY_RUN_ONLY=1; no rows were written. Review the inventory, create backups, then run with --apply.");
     }
