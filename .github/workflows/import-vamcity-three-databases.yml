@@ -83,3 +83,5 @@ jobs:
               echo "ALL_THREE_DATABASES_VERIFIED_IN_ONE_MARIADB_DATABASE=1\n";
               $db->close();
             '
+
+# Resume transfer schema installation safely after partial table creation.
