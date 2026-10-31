@@ -93,7 +93,7 @@ async function importSet(set){
     " CASE WHEN COALESCE(u.PasswordHash,'')<>'' THEN CONCAT('aspnet:',u.PasswordHash) ELSE '' END,"+
     " COALESCE(rr.role_code,'customer'),COALESCE(u.IsActive,1),"+
     " CASE WHEN COALESCE(u.PasswordHash,'')='' THEN 1 ELSE 0 END,?,CAST(u.Id AS CHAR),NULLIF(u.UserName,''),"+
-    set.customerId+","+set.agentId+",COALESCE("+set.created+",CURRENT_TIMESTAMP(6)) "+
+    set.customerId+","+set.agentId+",CASE WHEN "+set.created+" IS NULL OR "+set.created+"<'1000-01-01 00:00:00' THEN CURRENT_TIMESTAMP(6) ELSE "+set.created+" END "+
     "FROM "+quote(set.users)+" u LEFT JOIN ("+aggregate+") rr ON rr.UserId=u.Id "+
     "WHERE NOT EXISTS(SELECT 1 FROM users target WHERE target.legacy_source=? AND target.legacy_id=CAST(u.Id AS CHAR)) "+
     "AND NOT EXISTS(SELECT 1 FROM DigibailAppUserIdentity linked WHERE linked.LegacySource=? AND linked.MariaDbUserId=CAST(u.Id AS UNSIGNED))";
