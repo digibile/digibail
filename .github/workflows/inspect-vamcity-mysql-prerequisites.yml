@@ -47,18 +47,21 @@ jobs:
                 sed -n 's/^[[:space:]]*\([A-Za-z_][A-Za-z0-9_]*\)[[:space:]]*=.*/MYSQL_CONFIG_KEY=\1/p' "$F"
               fi
             done
-            echo "=== HOST MYSQL CREDENTIAL FILE METADATA ==="
-            $D run --rm --user 0:0 -v /:/host:ro mariadb:10.6 sh -lc '
-              for f in /host/root/.my.cnf /host/etc/mysql/debian.cnf /host/etc/my.cnf /host/root/.mylogin.cnf /host/usr/local/directadmin/conf/mysql.conf /host/usr/local/directadmin/conf/mysql.conf.d/mysql.conf; do
-                if [ -s "$f" ]; then
-                  echo "MYSQL_CREDENTIAL_FILE_FOUND=$f"
-                  stat -c "FILE_MODE=%a OWNER=%u:%g SIZE=%s" "$f"
-                  sed -n "s/^[[:space:]]*\\([A-Za-z_][A-Za-z0-9_]*\\)[[:space:]]*=.*/FILE_KEY=\\1/p" "$f"
-                fi
-              done
-              echo "=== DIRECTADMIN MYSQL USER METADATA ==="
-              find /host/usr/local/directadmin/data/users -maxdepth 3 -type f \\( -name "db.conf" -o -name "mysql.conf" -o -name "*.conf" \\) -print 2>/dev/null | grep -E "/(admin|digibail)/" | head -n 40 || true
-            '
+            echo "=== TEST DIRECTADMIN MYSQL CREDENTIALS THROUGH HOST SOCKET ==="
+            if [ -s /var/lib/mysql/mysql.sock ]; then
+              $D run --rm --network host -v /var/lib/mysql/mysql.sock:/var/lib/mysql/mysql.sock -v /usr/local/directadmin/conf/mysql.conf:/tmp/da-mysql.conf:ro mariadb:10.6 sh -lc '
+                getv(){ sed -n "s/^[[:space:]]*$1[[:space:]]*=[[:space:]]*//p" /tmp/da-mysql.conf | head -n 1; }
+                U="$(getv user)"; P="$(getv passwd)"; H="$(getv host)"; PORT="$(getv port)"; S="$(getv socket)"
+                test -n "$U" && test -n "$P" || { echo MYSQL_DA_CREDENTIAL_PARSE=FAILED; exit 2; }
+                printf "[client]\\nuser=%s\\npassword=%s\\nhost=%s\\nport=%s\\nsocket=%s\\n" "$U" "$P" "${H:-localhost}" "${PORT:-3306}" "${S:-/var/lib/mysql/mysql.sock}" > /tmp/client.cnf
+                chmod 600 /tmp/client.cnf
+                mariadb --defaults-extra-file=/tmp/client.cnf -NBe "SELECT VERSION(),CURRENT_USER()"
+                mariadb --defaults-extra-file=/tmp/client.cnf -NBe "SHOW DATABASES" | grep -E "^(vamcitydigibilepay|vamcitydigibilepay_bluvamdb|vamcitydigibilepay_transferdb)$" || true
+                echo MYSQL_DA_CREDENTIAL_TEST=SUCCESS
+              '
+            else
+              echo MYSQL_SOCKET_MISSING
+            fi
             echo "=== HOST MYSQL SOCKETS ==="
             for S in /var/lib/mysql/mysql.sock /run/mysqld/mysqld.sock /var/run/mysqld/mysqld.sock; do
               if [ -S "$S" ]; then echo "MYSQL_SOCKET_FOUND=$S"; fi
