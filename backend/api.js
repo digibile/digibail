@@ -44,34 +44,65 @@ function accountTypeForRoles(roles) {
   return "مشتری / کاربر";
 }
 async function unifiedUserDirectory({page=1,pageSize=50,search="",role="",status=""}={}) {
-  const db=legacyMaria(),mWhere=[],mValues=[];
-  const q=String(search||"").trim().slice(0,120);
-  if(q){mWhere.push("(u.FirstName LIKE ? OR u.LastName LIKE ? OR CONCAT_WS(' ',u.FirstName,u.LastName) LIKE ? OR u.Mobile LIKE ? OR u.Phone LIKE ? OR u.PhoneNumber LIKE ? OR u.Email LIKE ? OR u.UserName LIKE ? OR u.NationalCode LIKE ? OR u.UserCode LIKE ? OR CAST(u.Id AS CHAR) LIKE ? OR u.AffiliateCode LIKE ?)");for(let i=0;i<12;i++)mValues.push("%"+q+"%");}
-  if(role){const raw=String(role).startsWith("legacy_")?String(role).slice(7):String(role);mWhere.push("EXISTS(SELECT 1 FROM AspNetUserRoles urx JOIN AspNetRoles rx ON rx.Id=urx.RoleId WHERE urx.UserId=u.Id AND LOWER(REPLACE(REPLACE(REPLACE(rx.Name,' ',''),'-',''),'_',''))=?)");mValues.push(raw);}
-  if(status==="active")mWhere.push("COALESCE(u.IsActive,1)=1");
-  if(status==="inactive")mWhere.push("COALESCE(u.IsActive,1)=0");
+  const db=legacyMaria();
+  const unionSql=[
+    "SELECT 'main' AS source_key,'AspNetUsers' AS source_table,CAST(u.Id AS CHAR) AS legacy_id,COALESCE(NULLIF(TRIM(CONCAT_WS(' ',u.FirstName,u.LastName)),''),NULLIF(u.UserName,''),NULLIF(u.Mobile,''),'کاربر بدون نام') AS full_name,u.UserName AS username,COALESCE(NULLIF(u.Mobile,''),NULLIF(u.Phone,''),NULLIF(u.PhoneNumber,'')) AS phone,u.Email AS email,u.NationalCode AS national_code,u.UserCode AS customer_code,u.AgentId AS legacy_agent_id,CAST(u.CustomerId AS CHAR) AS legacy_customer_id,COALESCE(u.IsActive,1) AS is_active,DATE_FORMAT(u.RegDate,'%Y-%m-%dT%H:%i:%s+03:30') AS created_at,DATE(u.RegDate) AS created_day,COALESCE(rr.roles_raw,'') AS roles_raw,COALESCE(rr.roles_norm,'') AS roles_norm FROM AspNetUsers u LEFT JOIN (SELECT ur.UserId,GROUP_CONCAT(DISTINCT r.Name ORDER BY r.Name SEPARATOR ',') AS roles_raw,GROUP_CONCAT(DISTINCT LOWER(REPLACE(REPLACE(REPLACE(r.Name,' ',''),'-',''),'_','')) ORDER BY r.Name SEPARATOR ',') AS roles_norm FROM AspNetUserRoles ur JOIN AspNetRoles r ON r.Id=ur.RoleId GROUP BY ur.UserId) rr ON rr.UserId=u.Id",
+    "SELECT 'bluvam' AS source_key,'bluvamdb__AspNetUsers' AS source_table,CAST(u.Id AS CHAR) AS legacy_id,COALESCE(NULLIF(TRIM(CONCAT_WS(' ',u.FirstName,u.LastName)),''),NULLIF(u.UserName,''),NULLIF(u.Mobile,''),'کاربر بدون نام') AS full_name,u.UserName AS username,COALESCE(NULLIF(u.Mobile,''),NULLIF(u.Phone,''),NULLIF(u.PhoneNumber,'')) AS phone,u.Email AS email,u.NationalCode AS national_code,NULL AS customer_code,u.AgentId AS legacy_agent_id,CAST(u.CustomerId AS CHAR) AS legacy_customer_id,COALESCE(u.IsActive,1) AS is_active,DATE_FORMAT(u.RegDate,'%Y-%m-%dT%H:%i:%s+03:30') AS created_at,DATE(u.RegDate) AS created_day,COALESCE(rr.roles_raw,'') AS roles_raw,COALESCE(rr.roles_norm,'') AS roles_norm FROM bluvamdb__AspNetUsers u LEFT JOIN (SELECT ur.UserId,GROUP_CONCAT(DISTINCT r.Name ORDER BY r.Name SEPARATOR ',') AS roles_raw,GROUP_CONCAT(DISTINCT LOWER(REPLACE(REPLACE(REPLACE(r.Name,' ',''),'-',''),'_','')) ORDER BY r.Name SEPARATOR ',') AS roles_norm FROM bluvamdb__AspNetUserRoles ur JOIN bluvamdb__AspNetRoles r ON r.Id=ur.RoleId GROUP BY ur.UserId) rr ON rr.UserId=u.Id",
+    "SELECT 'transfer' AS source_key,'OnlineMoneyTransfer__AspNetUsers' AS source_table,CAST(u.Id AS CHAR) AS legacy_id,COALESCE(NULLIF(TRIM(CONCAT_WS(' ',u.FirstName,u.LastName)),''),NULLIF(u.UserName,''),NULLIF(u.PhoneNumber,''),'حساب انتقال وجه') AS full_name,u.UserName AS username,u.PhoneNumber AS phone,u.Email AS email,u.NationalCode AS national_code,NULL AS customer_code,NULL AS legacy_agent_id,NULL AS legacy_customer_id,COALESCE(u.IsActive,1) AS is_active,NULL AS created_at,NULL AS created_day,COALESCE(rr.roles_raw,'') AS roles_raw,COALESCE(rr.roles_norm,'') AS roles_norm FROM OnlineMoneyTransfer__AspNetUsers u LEFT JOIN (SELECT ur.UserId,GROUP_CONCAT(DISTINCT r.Name ORDER BY r.Name SEPARATOR ',') AS roles_raw,GROUP_CONCAT(DISTINCT LOWER(REPLACE(REPLACE(REPLACE(r.Name,' ',''),'-',''),'_','')) ORDER BY r.Name SEPARATOR ',') AS roles_norm FROM OnlineMoneyTransfer__AspNetUserRoles ur JOIN OnlineMoneyTransfer__AspNetRoles r ON r.Id=ur.RoleId GROUP BY ur.UserId) rr ON rr.UserId=u.Id"
+  ].join(" UNION ALL ");
+  const q=String(search||"").trim().slice(0,120),mWhere=[],mValues=[];
+  const staffSql="(FIND_IN_SET('admin',roles_norm)>0 OR FIND_IN_SET('superadmin',roles_norm)>0 OR FIND_IN_SET('agent',roles_norm)>0 OR FIND_IN_SET('marketer',roles_norm)>0 OR FIND_IN_SET('customermarketer',roles_norm)>0 OR FIND_IN_SET('appapiuser',roles_norm)>0 OR FIND_IN_SET('sponsor',roles_norm)>0)";
+  if(q){mWhere.push("(full_name LIKE ? OR username LIKE ? OR phone LIKE ? OR email LIKE ? OR national_code LIKE ? OR customer_code LIKE ? OR legacy_id LIKE ? OR roles_raw LIKE ? OR source_table LIKE ?)");for(let n=0;n<9;n++)mValues.push("%"+q+"%");}
+  if(role==="customer")mWhere.push("source_key<>'transfer' AND NOT "+staffSql);
+  else if(role==="admin")mWhere.push("(FIND_IN_SET('admin',roles_norm)>0 OR FIND_IN_SET('superadmin',roles_norm)>0)");
+  else if(role){const raw=String(role).startsWith("legacy_")?String(role).slice(7):String(role);mWhere.push("FIND_IN_SET(?,roles_norm)>0");mValues.push(raw);}
+  if(status==="active")mWhere.push("is_active=1");
+  if(status==="inactive")mWhere.push("is_active=0");
   const mFilter=mWhere.length?" WHERE "+mWhere.join(" AND "):"";
+  const derived="("+unionSql+") AS directory";
   const [mCountRows,mStatsRows,mRows]=await Promise.all([
-    db.query("SELECT COUNT(*) AS total FROM AspNetUsers u"+mFilter,mValues),
-    db.query("SELECT COUNT(*) AS total,SUM(CASE WHEN COALESCE(IsActive,1)=1 THEN 1 ELSE 0 END) AS active,SUM(CASE WHEN COALESCE(IsActive,1)=0 THEN 1 ELSE 0 END) AS inactive,SUM(CASE WHEN DATE(RegDate)=DATE(CONVERT_TZ(UTC_TIMESTAMP(),'+00:00','+03:30')) THEN 1 ELSE 0 END) AS today,DATE_FORMAT(MAX(RegDate),'%Y-%m-%dT%H:%i:%s+03:30') AS latest_registration FROM AspNetUsers"),
-    db.query("SELECT CAST(u.Id AS CHAR) AS legacy_id,COALESCE(NULLIF(TRIM(CONCAT_WS(' ',u.FirstName,u.LastName)),''),NULLIF(u.UserName,''),NULLIF(u.Mobile,''),'کاربر بدون نام') AS full_name,u.UserName AS username,u.UserName AS legacy_username,COALESCE(NULLIF(u.Mobile,''),NULLIF(u.Phone,''),NULLIF(u.PhoneNumber,'')) AS phone,u.Email AS email,u.NationalCode AS national_code,u.UserCode AS customer_code,u.AgentId AS legacy_agent_id,CAST(u.CustomerId AS CHAR) AS legacy_customer_id,COALESCE(u.IsActive,1) AS is_active,DATE_FORMAT(u.RegDate,'%Y-%m-%dT%H:%i:%s+03:30') AS created_at,DATE_FORMAT(u.RegDate,'%Y-%m-%dT%H:%i:%s+03:30') AS registered_at,(SELECT GROUP_CONCAT(DISTINCT r.Name ORDER BY r.Name SEPARATOR ',') FROM AspNetUserRoles ur JOIN AspNetRoles r ON r.Id=ur.RoleId WHERE ur.UserId=u.Id) AS roles_raw,(SELECT r.Name FROM AspNetUserRoles ur JOIN AspNetRoles r ON r.Id=ur.RoleId WHERE ur.UserId=u.Id ORDER BY CASE LOWER(REPLACE(REPLACE(REPLACE(r.Name,' ',''),'-',''),'_','')) WHEN 'superadmin' THEN 1 WHEN 'admin' THEN 2 WHEN 'agent' THEN 3 WHEN 'marketer' THEN 4 WHEN 'customermarketer' THEN 5 WHEN 'member' THEN 6 ELSE 7 END,r.Name LIMIT 1) AS primary_role FROM AspNetUsers u"+mFilter+" ORDER BY u.RegDate DESC,u.Id DESC LIMIT ?",[...mValues,Math.min(200000,page*pageSize)])
+    db.query("SELECT COUNT(*) AS total FROM "+derived+mFilter,mValues),
+    db.query("SELECT COUNT(*) AS total,SUM(CASE WHEN is_active=1 THEN 1 ELSE 0 END) AS active,SUM(CASE WHEN is_active=0 THEN 1 ELSE 0 END) AS inactive,SUM(CASE WHEN source_key<>'transfer' AND created_day=DATE(CONVERT_TZ(UTC_TIMESTAMP(),'+00:00','+03:30')) THEN 1 ELSE 0 END) AS today,DATE_FORMAT(MAX(created_at),'%Y-%m-%dT%H:%i:%s+03:30') AS latest_registration,SUM(CASE WHEN source_key='main' THEN 1 ELSE 0 END) AS main_total,SUM(CASE WHEN source_key='bluvam' THEN 1 ELSE 0 END) AS bluvam_total,SUM(CASE WHEN source_key='transfer' THEN 1 ELSE 0 END) AS transfer_total,SUM(CASE WHEN source_key<>'transfer' AND NOT "+staffSql+" THEN 1 ELSE 0 END) AS customer_total,SUM(CASE WHEN source_key<>'transfer' AND FIND_IN_SET('agent',roles_norm)>0 THEN 1 ELSE 0 END) AS agent_total,SUM(CASE WHEN source_key<>'transfer' AND FIND_IN_SET('agent',roles_norm)>0 AND is_active=1 THEN 1 ELSE 0 END) AS active_agent_total,SUM(CASE WHEN source_key<>'transfer' AND (FIND_IN_SET('admin',roles_norm)>0 OR FIND_IN_SET('superadmin',roles_norm)>0) THEN 1 ELSE 0 END) AS admin_total,SUM(CASE WHEN source_key<>'transfer' AND (FIND_IN_SET('marketer',roles_norm)>0 OR FIND_IN_SET('customermarketer',roles_norm)>0) THEN 1 ELSE 0 END) AS marketer_total,SUM(CASE WHEN source_key<>'transfer' AND NOT "+staffSql+" AND created_day=DATE(CONVERT_TZ(UTC_TIMESTAMP(),'+00:00','+03:30')) THEN 1 ELSE 0 END) AS customer_today FROM "+derived),
+    db.query("SELECT * FROM "+derived+mFilter+" ORDER BY (created_at IS NULL) ASC,created_at DESC,source_key,legacy_id DESC LIMIT ?",[...mValues,Math.min(200000,page*pageSize)])
   ]);
-  const mariaRows=mRows[0].map(r=>{const roles=String(r.roles_raw||"").split(",").filter(Boolean).map(legacyRoleCode);const roleCode=legacyRoleCode(r.primary_role||"customer");return {...r,id:"legacy:"+String(r.legacy_id),name:r.full_name,mobile:r.phone,customer_number:r.customer_code,role:roleCode,roles:roles.length?roles:[roleCode],account_type:accountTypeForRoles(roles.length?roles:[roleCode]),legacy_source:"AspNetUsers",source:"mariadb",password_reset_required:false,is_active:Boolean(Number(r.is_active))};});
-  const fresh=(await postgresOnlyAccounts(db,100000)).map(r=>({...r,name:r.full_name,mobile:r.phone,customer_number:r.customer_code,source:"postgres"}));
+  const mStats=mStatsRows[0][0]||{};
+  const mariaRows=mRows[0].map(r=>{
+    const roleNames=String(r.roles_raw||"").split(",").filter(Boolean);
+    const roles=roleNames.map(legacyRoleCode);
+    const primary=directoryRoleFromNames(roleNames);
+    return {...r,id:"legacy:"+r.source_key+":"+String(r.legacy_id),name:r.full_name,mobile:r.phone,customer_number:r.customer_code,role:primary,roles:roles.length?roles:[primary],account_type:r.source_key==="transfer"?"حساب انتقال وجه":directoryAccountType(primary),legacy_source:r.source_table,legacy_source_table:r.source_table,source:r.source_key==="main"?"mariadb":r.source_key==="bluvam"?"bluvamdb":"transfer",source_table:r.source_table,password_reset_required:false,is_active:Boolean(Number(r.is_active)),role_editable:r.source_key!=="transfer"};
+  });
+  const fresh=(await postgresOnlyAccounts(db,100000)).map(r=>({...r,name:r.full_name,mobile:r.phone,customer_number:r.customer_code,source:"postgres",role_editable:true}));
+  const staffRoles=["admin","superadmin","agent","marketer","customermarketer","legacy_appapiuser","legacy_sponsor"];
   const norm=v=>String(v||"").toLowerCase();
   const freshFiltered=fresh.filter(r=>{
-    if(role&&String(r.effective_role||r.role)!==role)return false;
+    const effective=String(r.effective_role||r.role||"customer");
+    if(role==="customer"&&staffRoles.includes(effective))return false;
+    if(role==="admin"&&!["admin","superadmin"].includes(effective))return false;
+    if(role&&role!=="customer"&&role!=="admin"&&effective!==role)return false;
     if(status==="active"&&!r.is_active)return false;
     if(status==="inactive"&&r.is_active)return false;
-    if(q&&!([r.full_name,r.username,r.phone,r.email,r.national_code,r.id].some(v=>norm(v).includes(norm(q)))))return false;
+    if(q&&!([r.full_name,r.username,r.phone,r.email,r.national_code,r.id,r.source_table].some(v=>norm(v).includes(norm(q)))))return false;
     return true;
   });
+  const freshCustomer=r=>!staffRoles.includes(String(r.effective_role||r.role||"customer"));
+  const dayKey=new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Tehran",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date());
+  const freshToday=fresh.filter(r=>new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Tehran",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date(r.created_at))===dayKey).length;
+  const freshCustomerToday=fresh.filter(r=>freshCustomer(r)&&new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Tehran",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date(r.created_at))===dayKey).length;
   const dateValue=v=>{const n=new Date(v||0).getTime();return Number.isFinite(n)?n:0;};
-  const merged=[...mariaRows,...freshFiltered].sort((a,b)=>dateValue(b.created_at)-dateValue(a.created_at)||String(b.id).localeCompare(String(a.id)));
-  const mStats=mStatsRows[0][0]||{},latestFresh=fresh[0]?.created_at||null,latestMaria=mStats.latest_registration||null;
+  const latestFresh=fresh[0]?.created_at||null,latestMaria=mStats.latest_registration||null;
   const latestRegistration=latestFresh&&(!latestMaria||dateValue(latestFresh)>dateValue(latestMaria))?latestFresh:latestMaria;
-  const todayFresh=fresh.filter(r=>new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Tehran",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date(r.created_at))===new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Tehran",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date())).length;
-  return {rows:merged.slice((page-1)*pageSize,page*pageSize),total:(Number(mCountRows[0][0]?.total)||0)+freshFiltered.length,overallTotal:(Number(mStats.total)||0)+fresh.length,activeTotal:(Number(mStats.active)||0)+fresh.filter(r=>r.is_active).length,inactiveTotal:(Number(mStats.inactive)||0)+fresh.filter(r=>!r.is_active).length,todayTotal:(Number(mStats.today)||0)+todayFresh,latestRegistration,page,pageSize,sourceTable:"MariaDB.AspNetUsers+PostgreSQL.users",timezone:"Asia/Tehran"};
+  const merged=[...mariaRows,...freshFiltered].sort((a,b)=>dateValue(b.created_at)-dateValue(a.created_at)||String(b.id).localeCompare(String(a.id)));
+  const freshAdmins=fresh.filter(r=>["admin","superadmin"].includes(r.effective_role));
+  const freshAgents=fresh.filter(r=>r.effective_role==="agent");
+  const freshMarketers=fresh.filter(r=>["marketer","customermarketer"].includes(r.effective_role));
+  return {rows:merged.slice((page-1)*pageSize,page*pageSize),total:(Number(mCountRows[0][0]?.total)||0)+freshFiltered.length,overallTotal:(Number(mStats.total)||0)+fresh.length,activeTotal:(Number(mStats.active)||0)+fresh.filter(r=>r.is_active).length,inactiveTotal:(Number(mStats.inactive)||0)+fresh.filter(r=>!r.is_active).length,todayTotal:(Number(mStats.today)||0)+freshToday,latestRegistration,customerTotal:(Number(mStats.customer_total)||0)+fresh.filter(freshCustomer).length,customerTodayTotal:(Number(mStats.customer_today)||0)+freshCustomerToday,agentTotal:(Number(mStats.agent_total)||0)+freshAgents.length,activeAgentTotal:(Number(mStats.active_agent_total)||0)+freshAgents.filter(r=>r.is_active).length,adminTotal:(Number(mStats.admin_total)||0)+freshAdmins.length,marketerTotal:(Number(mStats.marketer_total)||0)+freshMarketers.length,transferTotal:Number(mStats.transfer_total)||0,sourceCounts:{main:Number(mStats.main_total)||0,bluvam:Number(mStats.bluvam_total)||0,transfer:Number(mStats.transfer_total)||0,postgres:fresh.length},sourceTable:"MariaDB.AspNetUsers+MariaDB.bluvamdb__AspNetUsers+MariaDB.OnlineMoneyTransfer__AspNetUsers+PostgreSQL.users",timezone:"Asia/Tehran"};
+}
+
+function directoryRoleFromNames(value) {
+  const names=(Array.isArray(value)?value:String(value||"").split(",")).map(x=>String(x||"").toLowerCase().replace(/[^a-z]/g,"")).filter(Boolean);
+  for(const code of ["superadmin","admin","agent","customermarketer","marketer","member","customer","appapiuser","sponsor"])if(names.includes(code))return ["appapiuser","sponsor"].includes(code)?"legacy_"+code:code;
+  return "customer";
 }
 
 function directoryRoleFromNames(value) {
