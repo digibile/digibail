@@ -850,6 +850,14 @@ export async function handleApi(req, res, url) {
               if(role!==null)await pool.query("INSERT INTO user_role_overrides(user_id,role_code,updated_by,updated_at) VALUES($1,$2,$3,NOW()) ON CONFLICT(user_id) DO UPDATE SET role_code=EXCLUDED.role_code,updated_by=EXCLUDED.updated_by,updated_at=NOW()",[pgId,role,actorId]);
             }
           }catch(syncError){console.error("POSTGRES_MAPPED_USER_UPDATE_FAILED="+String(syncError.code||syncError.name||"unknown"));}
+          try{
+            const [mappingRows]=await db.query("SELECT PostgresUserId FROM DigibailUserIdentity WHERE MariaDbUserId=? LIMIT 1",[legacyId]);
+            if(mappingRows.length){
+              const pgId=Number(mappingRows[0].PostgresUserId);
+              await pool.query("UPDATE users SET full_name=COALESCE($1,full_name),phone=CASE WHEN $2::boolean THEN $3 ELSE phone END,email=CASE WHEN $4::boolean THEN $5 ELSE email END,role=COALESCE($6,role),is_active=COALESCE($7,is_active),updated_at=NOW() WHERE id=$8",[fullName,input.phone!==undefined,phone,input.email!==undefined,email,role,active,pgId]);
+              if(role!==null)await pool.query("INSERT INTO user_role_overrides(user_id,role_code,updated_by,updated_at) VALUES($1,$2,$3,NOW()) ON CONFLICT(user_id) DO UPDATE SET role_code=EXCLUDED.role_code,updated_by=EXCLUDED.updated_by,updated_at=NOW()",[pgId,role,actorId]);
+            }
+          }catch(syncError){console.error("POSTGRES_MAPPED_USER_UPDATE_FAILED="+String(syncError.code||syncError.name||"unknown"));}
           await audit(req,"admin.user.updated",actorId,{targetUserId:rawId,source:"mariadb.AspNetUsers",changed:{fullName:fullName!==null,phone:input.phone!==undefined,email:input.email!==undefined,role:role!==null,isActive:active!==null}});
           return json(res,200,{data:updated,message:"اطلاعات حساب به‌روزرسانی شد."});
         }
