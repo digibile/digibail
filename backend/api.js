@@ -912,12 +912,12 @@ export async function handleApi(req, res, url) {
         const [exists] = await db.query("SELECT TABLE_NAME FROM information_schema.tables WHERE TABLE_SCHEMA=? AND TABLE_NAME=? AND TABLE_TYPE='BASE TABLE' LIMIT 1", [database, sourceTable]);
         if (!exists.length) return json(res, 404, { message: "جدول منتقل‌شده پیدا نشد." });
         const [keys] = await db.query("SELECT COLUMN_NAME FROM information_schema.key_column_usage WHERE TABLE_SCHEMA=? AND TABLE_NAME=? AND CONSTRAINT_NAME='PRIMARY' ORDER BY ORDINAL_POSITION", [database, sourceTable]);
-        const [columns] = await db.query("SELECT COLUMN_NAME FROM information_schema.columns WHERE TABLE_SCHEMA=? AND TABLE_NAME=? ORDER BY ORDINAL_POSITION", [database, sourceTable]);
+        const [columns] = await db.query("SELECT COLUMN_NAME,DATA_TYPE FROM information_schema.columns WHERE TABLE_SCHEMA=? AND TABLE_NAME=? ORDER BY ORDINAL_POSITION", [database, sourceTable]);
         const primary = keys.map(x => x.COLUMN_NAME);
         const order = primary.length ? primary.map(sqlIdent).join(",") : (columns[0] ? sqlIdent(columns[0].COLUMN_NAME) : "1");
         const [countRows] = await db.query("SELECT COUNT(*) AS total FROM " + sqlIdent(sourceTable));
         const [rows] = await db.query("SELECT * FROM " + sqlIdent(sourceTable) + " ORDER BY " + order + " LIMIT ? OFFSET ?", [limit, offset]);
-        return json(res, 200, { data: rows.map((payload,index)=>({ legacy_id: primary.length ? primary.map(k=>String(payload[k] ?? "")).join(" / ") : String(offset+index+1), payload, imported_at: null })), total: Number(countRows[0]?.total)||0 });
+        return json(res, 200, { data: rows.map((payload,index)=>({ legacy_id: primary.length ? primary.map(k=>String(payload[k] ?? "")).join(" / ") : String(offset+index+1), payload, imported_at: null })), total: Number(countRows[0]?.total)||0, columns: columns.map(x=>({name:x.COLUMN_NAME,type:x.DATA_TYPE})) });
       }
       if (req.method === "GET" && route === "/api/v1/admin/legacy-relational-tables") {
         const q = await pool.query("SELECT source_schema,source_table,source_rows,imported_rows,imported_at FROM legacy_digibail._import_manifest ORDER BY source_schema,source_table");
