@@ -1,5 +1,5 @@
 name: Import all VamCity databases into the single Digibail MariaDB
-# Retry transfer source mapping to match reviewed schema table names exactly.
+# Run migration after deployment of exact transfer table mapping.
 # Resume safely after fixing BlueVam table and index namespace isolation.
 
 on:
