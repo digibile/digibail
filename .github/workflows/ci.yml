@@ -13,21 +13,26 @@ jobs:
   test-and-build:
     runs-on: ubuntu-latest
     services:
-      postgres:
-        image: postgres:16-alpine
+      mariadb:
+        image: mariadb:11.4
         env:
-          POSTGRES_DB: digibail_test
-          POSTGRES_USER: digibail_test
-          POSTGRES_PASSWORD: ci-only-password
+          MARIADB_DATABASE: digibail_test
+          MARIADB_USER: digibail_test
+          MARIADB_PASSWORD: ci-only-password
+          MARIADB_ROOT_PASSWORD: ci-only-root-password
         ports:
-          - 5432:5432
+          - 3306:3306
         options: >-
-          --health-cmd "pg_isready -U digibail_test -d digibail_test"
+          --health-cmd "healthcheck.sh --connect --innodb_initialized"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 10
     env:
-      DATABASE_URL: postgresql://digibail_test:ci-only-password@localhost:5432/digibail_test
+      MARIADB_HOST: 127.0.0.1
+      MARIADB_PORT: 3306
+      MARIADB_DATABASE: digibail_test
+      MARIADB_USER: digibail_test
+      MARIADB_PASSWORD: ci-only-password
       JWT_SECRET: ci-only-jwt-secret-at-least-32-characters-long
       OTP_PEPPER: ci-only-otp-pepper-at-least-32-characters
       CAPTCHA_PEPPER: ci-only-captcha-pepper-at-least-32-characters
