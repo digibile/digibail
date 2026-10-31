@@ -51,6 +51,10 @@ export async function migrate() {
   await runMigrationStep("step-3", `
     ALTER TABLE users ADD COLUMN IF NOT EXISTS password_reset_required BOOLEAN NOT NULL DEFAULT FALSE;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS legacy_username TEXT;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS legacy_customer_id UUID;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS legacy_agent_id BIGINT;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS legacy_customer_marketer_id BIGINT;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS legacy_agent_metadata_id UUID;
     ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;
     ALTER TABLE users ADD CONSTRAINT users_role_check CHECK (role IN ('customer','admin','superadmin','agent','marketer','customermarketer','member'));
     CREATE TABLE IF NOT EXISTS access_roles (
