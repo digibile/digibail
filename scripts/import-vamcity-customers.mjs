@@ -38,7 +38,7 @@ try {
   SA_PASS=clean(docker(["exec",SQLC,"printenv","MSSQL_SA_PASSWORD"]));
   if(!SQLCMD || !SA_PASS) throw new Error("Restored SQL Server source or credentials unavailable");
   function sql(query, extra=[]) {
-    return docker(["exec","-e","SQLCMDPASSWORD",SQLC,SQLCMD,"-S","localhost","-U","sa","-C","-b","-W","-w","65535","-y","0","-d",SOURCE_DB,...extra,"-Q",query], {
+    return docker(["exec","-e","SQLCMDPASSWORD",SQLC,SQLCMD,"-S","localhost","-U","sa","-C","-b","-w","65535","-y","0","-d",SOURCE_DB,...extra,"-Q",query], {
       env:{...process.env,SQLCMDPASSWORD:SA_PASS}
     });
   }
