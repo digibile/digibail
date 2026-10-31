@@ -615,7 +615,7 @@ export async function handleApi(req, res, url) {
         const method = String(params.get("method") || "").trim();
         const review = String(params.get("review") || "").trim();
         const active = String(params.get("active") || "").trim();
-        const where = "WHERE ($1='' OR name ILIKE '%'||$1||'%' OR title ILIKE '%'||$1||'%' OR slug ILIKE '%'||$1||'%' OR COALESCE(legacy_id::text,'') ILIKE '%'||$1||'%') AND ($2='' OR interest_method=$2) AND ($3='' OR needs_review=($3='review')) AND ($4='' OR is_active=($4='active'))";
+        const where = "WHERE ($1='' OR name ILIKE CONCAT('%',$1,'%') OR title ILIKE CONCAT('%',$1,'%') OR slug ILIKE CONCAT('%',$1,'%') OR COALESCE(legacy_id::text,'') ILIKE CONCAT('%',$1,'%')) AND ($2='' OR interest_method=$2) AND ($3='' OR needs_review=($3='review')) AND ($4='' OR is_active=($4='active'))";
         const [rows, count, summary] = await Promise.all([
           pool.query("SELECT * FROM loan_products " + where + " ORDER BY sort_order,created_at DESC LIMIT $5 OFFSET $6", [search,method,review,active,limit,offset]),
           pool.query("SELECT COUNT(*)::int AS total FROM loan_products " + where, [search,method,review,active]),
