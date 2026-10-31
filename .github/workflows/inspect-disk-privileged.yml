@@ -1,0 +1,45 @@
+name: Privileged read-only filesystem attribution
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/inspect-disk-privileged.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Inspect protected disk paths using sudo without modifying data
+        uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          command_timeout: 11m
+          script: |
+            set -u
+            S="sudo -n"
+            echo "=== Root filesystem top-level accounting ==="
+            $S du -xhd1 / 2>&1 | sort -h | tail -40
+            echo "=== Protected container directories ==="
+            for p in /var/lib/containerd /opt/containerd /var/lib/docker /opt; do
+              [ -e "$p" ] || continue
+              echo "--- $p ---"
+              $S du -xhd2 "$p" 2>&1 | sort -h | tail -40
+            done
+            echo "=== Large files >= 500 MB across root filesystem ==="
+            $S find / -xdev -type f -size +500M -printf '%s bytes %p\n' 2>/dev/null | sort -nr | head -100
+            echo "=== Docker root and inventory ==="
+            $S docker info --format 'DockerRootDir={{.DockerRootDir}} StorageDriver={{.Driver}}' 2>&1 || true
+            $S docker system df -v 2>&1 || true
+            echo "=== Largest logs ==="
+            $S find /var/log -xdev -type f -printf '%s %p\n' 2>/dev/null | sort -nr | head -40
+            echo "=== Final usage ==="
+            df -hT /
+            echo "PRIVILEGED_DISK_ATTRIBUTION_COMPLETE=1"
