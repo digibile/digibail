@@ -1,0 +1,10 @@
+FROM node:22-alpine
+ENV NODE_ENV=production
+WORKDIR /app
+COPY scripts/migration-tools/package.json ./package.json
+RUN npm install --omit=dev --no-audit --no-fund && npm cache clean --force
+COPY backend ./backend
+COPY scripts/import-legacy-mariadb-users.mjs ./scripts/import-legacy-mariadb-users.mjs
+COPY scripts/migration-tools/migrate-postgres-app-data-to-mariadb.mjs ./scripts/migration-tools/migrate-postgres-app-data-to-mariadb.mjs
+RUN node --check scripts/migration-tools/migrate-postgres-app-data-to-mariadb.mjs && node --check scripts/import-legacy-mariadb-users.mjs
+CMD ["node", "scripts/migration-tools/migrate-postgres-app-data-to-mariadb.mjs"]
