@@ -812,32 +812,65 @@ export async function handleApi(req, res, url) {
         const rows=merged.slice((page-1)*pageSize,page*pageSize),latest=freshAll[0]?.created_at&&(!stats.latest_registration||new Date(freshAll[0].created_at)>new Date(stats.latest_registration))?freshAll[0].created_at:(stats.latest_registration||null);
         return json(res,200,{data:{rows,total:(Number(count.total)||0)+fresh.length,overallTotal:(Number(stats.total)||0)+freshAll.length,activeTotal:(Number(stats.active)||0)+freshAll.filter(r=>r.is_active).length,inactiveTotal:(Number(stats.inactive)||0)+freshAll.filter(r=>!r.is_active).length,todayTotal:(Number(stats.today)||0)+freshToday,latestRegistration:latest,page,pageSize,sourceTable:"MariaDB.AspNetUsers",additionalSource:"new PostgreSQL registrations",timezone:"Asia/Tehran"}});
       }
-      if (req.method === "PATCH" && /^\/api\/v1\/admin\/users\/\d+$/.test(route)) {
-        const id=Number(route.split("/").pop()),input=await body(req);
-        const current=await pool.query("SELECT id,role,is_active FROM users WHERE id=$1",[id]);
-        if(!current.rowCount)return json(res,404,{message:"حساب کاربری پیدا نشد."});
-        const target=current.rows[0],actorId=Number(admin.sub);
+      if (req.method === "PATCH" && /^\/api\/v1\/admin\/users\/[^/]+$/.test(route)) {
+        const rawId=decodeURIComponent(route.split("/").pop()),input=await body(req),actorId=Number(admin.sub);
         const role=input.role===undefined?null:String(input.role).trim().toLowerCase(),active=input.isActive===undefined?null:input.isActive;
         if(active!==null&&typeof active!=="boolean")return json(res,400,{message:"وضعیت حساب معتبر نیست."});
         if(role!==null){
           if(!["customer","member","agent","marketer","customermarketer","admin","superadmin"].includes(role))return json(res,400,{message:"نقش انتخاب‌شده معتبر نیست."});
           if(admin.role!=="superadmin")return json(res,403,{message:"تغییر نقش فقط برای مدیر ارشد مجاز است."});
         }
-        if(Number(target.id)===actorId&&role!==null&&role!==target.role)return json(res,400,{message:"نقش حساب مدیر واردشده را نمی‌توان از همین نشست تغییر داد."});
-        if(Number(target.id)===actorId&&active===false)return json(res,400,{message:"امکان غیرفعال‌کردن حساب مدیر واردشده وجود ندارد."});
-        if((target.role==="superadmin"||role==="superadmin")&&admin.role!=="superadmin")return json(res,403,{message:"مدیریت حساب مدیر ارشد فقط برای مدیر ارشد مجاز است."});
         const fullName=input.fullName===undefined?null:String(input.fullName).trim().replace(/\s+/g," ").slice(0,160);
         const phone=input.phone===undefined?null:(String(input.phone).trim()||null),email=input.email===undefined?null:(String(input.email).trim().slice(0,254)||null);
         if(fullName!==null&&fullName.length<3)return json(res,400,{message:"نام باید حداقل ۳ نویسه باشد."});
         if(phone!==null&&!phoneOk(phone))return json(res,400,{message:"شماره موبایل باید با قالب ۰۹ و ۱۱ رقم وارد شود."});
         if(email!==null&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))return json(res,400,{message:"نشانی ایمیل معتبر نیست."});
+        if(rawId.startsWith("legacy:")){
+          const legacyId=rawId.slice(7),db=legacyMaria(),conn=await db.getConnection();let updated;
+          try{
+            await conn.beginTransaction();
+            const [currentRows]=await conn.query("SELECT u.Id,u.IsActive,(SELECT r.Name FROM AspNetUserRoles ur JOIN AspNetRoles r ON r.Id=ur.RoleId WHERE ur.UserId=u.Id ORDER BY r.Name LIMIT 1) AS role_name FROM AspNetUsers u WHERE u.Id=? LIMIT 1",[legacyId]);
+            if(!currentRows.length){await conn.rollback();return json(res,404,{message:"حساب کاربری پیدا نشد."});}
+            const current=currentRows[0],currentRole=legacyRoleCode(current.role_name||"customer");
+            if((currentRole==="superadmin"||role==="superadmin")&&admin.role!=="superadmin"){await conn.rollback();return json(res,403,{message:"مدیریت حساب مدیر ارشد فقط برای مدیر ارشد مجاز است."});}
+            const [columnRows]=await conn.query("SELECT COLUMN_NAME FROM information_schema.columns WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='AspNetUsers'");
+            const columns=new Set(columnRows.map(x=>String(x.COLUMN_NAME)));
+            const sets=[],values=[];
+            if(fullName!==null){const parts=fullName.split(" "),first=parts.shift()||"",last=parts.join(" ");if(columns.has("FirstName")){sets.push("FirstName=?");values.push(first);}if(columns.has("LastName")){sets.push("LastName=?");values.push(last);}}
+            if(input.phone!==undefined){for(const col of ["Mobile","Phone","PhoneNumber"])if(columns.has(col)){sets.push(sqlIdent(col)+"=?");values.push(phone);}}
+            if(input.email!==undefined&&columns.has("Email")){sets.push("Email=?");values.push(email);}
+            if(active!==null){if(!columns.has("IsActive"))throw new Error("AspNetUsers.IsActive column is missing");sets.push("IsActive=?");values.push(active?1:0);}
+            if(sets.length){values.push(legacyId);await conn.query("UPDATE AspNetUsers SET "+sets.join(",")+" WHERE Id=?",values);}
+            if(role!==null){
+              const [roleRows]=await conn.query("SELECT Id,Name FROM AspNetRoles");
+              const selected=roleRows.find(r=>legacyRoleCode(r.Name)===role);
+              if(!selected)throw Object.assign(new Error("نقش انتخاب‌شده در فهرست نقش‌های پایگاه داده وجود ندارد."),{status:400});
+              await conn.query("DELETE FROM AspNetUserRoles WHERE UserId=?",[legacyId]);
+              await conn.query("INSERT INTO AspNetUserRoles(UserId,RoleId) VALUES(?,?)",[legacyId,selected.Id]);
+            }
+            await conn.commit();
+            const [result]=await conn.query("SELECT CAST(u.Id AS CHAR) AS id,COALESCE(NULLIF(TRIM(CONCAT_WS(' ',u.FirstName,u.LastName)),''),u.UserName) AS full_name,COALESCE(NULLIF(u.Mobile,''),NULLIF(u.Phone,''),NULLIF(u.PhoneNumber,'')) AS phone,u.Email AS email,COALESCE(u.IsActive,1) AS is_active,(SELECT r.Name FROM AspNetUserRoles ur JOIN AspNetRoles r ON r.Id=ur.RoleId WHERE ur.UserId=u.Id ORDER BY r.Name LIMIT 1) AS role_name FROM AspNetUsers u WHERE u.Id=?",[legacyId]);
+            const roles=[result[0]?.role_name].filter(Boolean).map(legacyRoleCode);
+            updated={...result[0],id:"legacy:"+legacyId,role:roles[0]||"customer",roles,is_active:Boolean(Number(result[0]?.is_active))};
+          }catch(error){await conn.rollback().catch(()=>{});throw error;}finally{conn.release();}
+          await audit(req,"admin.user.updated",actorId,{targetUserId:rawId,source:"mariadb.AspNetUsers",changed:{fullName:fullName!==null,phone:input.phone!==undefined,email:input.email!==undefined,role:role!==null,isActive:active!==null}});
+          return json(res,200,{data:updated,message:"اطلاعات حساب به‌روزرسانی شد."});
+        }
+        const id=Number(rawId.startsWith("pg:")?rawId.slice(3):rawId);
+        if(!Number.isSafeInteger(id)||id<1)return json(res,400,{message:"شناسه حساب معتبر نیست."});
+        const current=await pool.query("SELECT id,role,is_active FROM users WHERE id=$1",[id]);
+        if(!current.rowCount)return json(res,404,{message:"حساب کاربری پیدا نشد."});
+        const target=current.rows[0];
+        if(Number(target.id)===actorId&&role!==null&&role!==target.role)return json(res,400,{message:"نقش حساب مدیر واردشده را نمی‌توان از همین نشست تغییر داد."});
+        if(Number(target.id)===actorId&&active===false)return json(res,400,{message:"امکان غیرفعال‌کردن حساب مدیر واردشده وجود ندارد."});
+        if((target.role==="superadmin"||role==="superadmin")&&admin.role!=="superadmin")return json(res,403,{message:"مدیریت حساب مدیر ارشد فقط برای مدیر ارشد مجاز است."});
         const client=await pool.connect();let updated;
         try{
           await client.query("BEGIN");
           const result=await client.query("UPDATE users SET full_name=COALESCE($1,full_name),phone=CASE WHEN $2::boolean THEN $3 ELSE phone END,email=CASE WHEN $4::boolean THEN $5 ELSE email END,role=COALESCE($6,role),is_active=COALESCE($7,is_active),updated_at=NOW() WHERE id=$8 RETURNING id,full_name,phone,email,role,is_active,updated_at",[fullName,input.phone!==undefined,phone,input.email!==undefined,email,role,active,id]);
           updated=result.rows[0];if(role!==null)await client.query("INSERT INTO user_role_overrides(user_id,role_code,updated_by,updated_at) VALUES($1,$2,$3,NOW()) ON CONFLICT(user_id) DO UPDATE SET role_code=EXCLUDED.role_code,updated_by=EXCLUDED.updated_by,updated_at=NOW()",[id,role,actorId]);await client.query("COMMIT");
         }catch(error){await client.query("ROLLBACK");throw error;}finally{client.release();}
-        await audit(req,"admin.user.updated",actorId,{targetUserId:id,changed:{fullName:fullName!==null,phone:input.phone!==undefined,email:input.email!==undefined,role:role!==null,isActive:active!==null}});
+        await audit(req,"admin.user.updated",actorId,{targetUserId:id,source:"postgres.users",changed:{fullName:fullName!==null,phone:input.phone!==undefined,email:input.email!==undefined,role:role!==null,isActive:active!==null}});
         return json(res,200,{data:updated,message:"اطلاعات حساب به‌روزرسانی شد."});
       }
       if (req.method === "GET" && route === "/api/v1/admin/legacy-customers") {
