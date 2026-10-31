@@ -98,28 +98,14 @@ jobs:
             # MariaDB is the only database. Preserve an existing .env and fill only missing app secrets.
             if [ ! -f .env ]; then umask 077; : > .env; fi
             chmod 600 .env
-            for key in JWT_SECRET OTP_PEPPER CAPTCHA_PEPPER; do
-              if ! grep -qE "^\${key}=.+" .env; then
-                case "$key" in
-                  JWT_SECRET) value="$(openssl rand -hex 48)" ;;
-                  OTP_PEPPER) value="$(openssl rand -hex 32)" ;;
-                  CAPTCHA_PEPPER) value="$(openssl rand -hex 32)" ;;
-                esac
-                printf '%s=%s\n' "$key" "$value" >> .env
-                unset value
-              fi
-            done
-            for key in PORT HOST BRAND_NAME KAVENEGAR_API_KEY KAVENEGAR_TEMPLATE; do
-              if ! grep -q "^\${key}=" .env; then
-                case "$key" in
-                  PORT) printf 'PORT=1631\n' >> .env ;;
-                  HOST) printf 'HOST=0.0.0.0\n' >> .env ;;
-                  BRAND_NAME) printf 'BRAND_NAME=دیجی‌بایل پی\n' >> .env ;;
-                  KAVENEGAR_API_KEY) printf 'KAVENEGAR_API_KEY=\n' >> .env ;;
-                  KAVENEGAR_TEMPLATE) printf 'KAVENEGAR_TEMPLATE=\n' >> .env ;;
-                esac
-              fi
-            done
+            if ! grep -qE '^JWT_SECRET=.+$' .env; then printf 'JWT_SECRET=%s\n' "$(openssl rand -hex 48)" >> .env; fi
+            if ! grep -qE '^OTP_PEPPER=.+$' .env; then printf 'OTP_PEPPER=%s\n' "$(openssl rand -hex 32)" >> .env; fi
+            if ! grep -qE '^CAPTCHA_PEPPER=.+$' .env; then printf 'CAPTCHA_PEPPER=%s\n' "$(openssl rand -hex 32)" >> .env; fi
+            if ! grep -q '^PORT=' .env; then printf 'PORT=1631\n' >> .env; fi
+            if ! grep -q '^HOST=' .env; then printf 'HOST=0.0.0.0\n' >> .env; fi
+            if ! grep -q '^BRAND_NAME=' .env; then printf 'BRAND_NAME=دیجی‌بایل پی\n' >> .env; fi
+            if ! grep -q '^KAVENEGAR_API_KEY=' .env; then printf 'KAVENEGAR_API_KEY=\n' >> .env; fi
+            if ! grep -q '^KAVENEGAR_TEMPLATE=' .env; then printf 'KAVENEGAR_TEMPLATE=\n' >> .env; fi
             if [ -z "${MYSQL_PASS:-}" ]; then
               echo "BLOCKED: MariaDB password secret is required for the application database."
               exit 25
