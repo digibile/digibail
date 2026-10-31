@@ -88,12 +88,15 @@ try {
     const dbCounts={tables:tables.length,rows:0};
     for(const t of tables) {
       const name=t.tableName;
-      const data=rows("SELECT * FROM ["+t.sourceSchema.replace(/]/g,"]]")+ "].["+name.replace(/]/g,"]]")+"] FOR JSON PATH, INCLUDE_NULL_VALUES;",db.name+"."+t.sourceSchema+"."+name,db.name);
+      const safeColumns=cols.filter(x=>x.schemaName===t.sourceSchema&&x.tableName===name&&!((db.name===SOURCE_DB&&name.toLowerCase()==="aspnetusers"&&["passwordhash","securitystamp","concurrencystamp","otp"].includes(String(x.columnName).toLowerCase()))||(db.name===SOURCE_DB&&name.toLowerCase()==="customers"&&String(x.columnName).toLowerCase()==="initpassword")));
+      if(!safeColumns.length)throw new Error("No exportable columns for "+db.name+"."+t.sourceSchema+"."+name);
+      const projection=safeColumns.map(x=>"["+x.columnName.replace(/]/g,"]]")+"]").join(",");
+      const data=rows("SELECT "+projection+" FROM ["+t.sourceSchema.replace(/]/g,"]]")+ "].["+name.replace(/]/g,"]]")+"] FOR JSON PATH, INCLUDE_NULL_VALUES;",db.name+"."+t.sourceSchema+"."+name,db.name);
       const expected=count(name,db.name,t.sourceSchema);
       if(data.length!==expected) throw new Error("Row count mismatch for "+db.name+"."+t.sourceSchema+"."+name+": expected "+expected+" got "+data.length);
       genericTables.push({sourceTable:t.schemaName+"."+name,rows:data});
       totalRows+=data.length;dbCounts.rows+=data.length;
-      console.log("SOURCE_TABLE_EXPORTED="+db.name+".dbo."+name+" rows="+data.length);
+      console.log("SOURCE_TABLE_EXPORTED="+db.name+"."+t.sourceSchema+"."+name+" rows="+data.length);
     }
     sourceInventory[db.name]=dbCounts;
     exportedByDatabase.set(db.name,new Set(tables.map(t=>t.sourceSchema+"."+t.tableName)));
