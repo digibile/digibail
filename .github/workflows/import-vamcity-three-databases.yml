@@ -1,5 +1,5 @@
 name: Import all VamCity databases into the single Digibail MariaDB
-# Triggered migration continuation: preserve the audited single-database import workflow.
+# Triggered migration continuation after empty-table key-width fix; keep audited single-database import.
 
 on:
   workflow_dispatch:
