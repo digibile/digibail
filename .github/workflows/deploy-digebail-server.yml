@@ -140,19 +140,27 @@ jobs:
             fi
             echo "=== start the freshly built release ==="
             $DOCKER compose up -d --no-build
-            echo "=== wait for application health ==="
-            for n in $(seq 1 30); do
-              if curl -fsS http://127.0.0.1:1631/healthz >/dev/null; then
-                echo "APP_HEALTH=healthy"
+            echo "=== wait for application and legacy API health ==="
+            HEALTH_OK=0
+            for n in $(seq 1 120); do
+              if curl -fsS --max-time 5 http://127.0.0.1:1631/healthz >/dev/null; then
+                HEALTH_OK=1
+                echo "APP_HEALTH=healthy elapsed_seconds=$((n * 5))"
                 break
               fi
-              if [ "$n" -eq 30 ]; then
-                $DOCKER compose ps
-                $DOCKER compose logs --tail=100 app db
-                exit 23
+              if [ $((n % 6)) -eq 0 ]; then
+                echo "APP_HEALTH_WAIT elapsed_seconds=$((n * 5))"
+                $DOCKER compose logs --tail=20 app
               fi
               sleep 5
             done
+            if [ "$HEALTH_OK" -ne 1 ]; then
+              echo "ERROR: application health did not recover within 10 minutes."
+              $DOCKER compose ps
+              $DOCKER compose exec -T app sh -lc 'ps -ef; (wget -qO- http://127.0.0.1:1632/healthz || true)'
+              $DOCKER compose logs --tail=200 app db
+              exit 23
+            fi
             echo "=== provision secure admin recovery access ==="
             RECOVERY_FILE="/root/digibail-admin-recovery.txt"
             if $DOCKER run --rm -v /:/host alpine:3.20 sh -c 'test -s /host/root/digibail-admin-recovery.txt'; then
