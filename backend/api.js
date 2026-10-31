@@ -764,7 +764,7 @@ export async function handleApi(req, res, url) {
       }
       if (req.method === "GET" && route === "/api/v1/admin/legacy-relational-tables") {
         const q = await pool.query("SELECT source_schema,source_table,source_rows,imported_rows,imported_at FROM legacy_digibail._import_manifest ORDER BY source_schema,source_table");
-        return json(res,200,{data:q.rows});
+        return json(res,200,q.rows);
       }
       if (req.method === "GET" && route === "/api/v1/admin/legacy-relational-data") {
         const sourceTable=String(url.searchParams.get("table")||"");
