@@ -38,7 +38,7 @@ export async function syncUserToMariaDB(pool,user) {
     );
     const name=splitName(user.full_name);
     const phone=String(user.phone||"").trim()||null;
-    const email=String(user.email||"").trim().slice(0,254)||null;
+    const email=String(user.email||"").trim().slice(0,128)||null;
     const nationalCode=String(user.national_code||"").trim()||null;
     const regDate=localDateTime(user.created_at_tehran||user.created_at);
     let mariaId=mapping[0]?.MariaDbUserId||null;
@@ -60,6 +60,7 @@ export async function syncUserToMariaDB(pool,user) {
         Gender:0,
         Mobile:phone,
         LastLoginDate:null,
+        __raw_LastLoginDate:"0001-01-01T00:00:00.0000000",
         IsActive:user.is_active===false||user.is_active===0?0:1,
         NationalCode:nationalCode,
         TotalSavedMoney:0,
