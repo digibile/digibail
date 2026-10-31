@@ -1679,6 +1679,7 @@ V.dash=view('real-dashboard-drilldown',async function(){
   ['حساب‌های کاربری',nf(usersTotal),'users','','همه حساب‌های جدید و منتقل‌شده'],
   ['ثبت‌نام امروز',nf(Number(summary.users_today)||0),'users','','بر اساس ساعت رسمی ایران'],
   ['نمایندگان',nf(Number(summary.agents)||0),'users','agent','حساب‌های دارای نقش نماینده'],
+  ['مدیران',nf(Number(summary.admins)||0),'users','admin','حساب‌های مدیر و مدیر ارشد'],
   ['مشتریان',nf(customerCount),'legacyCustomers','','سوابق و حساب‌های واقعی'],
   ['الگوهای پیامک',nf(sms.length),'smsLegacy','','الگوها و گزارش ارسال'],
   ['استعلام‌های بتا',nf(beta.length),'betaRequests','','فهرست درخواست‌ها'],
