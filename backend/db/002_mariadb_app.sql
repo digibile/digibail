@@ -10,7 +10,7 @@ CREATE TABLE IF NOT EXISTS users (
  national_code VARCHAR(32) NULL,
  email VARCHAR(320) NULL,
  password_hash LONGTEXT NOT NULL,
- role VARCHAR(32) NOT NULL DEFAULT 'customer',
+ role VARCHAR(48) NOT NULL DEFAULT 'customer',
  is_active TINYINT(1) NOT NULL DEFAULT 1,
  password_reset_required TINYINT(1) NOT NULL DEFAULT 0,
  legacy_source VARCHAR(80) NULL,
