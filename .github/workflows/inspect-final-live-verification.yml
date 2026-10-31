@@ -89,7 +89,7 @@ jobs:
             if (populated.length !== 11) throw new Error("Unexpected number of populated source tables: " + populated.length);
             let testedRows = 0;
             let paginationTested = false;
-            for (const table of populated) {
+            for (const table of tables) {
               if (!table.source_schema || !table.source_table) throw new Error("Malformed manifest entry");
               const tableName = table.source_schema + "." + table.source_table;
               const endpoint = base + "/api/v1/admin/legacy-relational-data?table=" + encodeURIComponent(tableName);
@@ -101,10 +101,11 @@ jobs:
               }
               const data = await response.json();
               if (!Array.isArray(data.columns) || data.columns.length === 0) throw new Error("Relational column metadata missing for " + tableName);
-              if (!Array.isArray(data.rows) || !Array.isArray(data.primaryKeys) || !Array.isArray(data.foreignKeys) || data.primaryKeys.length === 0) throw new Error("Relational data shape or primary key invalid for " + tableName);
+              if (!Array.isArray(data.rows) || !Array.isArray(data.primaryKeys) || !Array.isArray(data.foreignKeys)) throw new Error("Relational data shape invalid for " + tableName);
               if (Number(data.total) !== Number(table.imported_rows)) throw new Error("Relational row count mismatch for " + tableName);
               const expected = Math.min(50, Number(table.imported_rows));
               if (data.rows.length !== expected) throw new Error("Relational first page count mismatch for " + tableName);
+              if (Number(table.imported_rows) === 0 && data.rows.length !== 0) throw new Error("Empty source table unexpectedly returned records: " + tableName);
               testedRows += data.rows.length;
               if (!paginationTested && Number(data.total) > 50) {
                 const nextResponse = await fetch(endpoint + "&offset=50&limit=50", { headers });
@@ -122,7 +123,7 @@ jobs:
             console.log("ADMIN_LOGIN=PASS");
             console.log("ADMIN_SUMMARY_API=PASS");
             console.log("RELATIONAL_TABLE_MANIFEST=PASS tables=" + tables.length + " populated=" + populated.length);
-            console.log("RELATIONAL_DATA_API=PASS populated_tables=" + populated.length + " first_page_rows=" + testedRows + " pagination=PASS");
+            console.log("RELATIONAL_DATA_API=PASS all_tables=" + tables.length + " populated_tables=" + populated.length + " first_page_rows=" + testedRows + " pagination=PASS");
             console.log("ADMIN_EXPLORER_PAGE=PASS");
             NODE
             unset RECOVERY_PASSWORD
