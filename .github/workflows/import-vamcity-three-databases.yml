@@ -1,5 +1,5 @@
 name: Import all VamCity databases into the single Digibail MariaDB
-# Trigger migration continuation after SQL identifier quoting fix; keep audited single-database import.
+# Trigger migration continuation after transfer SQL quoting correction; keep audited single-database import.
 # Resume safely after fixing BlueVam table and index namespace isolation.
 
 on:
