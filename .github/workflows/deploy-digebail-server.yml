@@ -79,6 +79,10 @@ jobs:
             test -f start.js
             echo "=== validate storefront inline JavaScript syntax ==="
             node -e 'const fs=require("node:fs"); const vm=require("node:vm"); const html=fs.readFileSync("web/template-v3.html","utf8"); const scripts=[...html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi)]; if(!scripts.length) throw new Error("No inline scripts found"); scripts.forEach((m,i)=>new vm.Script(m[1],{filename:"template-v3.inline-"+i+".js"})); console.log("INLINE_JS_SYNTAX=OK; scripts="+scripts.length)'
+            echo "=== validate backend and management panel JavaScript syntax ==="
+            node --check backend/api.js
+            node --check server.js
+            node -e 'const fs=require("node:fs");const vm=require("node:vm");const html=fs.readFileSync("backend/core/panel.html","utf8");const scripts=[...html.matchAll(/<script\\b[^>]*>([\\s\\S]*?)<\\/script>/gi)];if(!scripts.length)throw new Error("No management panel scripts found");scripts.forEach((m,i)=>new vm.Script(m[1],{filename:"panel.inline-"+i+".js"}));console.log("PANEL_JS_SYNTAX=OK; scripts="+scripts.length)'
             echo "=== production environment (values hidden) ==="
             # This DirectAdmin SSH account may not belong to the docker group.
             if sudo -n docker info >/dev/null 2>&1; then
