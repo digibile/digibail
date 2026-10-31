@@ -35,9 +35,10 @@ jobs:
             [ -n "$DB_NAME" ] && [ -n "$DB_USER" ] && [ -n "$DB_PASS" ] || { echo "MARIADB_ENV_INCOMPLETE"; exit 22; }
             DUMP_BIN="$(command -v mariadb-dump || command -v mysqldump || true)"
             [ -n "$DUMP_BIN" ] || { echo "MARIADB_DUMP_TOOL_UNAVAILABLE"; exit 23; }
-            mkdir -p "$ROOT/.migration-backups"
-            chmod 700 "$ROOT/.migration-backups"
-            BACKUP="$ROOT/.migration-backups/mariadb-before-new-identity-sync-$(date +%Y%m%d%H%M%S).sql.gz"
+            BACKUP_DIR="/home/digibail/.private-backups"
+            mkdir -p "$BACKUP_DIR"
+            chmod 700 "$BACKUP_DIR"
+            BACKUP="$BACKUP_DIR/mariadb-before-new-identity-sync-$(date +%Y%m%d%H%M%S).sql.gz"
             if sudo -n true >/dev/null 2>&1; then
               sudo -n env MYSQL_PWD="$DB_PASS" "$DUMP_BIN" --protocol=SOCKET --socket=/var/lib/mysql/mysql.sock --user="$DB_USER" --single-transaction --quick --skip-lock-tables "$DB_NAME" | gzip > "$BACKUP"
             else
@@ -45,6 +46,7 @@ jobs:
             fi
             chmod 600 "$BACKUP"
             test -s "$BACKUP"
+            gzip -t "$BACKUP"
             echo "MARIADB_BACKUP_CREATED=1"
             $D compose exec -T app node /app/scripts/sync-postgres-users-to-mariadb.mjs
             curl -fsS http://127.0.0.1:1631/healthz >/dev/null
