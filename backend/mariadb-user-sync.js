@@ -36,7 +36,7 @@ export async function syncUserToMariaDB(pool,user) {
     const email=String(user.email||"").trim().slice(0,128)||null;
     const nationalCode=String(user.national_code||"").trim()||null;
     const regDate=localDateTime(user.created_at_tehran||user.created_at);
-    const rawRegDate=regDate.replace(" ","T").replace(/\.(\d{6})$/,".$10");
+    const rawRegDate=regDate.replace(" ","T").replace(/\.(\d{6})$/,(match,fraction)=>"."+fraction+"0");
     let mariaId=mapping[0]?.MariaDbUserId||null;
     if(!mariaId){
       let username=String(user.username||phone||("digibail_"+postgresId)).trim().slice(0,128)||("digibail_"+postgresId);
