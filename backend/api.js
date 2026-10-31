@@ -75,7 +75,3091 @@ async function unifiedUserDirectory({page=1,pageSize=50,search="",role="",status
   const unionSql=[
     "SELECT 'main' AS source_key,'AspNetUsers' AS source_table,CAST(u.Id AS CHAR) AS legacy_id,COALESCE(NULLIF(TRIM(CONCAT_WS(' ',u.FirstName,u.LastName)),''),NULLIF(u.UserName,''),NULLIF(u.Mobile,''),'کاربر بدون نام') AS full_name,u.UserName AS username,COALESCE(NULLIF(u.Mobile,''),NULLIF(u.Phone,''),NULLIF(u.PhoneNumber,'')) AS phone,u.Email AS email,u.NationalCode AS national_code,u.UserCode AS customer_code,u.AgentId AS legacy_agent_id,CAST(u.CustomerId AS CHAR) AS legacy_customer_id,COALESCE(u.IsActive,1) AS is_active,DATE_FORMAT(u.RegDate,'%Y-%m-%dT%H:%i:%s+03:30') AS created_at,DATE(u.RegDate) AS created_day,COALESCE(rr.roles_raw,'') AS roles_raw,COALESCE(rr.roles_norm,'') AS roles_norm FROM AspNetUsers u LEFT JOIN (SELECT ur.UserId,GROUP_CONCAT(DISTINCT r.Name ORDER BY r.Name SEPARATOR ',') AS roles_raw,GROUP_CONCAT(DISTINCT LOWER(REPLACE(REPLACE(REPLACE(r.Name,' ',''),'-',''),'_','')) ORDER BY r.Name SEPARATOR ',') AS roles_norm FROM AspNetUserRoles ur JOIN AspNetRoles r ON r.Id=ur.RoleId GROUP BY ur.UserId) rr ON rr.UserId=u.Id",
     "SELECT 'bluvam' AS source_key,'bluvamdb__AspNetUsers' AS source_table,CAST(u.Id AS CHAR) AS legacy_id,COALESCE(NULLIF(TRIM(CONCAT_WS(' ',u.FirstName,u.LastName)),''),NULLIF(u.UserName,''),NULLIF(u.Mobile,''),'کاربر بدون نام') AS full_name,u.UserName AS username,COALESCE(NULLIF(u.Mobile,''),NULLIF(u.Phone,''),NULLIF(u.PhoneNumber,'')) AS phone,u.Email AS email,u.NationalCode AS national_code,NULL AS customer_code,u.AgentId AS legacy_agent_id,CAST(u.CustomerId AS CHAR) AS legacy_customer_id,COALESCE(u.IsActive,1) AS is_active,DATE_FORMAT(u.RegDate,'%Y-%m-%dT%H:%i:%s+03:30') AS created_at,DATE(u.RegDate) AS created_day,COALESCE(rr.roles_raw,'') AS roles_raw,COALESCE(rr.roles_norm,'') AS roles_norm FROM bluvamdb__AspNetUsers u LEFT JOIN (SELECT ur.UserId,GROUP_CONCAT(DISTINCT r.Name ORDER BY r.Name SEPARATOR ',') AS roles_raw,GROUP_CONCAT(DISTINCT LOWER(REPLACE(REPLACE(REPLACE(r.Name,' ',''),'-',''),'_','')) ORDER BY r.Name SEPARATOR ',') AS roles_norm FROM bluvamdb__AspNetUserRoles ur JOIN bluvamdb__AspNetRoles r ON r.Id=ur.RoleId GROUP BY ur.UserId) rr ON rr.UserId=u.Id",
-    "SELECT 'transfer' AS source_key,'OnlineMoneyTransfer__AspNetUsers' AS source_table,CAST(u.Id AS CHAR) AS legacy_id,COALESCE(NULLIF(TRIM(CONCAT_WS(' ',u.FirstName,u.LastName)),''),NULLIF(u.UserName,''),NULLIF(u.PhoneNumber,''),'حساب انتقال وجه') AS full_name,u.UserName AS username,u.PhoneNumber AS phone,u.Email AS email,u.NationalCode AS national_code,NULL AS customer_code,NULL AS legacy_agent_id,NULL AS legacy_customer_id,COALESCE(u.IsActive,1) AS is_active,NULL AS created_at,NULL AS created_day,COALESCE(rr.roles_raw,'') AS roles_raw,COALESCE(rr.roles_norm,'') AS roles_norm FROM OnlineMoneyTransfer__AspNetUsers u LEFT JOIN (SELECT ur.UserId,GROUP_CONCAT(DISTINCT r.Name ORDER BY r.Name SEPARATOR ',') AS roles_raw,GROUP_CONCAT(DISTINCT LOWER(REPLACE(REPLACE(REPLACE(r.Name,' ',''),'-',''),'_','')) ORDER BY r.Name SEPARATOR ',') AS roles_norm FROM OnlineMoneyTransfer__AspNetUserRoles ur JOIN OnlineMoneyTransfer__AspNetRoles r ON r.Id=ur.RoleId GROUP BY ur.UserId) rr ON rr.UserId=u.Id"
+    "SELECT 'transfer' AS source_key,'OnlineMoneyTransfer__AspNetUsers' AS source_table,CAST(u.Id AS CHAR) AS legacy_id,COALESCE(NULLIF(TRIM(CONCAT_WS(' ',u.FirstName,u.LastName)),''),NULLIF(u.UserName,''),NULLIF(u.PhoneNumber,''),'حساب انتقال وجه') AS full_name,u.UserName AS username,CASE WHEN u.PhoneNumber REGEXP '^9[0-9]{9},NULL AS customer_code,NULL AS legacy_agent_id,NULL AS legacy_customer_id,COALESCE(u.IsActive,1) AS is_active,NULL AS created_at,NULL AS created_day,COALESCE(rr.roles_raw,'') AS roles_raw,COALESCE(rr.roles_norm,'') AS roles_norm FROM OnlineMoneyTransfer__AspNetUsers u LEFT JOIN (SELECT ur.UserId,GROUP_CONCAT(DISTINCT r.Name ORDER BY r.Name SEPARATOR ',') AS roles_raw,GROUP_CONCAT(DISTINCT LOWER(REPLACE(REPLACE(REPLACE(r.Name,' ',''),'-',''),'_','')) ORDER BY r.Name SEPARATOR ',') AS roles_norm FROM OnlineMoneyTransfer__AspNetUserRoles ur JOIN OnlineMoneyTransfer__AspNetRoles r ON r.Id=ur.RoleId GROUP BY ur.UserId) rr ON rr.UserId=u.Id"
+  ].join(" UNION ALL ");
+  const q=String(search||"").trim().slice(0,120),mWhere=[],mValues=[];
+  const staffSql="(FIND_IN_SET('admin',roles_norm)>0 OR FIND_IN_SET('superadmin',roles_norm)>0 OR FIND_IN_SET('agent',roles_norm)>0 OR FIND_IN_SET('marketer',roles_norm)>0 OR FIND_IN_SET('customermarketer',roles_norm)>0 OR FIND_IN_SET('appapiuser',roles_norm)>0 OR FIND_IN_SET('sponsor',roles_norm)>0)";
+  if(q){mWhere.push("(full_name LIKE ? OR username LIKE ? OR phone LIKE ? OR email LIKE ? OR national_code LIKE ? OR customer_code LIKE ? OR legacy_id LIKE ? OR roles_raw LIKE ? OR source_table LIKE ?)");for(let n=0;n<9;n++)mValues.push("%"+q+"%");}
+  if(role==="customer")mWhere.push("source_key<>'transfer' AND NOT "+staffSql);
+  else if(role==="admin")mWhere.push("source_key<>'transfer' AND (FIND_IN_SET('admin',roles_norm)>0 OR FIND_IN_SET('superadmin',roles_norm)>0)");
+  else if(role){if(["superadmin","agent","marketer","customermarketer"].includes(role))mWhere.push("source_key<>'transfer'");const raw=String(role).startsWith("legacy_")?String(role).slice(7):String(role);mWhere.push("FIND_IN_SET(?,roles_norm)>0");mValues.push(raw);}
+  if(status==="active")mWhere.push("is_active=1");
+  if(status==="inactive")mWhere.push("is_active=0");
+  const mFilter=mWhere.length?" WHERE "+mWhere.join(" AND "):"";
+  const derived="("+unionSql+") AS directory";
+  const [mCountRows,mStatsRows,mRows]=await Promise.all([
+    db.query("SELECT COUNT(*) AS total FROM "+derived+mFilter,mValues),
+    db.query("SELECT COUNT(*) AS total,SUM(CASE WHEN is_active=1 THEN 1 ELSE 0 END) AS active,SUM(CASE WHEN is_active=0 THEN 1 ELSE 0 END) AS inactive,SUM(CASE WHEN source_key<>'transfer' AND created_day=DATE(CONVERT_TZ(UTC_TIMESTAMP(),'+00:00','+03:30')) THEN 1 ELSE 0 END) AS today,MAX(created_at) AS latest_registration,SUM(CASE WHEN source_key='main' THEN 1 ELSE 0 END) AS main_total,SUM(CASE WHEN source_key='bluvam' THEN 1 ELSE 0 END) AS bluvam_total,SUM(CASE WHEN source_key='transfer' THEN 1 ELSE 0 END) AS transfer_total,SUM(CASE WHEN source_key<>'transfer' AND NOT "+staffSql+" THEN 1 ELSE 0 END) AS customer_total,SUM(CASE WHEN source_key<>'transfer' AND FIND_IN_SET('agent',roles_norm)>0 THEN 1 ELSE 0 END) AS agent_total,SUM(CASE WHEN source_key<>'transfer' AND FIND_IN_SET('agent',roles_norm)>0 AND is_active=1 THEN 1 ELSE 0 END) AS active_agent_total,SUM(CASE WHEN source_key<>'transfer' AND (FIND_IN_SET('admin',roles_norm)>0 OR FIND_IN_SET('superadmin',roles_norm)>0) THEN 1 ELSE 0 END) AS admin_total,SUM(CASE WHEN source_key<>'transfer' AND (FIND_IN_SET('marketer',roles_norm)>0 OR FIND_IN_SET('customermarketer',roles_norm)>0) THEN 1 ELSE 0 END) AS marketer_total,SUM(CASE WHEN source_key<>'transfer' AND NOT "+staffSql+" AND created_day=DATE(CONVERT_TZ(UTC_TIMESTAMP(),'+00:00','+03:30')) THEN 1 ELSE 0 END) AS customer_today FROM "+derived),
+    db.query("SELECT * FROM "+derived+mFilter+" ORDER BY (created_at IS NULL) ASC,created_at DESC,source_key,legacy_id DESC LIMIT ?",[...mValues,Math.min(200000,page*pageSize)])
+  ]);
+  const mStats=mStatsRows[0][0]||{};
+  const mariaRows=mRows[0].map(r=>{
+    const roleNames=String(r.roles_raw||"").split(",").filter(Boolean);
+    const roles=roleNames.map(legacyRoleCode);
+    const primary=directoryRoleFromNames(roleNames);
+    return {...r,id:"legacy:"+r.source_key+":"+String(r.legacy_id),name:r.full_name,mobile:r.phone,customer_number:r.customer_code,role:primary,roles:roles.length?roles:[primary],account_type:r.source_key==="transfer"?"حساب انتقال وجه":directoryAccountType(primary),legacy_source:r.source_table,legacy_source_table:r.source_table,source:r.source_key==="main"?"mariadb":r.source_key==="bluvam"?"bluvamdb":"transfer",source_table:r.source_table,password_reset_required:false,is_active:Boolean(Number(r.is_active)),role_editable:r.source_key!=="transfer"};
+  });
+  const fresh=(await applicationOnlyAccounts(100000)).map(r=>({...r,name:r.full_name,mobile:r.phone,customer_number:r.customer_code,source:"app",role_editable:true}));
+  const staffRoles=["admin","superadmin","agent","marketer","customermarketer","legacy_appapiuser","legacy_sponsor"];
+  const norm=v=>String(v||"").toLowerCase();
+  const freshFiltered=fresh.filter(r=>{
+    const effective=String(r.effective_role||r.role||"customer");
+    if(role==="customer"&&staffRoles.includes(effective))return false;
+    if(role==="admin"&&!["admin","superadmin"].includes(effective))return false;
+    if(role&&role!=="customer"&&role!=="admin"&&effective!==role)return false;
+    if(status==="active"&&!r.is_active)return false;
+    if(status==="inactive"&&r.is_active)return false;
+    if(q&&!([r.full_name,r.username,r.phone,r.email,r.national_code,r.id,r.source_table].some(v=>norm(v).includes(norm(q)))))return false;
+    return true;
+  });
+  const freshCustomer=r=>!staffRoles.includes(String(r.effective_role||r.role||"customer"));
+  const dayKey=new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Tehran",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date());
+  const freshToday=fresh.filter(r=>new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Tehran",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date(r.created_at))===dayKey).length;
+  const freshCustomerToday=fresh.filter(r=>freshCustomer(r)&&new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Tehran",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date(r.created_at))===dayKey).length;
+  const dateValue=v=>{const n=new Date(v||0).getTime();return Number.isFinite(n)?n:0;};
+  const latestFresh=fresh[0]?.created_at||null,latestMaria=mStats.latest_registration||null;
+  const latestRegistration=latestFresh&&(!latestMaria||dateValue(latestFresh)>dateValue(latestMaria))?latestFresh:latestMaria;
+  const merged=[...mariaRows,...freshFiltered].sort((a,b)=>dateValue(b.created_at)-dateValue(a.created_at)||String(b.id).localeCompare(String(a.id)));
+  const freshAdmins=fresh.filter(r=>["admin","superadmin"].includes(r.effective_role));
+  const freshAgents=fresh.filter(r=>r.effective_role==="agent");
+  const freshMarketers=fresh.filter(r=>["marketer","customermarketer"].includes(r.effective_role));
+  return {rows:merged.slice((page-1)*pageSize,page*pageSize),total:(Number(mCountRows[0][0]?.total)||0)+freshFiltered.length,overallTotal:(Number(mStats.total)||0)+fresh.length,activeTotal:(Number(mStats.active)||0)+fresh.filter(r=>r.is_active).length,inactiveTotal:(Number(mStats.inactive)||0)+fresh.filter(r=>!r.is_active).length,todayTotal:(Number(mStats.today)||0)+freshToday,latestRegistration,customerTotal:(Number(mStats.customer_total)||0)+fresh.filter(freshCustomer).length,customerTodayTotal:(Number(mStats.customer_today)||0)+freshCustomerToday,agentTotal:(Number(mStats.agent_total)||0)+freshAgents.length,activeAgentTotal:(Number(mStats.active_agent_total)||0)+freshAgents.filter(r=>r.is_active).length,adminTotal:(Number(mStats.admin_total)||0)+freshAdmins.length,marketerTotal:(Number(mStats.marketer_total)||0)+freshMarketers.length,transferTotal:Number(mStats.transfer_total)||0,sourceCounts:{main:Number(mStats.main_total)||0,bluvam:Number(mStats.bluvam_total)||0,transfer:Number(mStats.transfer_total)||0,app:fresh.length},sourceTable:"MariaDB.AspNetUsers+MariaDB.bluvamdb__AspNetUsers+MariaDB.OnlineMoneyTransfer__AspNetUsers+MariaDB.users",timezone:"Asia/Tehran"};
+}
+
+function directoryRoleFromNames(value) {
+  const names=(Array.isArray(value)?value:String(value||"").split(",")).map(x=>String(x||"").toLowerCase().replace(/[^a-z0-9]/g,"")).filter(Boolean);
+  for(const code of ["superadmin","admin","agent","customermarketer","marketer","member","customer","user","appapiuser","sponsor"])if(names.includes(code))return legacyRoleCode(code);
+  return names.length?legacyRoleCode(names[0]):"customer";
+}
+
+function directoryAccountType(role) {
+  return role==="superadmin"||role==="admin"?"مدیر سامانه":role==="agent"?"نماینده":role==="marketer"||role==="customermarketer"?"بازاریاب":role==="legacy_appapiuser"||role==="legacy_sponsor"?"حساب سیستمی":"مشتری / کاربر";
+}
+function mapMariaDirectoryUser(r) {
+  const roleNames=String(r.roles||"").split(",").filter(Boolean),role=directoryRoleFromNames(roleNames);
+  return {id:"legacy:"+String(r.Id),legacy_id:String(r.Id),username:r.UserName||null,legacy_username:r.UserName||null,full_name:[r.FirstName,r.LastName].filter(Boolean).join(" ").trim()||r.UserName||r.Mobile||"کاربر بدون نام",phone:r.Mobile||r.Phone||r.PhoneNumber||null,mobile:r.Mobile||r.Phone||r.PhoneNumber||null,email:r.Email||null,national_code:r.NationalCode||null,role,roles:roleNames.map(x=>String(x).toLowerCase().replace(/[^a-z]/g,"")),is_active:Boolean(r.IsActive),created_at:r.RegDate||null,registered_at:r.RegDate||null,legacy_source:"MariaDB.AspNetUsers",source_table:"AspNetUsers",legacy_customer_id:r.CustomerId||null,legacy_agent_id:r.AgentId||null,password_reset_required:true,account_type:directoryAccountType(role)};
+}
+const sqlIdent = value => "`" + String(value).replace(/`/g, "``") + "`";
+
+const JWT_SECRET = process.env.JWT_SECRET || "";
+const OTP_PEPPER = process.env.OTP_PEPPER || "";
+const CAPTCHA_PEPPER = process.env.CAPTCHA_PEPPER || "";
+const BRAND_NAME = process.env.BRAND_NAME || "دیجی‌بایل پی";
+const KAVENEGAR_API_KEY = process.env.KAVENEGAR_API_KEY || "";
+const KAVENEGAR_TEMPLATE = process.env.KAVENEGAR_TEMPLATE || "";
+const AI_STORY_RATE = new Map();
+
+export async function migrate() {
+  const { readFile } = await import("node:fs/promises");
+  const { fileURLToPath } = await import("node:url");
+  const path = await import("node:path");
+  const root = path.dirname(fileURLToPath(import.meta.url));
+  const schema = await readFile(path.join(root, "db", "002_mariadb_app.sql"), "utf8");
+  const statements = schema
+    .replace(/^\s*--.*$/gm, "")
+    .split(/;\s*(?:\r?\n|$)/)
+    .map(statement => statement.trim())
+    .filter(statement => statement && !statement.startsWith("--"));
+  for (const statement of statements) {
+    await mariadbPool.query(statement);
+  }
+  await mariadbPool.query("ANALYZE TABLE users, sms_templates, legacy_source_data, loan_products");
+}
+export async function dbHealth() { await mariadbPool.query("SELECT 1"); return true; }
+function hash(value, pepper) { return crypto.createHmac("sha256", pepper).update(String(value)).digest("hex"); }
+function json(res, status, value, extraHeaders = {}) {
+  res.writeHead(status, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", ...extraHeaders });
+  res.end(JSON.stringify(value));
+}
+function authJson(res, status, token, value) {
+  const secure = process.env.NODE_ENV === "production" ? "; Secure" : "";
+  res.setHeader("Set-Cookie", "db_session=" + token + "; HttpOnly; SameSite=Lax; Path=/; Max-Age=28800" + secure);
+  return json(res, status, value);
+}
+export function verifySession(token) {
+  if (!token || JWT_SECRET.length < 32) return null;
+  try { return jwt.verify(token, JWT_SECRET, { issuer: "digibail" }); } catch { return null; }
+}
+async function body(req) {
+  let raw = "";
+  // Loan products can include a compressed image data URL. Keep a bounded 3 MB JSON limit.
+  for await (const chunk of req) { raw += chunk; if (raw.length > 3_000_000) throw Object.assign(new Error("حجم درخواست بیشتر از ۳ مگابایت است؛ تصویر را کوچک‌تر کنید."), { status: 413 }); }
+  try { return raw ? JSON.parse(raw) : {}; } catch { throw Object.assign(new Error("ساختار JSON معتبر نیست."), { status: 400 }); }
+}
+async function multipartBody(req, limit = 6_200_000) {
+  const type = String(req.headers["content-type"] || "");
+  const match = type.match(/boundary=(?:"([^"]+)"|([^;]+))/i);
+  if (!match) throw Object.assign(new Error("فرمت بارگذاری فایل معتبر نیست."), { status: 400 });
+  const boundary = Buffer.from("--" + (match[1] || match[2]).trim());
+  const chunks = []; let size = 0;
+  for await (const chunk of req) {
+    size += chunk.length;
+    if (size > limit) throw Object.assign(new Error("حجم فایل بیشتر از حد مجاز است."), { status: 413 });
+    chunks.push(chunk);
+  }
+  const raw = Buffer.concat(chunks); const fields = {}; let file = null; let pos = 0;
+  while (true) {
+    const start = raw.indexOf(boundary, pos);
+    if (start < 0) break;
+    let partStart = start + boundary.length;
+    if (raw.subarray(partStart, partStart + 2).toString() === "--") break;
+    if (raw.subarray(partStart, partStart + 2).toString() === "\r\n") partStart += 2;
+    const next = raw.indexOf(boundary, partStart);
+    if (next < 0) break;
+    let partEnd = next;
+    if (raw.subarray(partEnd - 2, partEnd).toString() === "\r\n") partEnd -= 2;
+    const part = raw.subarray(partStart, partEnd);
+    const headerEnd = part.indexOf(Buffer.from("\r\n\r\n"));
+    if (headerEnd < 0) { pos = next; continue; }
+    const headers = part.subarray(0, headerEnd).toString("utf8");
+    const disposition = headers.match(/content-disposition:\s*form-data;[^\r\n]*name="([^"]+)"(?:;\s*filename="([^"]*)")?/i);
+    if (!disposition) { pos = next; continue; }
+    const name = disposition[1]; const filename = disposition[2];
+    const data = part.subarray(headerEnd + 4);
+    if (filename !== undefined) {
+      const mime = headers.match(/content-type:\s*([^\r\n]+)/i)?.[1]?.trim().toLowerCase() || "application/octet-stream";
+      file = { name: filename, mime, data };
+    } else fields[name] = data.toString("utf8");
+    pos = next;
+  }
+  return { fields, file };
+}
+function authenticatedUserId(req) {
+  const session = sessionFor(req);
+  const id = Number(session?.sub);
+  return Number.isSafeInteger(id) && id > 0 ? id : null;
+}
+function clientIp(req) { return (req.socket.remoteAddress || "").replace(/^::ffff:/, "").slice(0, 64) || null; }
+async function audit(req, event, userId = null, details = {}) {
+  await pool.query("INSERT INTO audit_logs(user_id,event_type,ip_address,details) VALUES($1,$2,$3,$4)", [userId, event, clientIp(req), JSON.stringify(details)]);
+}
+function tokenFor(user) {
+  if (JWT_SECRET.length < 32) throw new Error("JWT_SECRET تنظیم نشده است.");
+  return jwt.sign({ sub: String(user.id), role: user.role, phone: user.phone }, JWT_SECRET, { expiresIn: "8h", issuer: "digibail" });
+}
+async function consumeCaptcha(id, answer) {
+  if (!id || !answer || CAPTCHA_PEPPER.length < 32) return false;
+  const result = await pool.query("UPDATE captcha_challenges SET consumed_at=NOW() WHERE id=$1 AND consumed_at IS NULL AND expires_at>NOW() AND answer_hash=$2 RETURNING id", [id, hash(String(answer).trim(), CAPTCHA_PEPPER)]);
+  return result.rowCount === 1;
+}
+function phoneOk(phone) { return /^09\d{9}$/.test(String(phone || "")); }
+function nationalCodeOk(value) {
+  const n = String(value || "");
+  if (!/^\d{10}$/.test(n) || /^([0-9])\1{9}$/.test(n)) return false;
+  const check = Number(n[9]);
+  const sum = n.slice(0, 9).split("").reduce((s, digit, i) => s + Number(digit) * (10 - i), 0) % 11;
+  return sum < 2 ? check === sum : check === 11 - sum;
+}
+function sessionFor(req) {
+  const auth = String(req.headers.authorization || "");
+  const bearer = auth.match(/^Bearer\s+(.+)$/i)?.[1];
+  const cookie = String(req.headers.cookie || "").split(";").map(v => v.trim()).find(v => v.startsWith("db_session="));
+  return verifySession(bearer || (cookie ? cookie.slice("db_session=".length) : ""));
+}
+async function adminFor(req) {
+  const session = sessionFor(req);
+  if (!session) return null;
+  // Read the current role from MariaDB so permission changes take effect immediately.
+  const current = await pool.query("SELECT id,role,is_active,phone,full_name,username FROM users WHERE id=$1 LIMIT 1", [Number(session.sub)]);
+  const role = String(current.rows[0]?.role || "").trim().toLowerCase();
+  if (!current.rowCount || !current.rows[0].is_active || !["admin", "superadmin"].includes(role)) return null;
+  return { ...session, role, fullName: current.rows[0].full_name, phone: current.rows[0].phone, username: current.rows[0].username };
+}
+export async function verifyAdminSession(req) { return Boolean(await adminFor(req)); }
+function verifyAspNetIdentityPassword(password, storedHash) {
+  let data;
+  try { data = Buffer.from(String(storedHash || ""), "base64"); } catch { return false; }
+  if (data.length < 2) return false;
+  let salt, subkey, iterations, digest;
+  if (data[0] === 0x00 && data.length >= 49) {
+    salt = data.subarray(1, 17); subkey = data.subarray(17); iterations = 1000; digest = "sha1";
+  } else if (data[0] === 0x01 && data.length >= 14) {
+    const prf = data.readUInt32BE(1); iterations = data.readUInt32BE(5);
+    const saltLength = data.readUInt32BE(9);
+    if (iterations < 1 || iterations > 2000000 || saltLength < 8 || saltLength > 1024 || data.length <= 13 + saltLength) return false;
+    digest = ({ 0: "sha1", 1: "sha256", 2: "sha512" })[prf];
+    if (!digest) return false;
+    salt = data.subarray(13, 13 + saltLength); subkey = data.subarray(13 + saltLength);
+  } else return false;
+  const actual = crypto.pbkdf2Sync(String(password), salt, iterations, subkey.length, digest);
+  return actual.length === subkey.length && crypto.timingSafeEqual(actual, subkey);
+}
+async function verifyPassword(password, storedHash) {
+  const stored = String(storedHash || "");
+  if (stored.startsWith("aspnet:")) return verifyAspNetIdentityPassword(password, stored.slice(7));
+  if (stored.startsWith("scrypt$")) {
+    try {
+      const [, n, r, p, salt, expected] = stored.split("$");
+      const N = Number(n), R = Number(r), P = Number(p);
+      if (N !== 16384 || R !== 8 || P !== 1 || !salt || !expected) return false;
+      const expectedBytes = Buffer.from(expected, "base64url");
+      const actual = crypto.scryptSync(String(password || ""), Buffer.from(salt, "base64url"), expectedBytes.length, { N, r: R, p: P, maxmem: 64 * 1024 * 1024 });
+      return actual.length === expectedBytes.length && crypto.timingSafeEqual(actual, expectedBytes);
+    } catch { return false; }
+  }
+  return bcrypt.compare(String(password || ""), stored);
+}
+function maskPhone(phone) {
+  const p = String(phone || "");
+  return p.length >= 7 ? p.slice(0, 4) + "****" + p.slice(-3) : "***";
+}
+function settingsCipherKey() {
+  if (JWT_SECRET.length < 32) throw Object.assign(new Error("تنظیم کلید رمزنگاری امن سرور ناقص است."), { status: 503, code: "sms_settings_key_missing" });
+  return crypto.createHash("sha256").update(JWT_SECRET).digest();
+}
+function encryptSetting(value) {
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv("aes-256-gcm", settingsCipherKey(), iv);
+  const encrypted = Buffer.concat([cipher.update(String(value), "utf8"), cipher.final()]);
+  return [iv.toString("base64"), cipher.getAuthTag().toString("base64"), encrypted.toString("base64")].join(".");
+}
+function decryptSetting(value) {
+  if (!value) return "";
+  const parts = String(value).split(".");
+  const decipher = crypto.createDecipheriv("aes-256-gcm", settingsCipherKey(), Buffer.from(parts[0], "base64"));
+  decipher.setAuthTag(Buffer.from(parts[1], "base64"));
+  return Buffer.concat([decipher.update(Buffer.from(parts[2], "base64")), decipher.final()]).toString("utf8");
+}
+async function getKavenegarSettings() {
+  const q = await pool.query("SELECT api_key_encrypted,sender FROM sms_provider_settings WHERE provider=$1 LIMIT 1", ["kavenegar"]);
+  const row = q.rows[0]; let apiKey = "";
+  try { apiKey = row?.api_key_encrypted ? decryptSetting(row.api_key_encrypted) : ""; } catch {}
+  return { apiKey: apiKey || KAVENEGAR_API_KEY, sender: row?.sender || process.env.KAVENEGAR_SENDER || "" };
+}
+async function sendSmsText(phone, message) {
+  const settings = await getKavenegarSettings();
+  if (!settings.apiKey) throw Object.assign(new Error("کلید کاوه‌نگار در تنظیمات پیامک ثبت نشده است."), { status: 503, code: "sms_provider_not_configured" });
+  const form = new URLSearchParams({ receptor: phone, message });
+  if (settings.sender) form.set("sender", settings.sender);
+  const endpoint = "https://api.kavenegar.com/v1/" + encodeURIComponent(settings.apiKey) + "/sms/send.json";
+  const response = await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: form, signal: AbortSignal.timeout(10000) });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok || result?.return?.status !== 200) throw Object.assign(new Error("کاوه‌نگار ارسال را تأیید نکرد. کد پاسخ: " + String(result?.return?.status || response.status)), { status: 502, code: "sms_delivery_failed" });
+  return String(result?.entries?.[0]?.messageid || "");
+}
+function captchaSvg(value) {
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="170" height="56" viewBox="0 0 170 56"><rect width="170" height="56" rx="12" fill="#241047"/><path d="M0 12L170 42M10 50L150 5" stroke="#ffb629" stroke-opacity=".35" stroke-width="2"/><text x="85" y="38" text-anchor="middle" font-family="monospace" font-size="30" font-weight="700" letter-spacing="5" fill="#fff">${value}</text></svg>`;
+}
+async function sendOtp(phone, code) {
+  const settings = await getKavenegarSettings();
+  if (!settings.apiKey) throw Object.assign(new Error("کلید کاوه‌نگار در تنظیمات پیامک ثبت نشده است."), { status: 503, code: "sms_provider_not_configured" });
+  if (!KAVENEGAR_TEMPLATE) {
+    await sendSmsText(phone, BRAND_NAME + ": کد تأیید شما " + code + " است. این کد را در اختیار دیگران قرار ندهید.");
+    return;
+  }
+  const endpoint = "https://api.kavenegar.com/v1/" + encodeURIComponent(settings.apiKey) + "/verify/lookup.json";
+  const form = new URLSearchParams({ receptor: phone, token: code, template: KAVENEGAR_TEMPLATE });
+  const response = await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: form, signal: AbortSignal.timeout(10000) });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok || result?.return?.status !== 200) throw Object.assign(new Error("ارسال پیامک توسط کاوه‌نگار تأیید نشد."), { status: 502, code: "sms_delivery_failed" });
+}
+const recentFailures = new Map();
+function limited(key) {
+  const now = Date.now(); const entry = recentFailures.get(key) || { count: 0, since: now };
+  if (now - entry.since > 15 * 60_000) { entry.count = 0; entry.since = now; }
+  entry.count += 1; recentFailures.set(key, entry); return entry.count > 12;
+}
+function resetLimit(key) { recentFailures.delete(key); }
+
+export async function handleApi(req, res, url) {
+  const route = url.pathname;
+  const intervalMonthsFromStored = (value) => { const n=Number(value)||0; if(n>=1&&n<=12)return Math.trunc(n); const ranges=[[28,31,1],[59,62,2],[89,93,3],[118,124,4],[148,155,5],[178,186,6],[208,217,7],[238,248,8],[268,279,9],[298,310,10],[328,341,11],[358,372,12]]; const hit=ranges.find(([lo,hi])=>n>=lo&&n<=hi); return hit?hit[2]:1; };
+  try {
+    if (req.method === "GET" && route === "/api/v1/security/me") {
+      const session = sessionFor(req);
+      if (!session) return json(res, 401, { message: "وارد حساب خود شوید." });
+      const current = await pool.query("SELECT id,phone,full_name,username,role,is_active,password_reset_required,COALESCE((SELECT json_agg(role_code ORDER BY role_code) FROM (SELECT role_code FROM user_role_overrides WHERE user_id=users.id UNION SELECT role_code FROM user_role_assignments WHERE user_id=users.id AND NOT EXISTS(SELECT 1 FROM user_role_overrides WHERE user_id=users.id)) rr),json_build_array(role)) AS roles FROM users WHERE id=$1 LIMIT 1", [Number(session.sub)]);
+      if (!current.rowCount || !current.rows[0].is_active) return json(res, 401, { message: "حساب کاربری فعال نیست." });
+      const u = current.rows[0];
+      return json(res, 200, { data: { id: u.id, phone: u.phone, fullName: u.full_name, username: u.username, role: u.role, roles: u.roles || [u.role], passwordResetRequired: Boolean(u.password_reset_required) } });
+    }
+    if (req.method === "GET" && route === "/api/v1/tenant/config") {
+      return json(res, 200, { data: { name: BRAND_NAME, brand: { logoText: BRAND_NAME.slice(0, 1), primary: "#4a2a86", accent: "#ffb629" } } });
+    }
+    if (req.method === "GET" && (route === "/api/v1/loan-products" || /^\/api\/v1\/loan-products\/[^/]+$/.test(route))) {
+      const slug = route === "/api/v1/loan-products" ? null : decodeURIComponent(route.slice("/api/v1/loan-products/".length));
+      const publicColumns = "slug,name,title,description,badge,min_amount,max_amount,interval_days,tiers,conditions,documents,is_active,sort_order,show_in_list,interest_method,interest_percent,late_daily_coef,early_daily_coef,image_url,full_description_html,labels,operational_costs,send_reminders";
+      const q = slug
+        ? await pool.query("SELECT " + publicColumns + " FROM loan_products WHERE slug=$1 AND is_active=TRUE AND show_in_list=TRUE LIMIT 1", [slug])
+        : await pool.query("SELECT " + publicColumns + " FROM loan_products WHERE is_active=TRUE AND show_in_list=TRUE ORDER BY sort_order,created_at DESC");
+      const shape = (p) => ({ id:p.slug,name:p.name,description:p.description,badge:p.badge,isActive:p.is_active,minAmount:Number(p.min_amount),maxAmount:Number(p.max_amount),intervalMonths:intervalMonthsFromStored(p.interval_days),intervalDays:intervalMonthsFromStored(p.interval_days),tiers:p.tiers,conditions:p.conditions,documents:p.documents,title:p.title||p.name,imageUrl:p.image_url,fullDescriptionHtml:p.full_description_html,labels:p.labels,operationalCosts:p.operational_costs,interestMethod:p.interest_method,interestPercent:Number(p.interest_percent),lateDailyCoef:Number(p.late_daily_coef),earlyDailyCoef:Number(p.early_daily_coef),showInList:p.show_in_list,sendReminders:p.send_reminders });
+      if (slug) return q.rowCount ? json(res,200,shape(q.rows[0]),{"Cache-Control":"public, max-age=10, stale-while-revalidate=30"}) : json(res,404,{message:"طرح وام پیدا نشد."});
+      return json(res,200,q.rows.map(shape),{"Cache-Control":"public, max-age=10, stale-while-revalidate=30"});
+    }
+    if (route.startsWith("/api/v1/admin/")) {
+      const admin = await adminFor(req);
+      if (!admin) return json(res, 403, { message: "دسترسی مدیر لازم است." });
+      if (req.method === "POST" && route === "/api/v1/admin/ai/story") {
+        const input = await body(req);
+        const provider = ["openai", "gemini", "anthropic"].includes(String(input.provider || "").toLowerCase()) ? String(input.provider).toLowerCase() : "openai";
+        const brief = String(input.brief || "").trim().slice(0, 1600);
+        const campaign = String(input.campaign || "general").slice(0, 80);
+        if (brief.length < 8) return json(res, 400, { message: "شرح کمپین را با حداقل ۸ نویسه وارد کنید." });
+        const keys = {
+          openai: process.env.OPENAI_API_KEY || "",
+          gemini: process.env.GEMINI_API_KEY || "",
+          anthropic: process.env.ANTHROPIC_API_KEY || ""
+        };
+        if (!keys[provider]) return json(res, 503, { message: "کلید این سرویس روی سرور تنظیم نشده است. کلید را در متغیر محیطی امن سرور ثبت کنید؛ کلید را داخل مرورگر وارد نکنید." });
+        const prompt = "برای برند فارسی‌زبان «دیجی‌بایل پی» یک متن تبلیغاتی حرفه‌ای و غیرگمراه‌کننده برای استوری عمودی 9:16 بساز. ادعای نرخ صفر، تأیید قطعی و مزیت مالی تضمین‌شده نکن مگر در شرح کمپین صریحاً تأیید شده باشد. خروجی فقط JSON معتبر با کلیدهای h,p,cta,caption,hashtags,designNotes باشد. h حداکثر 55 نویسه، p حداکثر 110، cta حداکثر 24، caption حداکثر 500 و hashtags آرایه‌ای با حداکثر 8 هشتگ فارسی/انگلیسی باشد. از فارسی طبیعی، تیتر قوی، مزیت روشن و دعوت به اقدام استفاده کن. نوع کمپین: " + campaign + ". شرح کمپین: " + brief;
+        try {
+          let responseText = "";
+          if (provider === "openai") {
+            const r = await fetch(process.env.OPENAI_BASE_URL || "https://api.openai.com/v1/chat/completions", { method: "POST", headers: { "Authorization": "Bearer " + keys.openai, "Content-Type": "application/json" }, body: JSON.stringify({ model: process.env.OPENAI_MODEL || "gpt-4o-mini", temperature: 0.75, response_format: { type: "json_object" }, messages: [{ role: "system", content: "You are a senior Persian performance-marketing creative director. Return valid JSON only." }, { role: "user", content: prompt }] }), signal: AbortSignal.timeout(45000) });
+            const j = await r.json().catch(() => ({})); if (!r.ok) return json(res, 502, { message: "سرویس OpenAI پاسخ موفق نداد؛ تنظیمات مدل و کلید را بررسی کنید." });
+            responseText = j.choices?.[0]?.message?.content || "";
+          } else if (provider === "gemini") {
+            const model = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+            const r = await fetch("https://generativelanguage.googleapis.com/v1beta/models/" + encodeURIComponent(model) + ":generateContent?key=" + encodeURIComponent(keys.gemini), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ generationConfig: { responseMimeType: "application/json", temperature: 0.75 }, contents: [{ role: "user", parts: [{ text: prompt }] }] }), signal: AbortSignal.timeout(45000) });
+            const j = await r.json().catch(() => ({})); if (!r.ok) return json(res, 502, { message: "سرویس Gemini پاسخ موفق نداد؛ تنظیمات مدل و کلید را بررسی کنید." });
+            responseText = j.candidates?.[0]?.content?.parts?.map(p => p.text || "").join("") || "";
+          } else {
+            const r = await fetch("https://api.anthropic.com/v1/messages", { method: "POST", headers: { "x-api-key": keys.anthropic, "anthropic-version": "2023-06-01", "Content-Type": "application/json" }, body: JSON.stringify({ model: process.env.ANTHROPIC_MODEL || "claude-3-5-haiku-latest", max_tokens: 900, temperature: 0.75, system: "You are a senior Persian performance-marketing creative director. Return valid JSON only.", messages: [{ role: "user", content: prompt }] }), signal: AbortSignal.timeout(45000) });
+            const j = await r.json().catch(() => ({})); if (!r.ok) return json(res, 502, { message: "سرویس Anthropic پاسخ موفق نداد؛ تنظیمات مدل و کلید را بررسی کنید." });
+            responseText = j.content?.map(p => p.text || "").join("") || "";
+          }
+          const cleaned = responseText.replace(/^\s*```(?:json)?/i, "").replace(/```\s*$/i, "").trim();
+          const story = JSON.parse(cleaned);
+          const str = (v, max) => String(v || "").trim().slice(0, max);
+          return json(res, 200, { provider, story: { h: str(story.h, 90), p: str(story.p, 180), cta: str(story.cta, 36), caption: str(story.caption, 800), hashtags: Array.isArray(story.hashtags) ? story.hashtags.slice(0, 8).map(x => str(x, 40)) : [], designNotes: str(story.designNotes, 500) } });
+        } catch (e) {
+          return json(res, 502, { message: e?.name === "TimeoutError" ? "زمان پاسخ هوش مصنوعی تمام شد؛ دوباره تلاش کنید." : "پاسخ هوش مصنوعی قابل پردازش نبود؛ دوباره تولید کنید." });
+        }
+      }
+
+      const aiRateLimit = (kind, max) => {
+        const key = String(admin.sub || admin.username || "admin") + ":" + kind;
+        const now = Date.now(), old = AI_STORY_RATE.get(key);
+        const slot = !old || now - old.started > 600000 ? { started: now, count: 0 } : old;
+        if (slot.count >= max) return false;
+        slot.count += 1; AI_STORY_RATE.set(key, slot); return true;
+      };
+      const ensureAiStories = async () => true;
+      const parseAiStory = (raw) => {
+        let txt = String(raw || "").replace(new RegExp(String.fromCharCode(96), "g"), "").trim();
+        const start = txt.indexOf("{"), end = txt.lastIndexOf("}");
+        if (start >= 0 && end > start) txt = txt.slice(start, end + 1);
+        const o = JSON.parse(txt);
+        return { title:String(o.title || "").slice(0,160), body:String(o.body || "").slice(0,700), cta:String(o.cta || "").slice(0,100), caption:String(o.caption || "").slice(0,1200), hashtags:Array.isArray(o.hashtags)?o.hashtags.slice(0,12).map(x=>String(x).slice(0,50)).join(" "):String(o.hashtags || "").slice(0,400), visualPrompt:String(o.visualPrompt || "").slice(0,1800) };
+      };
+      const callStoryProvider = async (provider, key, prompt) => {
+        let response, raw = "";
+        if (provider === "openai") {
+          response = await fetch("https://api.openai.com/v1/chat/completions", { method:"POST", signal:AbortSignal.timeout(45000), headers:{"Authorization":"Bearer "+key,"Content-Type":"application/json"}, body:JSON.stringify({model:process.env.OPENAI_TEXT_MODEL||process.env.OPENAI_MODEL||"gpt-4.1-mini",temperature:0.8,response_format:{type:"json_object"},messages:[{role:"system",content:"You are a senior Persian-language advertising creative director. Return valid JSON only with title, body, cta, caption, hashtags (array), visualPrompt. Write polished natural Persian. Never invent financial rates, guaranteed approvals, bank partnerships, or claims not supplied by the user. visualPrompt describes a premium vertical 9:16 background image with no text, no logos, no watermark."},{role:"user",content:prompt}]}) });
+          const j = await response.json().catch(() => ({}));
+          if (!response.ok) throw new Error("OpenAI پاسخ موفق نداد (" + response.status + ")");
+          raw = j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content;
+        } else if (provider === "gemini") {
+          response = await fetch("https://generativelanguage.googleapis.com/v1beta/models/" + encodeURIComponent(process.env.GEMINI_TEXT_MODEL||process.env.GEMINI_MODEL||"gemini-2.5-flash") + ":generateContent?key=" + encodeURIComponent(key), { method:"POST", signal:AbortSignal.timeout(45000), headers:{"Content-Type":"application/json"}, body:JSON.stringify({systemInstruction:{parts:[{text:"You are a senior Persian-language advertising creative director. Return valid JSON only with title, body, cta, caption, hashtags (array), visualPrompt. Write polished natural Persian. Never invent financial rates, guaranteed approvals, bank partnerships, or claims not supplied by the user. visualPrompt describes a premium vertical 9:16 background image with no text, no logos, no watermark."}]},contents:[{role:"user",parts:[{text:prompt}]}],generationConfig:{responseMimeType:"application/json",temperature:0.8}}) });
+          const j = await response.json().catch(() => ({}));
+          if (!response.ok) throw new Error("Gemini پاسخ موفق نداد (" + response.status + ")");
+          raw = (j.candidates && j.candidates[0] && j.candidates[0].content && j.candidates[0].content.parts || []).map(x => x.text || "").join("");
+        } else if (provider === "anthropic") {
+          response = await fetch("https://api.anthropic.com/v1/messages", { method:"POST", signal:AbortSignal.timeout(45000), headers:{"x-api-key":key,"anthropic-version":"2023-06-01","Content-Type":"application/json"}, body:JSON.stringify({model:process.env.ANTHROPIC_TEXT_MODEL||process.env.ANTHROPIC_MODEL||"claude-sonnet-4-20250514",max_tokens:1200,temperature:0.8,system:"You are a senior Persian-language advertising creative director. Return valid JSON only with title, body, cta, caption, hashtags (array), visualPrompt. Write polished natural Persian. Never invent financial rates, guaranteed approvals, bank partnerships, or claims not supplied by the user. visualPrompt describes a premium vertical 9:16 background image with no text, no logos, no watermark.",messages:[{role:"user",content:prompt}]}) });
+          const j = await response.json().catch(() => ({}));
+          if (!response.ok) throw new Error("Anthropic پاسخ موفق نداد (" + response.status + ")");
+          raw = (j.content || []).filter(x => x.type === "text").map(x => x.text || "").join("");
+        } else throw new Error("ارائه‌دهنده‌ی هوش مصنوعی معتبر نیست.");
+        const p = parseAiStory(raw);
+        if (!p.title || !p.body || !p.cta) throw new Error("پاسخ مدل ناقص بود؛ دوباره تولید کنید.");
+        return { provider:provider, title:p.title, body:p.body, cta:p.cta, caption:p.caption, hashtags:p.hashtags, visualPrompt:p.visualPrompt };
+      };
+      if (req.method === "GET" && route === "/api/v1/admin/ai/stories") {
+        await ensureAiStories();
+        const q = await pool.query("SELECT id,title,status,created_at,payload,(image_data IS NOT NULL) AS has_image FROM ai_story_assets WHERE created_by=$1 ORDER BY created_at DESC LIMIT 30", [Number(admin.sub)]);
+        return json(res,200,{data:q.rows.map(x=>({id:x.id,title:x.title,status:x.status,created_at:x.created_at,story:x.payload,hasImage:x.has_image}))});
+      }
+      if (req.method === "GET" && /^\/api\/v1\/admin\/ai\/stories\/[0-9]+$/.test(route)) {
+        await ensureAiStories();
+        const q = await pool.query("SELECT id,title,status,created_at,payload,image_data FROM ai_story_assets WHERE id=$1 AND created_by=$2 LIMIT 1", [route.split("/").pop(), Number(admin.sub)]);
+        if (!q.rowCount) return json(res,404,{message:"استوری ذخیره‌شده پیدا نشد."});
+        return json(res,200,{id:q.rows[0].id,title:q.rows[0].title,status:q.rows[0].status,created_at:q.rows[0].created_at,story:q.rows[0].payload,imageData:q.rows[0].image_data||""});
+      }
+      if (req.method === "POST" && route === "/api/v1/admin/ai/stories") {
+        const b = await body(req), s = b.story && typeof b.story === "object" ? b.story : b;
+        const clean = {goal:String(s.goal||"").slice(0,240),audience:String(s.audience||"").slice(0,240),offer:String(s.offer||"").slice(0,500),tone:String(s.tone||"professional").slice(0,80),provider:String(s.provider||"auto").slice(0,40),platform:String(s.platform||"instagram").slice(0,40),title:String(s.title||s.h||"").slice(0,160),body:String(s.body||s.p||"").slice(0,700),cta:String(s.cta||"").slice(0,100),caption:String(s.caption||"").slice(0,1200),hashtags:String(s.hashtags||"").slice(0,400),visualPrompt:String(s.visualPrompt||"").slice(0,1800),theme:String(s.theme||s.bg||"plum").slice(0,40)};
+        const title = String(b.title || clean.title || "استوری تبلیغاتی").trim().slice(0,160) || "استوری تبلیغاتی";
+        const status = b.status === "ready" ? "ready" : "draft";
+        const imageData = typeof b.imageData === "string" && /^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(b.imageData) && b.imageData.length <= 2600000 ? b.imageData : null;
+        await ensureAiStories();
+        const q = await pool.query("INSERT INTO ai_story_assets(created_by,title,status,payload,image_data) VALUES($1,$2,$3,$4::jsonb,$5) RETURNING id,created_at", [Number(admin.sub),title,status,JSON.stringify(clean),imageData]);
+        return json(res,201,{id:q.rows[0].id,title:title,status:status,created_at:q.rows[0].created_at,hasImage:Boolean(imageData)});
+      }
+      if (req.method === "POST" && route === "/api/v1/admin/ai/story/generate") {
+        const b = await body(req);
+        if (!aiRateLimit("text",12)) return json(res,429,{message:"برای جلوگیری از هزینه‌ی ناخواسته، ۱۲ تولید در هر ۱۰ دقیقه مجاز است."});
+        const provider = String(b.provider || "auto").toLowerCase();
+        const keys = {openai:process.env.OPENAI_API_KEY||"",gemini:process.env.GEMINI_API_KEY||"",anthropic:process.env.ANTHROPIC_API_KEY||""};
+        const available = Object.keys(keys).filter(k=>keys[k]);
+        if (!available.length) return json(res,503,{message:"کلید هوش مصنوعی روی سرور تنظیم نشده است. یکی از OPENAI_API_KEY، GEMINI_API_KEY یا ANTHROPIC_API_KEY را در فایل محیطی سرور تنظیم کنید."});
+        const selected = provider === "compare" ? available : provider === "auto" ? [available[0]] : [provider];
+        if (selected.some(k=>!keys[k])) return json(res,503,{message:"کلید ارائه‌دهنده‌ی انتخاب‌شده روی سرور تنظیم نشده است."});
+        const f = {goal:String(b.goal||"معرفی خدمات").slice(0,240),audience:String(b.audience||"مخاطبان عمومی").slice(0,240),offer:String(b.offer||"شرایط مالی مشخصی ارائه نشده؛ هیچ عدد یا وعده‌ای نساز").slice(0,500),tone:String(b.tone||"professional").slice(0,80),platform:String(b.platform||"instagram").slice(0,40)};
+        const prompt = "برای برند دیجی‌بایل، یک استوری تبلیغاتی فارسی حرفه‌ای بساز. هدف کمپین: " + f.goal + ". مخاطب: " + f.audience + ". پیشنهاد یا شرایط واقعی که کاربر داده: " + f.offer + ". لحن: " + f.tone + ". بستر: " + f.platform + ". متن کوتاه، خوانا، جذاب و مناسب موبایل باشد. CTA کوتاه و روشن باشد. کپشن و هشتگ‌ها را هم تولید کن. فقط JSON با فیلدهای title, body, cta, caption, hashtags, visualPrompt برگردان. هیچ نرخ، تضمین تأیید وام، شراکت بانکی یا مزیت تأییدنشده‌ای را اختراع نکن.";
+        const results = await Promise.allSettled(selected.map(k=>callStoryProvider(k,keys[k],prompt)));
+        const candidates = results.filter(x=>x.status==="fulfilled").map(x=>x.value);
+        if (!candidates.length) return json(res,502,{message:"مدل‌های انتخاب‌شده پاسخ قابل استفاده ندادند؛ کلید، اعتبار حساب و نام مدل را بررسی کنید."});
+        return json(res,200,{candidates:candidates,compared:selected.length>1});
+      }
+      if (req.method === "POST" && route === "/api/v1/admin/ai/story/audio") {
+        const b = await body(req);
+        if (!aiRateLimit("audio", 5)) return json(res,429,{message:"برای جلوگیری از هزینه ناخواسته، حداکثر ۵ صدای تبلیغاتی در هر ۱۰ دقیقه مجاز است."});
+        const key = process.env.OPENAI_API_KEY || "";
+        if (!key) return json(res,503,{message:"تولید گفتار نیازمند OPENAI_API_KEY در محیط امن سرور است."});
+        const input = String(b.text || "").trim().slice(0,1800);
+        if (input.length < 8) return json(res,400,{message:"متن گویندگی کوتاه یا خالی است."});
+        const voice = ["alloy","ash","coral","echo","fable","onyx","nova","sage","shimmer","marin","cedar"].includes(String(b.voice||"").toLowerCase()) ? String(b.voice).toLowerCase() : "marin";
+        try {
+          const r = await fetch("https://api.openai.com/v1/audio/speech", {method:"POST",signal:AbortSignal.timeout(90000),headers:{"Authorization":"Bearer "+key,"Content-Type":"application/json"},body:JSON.stringify({model:process.env.OPENAI_TTS_MODEL||"gpt-4o-mini-tts",voice,input,instructions:"با فارسی روان و طبیعی، لحن تبلیغاتی حرفه‌ای، مطمئن و گرم صحبت کن. سرعت متوسط، تلفظ واضح و بدون اغراق. فقط متن داده‌شده را بخوان.",response_format:"mp3"})});
+          if (!r.ok) return json(res,502,{message:"سرویس گویندگی پاسخ موفق نداد ("+r.status+")."});
+          const bytes=Buffer.from(await r.arrayBuffer());
+          if(!bytes.length)return json(res,502,{message:"سرویس گویندگی فایل صوتی خالی برگرداند."});
+          return json(res,200,{audioBase64:bytes.toString("base64"),mimeType:"audio/mpeg",voice});
+        } catch(e) { return json(res,502,{message:e?.name==="TimeoutError"?"زمان تولید گویندگی تمام شد؛ دوباره تلاش کنید.":"ارتباط با سرویس گویندگی برقرار نشد."}); }
+      }
+      if (req.method === "POST" && route === "/api/v1/admin/ai/story/image") {
+        const b = await body(req);
+        if (!aiRateLimit("image",4)) return json(res,429,{message:"برای جلوگیری از هزینه‌ی ناخواسته، ۴ تصویر در هر ۱۰ دقیقه مجاز است."});
+        const key = process.env.OPENAI_API_KEY || "";
+        if (!key) return json(res,503,{message:"ساخت تصویر نیازمند OPENAI_API_KEY در فایل محیطی سرور است."});
+        const prompt = String(b.prompt||"").trim().slice(0,1800);
+        if (!prompt) return json(res,400,{message:"توضیح تصویر خالی است."});
+        const imageResponse = await fetch("https://api.openai.com/v1/images/generations", {method:"POST",signal:AbortSignal.timeout(90000),headers:{"Authorization":"Bearer "+key,"Content-Type":"application/json"},body:JSON.stringify({model:process.env.OPENAI_IMAGE_MODEL||"gpt-image-1",prompt:"Create a premium advertising background image for a Persian fintech brand. Vertical 9:16 composition, elegant editorial art direction, strong focal point, refined lighting, high-quality commercial photography or 3D illustration. No text, no letters, no logo, no watermark. Visual direction: "+prompt,size:"1024x1536",quality:"high",output_format:"png",n:1})});
+        const imageJson = await imageResponse.json().catch(()=>({}));
+        if (!imageResponse.ok) return json(res,502,{message:"سرویس ساخت تصویر پاسخ نداد ("+imageResponse.status+")."});
+        const b64 = imageJson.data && imageJson.data[0] && imageJson.data[0].b64_json;
+        if (!b64) return json(res,502,{message:"سرویس تصویر خروجی قابل استفاده نداد."});
+        return json(res,200,{imageData:"data:image/png;base64,"+b64});
+      }
+
+      const loanShape = (p) => ({ id:p.slug,name:p.name,description:p.description,badge:p.badge,isActive:p.is_active,minAmount:Number(p.min_amount),maxAmount:Number(p.max_amount),intervalMonths:intervalMonthsFromStored(p.interval_days),intervalDays:intervalMonthsFromStored(p.interval_days),tiers:p.tiers,conditions:p.conditions,documents:p.documents,title:p.title||p.name,imageUrl:p.image_url,fullDescriptionHtml:p.full_description_html,labels:p.labels,operationalCosts:p.operational_costs,interestMethod:p.interest_method,interestPercent:Number(p.interest_percent),lateDailyCoef:Number(p.late_daily_coef),earlyDailyCoef:Number(p.early_daily_coef),showInList:p.show_in_list,sendReminders:p.send_reminders });
+      const loanRow = (p) => ({ id:p.id,shape:loanShape(p),isActive:p.is_active,sortOrder:p.sort_order,showInList:p.show_in_list,sendReminders:p.send_reminders,legacySourceTable:p.legacy_source_table,legacyId:p.legacy_id,needsReview:Boolean(p.needs_review) });
+      const cleanLoanInput = (b) => {
+        const name=String(b.name||"").trim(), slug=String(b.slug||"").trim();
+        const num=(v)=>{if(v===null||v===undefined||v==="")return null;const n=Number(String(v).replace(/[۰-۹]/g,d=>"۰۱۲۳۴۵۶۷۸۹".indexOf(d)).replace(/[٠-٩]/g,d=>"٠١٢٣٤٥٦٧٨٩".indexOf(d)).replace(/[٬,\s]/g,"").replace(/٫/g,"."));return Number.isFinite(n)?n:null};
+        const minAmount=num(b.minAmount),maxAmount=num(b.maxAmount),intervalDays=num(b.intervalMonths??b.intervalDays),interestPercent=num(b.interestPercent??0),lateDailyCoef=num(b.lateDailyCoef??0),earlyDailyCoef=num(b.earlyDailyCoef??0);
+        const interestMethod=String(b.interestMethod||"Monthly");
+        const tiers=Array.isArray(b.tiers)?b.tiers:[],conditions=b.conditions&&typeof b.conditions==="object"&&!Array.isArray(b.conditions)?b.conditions:{},documents=Array.isArray(b.documents)?b.documents:[],labels=Array.isArray(b.labels)?b.labels:[],operationalCosts=Array.isArray(b.operationalCosts)?b.operationalCosts:[];
+        if(!name||name.length>120||!/^[a-z0-9-]{2,40}$/.test(slug))throw Object.assign(new Error("نام و شناسه انگلیسی معتبر لازم است."),{status:400});
+        if(!Number.isFinite(minAmount)||!Number.isFinite(maxAmount)||minAmount<=0||maxAmount<minAmount)throw Object.assign(new Error("بازه مبلغ وام نامعتبر است."),{status:400});
+        if(!Number.isInteger(intervalDays)||intervalDays<1||intervalDays>12)throw Object.assign(new Error("فاصله اقساط باید بین ۱ تا ۱۲ ماه باشد."),{status:400});
+        if(!["Monthly","Annual","Flat"].includes(interestMethod)||!Number.isFinite(interestPercent)||interestPercent<0||interestPercent>100)throw Object.assign(new Error("نوع یا نرخ بهره نامعتبر است."),{status:400});
+        if(!Number.isFinite(lateDailyCoef)||!Number.isFinite(earlyDailyCoef)||lateDailyCoef<0||lateDailyCoef>1||earlyDailyCoef<0||earlyDailyCoef>1)throw Object.assign(new Error("ضریب روزانه باید بین صفر و یک باشد."),{status:400});
+        if(!tiers.length||tiers.some(t=>!Number.isInteger(Number(t.months))||Number(t.months)<1||!Number.isFinite(Number(t.feePercent??0))||Number(t.feePercent??0)<0||Number(t.feePercent??0)>100||Number(t.downPaymentPercent??0)<0||Number(t.downPaymentPercent??0)>100))throw Object.assign(new Error("حداقل یک گزینه اقساط معتبر لازم است."),{status:400});
+        if(labels.length>10||labels.some(x=>typeof x!=="string"||!x.trim()||x.length>30))throw Object.assign(new Error("حداکثر ۱۰ برچسب، هرکدام تا ۳۰ نویسه."),{status:400});
+        if(operationalCosts.length>10||operationalCosts.some(x=>!String(x.title||"").trim()||Number(x.percent)<0||Number(x.percent)>100))throw Object.assign(new Error("هزینه عملیاتی نامعتبر است."),{status:400});
+        const cleanHtml=String(b.fullDescriptionHtml||"").replace(/<\s*(script|style|iframe|object|embed|form|meta|link)[^>]*>[\s\S]*?<\/\s*\1\s*>/gi,"").replace(/\s+on[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi,"").replace(/(href|src)\s*=\s*(['"])\s*javascript:[\s\S]*?\2/gi,"$1=\"#\"");
+        const imageUrl=String(b.imageUrl||"").slice(0,2200000); if(imageUrl&&!(/^data:image\/(?:svg\+xml|webp|png|jpeg);(?:charset=utf-8;)?base64,/i.test(imageUrl)||/^data:image\/svg\+xml;charset=utf-8,/i.test(imageUrl)||/^https:\/\//i.test(imageUrl)))throw Object.assign(new Error("تصویر طرح معتبر نیست."),{status:400});
+         return {name,slug,description:String(b.description||"").slice(0,500),badge:String(b.badge||"").slice(0,40),minAmount,maxAmount,intervalDays,imageUrl,tiers,conditions,documents,isActive:b.isActive!==false,sortOrder:Number.isFinite(num(b.sortOrder))?Math.trunc(num(b.sortOrder)):0,title:String(b.title||name).slice(0,160),interestMethod,interestPercent,lateDailyCoef,earlyDailyCoef,showInList:b.showInList!==false,sendReminders:b.sendReminders!==false,fullDescriptionHtml:cleanHtml,labels,operationalCosts};
+      };
+      if (req.method === "GET" && route === "/api/v1/admin/loan-products/legacy-candidates") {
+        const q=await pool.query("SELECT source_table,COUNT(*)::int AS row_count FROM legacy_source_data WHERE source_table<>'__legacy_schema__' AND source_table ~* '(loan.?product|loan.?type|loan.?plan|loan.?definition|loan.?configuration|(^|[.])loans?$|وام)' GROUP BY source_table ORDER BY source_table");
+        return json(res,200,q.rows);
+      }
+      // IMPORT_LATEST_VAMCITY_LOAN_DEFINITIONS_V3
+      // IMPORT_LATEST_VAMCITY_LOAN_DEFINITIONS_V3
+      if (req.method === "POST" && route === "/api/v1/admin/loan-products/import-legacy") {
+        // Import only the latest VamCity loan-definition table, never mix in the separate BluVam database.
+        const source=await pool.query("SELECT source_table FROM legacy_source_data WHERE source_table ~* '^vamcityc_vamcity_import_[0-9]{8}[.]dbo[.]Loans$' GROUP BY source_table ORDER BY source_table DESC LIMIT 1");
+        const sourceTable=source.rows[0]?.source_table;
+        if(!sourceTable)return json(res,200,{imported:0,skipped:0,candidateTables:[],message:"جدول واقعی تعریف وام در داده‌های منتقل‌شده پیدا نشد."});
+        const countResult=await pool.query("SELECT COUNT(*)::int AS row_count FROM legacy_source_data WHERE source_table=$1",[sourceTable]);const totalRows=Number(countResult.rows[0]?.row_count)||0;
+        const norm=(x)=>String(x||"").toLowerCase().replace(/[^a-z0-9\u0600-\u06ff]/g,"");
+        const pick=(p,keys)=>{const entries=Object.keys(p||{});for(const key of keys){const wanted=norm(key),k=entries.find(x=>norm(x)===wanted);if(k&&p[k]!==null&&p[k]!==undefined&&p[k]!=="")return p[k]}return null};
+        const num=(v)=>{if(v===null||v===undefined||v==="")return null;const n=Number(String(v).replace(/[۰-۹]/g,d=>"۰۱۲۳۴۵۶۷۸۹".indexOf(d)).replace(/[٠-٩]/g,d=>"٠١٢٣٤٥٦٧٨٩".indexOf(d)).replace(/[٬,\\s]/g,"").replace(/٫/g,"."));return Number.isFinite(n)?n:null};
+        const bool=(v)=>v===true||v===1||String(v).toLowerCase()==="true"||String(v)==="1";
+        const safeHtml=(v)=>String(v||"").slice(0,50000).replace(/<\s*(script|style|iframe|object|embed|form|meta|link)[^>]*>[\s\S]*?<\/\s*\1\s*>/gi,"").replace(/<\s*(script|style|iframe|object|embed|form|meta|link)[^>]*\/?\s*>/gi,"").replace(/\s+on[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi,"").replace(/(href|src)\s*=\s*(['"])\s*javascript:[\s\S]*?\2/gi,"$1=\"#\"");
+        let imported=0,skipped=0;
+        let lastLegacyId=null;
+        while(true){
+          // Process exactly one legacy payload per query. Imported legacy payloads can be large;
+          // keeping even a 100-row batch in Node memory caused the production container to be OOM-killed (exit 137).
+          // Keyset pagination makes this resumable: ON CONFLICT DO NOTHING safely skips rows already imported.
+          const q=await pool.query("SELECT source_table,legacy_id,payload FROM legacy_source_data WHERE source_table=$1 AND ($2::text IS NULL OR legacy_id>$2) ORDER BY legacy_id LIMIT 1",[sourceTable,lastLegacyId]);
+          if(!q.rowCount)break;
+          for(const row of q.rows){
+          lastLegacyId=row.legacy_id;
+          const p=row.payload&&typeof row.payload==="object"?row.payload:{};
+          const name=String(pick(p,["Title","Name","LoanName","LoanTitle","نام وام","عنوان وام"])||"").trim().slice(0,120);
+          const title=String(pick(p,["PlanTitle","Title","Name","عنوان طرح","عنوان"])||name).trim().slice(0,160);
+          if(!name){skipped++;continue}
+          const rawMin=num(pick(p,["MinAmount","MinimumAmount","MinLoanAmount","AmountFrom","FromAmount","حداقل مبلغ"]));
+          const rawMax=num(pick(p,["MaxAmount","MaximumAmount","MaxLoanAmount","AmountTo","ToAmount","حداکثر مبلغ"]));
+          const rawAmount=num(pick(p,["LoanAmount","Amount","AmountValue","مبلغ وام","مبلغ"]));
+          const min=rawMin??rawAmount??0,max=rawMax??rawAmount??rawMin??0;
+          const rate=num(pick(p,["ProfitPercent","InterestPercent","InterestRate","MonthlyInterest","AnnualInterest","RatePercent","درصد بهره","درصد سود","نرخ سود"]));
+          const profitType=pick(p,["LoanProfitType","InterestMethod","InterestType","ProfitType","CalculationMethod","نوع سود","نحوه محاسبه سود"]);
+          const methodText=String(profitType??"").toLowerCase();
+          const method=/annual|year|سالانه|بانک/.test(methodText)||methodText==="1"?"Annual":/flat|once|یکجا/.test(methodText)?"Flat":"Monthly";
+          const allowedRaw=pick(p,["AllowedInstallments","InstallmentOptions","RepaymentOptions"]);
+          let allowed=[];try{const av=typeof allowedRaw==="string"?JSON.parse(allowedRaw):allowedRaw;if(Array.isArray(av))allowed=av.map(t=>num(typeof t==="object"?(t.value??t.months??t.Months??t.installments??t.Installments):t)).filter(n=>n!==null&&n>0&&n<=600).map(Math.trunc);else if(av!==null&&av!==undefined){const n=num(av);if(n>0&&n<=600)allowed=[Math.trunc(n)]}}catch{if(typeof allowedRaw==="string")allowed=allowedRaw.split(/[,;|\/\s]+/).map(num).filter(n=>n!==null&&n>0&&n<=600).map(Math.trunc)}
+          const months=num(pick(p,["Months","InstallmentsCount","InstallmentCount","TermMonths","DurationMonths","MaxInstallments","تعداد اقساط","مدت ماه"]))??(allowed.length?Math.max(...allowed):null);
+          let tiers=[];try{const av=typeof allowedRaw==="string"?JSON.parse(allowedRaw):allowedRaw;if(Array.isArray(av))tiers=av.map(t=>({months:num(typeof t==="object"?(t.value??t.months??t.Months??t.installments??t.Installments):t),feePercent:0,downPaymentPercent:0})).filter(t=>t.months!==null&&t.months>0&&t.months<=600)}catch{}
+          if(!tiers.length&&months&&months>0)tiers=[{months:Math.trunc(months),feePercent:0,downPaymentPercent:0}];
+          const stableSlug="legacy-"+crypto.createHash("sha256").update(sourceTable+"|"+row.legacy_id).digest("hex").slice(0,16);
+          const description=String(pick(p,["PlanShortDescription","ShortDescription","Description","Summary","توضیحات"])||"").slice(0,500);
+          const conditions={};
+          let costs=[];try{const rawCosts=pick(p,["CostsJson","OperationalCostsJson","OperationalCosts"]);const parsed=typeof rawCosts==="string"?JSON.parse(rawCosts):rawCosts;if(Array.isArray(parsed))costs=parsed.map(c=>({title:String(c.title??c.Title??c.name??c.Name??"هزینه").slice(0,100),percent:num(c.percent??c.Percent??c.value??c.Value??c.amount??c.Amount)??0,months:num(c.months??c.Months)??null}))}catch{}const intervalDays=num(pick(p,["IntervalDays","InstallmentIntervalDays","فاصله اقساط"]))??0;const lateCoef=num(pick(p,["DelayPercent","LateDailyCoef","LatePenaltyDailyCoefficient"]))??0;const earlyCoef=num(pick(p,["EarlyPercent","EarlyDailyCoef","EarlyPaymentDailyCoefficient"]))??0;const ins=await pool.query("INSERT INTO loan_products(id,slug,name,title,description,badge,min_amount,max_amount,interval_days,tiers,conditions,documents,is_active,sort_order,interest_method,interest_percent,late_daily_coef,early_daily_coef,show_in_list,send_reminders,labels,full_description_html,operational_costs,legacy_source_table,legacy_id,legacy_payload,needs_review) VALUES($1,$2,$3,$4,$5,'',$6,$7,$8,$9::jsonb,$10::jsonb,'[]'::jsonb,FALSE,$11,$12,$13,$14,$15,FALSE,FALSE,'[]'::jsonb,$16,$17::jsonb,$18,$19,$20::jsonb,$21) ON CONFLICT DO NOTHING RETURNING id",[crypto.randomUUID(),stableSlug,name,title,description,min,max,intervalDays,JSON.stringify(tiers),JSON.stringify(conditions),1000+imported,method,rate??0,lateCoef,earlyCoef,safeHtml(pick(p,["PlanHtml","FullDescriptionHtml"])),JSON.stringify(costs),sourceTable,row.legacy_id,JSON.stringify(Object.fromEntries(["Title","Code","DelayPercent","EarlyPercent","ProfitPercent","MaxAmount","MaxMonthGap","AllowedInstallments","CostsJson","Disable","DisableText","IncludePlan","PlanTitle","PlanShortDescription","HasSponsore","DefaultSponsoreCheckoutDays","LoanProfitType"].filter(k=>p[k]!==undefined).map(k=>[k,p[k]]))), (min<=0 || max<min || tiers.length===0)]);
+          if(ins.rowCount)imported++;else skipped++;
+          if((imported+skipped)>0&&(imported+skipped)%100===0)console.log("LEGACY_LOAN_IMPORT_PROGRESS="+(imported+skipped)+" imported="+imported+" skipped="+skipped);
+          }
+        }
+        const statusSync=await pool.query("UPDATE loan_products lp JOIN legacy_source_data src ON lp.legacy_source_table=src.source_table AND lp.legacy_id=src.legacy_id SET show_in_list=CASE WHEN lower(COALESCE(src.payload->>'IncludePlan','')) IN ('true','1','yes','y') THEN TRUE WHEN lower(COALESCE(src.payload->>'IncludePlan','')) IN ('false','0','no','n') THEN FALSE ELSE lp.show_in_list END, is_active=CASE WHEN lower(COALESCE(src.payload->>'Disable','')) IN ('true','1','yes','y') THEN FALSE WHEN lower(COALESCE(src.payload->>'Disable','')) IN ('false','0','no','n') THEN TRUE WHEN COALESCE(lp.min_amount,0)>0 AND COALESCE(lp.max_amount,0)>=COALESCE(lp.min_amount,0) AND jsonb_typeof(lp.tiers)='array' AND jsonb_array_length(CASE WHEN jsonb_typeof(lp.tiers)='array' THEN lp.tiers ELSE '[]'::jsonb END)>0 THEN TRUE ELSE lp.is_active END, needs_review=(COALESCE(lp.min_amount,0)<=0 OR COALESCE(lp.max_amount,0)<COALESCE(lp.min_amount,0) OR jsonb_typeof(lp.tiers)<>'array' OR jsonb_array_length(CASE WHEN jsonb_typeof(lp.tiers)='array' THEN lp.tiers ELSE '[]'::jsonb END)=0), updated_at=NOW() WHERE src.source_table=$1",[sourceTable]);
+        return json(res,200,{imported,skipped,statusSynced:statusSync.rowCount,candidateTables:[sourceTable],message:imported?"تعریف‌های قدیمی وارد شدند و وضعیت فعال/نمایش از رکورد اصلی بازیابی شد.":"رکوردهای موجود بررسی شدند؛ وضعیت فعال/نمایش از داده قدیمی همگام شد."});
+      }
+      if (req.method === "GET" && route === "/api/v1/admin/loan-products") {
+        const params = url.searchParams;
+        const limit = Math.min(50, Math.max(10, Number.parseInt(params.get("limit") || "10", 10) || 10));
+        const offset = Math.max(0, Number.parseInt(params.get("offset") || "0", 10) || 0);
+        const search = String(params.get("q") || "").trim().slice(0, 120);
+        const method = String(params.get("method") || "").trim();
+        const review = String(params.get("review") || "").trim();
+        const active = String(params.get("active") || "").trim();
+        const where = "WHERE ($1='' OR name ILIKE CONCAT('%',$1,'%') OR title ILIKE CONCAT('%',$1,'%') OR slug ILIKE CONCAT('%',$1,'%') OR COALESCE(legacy_id::text,'') ILIKE CONCAT('%',$1,'%')) AND ($2='' OR interest_method=$2) AND ($3='' OR needs_review=($3='review')) AND ($4='' OR is_active=($4='active'))";
+        const [rows, count, summary] = await Promise.all([
+          pool.query("SELECT * FROM loan_products " + where + " ORDER BY sort_order,created_at DESC LIMIT $5 OFFSET $6", [search,method,review,active,limit,offset]),
+          pool.query("SELECT COUNT(*)::int AS total FROM loan_products " + where, [search,method,review,active]),
+          pool.query("SELECT COUNT(*)::int AS total, COUNT(*) FILTER (WHERE is_active)::int AS active, COUNT(*) FILTER (WHERE needs_review)::int AS review, COUNT(*) FILTER (WHERE show_in_list)::int AS listed FROM loan_products")
+        ]);
+        return json(res,200,{data:rows.rows.map(loanRow),total:count.rows[0].total,limit,offset,summary:summary.rows[0]});
+      }
+      if (req.method === "POST" && route === "/api/v1/admin/loan-products") {
+        const b=cleanLoanInput(await body(req));
+        const q=await pool.query("INSERT INTO loan_products(id,slug,name,title,description,badge,min_amount,max_amount,interval_days,tiers,conditions,documents,is_active,sort_order,interest_method,interest_percent,late_daily_coef,early_daily_coef,show_in_list,send_reminders,labels,full_description_html,operational_costs,image_url) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,$11::jsonb,$12::jsonb,$13,$14,$15,$16,$17,$18,$19,$20,$21::jsonb,$22,$23::jsonb,$24) RETURNING id",[crypto.randomUUID(),b.slug,b.name,b.title,b.description,b.badge,b.minAmount,b.maxAmount,b.intervalDays,JSON.stringify(b.tiers),JSON.stringify(b.conditions),JSON.stringify(b.documents),b.isActive,b.sortOrder,b.interestMethod,b.interestPercent,b.lateDailyCoef,b.earlyDailyCoef,b.showInList,b.sendReminders,JSON.stringify(b.labels),b.fullDescriptionHtml,JSON.stringify(b.operationalCosts),b.imageUrl]);
+        return json(res,201,{id:q.rows[0].id});
+      }
+      const loanToggle=route.match(/^\/api\/v1\/admin\/loan-products\/([0-9a-f-]{36})\/toggle$/i);
+      if(req.method==="POST"&&loanToggle){const q=await pool.query("UPDATE loan_products SET is_active=NOT is_active,show_in_list=CASE WHEN is_active=FALSE THEN TRUE ELSE show_in_list END,updated_at=NOW() WHERE id=$1 AND (is_active=TRUE OR needs_review=FALSE) RETURNING is_active,show_in_list",[loanToggle[1]]);if(q.rowCount)return json(res,200,{isActive:q.rows[0].is_active});const exists=await pool.query("SELECT needs_review FROM loan_products WHERE id=$1",[loanToggle[1]]);if(!exists.rowCount)return json(res,404,{message:"طرح وام پیدا نشد."});if(exists.rows[0].needs_review)return json(res,409,{message:"تعریف وام هنوز نیازمند بررسی است؛ ابتدا اطلاعات واقعی را تکمیل و ذخیره کنید."});return json(res,409,{message:"تغییر وضعیت انجام نشد."})}
+      const loanEdit=route.match(/^\/api\/v1\/admin\/loan-products\/([0-9a-f-]{36})$/i);
+      if(req.method==="PUT"&&loanEdit){
+        const b=cleanLoanInput(await body(req));
+        const q=await pool.query("UPDATE loan_products SET slug=$1,name=$2,title=$3,description=$4,badge=$5,min_amount=$6,max_amount=$7,interval_days=$8,tiers=$9::jsonb,conditions=$10::jsonb,documents=$11::jsonb,is_active=$12,sort_order=$13,interest_method=$14,interest_percent=$15,late_daily_coef=$16,early_daily_coef=$17,show_in_list=$18,send_reminders=$19,labels=$20::jsonb,full_description_html=$21,operational_costs=$22::jsonb,image_url=$23,needs_review=FALSE,updated_at=NOW() WHERE id=$24 RETURNING id", [b.slug,b.name,b.title,b.description,b.badge,b.minAmount,b.maxAmount,b.intervalDays,JSON.stringify(b.tiers),JSON.stringify(b.conditions),JSON.stringify(b.documents),b.isActive,b.sortOrder,b.interestMethod,b.interestPercent,b.lateDailyCoef,b.earlyDailyCoef,b.showInList,b.sendReminders,JSON.stringify(b.labels),b.fullDescriptionHtml,JSON.stringify(b.operationalCosts),b.imageUrl,loanEdit[1]]);
+        return q.rowCount?json(res,200,{id:q.rows[0].id}):json(res,404,{message:"طرح وام پیدا نشد."});
+      }
+
+      if (req.method === "GET" && route === "/api/v1/admin/sms/settings") {
+        const settings = await getKavenegarSettings();
+        return json(res, 200, { data: { provider: "kavenegar", sender: settings.sender, configured: Boolean(settings.apiKey), maskedKey: settings.apiKey ? "••••••••••••••••" : "" } });
+      }
+      if (req.method === "POST" && route === "/api/v1/admin/sms/settings") {
+        const b = await body(req); const apiKey = String(b.apiKey || "").trim(); const sender = String(b.sender || "").trim();
+        if (apiKey && (apiKey.length < 20 || apiKey.length > 256)) return json(res, 400, { message: "کلید API معتبر نیست." });
+        if (!/^\d{5,20}$/.test(sender)) return json(res, 400, { message: "شماره فرستنده باید فقط شامل ۵ تا ۲۰ رقم باشد." });
+        if (JWT_SECRET.length < 32) return json(res, 503, { message: "کلید رمزنگاری امن سرور تنظیم نشده است." });
+        const existing = await pool.query("SELECT api_key_encrypted FROM sms_provider_settings WHERE provider=$1 LIMIT 1", ["kavenegar"]);
+        const encrypted = apiKey ? encryptSetting(apiKey) : (existing.rows[0]?.api_key_encrypted || null);
+        if (!encrypted) return json(res, 400, { message: "کلید API کاوه‌نگار را وارد کنید." });
+        await pool.query("INSERT INTO sms_provider_settings(provider,api_key_encrypted,sender,updated_by,updated_at) VALUES($1,$2,$3,$4,NOW()) ON CONFLICT(provider) DO UPDATE SET api_key_encrypted=EXCLUDED.api_key_encrypted,sender=EXCLUDED.sender,updated_by=EXCLUDED.updated_by,updated_at=NOW()", ["kavenegar", encrypted, sender, Number(admin.sub) || null]);
+        await audit(req, "admin.sms_settings.updated", Number(admin.sub), { provider: "kavenegar", sender });
+        return json(res, 200, { ok: true, data: { provider: "kavenegar", sender, configured: true, maskedKey: "••••••••••••••••" } });
+      }
+      if (req.method === "POST" && route === "/api/v1/admin/sms/test") {
+        const b = await body(req); const phone = String(b.phone || "").trim(); const message = String(b.message || "").trim();
+        if (!/^09\d{9}$/.test(phone)) return json(res, 400, { message: "شماره مقصد باید با 09 شروع شود و ۱۱ رقم باشد." });
+        if (!message || message.length > 1000) return json(res, 400, { message: "متن آزمایشی باید بین ۱ تا ۱۰۰۰ نویسه باشد." });
+        if (limited("sms-test:" + String(admin.sub))) return json(res, 429, { message: "تعداد تست‌ها زیاد است؛ ۱۵ دقیقه بعد دوباره تلاش کنید." });
+        const messageId = await sendSmsText(phone, message);
+        await audit(req, "admin.sms_test.sent", Number(admin.sub), { provider: "kavenegar", phone: maskPhone(phone), messageId });
+        return json(res, 200, { ok: true, message: "کاوه‌نگار ارسال پیامک را پذیرفت.", messageId });
+      }
+      const loanRequestMatch = route.match(new RegExp("^/api/v1/admin/loan-requests/([0-9]+)(?:/(comments|status))?$"));
+      if (loanRequestMatch && req.method === "GET" && !loanRequestMatch[2]) {
+        const id=loanRequestMatch[1];
+        const q=await pool.query("SELECT id,request_key,source_table,legacy_id,applicant_name,mobile,national_code,status,amount,created_at,imported_at,payload,COALESCE(NULLIF(payload->>'CreatedByName',''),NULLIF(payload->>'CreatedByFullName',''),NULLIF(payload->>'CreatedByDisplayName',''),NULLIF(payload->>'CreatorName',''),NULLIF(payload->>'RegisteredByName',''),NULLIF(payload->>'RegisteredByFullName',''),NULLIF(payload->>'RegisterByName',''),NULLIF(payload->>'RegistererFullName',''),NULLIF(payload->>'CreatedByUserName',''),NULLIF(payload->>'CreatorUserName',''),NULLIF(payload->>'RegisteredByUserName',''),NULLIF(payload->>'RegistererName',''),NULLIF(payload->>'RegistrarName',''),NULLIF(payload->>'RegistrarFullName',''),NULLIF(payload->>'CreateUserName',''),NULLIF(payload->>'InsertUserName',''),NULLIF(payload->>'CreatedByUser',''),NULLIF(payload->>'RegisteredBy',''),NULLIF(payload->>'RegisterBy',''),NULLIF(payload->>'AdminName',''),NULLIF(payload->>'OperatorName',''),(SELECT COALESCE(NULLIF(u.payload->>'FullName',''),NULLIF(u.payload->>'DisplayName',''),NULLIF(trim(concat_ws(' ',NULLIF(u.payload->>'FirstName',''),NULLIF(u.payload->>'LastName',''))),''),NULLIF(u.payload->>'UserName',''),NULLIF(u.payload->>'Username','')) FROM legacy_source_data u WHERE u.source_table=regexp_replace(lr.source_table,'[.]UserLoanRequests$','.AspNetUsers') AND u.payload->>'Id'=COALESCE(NULLIF(lr.payload->>'CreatedByUserId',''),NULLIF(lr.payload->>'CreatedById',''),NULLIF(lr.payload->>'CreatedByAdminId',''),NULLIF(lr.payload->>'CreatorUserId',''),NULLIF(lr.payload->>'CreatorId',''),NULLIF(lr.payload->>'RegisterUserId',''),NULLIF(lr.payload->>'RegistererId',''),NULLIF(lr.payload->>'RegisteredById',''),NULLIF(lr.payload->>'InsertUserId',''),NULLIF(lr.payload->>'CreateUserId',''),NULLIF(lr.payload->>'CreatedBy','')) LIMIT 1),NULLIF(payload->>'CreatedBy',''),(SELECT COALESCE(NULLIF(a.payload->>'FullName',''),NULLIF(a.payload->>'DisplayName',''),NULLIF(a.payload->>'Name',''),NULLIF(trim(concat_ws(' ',NULLIF(a.payload->>'FirstName',''),NULLIF(a.payload->>'LastName',''))),''),NULLIF(a.payload->>'UserName',''),NULLIF(a.payload->>'Username','')) FROM legacy_source_data a WHERE a.source_table=regexp_replace(lr.source_table,'[.]UserLoanRequests$','.Agents') AND a.payload->>'Id'=NULLIF(lr.payload->>'AgentId','') LIMIT 1),(SELECT COALESCE(NULLIF(a.payload->>'FullName',''),NULLIF(a.payload->>'DisplayName',''),NULLIF(a.payload->>'Name',''),NULLIF(trim(concat_ws(' ',NULLIF(a.payload->>'FirstName',''),NULLIF(a.payload->>'LastName',''))),''),NULLIF(a.payload->>'UserName',''),NULLIF(a.payload->>'Username','')) FROM legacy_source_data a WHERE a.source_table=regexp_replace(lr.source_table,'[.]UserLoanRequests$','.AspNetUsers') AND a.payload->>'Id'=NULLIF(lr.payload->>'AgentId','') LIMIT 1),NULLIF(payload->>'UserName',''),NULLIF(payload->>'Username',''),'نام ثبت‌کننده در منبع موجود نیست') AS registrar FROM loan_requests lr WHERE lr.id=$1",[id]);
+        if(!q.rowCount)return json(res,404,{message:"درخواست پیدا نشد."});
+        const comments=await pool.query("SELECT id,author_name,comment,created_at FROM loan_request_comments WHERE loan_request_id=$1 ORDER BY created_at DESC,id DESC LIMIT 200",[id]);
+        const history=await pool.query("SELECT id,old_status,new_status,note,changed_by_name,changed_at FROM loan_request_status_history WHERE loan_request_id=$1 ORDER BY changed_at DESC,id DESC LIMIT 100",[id]);
+        return json(res,200,{data:{...q.rows[0],comments:comments.rows,history:history.rows}});
+      }
+      if(loanRequestMatch && req.method==="POST" && loanRequestMatch[2]==="comments"){
+        const id=loanRequestMatch[1],b=await body(req),comment=String(b.comment||"").trim();
+        if(!comment||comment.length>5000)return json(res,400,{message:"متن نظر باید بین ۱ تا ۵۰۰۰ نویسه باشد."});
+        const exists=await pool.query("SELECT id FROM loan_requests WHERE id=$1",[id]);
+        if(!exists.rowCount)return json(res,404,{message:"درخواست پیدا نشد."});
+        const authorId=Number(admin.sub)||null;
+        const author=await pool.query("SELECT COALESCE(NULLIF(full_name,''),NULLIF(username,''),'مدیر سامانه') AS name FROM users WHERE id=$1",[authorId]);
+        const name=author.rows[0]?.name||"مدیر سامانه";
+        const q=await pool.query("INSERT INTO loan_request_comments(loan_request_id,author_user_id,author_name,comment) VALUES($1,$2,$3,$4) RETURNING id,author_name,comment,created_at",[id,authorId,name,comment]);
+        await audit(req,"admin.loan_request.comment_added",authorId,{loanRequestId:id,commentId:q.rows[0].id});
+        return json(res,201,{data:q.rows[0]});
+      }
+      if(loanRequestMatch && req.method==="POST" && loanRequestMatch[2]==="status"){
+        const id=loanRequestMatch[1],b=await body(req),next=String(b.status||"").trim().slice(0,120),note=String(b.note||"").trim().slice(0,2000);
+        if(!next)return json(res,400,{message:"وضعیت جدید را انتخاب کنید."});
+        const authorId=Number(admin.sub)||null;
+        const author=await pool.query("SELECT COALESCE(NULLIF(full_name,''),NULLIF(username,''),'مدیر سامانه') AS name FROM users WHERE id=$1",[authorId]);
+        const name=author.rows[0]?.name||"مدیر سامانه";
+        const prior=await pool.query("SELECT status FROM loan_requests WHERE id=$1",[id]);
+        if(!prior.rowCount)return json(res,404,{message:"درخواست پیدا نشد."});
+        const oldStatus=String(prior.rows[0].status||"");
+        const changed=await pool.query("UPDATE loan_requests SET status=$1 WHERE id=$2 RETURNING id,status,payload",[next,id]);
+        await pool.query("INSERT INTO loan_request_status_history(loan_request_id,old_status,new_status,note,changed_by,changed_by_name) VALUES($1,$2,$3,$4,$5,$6)",[id,oldStatus,next,note,authorId,name]);
+        await audit(req,"admin.loan_request.status_changed",authorId,{loanRequestId:id,newStatus:next});
+        return json(res,200,{data:{id:changed.rows[0].id,status:changed.rows[0].status}});
+      }
+      if (req.method === "GET" && route === "/api/v1/admin/loan-requests") {
+        const page = Math.min(100000, Math.max(1, Number.parseInt(url.searchParams.get("page") || "1", 10) || 1));
+        const pageSize = Math.min(250, Math.max(10, Number.parseInt(url.searchParams.get("pageSize") || "25", 10) || 25));
+        const search = String(url.searchParams.get("q") || "").trim().slice(0,120);
+        const status = String(url.searchParams.get("status") || "").trim().slice(0,120);
+        const from = String(url.searchParams.get("from") || "").trim();
+        const to = String(url.searchParams.get("to") || "").trim();
+        const where = []; const params = [];
+        if (search) { params.push("%" + search + "%"); where.push("(applicant_name ILIKE $" + params.length + " OR mobile ILIKE $" + params.length + " OR national_code ILIKE $" + params.length + " OR legacy_id ILIKE $" + params.length + ")"); }
+        if (status) { params.push(status); where.push("status=$" + params.length); }
+        if (from && /^\d{4}-\d{2}-\d{2}$/.test(from)) { params.push(from); where.push("created_at >= $" + params.length + "::date"); }
+        if (to && /^\d{4}-\d{2}-\d{2}$/.test(to)) { params.push(to); where.push("created_at < ($" + params.length + "::date + INTERVAL '1 day')"); }
+        const filter = where.length ? " WHERE " + where.join(" AND ") : "";
+        const count = await pool.query("SELECT COUNT(*)::int AS total FROM loan_requests" + filter, params);
+        const pageParams = [...params, pageSize, (page - 1) * pageSize];
+        const rows = await pool.query("SELECT id,applicant_name,mobile,national_code,status,amount,created_at,COALESCE(NULLIF(payload->>'CreatedByName',''),NULLIF(payload->>'CreatedByFullName',''),NULLIF(payload->>'CreatedByDisplayName',''),NULLIF(payload->>'CreatorName',''),NULLIF(payload->>'RegisteredByName',''),NULLIF(payload->>'RegisteredByFullName',''),NULLIF(payload->>'RegisterByName',''),NULLIF(payload->>'RegistererFullName',''),NULLIF(payload->>'CreatedByUserName',''),NULLIF(payload->>'CreatorUserName',''),NULLIF(payload->>'RegisteredByUserName',''),NULLIF(payload->>'RegistererName',''),NULLIF(payload->>'RegistrarName',''),NULLIF(payload->>'RegistrarFullName',''),NULLIF(payload->>'CreateUserName',''),NULLIF(payload->>'InsertUserName',''),NULLIF(payload->>'CreatedByUser',''),NULLIF(payload->>'RegisteredBy',''),NULLIF(payload->>'RegisterBy',''),NULLIF(payload->>'AdminName',''),NULLIF(payload->>'OperatorName',''),(SELECT COALESCE(NULLIF(u.payload->>'FullName',''),NULLIF(u.payload->>'DisplayName',''),NULLIF(trim(concat_ws(' ',NULLIF(u.payload->>'FirstName',''),NULLIF(u.payload->>'LastName',''))),''),NULLIF(u.payload->>'UserName',''),NULLIF(u.payload->>'Username','')) FROM legacy_source_data u WHERE u.source_table=regexp_replace(lr.source_table,'[.]UserLoanRequests$','.AspNetUsers') AND u.payload->>'Id'=COALESCE(NULLIF(lr.payload->>'CreatedByUserId',''),NULLIF(lr.payload->>'CreatedById',''),NULLIF(lr.payload->>'CreatedByAdminId',''),NULLIF(lr.payload->>'CreatorUserId',''),NULLIF(lr.payload->>'CreatorId',''),NULLIF(lr.payload->>'RegisterUserId',''),NULLIF(lr.payload->>'RegistererId',''),NULLIF(lr.payload->>'RegisteredById',''),NULLIF(lr.payload->>'InsertUserId',''),NULLIF(lr.payload->>'CreateUserId',''),NULLIF(lr.payload->>'CreatedBy','')) LIMIT 1),NULLIF(payload->>'CreatedBy',''),(SELECT COALESCE(NULLIF(a.payload->>'FullName',''),NULLIF(a.payload->>'DisplayName',''),NULLIF(a.payload->>'Name',''),NULLIF(trim(concat_ws(' ',NULLIF(a.payload->>'FirstName',''),NULLIF(a.payload->>'LastName',''))),''),NULLIF(a.payload->>'UserName',''),NULLIF(a.payload->>'Username','')) FROM legacy_source_data a WHERE a.source_table=regexp_replace(lr.source_table,'[.]UserLoanRequests$','.Agents') AND a.payload->>'Id'=NULLIF(lr.payload->>'AgentId','') LIMIT 1),(SELECT COALESCE(NULLIF(a.payload->>'FullName',''),NULLIF(a.payload->>'DisplayName',''),NULLIF(a.payload->>'Name',''),NULLIF(trim(concat_ws(' ',NULLIF(a.payload->>'FirstName',''),NULLIF(a.payload->>'LastName',''))),''),NULLIF(a.payload->>'UserName',''),NULLIF(a.payload->>'Username','')) FROM legacy_source_data a WHERE a.source_table=regexp_replace(lr.source_table,'[.]UserLoanRequests$','.AspNetUsers') AND a.payload->>'Id'=NULLIF(lr.payload->>'AgentId','') LIMIT 1),NULLIF(payload->>'UserName',''),NULLIF(payload->>'Username',''),'نام ثبت‌کننده در منبع موجود نیست') AS registrar FROM loan_requests lr" + filter + " ORDER BY created_at DESC NULLS LAST, id DESC LIMIT $" + (params.length+1) + " OFFSET $" + (params.length+2), pageParams);
+        const summary = await pool.query("SELECT COUNT(*)::int AS total,COUNT(*) FILTER (WHERE lower(status) ~ '(new|pending|در انتظار|جدید|ثبت)')::int AS pending,COUNT(*) FILTER (WHERE lower(status) ~ '(approve|approved|تایید|تأیید|پذیرش)')::int AS approved,COUNT(*) FILTER (WHERE lower(status) ~ '(reject|رد|لغو|cancel)')::int AS rejected,COUNT(*) FILTER (WHERE created_at::date=CURRENT_DATE)::int AS today FROM loan_requests");
+        const statuses = await pool.query("SELECT status,COUNT(*)::int AS count FROM loan_requests WHERE status<>'' GROUP BY status ORDER BY count DESC,status LIMIT 100");
+        return json(res,200,{data:{rows:rows.rows,total:Number(count.rows[0]?.total)||0,page,pageSize,summary:summary.rows[0],statuses:statuses.rows}});
+      }
+      if (req.method === "GET" && route === "/api/v1/admin/summary") {
+        const db=legacyMaria();
+        const [directory,mainTenants,blueTenants]=await Promise.all([
+          unifiedUserDirectory({page:1,pageSize:1}),
+          db.query("SELECT COUNT(*) AS total FROM Customers"),
+          db.query("SELECT COUNT(*) AS total FROM bluvamdb__Customers")
+        ]);
+        const tenants=(Number(mainTenants[0][0]?.total)||0)+(Number(blueTenants[0][0]?.total)||0);
+        return json(res,200,{data:{users:directory.overallTotal,admins:directory.adminTotal,agents:directory.agentTotal,marketers:directory.marketerTotal,customers:directory.customerTotal,legacy_customers:directory.customerTotal,legacy_users:directory.overallTotal,users_active:directory.activeTotal,users_inactive:directory.inactiveTotal,users_today:directory.todayTotal,latest_user_registration:directory.latestRegistration,latestRegistration:directory.latestRegistration,legacy_customer_tenants:tenants,transfer_accounts:directory.transferTotal,identity_sources:directory.sourceCounts,smsConfigured:Boolean(KAVENEGAR_API_KEY),identitySource:directory.sourceTable,businessDateTimezone:"Asia/Tehran"}});
+      }
+      if (req.method === "GET" && route === "/api/v1/admin/users") {
+        const data=await unifiedUserDirectory({page:1,pageSize:500});
+        return json(res,200,{data:data.rows,total:data.overallTotal,sourceTable:data.sourceTable,sourceCounts:data.sourceCounts});
+      }
+      if (req.method === "GET" && route === "/api/v1/admin/roles") {
+        const db=legacyMaria();
+        const [mainRoles,blueRoles,transferRoles]=await Promise.all([
+          db.query("SELECT Name FROM AspNetRoles ORDER BY Name"),
+          db.query("SELECT Name FROM bluvamdb__AspNetRoles ORDER BY Name"),
+          db.query("SELECT Name FROM OnlineMoneyTransfer__AspNetRoles ORDER BY Name")
+        ]);
+        const builtins=["customer","member","agent","marketer","customermarketer","admin","superadmin"].map(code=>({code,display_name:legacyRoleLabel(code),editable:true}));
+        const map=new Map(builtins.map(r=>[r.code,r]));
+        for(const item of [...mainRoles[0],...blueRoles[0]]){const code=legacyRoleCode(item.Name);map.set(code,{code,display_name:legacyRoleLabel(code)===code?String(item.Name):legacyRoleLabel(code),editable:["customer","member","agent","marketer","customermarketer","admin","superadmin"].includes(code)});}
+        for(const item of transferRoles[0]){const code=legacyRoleCode(item.Name);if(!map.has(code))map.set(code,{code,display_name:String(item.Name||code),editable:false});}
+        return json(res,200,{data:[...map.values()]});
+      }
+      if (req.method === "GET" && route === "/api/v1/admin/users-page") {
+        const page=Math.max(1,Number.parseInt(url.searchParams.get("page")||"1",10)||1);
+        const pageSize=Math.min(100,Math.max(10,Number.parseInt(url.searchParams.get("pageSize")||"50",10)||50));
+        const data=await unifiedUserDirectory({page,pageSize,search:url.searchParams.get("q")||"",role:url.searchParams.get("role")||"",status:url.searchParams.get("status")||""});
+        return json(res,200,{data});
+      }
+      if (req.method === "PATCH" && /^\/api\/v1\/admin\/users\/[^/]+$/.test(route)) {
+        const rawId=decodeURIComponent(route.split("/").pop()),input=await body(req),actorId=Number(admin.sub);
+        const role=input.role===undefined?null:String(input.role).trim().toLowerCase(),active=input.isActive===undefined?null:input.isActive;
+        if(active!==null&&typeof active!=="boolean")return json(res,400,{message:"وضعیت حساب معتبر نیست."});
+        if(role!==null){
+          if(!["customer","member","agent","marketer","customermarketer","admin","superadmin"].includes(role))return json(res,400,{message:"نقش انتخاب‌شده معتبر نیست."});
+          if(admin.role!=="superadmin")return json(res,403,{message:"تغییر نقش فقط برای مدیر ارشد مجاز است."});
+        }
+        const fullName=input.fullName===undefined?null:String(input.fullName).trim().replace(/\s+/g," ").slice(0,160);
+        const phone=input.phone===undefined?null:(String(input.phone).trim()||null),email=input.email===undefined?null:(String(input.email).trim().slice(0,254)||null);
+        if(fullName!==null&&fullName.length<3)return json(res,400,{message:"نام باید حداقل ۳ نویسه باشد."});
+        if(phone!==null&&!phoneOk(phone))return json(res,400,{message:"شماره موبایل باید با قالب ۰۹ و ۱۱ رقم وارد شود."});
+        if(email!==null&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))return json(res,400,{message:"نشانی ایمیل معتبر نیست."});
+        if(rawId.startsWith("legacy:")){
+          const parts=rawId.split(":");
+          const sourceKey=parts.length>=3?parts[1]:"main";
+          const legacyId=parts.length>=3?parts.slice(2).join(":"):parts[1];
+          const configs={
+            main:{users:"AspNetUsers",roles:"AspNetRoles",links:"AspNetUserRoles",roleEditable:true},
+            bluvam:{users:"bluvamdb__AspNetUsers",roles:"bluvamdb__AspNetRoles",links:"bluvamdb__AspNetUserRoles",roleEditable:true},
+            transfer:{users:"OnlineMoneyTransfer__AspNetUsers",roles:"OnlineMoneyTransfer__AspNetRoles",links:"OnlineMoneyTransfer__AspNetUserRoles",roleEditable:false}
+          };
+          const config=configs[sourceKey];
+          if(!config||!legacyId)return json(res,400,{message:"منبع یا شناسه حساب معتبر نیست."});
+          if(role!==null&&!config.roleEditable)return json(res,403,{message:"نقش حساب‌های انتقال وجه از این پنل قابل تغییر نیست."});
+          const db=legacyMaria(),conn=await db.getConnection();let updated;
+          const usersTable=sqlIdent(config.users),rolesTable=sqlIdent(config.roles),linksTable=sqlIdent(config.links);
+          try{
+            await conn.beginTransaction();
+            const [currentRows]=await conn.query("SELECT u.Id,u.IsActive,(SELECT GROUP_CONCAT(DISTINCT r.Name ORDER BY r.Name SEPARATOR ',') FROM "+linksTable+" ur JOIN "+rolesTable+" r ON r.Id=ur.RoleId WHERE ur.UserId=u.Id) AS role_names FROM "+usersTable+" u WHERE u.Id=? LIMIT 1",[legacyId]);
+            if(!currentRows.length){await conn.rollback();return json(res,404,{message:"حساب کاربری پیدا نشد."});}
+            const current=currentRows[0],currentRoleNames=String(current.role_names||"").split(",").filter(Boolean),currentRoles=currentRoleNames.map(legacyRoleCode);
+            if((currentRoles.includes("superadmin")||role==="superadmin")&&admin.role!=="superadmin"){await conn.rollback();return json(res,403,{message:"مدیریت حساب مدیر ارشد فقط برای مدیر ارشد مجاز است."});}
+            if(sourceKey==="main"&&(active===false||(role!==null&&role!==directoryRoleFromNames(currentRoleNames)))){
+              try{
+                const [actorMap]=await conn.query("SELECT MariaDbUserId FROM DigibailAppUserIdentity WHERE AppUserId=? AND LegacySource='mariadb.AspNetUsers' LIMIT 1",[actorId]);
+                if(actorMap.length&&String(actorMap[0].MariaDbUserId)===String(legacyId)){await conn.rollback();return json(res,400,{message:"امکان تغییر نقش یا غیرفعال‌کردن حساب مدیر واردشده وجود ندارد."});}
+              }catch{}
+            }
+            if(currentRoles.includes("superadmin")&&(active===false||(role!==null&&role!=="superadmin"))){
+              const [lastAdmin]=await conn.query("SELECT (SELECT COUNT(DISTINCT u.Id) FROM AspNetUsers u JOIN AspNetUserRoles ur ON ur.UserId=u.Id JOIN AspNetRoles r ON r.Id=ur.RoleId WHERE LOWER(REPLACE(REPLACE(REPLACE(r.Name,' ',''),'-',''),'_',''))='superadmin' AND COALESCE(u.IsActive,1)=1)+(SELECT COUNT(DISTINCT u.Id) FROM bluvamdb__AspNetUsers u JOIN bluvamdb__AspNetUserRoles ur ON ur.UserId=u.Id JOIN bluvamdb__AspNetRoles r ON r.Id=ur.RoleId WHERE LOWER(REPLACE(REPLACE(REPLACE(r.Name,' ',''),'-',''),'_',''))='superadmin' AND COALESCE(u.IsActive,1)=1) AS total");
+              if(Number(lastAdmin[0]?.total||0)<=1){await conn.rollback();return json(res,400,{message:"حداقل یک مدیر ارشد فعال باید در سامانه باقی بماند."});}
+            }
+            const [columnRows]=await conn.query("SELECT COLUMN_NAME FROM information_schema.columns WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=?",[config.users]);
+            const columns=new Set(columnRows.map(x=>String(x.COLUMN_NAME)));
+            const sets=[],values=[];
+            if(fullName!==null){const parts=fullName.split(" "),first=parts.shift()||"",last=parts.join(" ");if(columns.has("FirstName")){sets.push("FirstName=?");values.push(first);}if(columns.has("LastName")){sets.push("LastName=?");values.push(last);}}
+            if(input.phone!==undefined){const sourcePhone=sourceKey==="transfer"&&phone?phone.replace(/^0/,"").slice(0,10):phone;for(const col of ["Mobile","Phone","PhoneNumber"])if(columns.has(col)){sets.push(sqlIdent(col)+"=?");values.push(sourcePhone);}}
+            if(input.email!==undefined&&columns.has("Email")){sets.push("Email=?");values.push(email);}
+            if(active!==null){if(!columns.has("IsActive"))throw new Error(config.users+".IsActive column is missing");sets.push("IsActive=?");values.push(active?1:0);}
+            if(sets.length){values.push(legacyId);await conn.query("UPDATE "+usersTable+" SET "+sets.join(",")+" WHERE Id=?",values);}
+            if(role!==null){
+              const [roleRows]=await conn.query("SELECT Id,Name FROM "+rolesTable);
+              const selected=roleRows.find(r=>legacyRoleCode(r.Name)===role);
+              if(!selected)throw Object.assign(new Error("نقش انتخاب‌شده در منبع حساب وجود ندارد."),{status:400});
+              const coreRoleIds=roleRows.filter(r=>["customer","member","agent","marketer","customermarketer","admin","superadmin"].includes(legacyRoleCode(r.Name))).map(r=>r.Id);
+              if(coreRoleIds.length)await conn.query("DELETE FROM "+linksTable+" WHERE UserId=? AND RoleId IN (?)",[legacyId,coreRoleIds]);
+              await conn.query("INSERT INTO "+linksTable+"(UserId,RoleId) VALUES(?,?)",[legacyId,selected.Id]);
+            }
+            await conn.commit();
+            const phoneExpression=sourceKey==="transfer"?"CASE WHEN u.PhoneNumber REGEXP '^9[0-9]{9}
+            const [result]=await conn.query("SELECT CAST(u.Id AS CHAR) AS legacy_id,COALESCE(NULLIF(TRIM(CONCAT_WS(' ',u.FirstName,u.LastName)),''),u.UserName) AS full_name,"+phoneExpression+" AS phone,u.Email AS email,COALESCE(u.IsActive,1) AS is_active,(SELECT GROUP_CONCAT(DISTINCT r.Name ORDER BY r.Name SEPARATOR ',') FROM "+linksTable+" ur JOIN "+rolesTable+" r ON r.Id=ur.RoleId WHERE ur.UserId=u.Id) AS role_names FROM "+usersTable+" u WHERE u.Id=?",[legacyId]);
+            const names=String(result[0]?.role_names||"").split(",").filter(Boolean),roles=names.map(legacyRoleCode),primary=directoryRoleFromNames(names);
+            updated={...result[0],id:rawId,role:primary,roles:roles.length?roles:[primary],is_active:Boolean(Number(result[0]?.is_active)),source:sourceKey,legacy_source:config.users,role_editable:config.roleEditable};
+          }catch(error){await conn.rollback().catch(()=>{});throw error;}finally{conn.release();}
+          const identitySource={
+            main:"mariadb.AspNetUsers",
+            bluvam:"mariadb.bluvamdb__AspNetUsers",
+            transfer:"mariadb.OnlineMoneyTransfer__AspNetUsers"
+          }[sourceKey];
+          if(identitySource){
+            const mappingColumn=sourceKey==="transfer"?"MariaDbUserKey":"MariaDbUserId";
+            const [mappingRows]=await db.query(
+              "SELECT AppUserId FROM DigibailAppUserIdentity WHERE LegacySource=? AND "+mappingColumn+"=? LIMIT 1",
+              [identitySource,legacyId]
+            );
+            if(mappingRows.length){
+              const appId=Number(mappingRows[0].AppUserId);
+              await pool.query(
+                "UPDATE users SET full_name=COALESCE($1,full_name),phone=CASE WHEN $2=1 THEN $3 ELSE phone END,email=CASE WHEN $4=1 THEN $5 ELSE email END,role=COALESCE($6,role),is_active=COALESCE($7,is_active),updated_at=NOW() WHERE id=$8",
+                [fullName,input.phone!==undefined?1:0,phone,input.email!==undefined?1:0,email,role,active,appId]
+              );
+              if(role!==null)await pool.query(
+                "INSERT INTO user_role_overrides(user_id,role_code,updated_by,updated_at) VALUES($1,$2,$3,NOW()) ON DUPLICATE KEY UPDATE role_code=VALUES(role_code),updated_by=VALUES(updated_by),updated_at=NOW()",
+                [appId,role,actorId]
+              );
+            }
+          }
+          await audit(req,"admin.user.updated",actorId,{targetUserId:rawId,source:"mariadb."+config.users,changed:{fullName:fullName!==null,phone:input.phone!==undefined,email:input.email!==undefined,role:role!==null,isActive:active!==null}});
+          return json(res,200,{data:updated,message:"اطلاعات حساب به‌روزرسانی شد."});
+        }
+        const id=Number(rawId.startsWith("app:")?rawId.slice(4):rawId);
+        if(!Number.isSafeInteger(id)||id<1)return json(res,400,{message:"شناسه حساب معتبر نیست."});
+        const current=await pool.query("SELECT id,role,is_active FROM users WHERE id=$1",[id]);
+        if(!current.rowCount)return json(res,404,{message:"حساب کاربری پیدا نشد."});
+        const target=current.rows[0];
+        if(Number(target.id)===actorId&&role!==null&&role!==target.role)return json(res,400,{message:"نقش حساب مدیر واردشده را نمی‌توان از همین نشست تغییر داد."});
+        if(Number(target.id)===actorId&&active===false)return json(res,400,{message:"امکان غیرفعال‌کردن حساب مدیر واردشده وجود ندارد."});
+        if((target.role==="superadmin"||role==="superadmin")&&admin.role!=="superadmin")return json(res,403,{message:"مدیریت حساب مدیر ارشد فقط برای مدیر ارشد مجاز است."});
+        const client=await pool.connect();let updated;
+        try{
+          await client.query("BEGIN");
+          const result=await client.query("UPDATE users SET full_name=COALESCE($1,full_name),phone=CASE WHEN $2::boolean THEN $3 ELSE phone END,email=CASE WHEN $4::boolean THEN $5 ELSE email END,role=COALESCE($6,role),is_active=COALESCE($7,is_active),updated_at=NOW() WHERE id=$8 RETURNING id,full_name,phone,email,role,is_active,updated_at",[fullName,input.phone!==undefined,phone,input.email!==undefined,email,role,active,id]);
+          updated=result.rows[0];if(role!==null)await client.query("INSERT INTO user_role_overrides(user_id,role_code,updated_by,updated_at) VALUES($1,$2,$3,NOW()) ON CONFLICT(user_id) DO UPDATE SET role_code=EXCLUDED.role_code,updated_by=EXCLUDED.updated_by,updated_at=NOW()",[id,role,actorId]);await client.query("COMMIT");
+        }catch(error){await client.query("ROLLBACK");throw error;}finally{client.release();}
+        try{
+          const mirror=await pool.query("SELECT id,username,phone,full_name,national_code,email,is_active,COALESCE((SELECT role_code FROM user_role_overrides o WHERE o.user_id=users.id),role) AS effective_role,to_char(created_at AT TIME ZONE 'Asia/Tehran','YYYY-MM-DD HH24:MI:SS.US') AS created_at_tehran FROM users WHERE id=$1",[id]);
+          if(mirror.rowCount)await syncUserToMariaDB(legacyMaria(),mirror.rows[0]);
+        }catch(mirrorError){console.error("MARIADB_ADMIN_USER_MIRROR_FAILED="+String(mirrorError.code||mirrorError.name||"unknown"));}
+        await audit(req,"admin.user.updated",actorId,{targetUserId:id,source:"app.users",changed:{fullName:fullName!==null,phone:input.phone!==undefined,email:input.email!==undefined,role:role!==null,isActive:active!==null}});
+        return json(res,200,{data:updated,message:"اطلاعات حساب به‌روزرسانی شد."});
+      }
+      if (req.method === "GET" && route === "/api/v1/admin/legacy-customers") {
+        const directory=await unifiedUserDirectory({page:1,pageSize:1,role:"customer"});
+        return json(res,200,{data:{legacy_customers:directory.customerTotal,legacy_users:directory.overallTotal,today:directory.customerTodayTotal,latestRegistration:directory.latestRegistration,sourceTable:directory.sourceTable,sourceCounts:directory.sourceCounts,timezone:"Asia/Tehran"}});
+      }
+      if (req.method === "GET" && route === "/api/v1/admin/legacy-customers-page") {
+        const page=Math.max(1,Number.parseInt(url.searchParams.get("page")||"1",10)||1);
+        const pageSize=Math.min(100,Math.max(10,Number.parseInt(url.searchParams.get("pageSize")||"50",10)||50));
+        const data=await unifiedUserDirectory({page,pageSize,search:url.searchParams.get("q")||"",role:"customer"});
+        return json(res,200,{data:{...data,legacy_customers:data.customerTotal,overallCustomerTotal:data.customerTotal}});
+      }
+      if (req.method === "GET" && route === "/api/v1/admin/legacy-agents-page") {
+        const page=Math.max(1,Number.parseInt(url.searchParams.get("page")||"1",10)||1),pageSize=Math.min(100,Math.max(10,Number.parseInt(url.searchParams.get("pageSize")||"25",10)||25));
+        const search=String(url.searchParams.get("q")||""),status=String(url.searchParams.get("status")||"");
+        const data=await unifiedUserDirectory({page,pageSize,search,role:"agent",status});
+        const db=legacyMaria();
+        const [mainCustomerStats]=await db.query("SELECT COUNT(*) AS total FROM AspNetUsers child WHERE child.AgentId IN (SELECT agent.Id FROM AspNetUsers agent WHERE EXISTS(SELECT 1 FROM AspNetUserRoles ur JOIN AspNetRoles r ON r.Id=ur.RoleId WHERE ur.UserId=agent.Id AND LOWER(REPLACE(REPLACE(REPLACE(r.Name,' ',''),'-',''),'_',''))='agent')) AND NOT EXISTS(SELECT 1 FROM AspNetUserRoles ur JOIN AspNetRoles r ON r.Id=ur.RoleId WHERE ur.UserId=child.Id AND LOWER(REPLACE(REPLACE(REPLACE(r.Name,' ',''),'-',''),'_','')) IN ('agent','admin','superadmin','marketer','customermarketer','appapiuser','sponsor'))");
+        const [blueCustomerStats]=await db.query("SELECT COUNT(*) AS total FROM bluvamdb__AspNetUsers child WHERE child.AgentId IN (SELECT agent.Id FROM bluvamdb__AspNetUsers agent WHERE EXISTS(SELECT 1 FROM bluvamdb__AspNetUserRoles ur JOIN bluvamdb__AspNetRoles r ON r.Id=ur.RoleId WHERE ur.UserId=agent.Id AND LOWER(REPLACE(REPLACE(REPLACE(r.Name,' ',''),'-',''),'_',''))='agent')) AND NOT EXISTS(SELECT 1 FROM bluvamdb__AspNetUserRoles ur JOIN bluvamdb__AspNetRoles r ON r.Id=ur.RoleId WHERE ur.UserId=child.Id AND LOWER(REPLACE(REPLACE(REPLACE(r.Name,' ',''),'-',''),'_','')) IN ('agent','admin','superadmin','marketer','customermarketer','appapiuser','sponsor'))");
+        const overallTotal=data.agentTotal,activeTotal=data.activeAgentTotal;
+        const ids=data.rows.filter(r=>r.source==="mariadb").map(r=>String(r.legacy_id));
+        let metadata=[];
+        if(ids.length){
+          const [found]=await db.query("SELECT CAST(u.Id AS CHAR) AS id,COALESCE(NULLIF(md.CompanyName,''),NULLIF(u.BusinessName,'')) AS business_name,md.AgentFactorCommission AS commission_percent,md.MaxAgentFactorCommission AS max_commission_percent,md.AgentType AS agent_type,md.Status AS agent_status,md.AgentCategoryActivities AS agent_category_activities,md.IsOnline AS is_online,md.IsPhysical AS is_physical,u.LastLoginDate AS last_login,(SELECT COUNT(*) FROM AspNetUsers child WHERE child.AgentId=u.Id) AS assigned_users_count,(SELECT COUNT(*) FROM AspNetUsers child WHERE child.AgentId=u.Id AND EXISTS(SELECT 1 FROM AspNetUserRoles ur JOIN AspNetRoles r ON r.Id=ur.RoleId WHERE ur.UserId=child.Id AND LOWER(REPLACE(REPLACE(REPLACE(r.Name,' ',''),'-',''),'_',''))='agent')) AS subagents_count,(SELECT COUNT(*) FROM AspNetUsers child WHERE child.AgentId=u.Id AND NOT EXISTS(SELECT 1 FROM AspNetUserRoles ur JOIN AspNetRoles r ON r.Id=ur.RoleId WHERE ur.UserId=child.Id AND LOWER(REPLACE(REPLACE(REPLACE(r.Name,' ',''),'-',''),'_','')) IN ('agent','admin','superadmin','marketer','customermarketer','appapiuser','sponsor'))) AS customer_count,(SELECT COUNT(*) FROM UserLoanRequests lr WHERE lr.AgentId=u.Id) AS loan_requests_count FROM AspNetUsers u LEFT JOIN AgentMetaData md ON md.UserId=u.Id WHERE u.Id IN (?)",[ids]);
+          metadata=found;
+        }
+        const metaById=new Map(metadata.map(r=>[String(r.id),r]));
+        const rows=data.rows.map(r=>{
+          const m=r.source==="mariadb"?metaById.get(String(r.legacy_id)):null;
+          return {...r,business_name:m?.business_name||null,commission_percent:m?.commission_percent==null?null:Number(m.commission_percent),max_commission_percent:m?.max_commission_percent==null?null:Number(m.max_commission_percent),agent_type:m?.agent_type??null,agent_status:m?.agent_status??null,agent_category_activities:m?.agent_category_activities??null,is_online:m?.is_online==null?null:Boolean(Number(m.is_online)),is_physical:m?.is_physical==null?null:Boolean(Number(m.is_physical)),last_login:m?.last_login??null,assigned_users_count:m?.assigned_users_count==null?null:Number(m.assigned_users_count),customer_count:m?.customer_count==null?null:Number(m.customer_count),subagents_count:m?.subagents_count==null?null:Number(m.subagents_count),loan_requests_count:m?.loan_requests_count==null?null:Number(m.loan_requests_count),raw_payload:{id:r.id,legacy_id:r.legacy_id,source:r.source||r.legacy_source,role:r.role,is_active:r.is_active,legacy_agent_id:r.legacy_agent_id}};
+        });
+        return json(res,200,{data:{...data,rows,overallTotal,activeTotal,customerTotal:(Number(mainCustomerStats[0]?.total)||0)+(Number(blueCustomerStats[0]?.total)||0),identitySource:"MariaDB.AspNetUsers + bluvamdb__AspNetUsers + AgentMetaData"}});
+      }
+      if (req.method === "GET" && route === "/api/v1/admin/legacy-source-tables") {
+        const db = legacyMaria(), database = process.env.MARIADB_DATABASE || "digibail_vamcitydigibilepay";
+        const [tables] = await db.query("SELECT TABLE_NAME FROM information_schema.tables WHERE TABLE_SCHEMA=? AND TABLE_TYPE='BASE TABLE' AND TABLE_NAME NOT LIKE '__vamcity\\_%' ORDER BY TABLE_NAME", [database]);
+        const data = [];
+        for (const item of tables) {
+          const table = String(item.TABLE_NAME);
+          const [counts] = await db.query("SELECT COUNT(*) AS row_count FROM " + sqlIdent(table));
+          data.push({ source_table: table, row_count: Number(counts[0]?.row_count) || 0 });
+        }
+        return json(res, 200, { data });
+      }
+      if (req.method === "GET" && route === "/api/v1/admin/legacy-source-data") {
+        const sourceTable = String(url.searchParams.get("table") || "");
+        if (!/^[A-Za-z0-9_]{1,120}$/.test(sourceTable)) return json(res, 400, { message: "نوع داده قدیمی معتبر نیست." });
+        const limit = Math.min(500, Math.max(1, Number.parseInt(url.searchParams.get("limit") || "500", 10) || 500));
+        const offset = Math.max(0, Number.parseInt(url.searchParams.get("offset") || "0", 10) || 0);
+        const db = legacyMaria(), database = process.env.MARIADB_DATABASE || "digibail_vamcitydigibilepay";
+        const [exists] = await db.query("SELECT TABLE_NAME FROM information_schema.tables WHERE TABLE_SCHEMA=? AND TABLE_NAME=? AND TABLE_TYPE='BASE TABLE' LIMIT 1", [database, sourceTable]);
+        if (!exists.length) return json(res, 404, { message: "جدول منتقل‌شده پیدا نشد." });
+        const [keys] = await db.query("SELECT COLUMN_NAME FROM information_schema.key_column_usage WHERE TABLE_SCHEMA=? AND TABLE_NAME=? AND CONSTRAINT_NAME='PRIMARY' ORDER BY ORDINAL_POSITION", [database, sourceTable]);
+        const [columns] = await db.query("SELECT COLUMN_NAME,DATA_TYPE FROM information_schema.columns WHERE TABLE_SCHEMA=? AND TABLE_NAME=? ORDER BY ORDINAL_POSITION", [database, sourceTable]);
+        const primary = keys.map(x => x.COLUMN_NAME);
+        const order = primary.length ? primary.map(sqlIdent).join(",") : (columns[0] ? sqlIdent(columns[0].COLUMN_NAME) : "1");
+        const [countRows] = await db.query("SELECT COUNT(*) AS total FROM " + sqlIdent(sourceTable));
+        const [rows] = await db.query("SELECT * FROM " + sqlIdent(sourceTable) + " ORDER BY " + order + " LIMIT ? OFFSET ?", [limit, offset]);
+        return json(res, 200, { data: rows.map((payload,index)=>({ legacy_id: primary.length ? primary.map(k=>String(payload[k] ?? "")).join(" / ") : String(offset+index+1), payload, imported_at: null })), total: Number(countRows[0]?.total)||0, columns: columns.map(x=>({name:x.COLUMN_NAME,type:x.DATA_TYPE})) });
+      }
+      if (req.method === "GET" && route === "/api/v1/admin/legacy-relational-tables") {
+        const q=await pool.query(
+          "SELECT source_schema,source_table,source_rows,imported_rows,imported_at FROM digibail_legacy_manifest ORDER BY source_schema,source_table"
+        );
+        return json(res,200,q.rows);
+      }
+      if (req.method === "GET" && route === "/api/v1/admin/legacy-relational-data") {
+        const sourceTable=String(url.searchParams.get("table")||"");
+        const match=/^([A-Za-z0-9_]{1,63})\\.([A-Za-z0-9_]{1,63})$/.exec(sourceTable);
+        if(!match)return json(res,400,{message:"نام جدول معتبر نیست."});
+        const [,sourceSchema,tableName]=match;
+        const manifest=await pool.query(
+          "SELECT source_rows,imported_rows FROM digibail_legacy_manifest WHERE source_schema=$1 AND source_table=$2",
+          [sourceSchema,tableName]
+        );
+        if(!manifest.rowCount)return json(res,404,{message:"جدول در ساختار منتقل‌شده پیدا نشد."});
+        const limit=Math.min(100,Math.max(1,Number.parseInt(url.searchParams.get("limit")||"50",10)||50));
+        const offset=Math.max(0,Number.parseInt(url.searchParams.get("offset")||"0",10)||0);
+        const [columns,rows]=await Promise.all([
+          pool.query(
+            "SELECT column_name,data_type,is_nullable,ordinal_position,primary_key_order,referenced_schema,referenced_table,referenced_column FROM digibail_legacy_columns WHERE source_schema=$1 AND source_table=$2 ORDER BY ordinal_position",
+            [sourceSchema,tableName]
+          ),
+          pool.query(
+            "SELECT legacy_id,payload FROM digibail_legacy_relational_rows WHERE source_schema=$1 AND source_table=$2 ORDER BY legacy_id LIMIT $3 OFFSET $4",
+            [sourceSchema,tableName,limit,offset]
+          )
+        ]);
+        const primaryKeys=columns.rows.filter(x=>x.primary_key_order!==null&&x.primary_key_order!==undefined)
+          .sort((a,b)=>Number(a.primary_key_order)-Number(b.primary_key_order)).map(x=>x.column_name);
+        const foreignKeys=columns.rows.filter(x=>x.referenced_table).map(x=>({
+          column_name:x.column_name,
+          referenced_schema:x.referenced_schema,
+          referenced_table:String(x.referenced_table).replace(/^([^_]+)__(.+)$/,"$1.$2"),
+          referenced_column:x.referenced_column
+        }));
+        const dataRows=rows.rows.map(row=>({
+          legacy_id:row.legacy_id,
+          payload:typeof row.payload==="string"?(JSON.parse(row.payload||"{}")):row.payload
+        }));
+        return json(res,200,{
+          sourceTable,
+          rows:dataRows,
+          columns:columns.rows.map(x=>({column_name:x.column_name,data_type:x.data_type,is_nullable:x.is_nullable,ordinal_position:x.ordinal_position})),
+          primaryKeys,
+          foreignKeys,
+          total:Number(manifest.rows[0].imported_rows)||0,
+          sourceRows:Number(manifest.rows[0].source_rows)||0,
+          offset,
+          limit
+        });
+      }
+      if (req.method === "GET" && route === "/api/v1/admin/beta-inquiries") {
+        const q = await pool.query("SELECT id,reference,user_id,national_code,status,status_note,created_at FROM beta_inquiries ORDER BY created_at DESC LIMIT 500");
+        return json(res,200,{data:q.rows});
+      }
+      if (req.method === "GET" && route === "/api/v1/admin/documents") {
+        const q = await pool.query("SELECT id,user_id,kind,status,created_on,updated_at,review_note,fields::text AS fields_json,file_name,mime_type FROM customer_documents ORDER BY created_on DESC LIMIT 500");
+        return json(res, 200, { data:q.rows });
+      }
+      if (req.method === "POST" && route === "/api/v1/admin/documents/review") {
+        const b = await body(req); const id = String(b.id || "");
+        const status = String(b.status || "");
+        const note = String(b.note || "").trim().slice(0,2000);
+        if (!/^[0-9a-f-]{36}$/i.test(id) || !["Verified","Rejected","Pending"].includes(status)) return json(res, 400, { message:"شناسه یا وضعیت مدرک معتبر نیست." });
+        const q = await pool.query("UPDATE customer_documents SET status=$1,review_note=$2,updated_at=NOW() WHERE id=$3 RETURNING id,user_id,status", [status,note||null,id]);
+        if (!q.rowCount) return json(res, 404, { message:"مدرک پیدا نشد." });
+        await audit(req,"admin.documents.reviewed",Number(admin.sub)||null,{documentId:id,status});
+        return json(res,200,{ok:true,data:q.rows[0]});
+      }
+      if (req.method === "GET" && route === "/api/v1/admin/contracts") {
+        const q = await pool.query("SELECT id,user_id,title,number,status,expires_at,created_on,signed_at,rejected_at,rejection_note FROM customer_contracts ORDER BY created_on DESC LIMIT 500");
+        return json(res,200,{data:q.rows});
+      }
+      if (req.method === "POST" && route === "/api/v1/admin/contracts/create") {
+        const b = await body(req);
+        const userId = Number(b.userId);
+        const title = String(b.title||"").trim().slice(0,240);
+        const number = String(b.number||"").trim().slice(0,120);
+        const bodyHtml = String(b.bodyHtml||"").trim();
+        const expiresAt = b.expiresAt ? new Date(b.expiresAt) : null;
+        if (!Number.isSafeInteger(userId)||userId<1||!title||!number||!bodyHtml||bodyHtml.length>200000||(expiresAt&&!Number.isFinite(expiresAt.getTime()))) return json(res,400,{message:"اطلاعات قرارداد معتبر نیست."});
+        const owner = await pool.query("SELECT id FROM users WHERE id=$1 AND is_active=TRUE",[userId]);
+        if(!owner.rowCount) return json(res,404,{message:"کاربر فعال پیدا نشد."});
+        const q=await pool.query("INSERT INTO customer_contracts(id,user_id,title,number,body_html,expires_at) VALUES($1,$2,$3,$4,$5,$6) RETURNING id,title,number,status,created_on",[crypto.randomUUID(),userId,title,number,bodyHtml,expiresAt?expiresAt.toISOString():null]);
+        await audit(req,"admin.contracts.created",Number(admin.sub)||null,{contractId:q.rows[0].id,userId});
+        return json(res,201,{ok:true,data:q.rows[0]});
+      }
+      if (req.method === "GET" && route === "/api/v1/admin/sms/templates") {
+        const q = await pool.query("SELECT id,legacy_id,title,body,is_system,status,category,provider_panel,is_pattern_base,pattern_base_code,reject_reason,updated_at FROM sms_templates ORDER BY id");
+        return json(res, 200, { data: { items: q.rows, configured: Boolean(KAVENEGAR_API_KEY) } });
+      }
+      if (req.method === "POST" && route === "/api/v1/admin/sms/templates/update") {
+        const b = await body(req); const id = Number(b.id); const title = String(b.title || "").trim(); const text = String(b.body || "").trim();
+        if (!Number.isSafeInteger(id) || id < 1 || !title || title.length > 200 || !text || text.length > 4000) return json(res, 400, { message: "عنوان و متن الگو معتبر نیست." });
+        const q = await pool.query("UPDATE sms_templates SET title=$1,body=$2,status=$3,pattern_base_code=$4,updated_at=NOW() WHERE id=$5 RETURNING id,title,body,status,pattern_base_code", [title,text,Number.isInteger(Number(b.status))?Number(b.status):0,String(b.patternBaseCode||"").slice(0,500)||null,id]);
+        if (!q.rowCount) return json(res, 404, { message: "الگوی پیامک پیدا نشد." });
+        await audit(req, "admin.sms_template.updated", Number(admin.sub), { templateId: id });
+        return json(res, 200, { data: q.rows[0] });
+      }
+      if (req.method === "POST" && route === "/api/v1/admin/sms/test") {
+        const b = await body(req); const phone = String(b.phone || ""); const text = String(b.message || "").trim();
+        if (!phoneOk(phone) || !text || text.length > 1000) return json(res, 400, { message: "شماره موبایل یا متن پیام معتبر نیست." });
+        try {
+          const messageId = await sendSmsText(phone, text);
+          await pool.query("INSERT INTO sms_logs(recipient_masked,status,provider_message_id,created_by) VALUES($1,'sent',$2,$3)", [maskPhone(phone),messageId,Number(admin.sub)||null]);
+          await audit(req, "admin.sms.test.sent", Number(admin.sub), { recipient: maskPhone(phone) });
+          return json(res, 200, { ok: true, message: "درخواست ارسال پیامک به سرویس‌دهنده تحویل شد." });
+        } catch (e) {
+          await pool.query("INSERT INTO sms_logs(recipient_masked,status,error_code,created_by) VALUES($1,'failed',$2,$3)", [maskPhone(phone),String(e.code||"sms_delivery_failed").slice(0,80),Number(admin.sub)||null]).catch(()=>{});
+          throw e;
+        }
+      }
+      if (req.method === "GET" && route === "/api/v1/admin/sms/logs") {
+        const q = await pool.query("SELECT id,template_id,recipient_masked,status,provider_message_id,error_code,created_at FROM sms_logs ORDER BY created_at DESC LIMIT 100");
+        return json(res, 200, { data: q.rows });
+      }
+      return json(res, 404, { message: "مسیر مدیریت پیدا نشد." });
+    }
+    if (req.method === "POST" && route === "/api/v1/beta/inquiry") {
+      const userId = authenticatedUserId(req);
+      if (!userId) return json(res, 401, { message: "برای استعلام ابتدا وارد حساب شوید." });
+      const b = await body(req);
+      const nationalCode = String(b.nationalCode || "").replace(/[۰-۹]/g,d=>"۰۱۲۳۴۵۶۷۸۹".indexOf(d)).replace(/[٠-٩]/g,d=>"٠١٢٣٤٥٦٧٨٩".indexOf(d));
+      if (b.consent !== true) return json(res, 400, { message: "رضایت استعلام بانکی باید تأیید شود." });
+      if (!nationalCodeOk(nationalCode)) return json(res, 400, { message: "کد ملی معتبر نیست." });
+      const user = await pool.query("SELECT national_code FROM users WHERE id=$1 AND is_active=TRUE", [userId]);
+      if (!user.rowCount) return json(res, 401, { message: "حساب کاربری فعال پیدا نشد." });
+      if (String(user.rows[0].national_code || "").trim() !== nationalCode) {
+        return json(res, 400, { message: "کد ملی واردشده با کد ملی ثبت‌شده در حساب یکسان نیست." });
+      }
+      const reference = "BETA-" + crypto.randomBytes(4).toString("hex").toUpperCase();
+      const statusNote = "درخواست و رضایت ثبت شد؛ اتصال API رسمی بانک رفاه تنظیم نشده و استعلام به بانک ارسال نشده است.";
+      const q = await pool.query(
+        "INSERT INTO beta_inquiries(id,reference,user_id,national_code,status,status_note) VALUES($1,$2,$3,$4,'pending_provider',$5) RETURNING reference,status,status_note,created_at",
+        [crypto.randomUUID(),reference,userId,nationalCode,statusNote]
+      );
+      await audit(req,"beta.inquiry.created",userId,{reference});
+      return json(res,202,{data:{ref:q.rows[0].reference,status:q.rows[0].status,message:q.rows[0].status_note,createdAt:q.rows[0].created_at}});
+    }
+    if (route.startsWith("/api/v1/me/loan-applications")) {
+      const userId = authenticatedUserId(req);
+      if (!userId) return json(res, 401, { message: "برای ثبت یا مشاهده درخواست وام وارد حساب شوید." });
+
+      if (req.method === "GET" && route === "/api/v1/me/loan-applications") {
+        const q = await pool.query("SELECT id,reference,loan_product_id AS \"loanProductId\",loan_name AS \"loanName\",amount,installment_months AS \"installmentMonths\",down_payment AS \"downPayment\",monthly_payment AS \"monthlyPayment\",status,details,created_at AS \"createdAt\" FROM customer_loan_applications WHERE user_id=$1 ORDER BY created_at DESC", [userId]);
+        return json(res,200,{data:q.rows});
+      }
+      if (req.method === "POST" && route === "/api/v1/me/loan-applications") {
+        const b=await body(req), amount=Number(b.amount), months=Number(b.installmentMonths), productId=String(b.loanProductId||"");
+        if(!/^[0-9a-f-]{36}$/i.test(productId)||!Number.isFinite(amount)||amount<=0||!Number.isInteger(months)||months<1||months>600) return json(res,400,{message:"طرح، مبلغ یا تعداد اقساط معتبر نیست."});
+        const product=await pool.query("SELECT id,name,title,min_amount,max_amount,tiers,is_active,needs_review FROM loan_products WHERE id=$1",[productId]);
+        if(!product.rowCount||!product.rows[0].is_active||product.rows[0].needs_review) return json(res,409,{message:"این طرح برای ثبت درخواست فعال و تأییدشده نیست."});
+        const p=product.rows[0], min=Number(p.min_amount), max=Number(p.max_amount);
+        if(amount<min||amount>max) return json(res,400,{message:"مبلغ درخواستی خارج از بازه مجاز طرح است."});
+        const tiers=Array.isArray(p.tiers)?p.tiers:[], tier=tiers.find(t=>Number(t.months)===months);
+        if(!tier) return json(res,400,{message:"تعداد اقساط انتخابی در تعریف این طرح وجود ندارد."});
+        const down=amount*Math.max(0,Number(tier.downPaymentPercent)||0)/100;
+        const rate=Number(b.interestPercent)||0, method=String(b.interestMethod||"Monthly");
+        const fee=method==="Annual"?amount*rate/100*months/12:method==="Flat"?amount*rate/100:amount*rate/100*months;
+        const monthly=Math.max(0,amount-down+fee)/months;
+        const ref="DBL-"+crypto.randomBytes(5).toString("hex").toUpperCase();
+        const details={interestMethod:method,interestPercent:rate,feePercent:Number(tier.feePercent)||0,source:"customer-portal"};
+        const q=await pool.query("INSERT INTO customer_loan_applications(reference,user_id,loan_product_id,loan_name,amount,installment_months,down_payment,monthly_payment,details) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb) RETURNING id,reference,status,created_at AS \"createdAt\"",[ref,userId,productId,p.title||p.name,amount,months,down,monthly,JSON.stringify(details)]);
+        await audit(req,"loan.application.created",userId,{applicationId:q.rows[0].id,reference:ref,loanProductId:productId,amount,months});
+        return json(res,201,{data:{...q.rows[0],loanName:p.title||p.name,amount,installmentMonths:months,downPayment:down,monthlyPayment:monthly},message:"درخواست در سامانه ثبت شد."});
+      }
+      return json(res,405,{message:"عملیات درخواست وام پشتیبانی نمی‌شود."});
+    }
+    if (route.startsWith("/api/v1/me/documents")) {
+      const userId = authenticatedUserId(req);
+      if (!userId) return json(res, 401, { message: "برای مشاهده مدارک وارد حساب شوید." });
+      if (req.method === "GET" && route === "/api/v1/me/documents") {
+        const q = await pool.query(
+          "SELECT id,kind,status,created_on AS \"createdOn\",review_note AS \"reviewNote\",fields::text AS \"fieldsJson\",ocr_text AS \"ocrText\",file_name AS \"fileName\" FROM customer_documents WHERE user_id=$1 ORDER BY created_on DESC",
+          [userId]
+        );
+        return json(res, 200, { data: q.rows });
+      }
+      if (req.method === "POST" && route === "/api/v1/me/documents") {
+        const { fields, file } = await multipartBody(req);
+        const kind = String(fields.kind || "").trim();
+        if (!["کارت ملی","شناسنامه","فیش حقوقی","سایر"].includes(kind)) return json(res, 400, { message: "نوع مدرک معتبر نیست." });
+        if (!file || !file.data.length) return json(res, 400, { message: "فایل مدرک انتخاب نشده است." });
+        if (file.data.length > 6_000_000) return json(res, 413, { message: "حجم عکس حداکثر ۶ مگابایت است." });
+        if (!["image/jpeg","image/png","image/webp"].includes(file.mime)) return json(res, 415, { message: "فقط تصویر JPG، PNG یا WEBP پذیرفته می‌شود." });
+        const safeName = String(file.name || "document").replace(/[\\/\\r\\n\0]/g,"_").slice(0,255) || "document";
+        const q = await pool.query(
+          "INSERT INTO customer_documents(id,user_id,kind,file_name,mime_type,file_data,fields) VALUES($1,$2,$3,$4,$5,$6,$7::jsonb) RETURNING id",
+          [crypto.randomUUID(),userId,kind,safeName,file.mime,file.data,JSON.stringify({fields:{fullName:"",nationalCode:""}})]
+        );
+        await audit(req, "documents.uploaded", userId, { documentId:q.rows[0].id, kind, size:file.data.length });
+        return json(res, 201, { ok:true, ocr:false, id:q.rows[0].id });
+      }
+      const fileMatch = route.match(/^\/api\/v1\/me\/documents\/([0-9a-f-]+)\/file$/i);
+      if (req.method === "GET" && fileMatch) {
+        const q = await pool.query("SELECT mime_type,file_data FROM customer_documents WHERE id=$1 AND user_id=$2", [fileMatch[1],userId]);
+        if (!q.rowCount) return json(res, 404, { message: "فایل مدرک پیدا نشد." });
+        res.writeHead(200, { "Content-Type":q.rows[0].mime_type, "Cache-Control":"no-store", "X-Content-Type-Options":"nosniff" });
+        return res.end(q.rows[0].file_data);
+      }
+      const fieldsMatch = route.match(/^\/api\/v1\/me\/documents\/([0-9a-f-]+)\/fields$/i);
+      if (req.method === "PUT" && fieldsMatch) {
+        const b = await body(req);
+        if (!b.fields || typeof b.fields !== "object" || Array.isArray(b.fields)) return json(res, 400, { message: "اطلاعات مدرک معتبر نیست." });
+        const q = await pool.query("UPDATE customer_documents SET fields=$1::jsonb,updated_at=NOW() WHERE id=$2 AND user_id=$3 AND status<>'Verified' RETURNING id", [JSON.stringify(b.fields),fieldsMatch[1],userId]);
+        if (!q.rowCount) return json(res, 404, { message: "مدرک پیدا نشد یا تأیید نهایی شده است." });
+        await audit(req, "documents.fields_updated", userId, { documentId:fieldsMatch[1] });
+        return json(res, 200, { ok:true });
+      }
+      const idMatch = route.match(/^\/api\/v1\/me\/documents\/([0-9a-f-]+)$/i);
+      if (req.method === "DELETE" && idMatch) {
+        const q = await pool.query("DELETE FROM customer_documents WHERE id=$1 AND user_id=$2 AND status='Pending' RETURNING id", [idMatch[1],userId]);
+        if (!q.rowCount) return json(res, 404, { message: "مدرک پیدا نشد یا دیگر قابل حذف نیست." });
+        await audit(req, "documents.deleted", userId, { documentId:idMatch[1] });
+        return json(res, 200, { ok:true });
+      }
+      return json(res, 404, { message: "مسیر مدارک پیدا نشد." });
+    }
+    if (route.startsWith("/api/v1/me/contracts")) {
+      const userId = authenticatedUserId(req);
+      if (!userId) return json(res, 401, { message: "برای مشاهده قراردادها وارد حساب شوید." });
+      if (req.method === "GET" && route === "/api/v1/me/contracts") {
+        const q = await pool.query("SELECT id,title,number,status,expires_at AS \"expiresAt\",created_on AS \"createdOn\" FROM customer_contracts WHERE user_id=$1 ORDER BY created_on DESC", [userId]);
+        return json(res, 200, { data:q.rows });
+      }
+      const htmlMatch = route.match(/^\/api\/v1\/me\/contracts\/([0-9a-f-]+)\/html$/i);
+      if (req.method === "GET" && htmlMatch) {
+        const q = await pool.query("SELECT body_html FROM customer_contracts WHERE id=$1 AND user_id=$2", [htmlMatch[1],userId]);
+        if (!q.rowCount) return json(res, 404, { message: "قرارداد پیدا نشد." });
+        res.writeHead(200, { "Content-Type":"text/html; charset=utf-8", "Cache-Control":"no-store", "Content-Security-Policy":"default-src 'none'; style-src 'unsafe-inline'; img-src data:" });
+        return res.end(q.rows[0].body_html);
+      }
+      const contractMatch = route.match(/^\/api\/v1\/me\/contracts\/([0-9a-f-]+)\/(sign|reject)$/i);
+      if (contractMatch && req.method === "POST") {
+        const action = contractMatch[2].toLowerCase();
+        const b = await body(req);
+        const status = action === "sign" ? "Signed" : "Rejected";
+        const note = action === "reject" ? String(b.note || "").trim().slice(0,2000) : null;
+        const q = await pool.query(
+          "UPDATE customer_contracts SET status=$1,signed_at=CASE WHEN $1='Signed' THEN NOW() ELSE signed_at END,rejected_at=CASE WHEN $1='Rejected' THEN NOW() ELSE rejected_at END,rejection_note=$2,updated_at=NOW() WHERE id=$3 AND user_id=$4 AND status IN ('Presented','AwaitingSignature') AND (expires_at IS NULL OR expires_at>NOW()) RETURNING id",
+          [status,note,contractMatch[1],userId]
+        );
+        if (!q.rowCount) return json(res, 404, { message: "قرارداد پیدا نشد یا دیگر قابل امضا نیست." });
+        await audit(req, action === "sign" ? "contracts.signed" : "contracts.rejected", userId, { contractId:contractMatch[1] });
+        return json(res, 200, { ok:true });
+      }
+      return json(res, 404, { message: "مسیر قراردادها پیدا نشد." });
+    }
+    if (req.method === "POST" && route === "/api/v1/security/password-reset/request") {
+      const b = await body(req); const phone = String(b.phone || ""); const ip = clientIp(req) || "unknown";
+      if (limited("reset:" + ip)) return json(res, 429, { message: "تلاش‌های زیاد؛ کمی بعد دوباره امتحان کنید." });
+      if (!phoneOk(phone)) return json(res, 400, { message: "شماره موبایل معتبر نیست." });
+      if (!await consumeCaptcha(b.captchaId, b.captchaAnswer)) return json(res, 400, { message: "کد امنیتی نامعتبر یا منقضی شده است." });
+      if (OTP_PEPPER.length < 32) return json(res, 503, { message: "تنظیم امنیتی OTP موجود نیست." });
+      const user = await pool.query("SELECT id FROM users WHERE phone=$1 AND is_active=TRUE ORDER BY CASE WHEN legacy_source='mariadb.AspNetUsers' THEN 0 WHEN legacy_source IS NULL THEN 1 ELSE 2 END,id LIMIT 1", [phone]);
+      if (!user.rowCount) {
+        await audit(req, "auth.password_reset.requested_unknown");
+        resetLimit("reset:" + ip);
+        return json(res, 200, { ok: true, message: "اگر شماره به حساب فعال متصل باشد، کد بازیابی ارسال می‌شود.", expiresIn: 120, resendIn: 60 });
+      }
+      const previous = await pool.query("SELECT resend_at FROM otp_challenges WHERE phone=$1 AND purpose='password_reset' AND consumed_at IS NULL ORDER BY created_at DESC LIMIT 1", [phone]);
+      if (previous.rowCount && new Date(previous.rows[0].resend_at).getTime() > Date.now()) {
+        return json(res, 429, { message: "برای ارسال مجدد کمی صبر کنید.", resendIn: Math.ceil((new Date(previous.rows[0].resend_at).getTime()-Date.now())/1000) });
+      }
+      const code = String(crypto.randomInt(100000,1000000)); const id = crypto.randomUUID();
+      await sendOtp(phone, code);
+      await pool.query("INSERT INTO otp_challenges(id,phone,purpose,code_hash,expires_at,resend_at) VALUES($1,$2,'password_reset',$3,NOW()+INTERVAL '2 minutes',NOW()+INTERVAL '60 seconds')", [id,phone,hash(code,OTP_PEPPER)]);
+      await audit(req, "auth.password_reset.code_sent", user.rows[0].id);
+      resetLimit("reset:" + ip);
+      return json(res, 200, { ok:true, message:"کد بازیابی ارسال شد.", expiresIn:120, resendIn:60 });
+    }
+    if (req.method === "POST" && route === "/api/v1/security/password-reset/confirm") {
+      const b = await body(req); const phone = String(b.phone || ""); const code = String(b.code || ""); const password = String(b.password || "");
+      if (!phoneOk(phone) || !/^\d{6}$/.test(code)) return json(res, 400, { message: "شماره یا کد بازیابی معتبر نیست." });
+      if (password.length < 10 || password.length > 128) return json(res, 400, { message: "رمز جدید باید بین ۱۰ تا ۱۲۸ نویسه باشد." });
+      if (OTP_PEPPER.length < 32) return json(res, 503, { message: "تنظیم امنیتی OTP موجود نیست." });
+      const result = await pool.query("SELECT * FROM otp_challenges WHERE phone=$1 AND purpose='password_reset' AND consumed_at IS NULL AND expires_at>NOW() ORDER BY created_at DESC LIMIT 1", [phone]);
+      if (!result.rowCount) return json(res, 400, { message: "کد منقضی شده یا وجود ندارد." });
+      const challenge = result.rows[0];
+      if (challenge.attempts >= 5) return json(res, 429, { message: "تعداد تلاش مجاز تمام شده است." });
+      if (hash(code,OTP_PEPPER) !== challenge.code_hash) {
+        await pool.query("UPDATE otp_challenges SET attempts=attempts+1 WHERE id=$1", [challenge.id]);
+        return json(res, 400, { message: "کد بازیابی نادرست است." });
+      }
+      const user = await pool.query("SELECT id FROM users WHERE phone=$1 AND is_active=TRUE LIMIT 1", [phone]);
+      if (!user.rowCount) return json(res, 400, { message: "بازیابی برای این حساب ممکن نیست." });
+      const passwordHash = await bcrypt.hash(password,12);
+      const client=await pool.connect();
+      try {
+        await client.query("BEGIN");
+        await client.query("UPDATE users SET password_hash=$1,updated_at=NOW() WHERE id=$2",[passwordHash,user.rows[0].id]);
+        await client.query("UPDATE otp_challenges SET consumed_at=NOW() WHERE id=$1",[challenge.id]);
+        await client.query("COMMIT");
+      } catch(e) {
+        await client.query("ROLLBACK").catch(()=>{});
+        throw e;
+      } finally { client.release(); }
+      await audit(req,"auth.password_reset.completed",user.rows[0].id);
+      return json(res,200,{ok:true,message:"رمز عبور تغییر کرد. اکنون وارد شوید."});
+    }
+    if (req.method === "GET" && route === "/api/v1/security/captcha") {
+      if (CAPTCHA_PEPPER.length < 32) return json(res, 503, { message: "تنظیم امنیتی کپچا موجود نیست." });
+      const value = String(crypto.randomInt(10000, 100000)); const id = crypto.randomUUID();
+      await pool.query("INSERT INTO captcha_challenges(id,answer_hash,expires_at) VALUES($1,$2,NOW()+INTERVAL '5 minutes')", [id, hash(value, CAPTCHA_PEPPER)]);
+      return json(res, 200, { id, image: "data:image/svg+xml;base64," + Buffer.from(captchaSvg(value)).toString("base64") });
+    }
+    if (req.method === "POST" && route === "/api/v1/security/login") {
+      const b = await body(req); const ip = clientIp(req) || "unknown";
+      if (limited("login:" + ip)) return json(res, 429, { message: "تلاش‌های ناموفق زیاد بود. کمی بعد دوباره امتحان کنید." });
+      if (!await consumeCaptcha(b.captchaId, b.captchaAnswer)) return json(res, 400, { message: "کد امنیتی نامعتبر یا منقضی شده است." });
+      const username = String(b.username || "").trim().slice(0, 80);
+      const password = String(b.password || "");
+      // Prefer the exact account name or phone. The legacy "admin" alias is only a fallback,
+      // otherwise it can accidentally select the bootstrap account instead of the real migrated admin.
+      const candidates = await pool.query(
+        "SELECT id,phone,full_name,username,password_hash,role,is_active,legacy_source FROM users WHERE phone=$1 OR lower(username)=lower($1) ORDER BY CASE WHEN lower(username)=lower($1) THEN 0 ELSE 1 END,CASE WHEN legacy_source='mariadb.AspNetUsers' THEN 0 WHEN legacy_source IS NULL THEN 1 WHEN legacy_source='mariadb.bluvamdb__AspNetUsers' THEN 2 ELSE 3 END,id ASC LIMIT 20",
+        [username]
+      );
+      if (username.toLowerCase() === "admin") {
+        const alias = await pool.query("SELECT id,phone,full_name,username,password_hash,role,is_active,legacy_source FROM users WHERE lower(username)='digibail-admin' LIMIT 1");
+        candidates.rows.push(...alias.rows);
+      }
+      let u=null;
+      for(const candidate of candidates.rows){
+        if(!candidate.is_active)continue;
+        if(await verifyPassword(password,candidate.password_hash)){u=candidate;break;}
+      }
+      if(!u){
+        await audit(req, "auth.login.failed");
+        return json(res, 401, { message: "نام کاربری یا رمز عبور نادرست است." });
+      }
+      resetLimit("login:" + ip);
+      if (String(u.password_hash).startsWith("aspnet:")) {
+        const upgraded = await bcrypt.hash(password, 12);
+        await pool.query("UPDATE users SET password_hash=$1,updated_at=NOW() WHERE id=$2", [upgraded, u.id]);
+      }
+      await audit(req, "auth.login.success", u.id);
+      const token = tokenFor(u);
+      return authJson(res, 200, token, { accessToken: token, user: { id: u.id, phone: u.phone, fullName: u.full_name, role: u.role } });
+    }
+    if (req.method === "POST" && route === "/api/v1/security/otp/request") {
+      const b = await body(req); const phone = String(b.phone || ""); const purpose = b.purpose === "register" ? "register" : "login";
+      if (!phoneOk(phone)) return json(res, 400, { message: "شماره موبایل معتبر نیست." });
+      if (!await consumeCaptcha(b.captchaId, b.captchaAnswer)) return json(res, 400, { message: "کد امنیتی نامعتبر یا منقضی شده است." });
+      const exists = await pool.query("SELECT id FROM users WHERE phone=$1", [phone]);
+      if (purpose === "register" && exists.rowCount) return json(res, 409, { message: "این شماره قبلاً ثبت شده است." });
+      if (purpose === "login" && !exists.rowCount) return json(res, 404, { message: "حسابی با این شماره پیدا نشد." });
+      const previous = await pool.query("SELECT resend_at FROM otp_challenges WHERE phone=$1 AND purpose=$2 AND consumed_at IS NULL ORDER BY created_at DESC LIMIT 1", [phone, purpose]);
+      if (previous.rowCount && new Date(previous.rows[0].resend_at).getTime() > Date.now()) {
+        const seconds = Math.ceil((new Date(previous.rows[0].resend_at).getTime() - Date.now()) / 1000);
+        return json(res, 429, { message: "برای ارسال مجدد کمی صبر کنید.", expiresIn: 120, resendIn: seconds });
+      }
+      if (OTP_PEPPER.length < 32) return json(res, 503, { message: "تنظیم امنیتی OTP موجود نیست." });
+      const code = String(crypto.randomInt(100000, 1000000)); const id = crypto.randomUUID();
+      await sendOtp(phone, code);
+      await pool.query("INSERT INTO otp_challenges(id,phone,purpose,code_hash,expires_at,resend_at) VALUES($1,$2,$3,$4,NOW()+INTERVAL '2 minutes',NOW()+INTERVAL '60 seconds')", [id, phone, purpose, hash(code, OTP_PEPPER)]);
+      await audit(req, "auth.otp.requested", exists.rows[0]?.id || null, { purpose });
+      return json(res, 200, { ok: true, message: "کد ارسال شد", expiresIn: 120, resendIn: 60 });
+    }
+    if (req.method === "GET" && route === "/api/v1/security/otp/status") {
+      const phone = String(url.searchParams.get("phone") || "");
+      const result = await pool.query("SELECT GREATEST(0,EXTRACT(EPOCH FROM (expires_at-NOW())))::int AS expires_in,GREATEST(0,EXTRACT(EPOCH FROM (resend_at-NOW())))::int AS resend_in FROM otp_challenges WHERE phone=$1 AND consumed_at IS NULL ORDER BY created_at DESC LIMIT 1", [phone]);
+      return json(res, 200, { expiresIn: result.rows[0]?.expires_in || 0, resendIn: result.rows[0]?.resend_in || 0 });
+    }
+    if (req.method === "POST" && route === "/api/v1/security/otp/verify") {
+      const b = await body(req); const phone = String(b.phone || ""); const purpose = b.purpose === "register" ? "register" : "login";
+      const result = await pool.query("SELECT * FROM otp_challenges WHERE phone=$1 AND purpose=$2 AND consumed_at IS NULL AND expires_at>NOW() ORDER BY created_at DESC LIMIT 1", [phone, purpose]);
+      if (!result.rowCount) return json(res, 400, { message: "کد منقضی شده یا وجود ندارد." });
+      const challenge = result.rows[0];
+      if (challenge.attempts >= 5) return json(res, 429, { message: "تعداد تلاش مجاز تمام شده است." });
+      if (OTP_PEPPER.length < 32 || hash(String(b.code || ""), OTP_PEPPER) !== challenge.code_hash) {
+        await pool.query("UPDATE otp_challenges SET attempts=attempts+1 WHERE id=$1", [challenge.id]);
+        return json(res, 400, { message: "کد تأیید نادرست است." });
+      }
+      await pool.query("UPDATE otp_challenges SET consumed_at=NOW() WHERE id=$1", [challenge.id]);
+      if (purpose === "register") {
+        if (JWT_SECRET.length < 32) return json(res, 503, { message: "تنظیم امنیتی توکن موجود نیست." });
+        return json(res, 200, { ticket: jwt.sign({ purpose: "register", phone }, JWT_SECRET, { expiresIn: "10m", issuer: "digibail" }) });
+      }
+      const users = await pool.query("SELECT id,phone,full_name,role,is_active FROM users WHERE phone=$1 ORDER BY CASE WHEN legacy_source='mariadb.AspNetUsers' THEN 0 WHEN legacy_source IS NULL THEN 1 ELSE 2 END,id LIMIT 1", [phone]);
+      if (!users.rowCount || !users.rows[0].is_active) return json(res, 404, { message: "حسابی با این شماره نیست." });
+      const u = users.rows[0]; await audit(req, "auth.otp.login.success", u.id);
+      const token = tokenFor(u);
+      return authJson(res, 200, token, { accessToken: token, user: { id: u.id, phone: u.phone, fullName: u.full_name, role: u.role } });
+    }
+    if (req.method === "POST" && route === "/api/v1/security/register") {
+      const b = await body(req);
+      if (JWT_SECRET.length < 32) return json(res, 503, { message: "تنظیم امنیتی توکن موجود نیست." });
+      let ticket;
+      try { ticket = jwt.verify(String(b.ticket || ""), JWT_SECRET, { issuer: "digibail" }); }
+      catch { return json(res, 400, { message: "تأیید شماره معتبر نیست؛ دوباره شماره را تأیید کنید." }); }
+      if (ticket.purpose !== "register" || !phoneOk(ticket.phone)) return json(res, 400, { message: "مجوز ثبت‌نام معتبر نیست." });
+      if (!await consumeCaptcha(b.captchaId, b.captchaAnswer)) return json(res, 400, { message: "کد امنیتی نامعتبر یا منقضی شده است." });
+      const fullName = String(b.fullName || "").trim().replace(/\s+/g, " "); const nationalCode = String(b.nationalCode || "");
+      const password = String(b.password || ""); const email = b.email ? String(b.email).trim().slice(0, 254) : null;
+      if (fullName.length < 5 || fullName.length > 160) return json(res, 400, { message: "نام و نام خانوادگی را کامل وارد کنید." });
+      if (!nationalCodeOk(nationalCode)) return json(res, 400, { message: "کد ملی معتبر نیست." });
+      if (password.length < 10 || password.length > 128) return json(res, 400, { message: "رمز عبور باید حداقل ۱۰ نویسه باشد." });
+      const duplicate=await pool.query("SELECT id FROM users WHERE phone=$1 OR national_code=$2 LIMIT 1",[ticket.phone,nationalCode]);
+      if(duplicate.rowCount)return json(res,409,{message:"شماره موبایل یا کد ملی قبلاً ثبت شده است."});
+      const passwordHash = await bcrypt.hash(password, 12);
+      try {
+        const created = await pool.query("INSERT INTO users(phone,full_name,national_code,email,password_hash) VALUES($1,$2,$3,$4,$5) RETURNING id,phone,full_name,role", [ticket.phone, fullName, nationalCode, email, passwordHash]);
+        const u = created.rows[0];
+        try{
+          const mirror=await pool.query("SELECT id,username,phone,full_name,national_code,email,is_active,COALESCE((SELECT role_code FROM user_role_overrides o WHERE o.user_id=users.id),role) AS effective_role,to_char(created_at AT TIME ZONE 'Asia/Tehran','YYYY-MM-DD HH24:MI:SS.US') AS created_at_tehran FROM users WHERE id=$1",[u.id]);
+          await syncUserToMariaDB(legacyMaria(),mirror.rows[0]);
+          console.log("MARIADB_NEW_REGISTRATION_MIRROR=PASS");
+        }catch(mirrorError){console.error("MARIADB_NEW_REGISTRATION_MIRROR_FAILED="+String(mirrorError.code||mirrorError.name||"unknown"));}
+        await audit(req, "auth.register.success", u.id);
+        const token = tokenFor(u);
+        return authJson(res, 201, token, { accessToken: token, user: { id: u.id, phone: u.phone, fullName: u.full_name, role: u.role } });
+      } catch (error) {
+        if (error.code === "23505" || error.code === "ER_DUP_ENTRY") return json(res, 409, { message: "شماره موبایل یا کد ملی قبلاً ثبت شده است." });
+        throw error;
+      }
+    }
+    if (req.method === "POST" && route === "/api/v1/security/register/ocr") return json(res, 501, { message: "سرویس OCR تا زمان اتصال ارائه‌دهنده و تنظیم کلید محرمانه فعال نیست." });
+    if (route.startsWith("/api/")) return json(res, 404, { message: "مسیر API پیدا نشد." });
+    return false;
+  } catch (error) {
+    const status = error.status || 500;
+    if (status >= 500) console.error("api_error", { route, status, code: error.code || "internal_error" });
+    return json(res, status, { message: status === 500 ? "خطای داخلی سرور." : error.message, code: error.code || undefined });
+  }
+}
+export async function closePool() { await mariadbPool.end(); }
+ THEN CONCAT('0',u.PhoneNumber) ELSE u.PhoneNumber END AS phone,u.Email AS email,u.NationalCode AS national_code,NULL AS customer_code,NULL AS legacy_agent_id,NULL AS legacy_customer_id,COALESCE(u.IsActive,1) AS is_active,NULL AS created_at,NULL AS created_day,COALESCE(rr.roles_raw,'') AS roles_raw,COALESCE(rr.roles_norm,'') AS roles_norm FROM OnlineMoneyTransfer__AspNetUsers u LEFT JOIN (SELECT ur.UserId,GROUP_CONCAT(DISTINCT r.Name ORDER BY r.Name SEPARATOR ',') AS roles_raw,GROUP_CONCAT(DISTINCT LOWER(REPLACE(REPLACE(REPLACE(r.Name,' ',''),'-',''),'_','')) ORDER BY r.Name SEPARATOR ',') AS roles_norm FROM OnlineMoneyTransfer__AspNetUserRoles ur JOIN OnlineMoneyTransfer__AspNetRoles r ON r.Id=ur.RoleId GROUP BY ur.UserId) rr ON rr.UserId=u.Id"
+  ].join(" UNION ALL ");
+  const q=String(search||"").trim().slice(0,120),mWhere=[],mValues=[];
+  const staffSql="(FIND_IN_SET('admin',roles_norm)>0 OR FIND_IN_SET('superadmin',roles_norm)>0 OR FIND_IN_SET('agent',roles_norm)>0 OR FIND_IN_SET('marketer',roles_norm)>0 OR FIND_IN_SET('customermarketer',roles_norm)>0 OR FIND_IN_SET('appapiuser',roles_norm)>0 OR FIND_IN_SET('sponsor',roles_norm)>0)";
+  if(q){mWhere.push("(full_name LIKE ? OR username LIKE ? OR phone LIKE ? OR email LIKE ? OR national_code LIKE ? OR customer_code LIKE ? OR legacy_id LIKE ? OR roles_raw LIKE ? OR source_table LIKE ?)");for(let n=0;n<9;n++)mValues.push("%"+q+"%");}
+  if(role==="customer")mWhere.push("source_key<>'transfer' AND NOT "+staffSql);
+  else if(role==="admin")mWhere.push("source_key<>'transfer' AND (FIND_IN_SET('admin',roles_norm)>0 OR FIND_IN_SET('superadmin',roles_norm)>0)");
+  else if(role){if(["superadmin","agent","marketer","customermarketer"].includes(role))mWhere.push("source_key<>'transfer'");const raw=String(role).startsWith("legacy_")?String(role).slice(7):String(role);mWhere.push("FIND_IN_SET(?,roles_norm)>0");mValues.push(raw);}
+  if(status==="active")mWhere.push("is_active=1");
+  if(status==="inactive")mWhere.push("is_active=0");
+  const mFilter=mWhere.length?" WHERE "+mWhere.join(" AND "):"";
+  const derived="("+unionSql+") AS directory";
+  const [mCountRows,mStatsRows,mRows]=await Promise.all([
+    db.query("SELECT COUNT(*) AS total FROM "+derived+mFilter,mValues),
+    db.query("SELECT COUNT(*) AS total,SUM(CASE WHEN is_active=1 THEN 1 ELSE 0 END) AS active,SUM(CASE WHEN is_active=0 THEN 1 ELSE 0 END) AS inactive,SUM(CASE WHEN source_key<>'transfer' AND created_day=DATE(CONVERT_TZ(UTC_TIMESTAMP(),'+00:00','+03:30')) THEN 1 ELSE 0 END) AS today,MAX(created_at) AS latest_registration,SUM(CASE WHEN source_key='main' THEN 1 ELSE 0 END) AS main_total,SUM(CASE WHEN source_key='bluvam' THEN 1 ELSE 0 END) AS bluvam_total,SUM(CASE WHEN source_key='transfer' THEN 1 ELSE 0 END) AS transfer_total,SUM(CASE WHEN source_key<>'transfer' AND NOT "+staffSql+" THEN 1 ELSE 0 END) AS customer_total,SUM(CASE WHEN source_key<>'transfer' AND FIND_IN_SET('agent',roles_norm)>0 THEN 1 ELSE 0 END) AS agent_total,SUM(CASE WHEN source_key<>'transfer' AND FIND_IN_SET('agent',roles_norm)>0 AND is_active=1 THEN 1 ELSE 0 END) AS active_agent_total,SUM(CASE WHEN source_key<>'transfer' AND (FIND_IN_SET('admin',roles_norm)>0 OR FIND_IN_SET('superadmin',roles_norm)>0) THEN 1 ELSE 0 END) AS admin_total,SUM(CASE WHEN source_key<>'transfer' AND (FIND_IN_SET('marketer',roles_norm)>0 OR FIND_IN_SET('customermarketer',roles_norm)>0) THEN 1 ELSE 0 END) AS marketer_total,SUM(CASE WHEN source_key<>'transfer' AND NOT "+staffSql+" AND created_day=DATE(CONVERT_TZ(UTC_TIMESTAMP(),'+00:00','+03:30')) THEN 1 ELSE 0 END) AS customer_today FROM "+derived),
+    db.query("SELECT * FROM "+derived+mFilter+" ORDER BY (created_at IS NULL) ASC,created_at DESC,source_key,legacy_id DESC LIMIT ?",[...mValues,Math.min(200000,page*pageSize)])
+  ]);
+  const mStats=mStatsRows[0][0]||{};
+  const mariaRows=mRows[0].map(r=>{
+    const roleNames=String(r.roles_raw||"").split(",").filter(Boolean);
+    const roles=roleNames.map(legacyRoleCode);
+    const primary=directoryRoleFromNames(roleNames);
+    return {...r,id:"legacy:"+r.source_key+":"+String(r.legacy_id),name:r.full_name,mobile:r.phone,customer_number:r.customer_code,role:primary,roles:roles.length?roles:[primary],account_type:r.source_key==="transfer"?"حساب انتقال وجه":directoryAccountType(primary),legacy_source:r.source_table,legacy_source_table:r.source_table,source:r.source_key==="main"?"mariadb":r.source_key==="bluvam"?"bluvamdb":"transfer",source_table:r.source_table,password_reset_required:false,is_active:Boolean(Number(r.is_active)),role_editable:r.source_key!=="transfer"};
+  });
+  const fresh=(await applicationOnlyAccounts(100000)).map(r=>({...r,name:r.full_name,mobile:r.phone,customer_number:r.customer_code,source:"app",role_editable:true}));
+  const staffRoles=["admin","superadmin","agent","marketer","customermarketer","legacy_appapiuser","legacy_sponsor"];
+  const norm=v=>String(v||"").toLowerCase();
+  const freshFiltered=fresh.filter(r=>{
+    const effective=String(r.effective_role||r.role||"customer");
+    if(role==="customer"&&staffRoles.includes(effective))return false;
+    if(role==="admin"&&!["admin","superadmin"].includes(effective))return false;
+    if(role&&role!=="customer"&&role!=="admin"&&effective!==role)return false;
+    if(status==="active"&&!r.is_active)return false;
+    if(status==="inactive"&&r.is_active)return false;
+    if(q&&!([r.full_name,r.username,r.phone,r.email,r.national_code,r.id,r.source_table].some(v=>norm(v).includes(norm(q)))))return false;
+    return true;
+  });
+  const freshCustomer=r=>!staffRoles.includes(String(r.effective_role||r.role||"customer"));
+  const dayKey=new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Tehran",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date());
+  const freshToday=fresh.filter(r=>new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Tehran",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date(r.created_at))===dayKey).length;
+  const freshCustomerToday=fresh.filter(r=>freshCustomer(r)&&new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Tehran",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date(r.created_at))===dayKey).length;
+  const dateValue=v=>{const n=new Date(v||0).getTime();return Number.isFinite(n)?n:0;};
+  const latestFresh=fresh[0]?.created_at||null,latestMaria=mStats.latest_registration||null;
+  const latestRegistration=latestFresh&&(!latestMaria||dateValue(latestFresh)>dateValue(latestMaria))?latestFresh:latestMaria;
+  const merged=[...mariaRows,...freshFiltered].sort((a,b)=>dateValue(b.created_at)-dateValue(a.created_at)||String(b.id).localeCompare(String(a.id)));
+  const freshAdmins=fresh.filter(r=>["admin","superadmin"].includes(r.effective_role));
+  const freshAgents=fresh.filter(r=>r.effective_role==="agent");
+  const freshMarketers=fresh.filter(r=>["marketer","customermarketer"].includes(r.effective_role));
+  return {rows:merged.slice((page-1)*pageSize,page*pageSize),total:(Number(mCountRows[0][0]?.total)||0)+freshFiltered.length,overallTotal:(Number(mStats.total)||0)+fresh.length,activeTotal:(Number(mStats.active)||0)+fresh.filter(r=>r.is_active).length,inactiveTotal:(Number(mStats.inactive)||0)+fresh.filter(r=>!r.is_active).length,todayTotal:(Number(mStats.today)||0)+freshToday,latestRegistration,customerTotal:(Number(mStats.customer_total)||0)+fresh.filter(freshCustomer).length,customerTodayTotal:(Number(mStats.customer_today)||0)+freshCustomerToday,agentTotal:(Number(mStats.agent_total)||0)+freshAgents.length,activeAgentTotal:(Number(mStats.active_agent_total)||0)+freshAgents.filter(r=>r.is_active).length,adminTotal:(Number(mStats.admin_total)||0)+freshAdmins.length,marketerTotal:(Number(mStats.marketer_total)||0)+freshMarketers.length,transferTotal:Number(mStats.transfer_total)||0,sourceCounts:{main:Number(mStats.main_total)||0,bluvam:Number(mStats.bluvam_total)||0,transfer:Number(mStats.transfer_total)||0,app:fresh.length},sourceTable:"MariaDB.AspNetUsers+MariaDB.bluvamdb__AspNetUsers+MariaDB.OnlineMoneyTransfer__AspNetUsers+MariaDB.users",timezone:"Asia/Tehran"};
+}
+
+function directoryRoleFromNames(value) {
+  const names=(Array.isArray(value)?value:String(value||"").split(",")).map(x=>String(x||"").toLowerCase().replace(/[^a-z0-9]/g,"")).filter(Boolean);
+  for(const code of ["superadmin","admin","agent","customermarketer","marketer","member","customer","user","appapiuser","sponsor"])if(names.includes(code))return legacyRoleCode(code);
+  return names.length?legacyRoleCode(names[0]):"customer";
+}
+
+function directoryAccountType(role) {
+  return role==="superadmin"||role==="admin"?"مدیر سامانه":role==="agent"?"نماینده":role==="marketer"||role==="customermarketer"?"بازاریاب":role==="legacy_appapiuser"||role==="legacy_sponsor"?"حساب سیستمی":"مشتری / کاربر";
+}
+function mapMariaDirectoryUser(r) {
+  const roleNames=String(r.roles||"").split(",").filter(Boolean),role=directoryRoleFromNames(roleNames);
+  return {id:"legacy:"+String(r.Id),legacy_id:String(r.Id),username:r.UserName||null,legacy_username:r.UserName||null,full_name:[r.FirstName,r.LastName].filter(Boolean).join(" ").trim()||r.UserName||r.Mobile||"کاربر بدون نام",phone:r.Mobile||r.Phone||r.PhoneNumber||null,mobile:r.Mobile||r.Phone||r.PhoneNumber||null,email:r.Email||null,national_code:r.NationalCode||null,role,roles:roleNames.map(x=>String(x).toLowerCase().replace(/[^a-z]/g,"")),is_active:Boolean(r.IsActive),created_at:r.RegDate||null,registered_at:r.RegDate||null,legacy_source:"MariaDB.AspNetUsers",source_table:"AspNetUsers",legacy_customer_id:r.CustomerId||null,legacy_agent_id:r.AgentId||null,password_reset_required:true,account_type:directoryAccountType(role)};
+}
+const sqlIdent = value => "`" + String(value).replace(/`/g, "``") + "`";
+
+const JWT_SECRET = process.env.JWT_SECRET || "";
+const OTP_PEPPER = process.env.OTP_PEPPER || "";
+const CAPTCHA_PEPPER = process.env.CAPTCHA_PEPPER || "";
+const BRAND_NAME = process.env.BRAND_NAME || "دیجی‌بایل پی";
+const KAVENEGAR_API_KEY = process.env.KAVENEGAR_API_KEY || "";
+const KAVENEGAR_TEMPLATE = process.env.KAVENEGAR_TEMPLATE || "";
+const AI_STORY_RATE = new Map();
+
+export async function migrate() {
+  const { readFile } = await import("node:fs/promises");
+  const { fileURLToPath } = await import("node:url");
+  const path = await import("node:path");
+  const root = path.dirname(fileURLToPath(import.meta.url));
+  const schema = await readFile(path.join(root, "db", "002_mariadb_app.sql"), "utf8");
+  const statements = schema
+    .replace(/^\s*--.*$/gm, "")
+    .split(/;\s*(?:\r?\n|$)/)
+    .map(statement => statement.trim())
+    .filter(statement => statement && !statement.startsWith("--"));
+  for (const statement of statements) {
+    await mariadbPool.query(statement);
+  }
+  await mariadbPool.query("ANALYZE TABLE users, sms_templates, legacy_source_data, loan_products");
+}
+export async function dbHealth() { await mariadbPool.query("SELECT 1"); return true; }
+function hash(value, pepper) { return crypto.createHmac("sha256", pepper).update(String(value)).digest("hex"); }
+function json(res, status, value, extraHeaders = {}) {
+  res.writeHead(status, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", ...extraHeaders });
+  res.end(JSON.stringify(value));
+}
+function authJson(res, status, token, value) {
+  const secure = process.env.NODE_ENV === "production" ? "; Secure" : "";
+  res.setHeader("Set-Cookie", "db_session=" + token + "; HttpOnly; SameSite=Lax; Path=/; Max-Age=28800" + secure);
+  return json(res, status, value);
+}
+export function verifySession(token) {
+  if (!token || JWT_SECRET.length < 32) return null;
+  try { return jwt.verify(token, JWT_SECRET, { issuer: "digibail" }); } catch { return null; }
+}
+async function body(req) {
+  let raw = "";
+  // Loan products can include a compressed image data URL. Keep a bounded 3 MB JSON limit.
+  for await (const chunk of req) { raw += chunk; if (raw.length > 3_000_000) throw Object.assign(new Error("حجم درخواست بیشتر از ۳ مگابایت است؛ تصویر را کوچک‌تر کنید."), { status: 413 }); }
+  try { return raw ? JSON.parse(raw) : {}; } catch { throw Object.assign(new Error("ساختار JSON معتبر نیست."), { status: 400 }); }
+}
+async function multipartBody(req, limit = 6_200_000) {
+  const type = String(req.headers["content-type"] || "");
+  const match = type.match(/boundary=(?:"([^"]+)"|([^;]+))/i);
+  if (!match) throw Object.assign(new Error("فرمت بارگذاری فایل معتبر نیست."), { status: 400 });
+  const boundary = Buffer.from("--" + (match[1] || match[2]).trim());
+  const chunks = []; let size = 0;
+  for await (const chunk of req) {
+    size += chunk.length;
+    if (size > limit) throw Object.assign(new Error("حجم فایل بیشتر از حد مجاز است."), { status: 413 });
+    chunks.push(chunk);
+  }
+  const raw = Buffer.concat(chunks); const fields = {}; let file = null; let pos = 0;
+  while (true) {
+    const start = raw.indexOf(boundary, pos);
+    if (start < 0) break;
+    let partStart = start + boundary.length;
+    if (raw.subarray(partStart, partStart + 2).toString() === "--") break;
+    if (raw.subarray(partStart, partStart + 2).toString() === "\r\n") partStart += 2;
+    const next = raw.indexOf(boundary, partStart);
+    if (next < 0) break;
+    let partEnd = next;
+    if (raw.subarray(partEnd - 2, partEnd).toString() === "\r\n") partEnd -= 2;
+    const part = raw.subarray(partStart, partEnd);
+    const headerEnd = part.indexOf(Buffer.from("\r\n\r\n"));
+    if (headerEnd < 0) { pos = next; continue; }
+    const headers = part.subarray(0, headerEnd).toString("utf8");
+    const disposition = headers.match(/content-disposition:\s*form-data;[^\r\n]*name="([^"]+)"(?:;\s*filename="([^"]*)")?/i);
+    if (!disposition) { pos = next; continue; }
+    const name = disposition[1]; const filename = disposition[2];
+    const data = part.subarray(headerEnd + 4);
+    if (filename !== undefined) {
+      const mime = headers.match(/content-type:\s*([^\r\n]+)/i)?.[1]?.trim().toLowerCase() || "application/octet-stream";
+      file = { name: filename, mime, data };
+    } else fields[name] = data.toString("utf8");
+    pos = next;
+  }
+  return { fields, file };
+}
+function authenticatedUserId(req) {
+  const session = sessionFor(req);
+  const id = Number(session?.sub);
+  return Number.isSafeInteger(id) && id > 0 ? id : null;
+}
+function clientIp(req) { return (req.socket.remoteAddress || "").replace(/^::ffff:/, "").slice(0, 64) || null; }
+async function audit(req, event, userId = null, details = {}) {
+  await pool.query("INSERT INTO audit_logs(user_id,event_type,ip_address,details) VALUES($1,$2,$3,$4)", [userId, event, clientIp(req), JSON.stringify(details)]);
+}
+function tokenFor(user) {
+  if (JWT_SECRET.length < 32) throw new Error("JWT_SECRET تنظیم نشده است.");
+  return jwt.sign({ sub: String(user.id), role: user.role, phone: user.phone }, JWT_SECRET, { expiresIn: "8h", issuer: "digibail" });
+}
+async function consumeCaptcha(id, answer) {
+  if (!id || !answer || CAPTCHA_PEPPER.length < 32) return false;
+  const result = await pool.query("UPDATE captcha_challenges SET consumed_at=NOW() WHERE id=$1 AND consumed_at IS NULL AND expires_at>NOW() AND answer_hash=$2 RETURNING id", [id, hash(String(answer).trim(), CAPTCHA_PEPPER)]);
+  return result.rowCount === 1;
+}
+function phoneOk(phone) { return /^09\d{9}$/.test(String(phone || "")); }
+function nationalCodeOk(value) {
+  const n = String(value || "");
+  if (!/^\d{10}$/.test(n) || /^([0-9])\1{9}$/.test(n)) return false;
+  const check = Number(n[9]);
+  const sum = n.slice(0, 9).split("").reduce((s, digit, i) => s + Number(digit) * (10 - i), 0) % 11;
+  return sum < 2 ? check === sum : check === 11 - sum;
+}
+function sessionFor(req) {
+  const auth = String(req.headers.authorization || "");
+  const bearer = auth.match(/^Bearer\s+(.+)$/i)?.[1];
+  const cookie = String(req.headers.cookie || "").split(";").map(v => v.trim()).find(v => v.startsWith("db_session="));
+  return verifySession(bearer || (cookie ? cookie.slice("db_session=".length) : ""));
+}
+async function adminFor(req) {
+  const session = sessionFor(req);
+  if (!session) return null;
+  // Read the current role from MariaDB so permission changes take effect immediately.
+  const current = await pool.query("SELECT id,role,is_active,phone,full_name,username FROM users WHERE id=$1 LIMIT 1", [Number(session.sub)]);
+  const role = String(current.rows[0]?.role || "").trim().toLowerCase();
+  if (!current.rowCount || !current.rows[0].is_active || !["admin", "superadmin"].includes(role)) return null;
+  return { ...session, role, fullName: current.rows[0].full_name, phone: current.rows[0].phone, username: current.rows[0].username };
+}
+export async function verifyAdminSession(req) { return Boolean(await adminFor(req)); }
+function verifyAspNetIdentityPassword(password, storedHash) {
+  let data;
+  try { data = Buffer.from(String(storedHash || ""), "base64"); } catch { return false; }
+  if (data.length < 2) return false;
+  let salt, subkey, iterations, digest;
+  if (data[0] === 0x00 && data.length >= 49) {
+    salt = data.subarray(1, 17); subkey = data.subarray(17); iterations = 1000; digest = "sha1";
+  } else if (data[0] === 0x01 && data.length >= 14) {
+    const prf = data.readUInt32BE(1); iterations = data.readUInt32BE(5);
+    const saltLength = data.readUInt32BE(9);
+    if (iterations < 1 || iterations > 2000000 || saltLength < 8 || saltLength > 1024 || data.length <= 13 + saltLength) return false;
+    digest = ({ 0: "sha1", 1: "sha256", 2: "sha512" })[prf];
+    if (!digest) return false;
+    salt = data.subarray(13, 13 + saltLength); subkey = data.subarray(13 + saltLength);
+  } else return false;
+  const actual = crypto.pbkdf2Sync(String(password), salt, iterations, subkey.length, digest);
+  return actual.length === subkey.length && crypto.timingSafeEqual(actual, subkey);
+}
+async function verifyPassword(password, storedHash) {
+  const stored = String(storedHash || "");
+  if (stored.startsWith("aspnet:")) return verifyAspNetIdentityPassword(password, stored.slice(7));
+  if (stored.startsWith("scrypt$")) {
+    try {
+      const [, n, r, p, salt, expected] = stored.split("$");
+      const N = Number(n), R = Number(r), P = Number(p);
+      if (N !== 16384 || R !== 8 || P !== 1 || !salt || !expected) return false;
+      const expectedBytes = Buffer.from(expected, "base64url");
+      const actual = crypto.scryptSync(String(password || ""), Buffer.from(salt, "base64url"), expectedBytes.length, { N, r: R, p: P, maxmem: 64 * 1024 * 1024 });
+      return actual.length === expectedBytes.length && crypto.timingSafeEqual(actual, expectedBytes);
+    } catch { return false; }
+  }
+  return bcrypt.compare(String(password || ""), stored);
+}
+function maskPhone(phone) {
+  const p = String(phone || "");
+  return p.length >= 7 ? p.slice(0, 4) + "****" + p.slice(-3) : "***";
+}
+function settingsCipherKey() {
+  if (JWT_SECRET.length < 32) throw Object.assign(new Error("تنظیم کلید رمزنگاری امن سرور ناقص است."), { status: 503, code: "sms_settings_key_missing" });
+  return crypto.createHash("sha256").update(JWT_SECRET).digest();
+}
+function encryptSetting(value) {
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv("aes-256-gcm", settingsCipherKey(), iv);
+  const encrypted = Buffer.concat([cipher.update(String(value), "utf8"), cipher.final()]);
+  return [iv.toString("base64"), cipher.getAuthTag().toString("base64"), encrypted.toString("base64")].join(".");
+}
+function decryptSetting(value) {
+  if (!value) return "";
+  const parts = String(value).split(".");
+  const decipher = crypto.createDecipheriv("aes-256-gcm", settingsCipherKey(), Buffer.from(parts[0], "base64"));
+  decipher.setAuthTag(Buffer.from(parts[1], "base64"));
+  return Buffer.concat([decipher.update(Buffer.from(parts[2], "base64")), decipher.final()]).toString("utf8");
+}
+async function getKavenegarSettings() {
+  const q = await pool.query("SELECT api_key_encrypted,sender FROM sms_provider_settings WHERE provider=$1 LIMIT 1", ["kavenegar"]);
+  const row = q.rows[0]; let apiKey = "";
+  try { apiKey = row?.api_key_encrypted ? decryptSetting(row.api_key_encrypted) : ""; } catch {}
+  return { apiKey: apiKey || KAVENEGAR_API_KEY, sender: row?.sender || process.env.KAVENEGAR_SENDER || "" };
+}
+async function sendSmsText(phone, message) {
+  const settings = await getKavenegarSettings();
+  if (!settings.apiKey) throw Object.assign(new Error("کلید کاوه‌نگار در تنظیمات پیامک ثبت نشده است."), { status: 503, code: "sms_provider_not_configured" });
+  const form = new URLSearchParams({ receptor: phone, message });
+  if (settings.sender) form.set("sender", settings.sender);
+  const endpoint = "https://api.kavenegar.com/v1/" + encodeURIComponent(settings.apiKey) + "/sms/send.json";
+  const response = await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: form, signal: AbortSignal.timeout(10000) });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok || result?.return?.status !== 200) throw Object.assign(new Error("کاوه‌نگار ارسال را تأیید نکرد. کد پاسخ: " + String(result?.return?.status || response.status)), { status: 502, code: "sms_delivery_failed" });
+  return String(result?.entries?.[0]?.messageid || "");
+}
+function captchaSvg(value) {
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="170" height="56" viewBox="0 0 170 56"><rect width="170" height="56" rx="12" fill="#241047"/><path d="M0 12L170 42M10 50L150 5" stroke="#ffb629" stroke-opacity=".35" stroke-width="2"/><text x="85" y="38" text-anchor="middle" font-family="monospace" font-size="30" font-weight="700" letter-spacing="5" fill="#fff">${value}</text></svg>`;
+}
+async function sendOtp(phone, code) {
+  const settings = await getKavenegarSettings();
+  if (!settings.apiKey) throw Object.assign(new Error("کلید کاوه‌نگار در تنظیمات پیامک ثبت نشده است."), { status: 503, code: "sms_provider_not_configured" });
+  if (!KAVENEGAR_TEMPLATE) {
+    await sendSmsText(phone, BRAND_NAME + ": کد تأیید شما " + code + " است. این کد را در اختیار دیگران قرار ندهید.");
+    return;
+  }
+  const endpoint = "https://api.kavenegar.com/v1/" + encodeURIComponent(settings.apiKey) + "/verify/lookup.json";
+  const form = new URLSearchParams({ receptor: phone, token: code, template: KAVENEGAR_TEMPLATE });
+  const response = await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: form, signal: AbortSignal.timeout(10000) });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok || result?.return?.status !== 200) throw Object.assign(new Error("ارسال پیامک توسط کاوه‌نگار تأیید نشد."), { status: 502, code: "sms_delivery_failed" });
+}
+const recentFailures = new Map();
+function limited(key) {
+  const now = Date.now(); const entry = recentFailures.get(key) || { count: 0, since: now };
+  if (now - entry.since > 15 * 60_000) { entry.count = 0; entry.since = now; }
+  entry.count += 1; recentFailures.set(key, entry); return entry.count > 12;
+}
+function resetLimit(key) { recentFailures.delete(key); }
+
+export async function handleApi(req, res, url) {
+  const route = url.pathname;
+  const intervalMonthsFromStored = (value) => { const n=Number(value)||0; if(n>=1&&n<=12)return Math.trunc(n); const ranges=[[28,31,1],[59,62,2],[89,93,3],[118,124,4],[148,155,5],[178,186,6],[208,217,7],[238,248,8],[268,279,9],[298,310,10],[328,341,11],[358,372,12]]; const hit=ranges.find(([lo,hi])=>n>=lo&&n<=hi); return hit?hit[2]:1; };
+  try {
+    if (req.method === "GET" && route === "/api/v1/security/me") {
+      const session = sessionFor(req);
+      if (!session) return json(res, 401, { message: "وارد حساب خود شوید." });
+      const current = await pool.query("SELECT id,phone,full_name,username,role,is_active,password_reset_required,COALESCE((SELECT json_agg(role_code ORDER BY role_code) FROM (SELECT role_code FROM user_role_overrides WHERE user_id=users.id UNION SELECT role_code FROM user_role_assignments WHERE user_id=users.id AND NOT EXISTS(SELECT 1 FROM user_role_overrides WHERE user_id=users.id)) rr),json_build_array(role)) AS roles FROM users WHERE id=$1 LIMIT 1", [Number(session.sub)]);
+      if (!current.rowCount || !current.rows[0].is_active) return json(res, 401, { message: "حساب کاربری فعال نیست." });
+      const u = current.rows[0];
+      return json(res, 200, { data: { id: u.id, phone: u.phone, fullName: u.full_name, username: u.username, role: u.role, roles: u.roles || [u.role], passwordResetRequired: Boolean(u.password_reset_required) } });
+    }
+    if (req.method === "GET" && route === "/api/v1/tenant/config") {
+      return json(res, 200, { data: { name: BRAND_NAME, brand: { logoText: BRAND_NAME.slice(0, 1), primary: "#4a2a86", accent: "#ffb629" } } });
+    }
+    if (req.method === "GET" && (route === "/api/v1/loan-products" || /^\/api\/v1\/loan-products\/[^/]+$/.test(route))) {
+      const slug = route === "/api/v1/loan-products" ? null : decodeURIComponent(route.slice("/api/v1/loan-products/".length));
+      const publicColumns = "slug,name,title,description,badge,min_amount,max_amount,interval_days,tiers,conditions,documents,is_active,sort_order,show_in_list,interest_method,interest_percent,late_daily_coef,early_daily_coef,image_url,full_description_html,labels,operational_costs,send_reminders";
+      const q = slug
+        ? await pool.query("SELECT " + publicColumns + " FROM loan_products WHERE slug=$1 AND is_active=TRUE AND show_in_list=TRUE LIMIT 1", [slug])
+        : await pool.query("SELECT " + publicColumns + " FROM loan_products WHERE is_active=TRUE AND show_in_list=TRUE ORDER BY sort_order,created_at DESC");
+      const shape = (p) => ({ id:p.slug,name:p.name,description:p.description,badge:p.badge,isActive:p.is_active,minAmount:Number(p.min_amount),maxAmount:Number(p.max_amount),intervalMonths:intervalMonthsFromStored(p.interval_days),intervalDays:intervalMonthsFromStored(p.interval_days),tiers:p.tiers,conditions:p.conditions,documents:p.documents,title:p.title||p.name,imageUrl:p.image_url,fullDescriptionHtml:p.full_description_html,labels:p.labels,operationalCosts:p.operational_costs,interestMethod:p.interest_method,interestPercent:Number(p.interest_percent),lateDailyCoef:Number(p.late_daily_coef),earlyDailyCoef:Number(p.early_daily_coef),showInList:p.show_in_list,sendReminders:p.send_reminders });
+      if (slug) return q.rowCount ? json(res,200,shape(q.rows[0]),{"Cache-Control":"public, max-age=10, stale-while-revalidate=30"}) : json(res,404,{message:"طرح وام پیدا نشد."});
+      return json(res,200,q.rows.map(shape),{"Cache-Control":"public, max-age=10, stale-while-revalidate=30"});
+    }
+    if (route.startsWith("/api/v1/admin/")) {
+      const admin = await adminFor(req);
+      if (!admin) return json(res, 403, { message: "دسترسی مدیر لازم است." });
+      if (req.method === "POST" && route === "/api/v1/admin/ai/story") {
+        const input = await body(req);
+        const provider = ["openai", "gemini", "anthropic"].includes(String(input.provider || "").toLowerCase()) ? String(input.provider).toLowerCase() : "openai";
+        const brief = String(input.brief || "").trim().slice(0, 1600);
+        const campaign = String(input.campaign || "general").slice(0, 80);
+        if (brief.length < 8) return json(res, 400, { message: "شرح کمپین را با حداقل ۸ نویسه وارد کنید." });
+        const keys = {
+          openai: process.env.OPENAI_API_KEY || "",
+          gemini: process.env.GEMINI_API_KEY || "",
+          anthropic: process.env.ANTHROPIC_API_KEY || ""
+        };
+        if (!keys[provider]) return json(res, 503, { message: "کلید این سرویس روی سرور تنظیم نشده است. کلید را در متغیر محیطی امن سرور ثبت کنید؛ کلید را داخل مرورگر وارد نکنید." });
+        const prompt = "برای برند فارسی‌زبان «دیجی‌بایل پی» یک متن تبلیغاتی حرفه‌ای و غیرگمراه‌کننده برای استوری عمودی 9:16 بساز. ادعای نرخ صفر، تأیید قطعی و مزیت مالی تضمین‌شده نکن مگر در شرح کمپین صریحاً تأیید شده باشد. خروجی فقط JSON معتبر با کلیدهای h,p,cta,caption,hashtags,designNotes باشد. h حداکثر 55 نویسه، p حداکثر 110، cta حداکثر 24، caption حداکثر 500 و hashtags آرایه‌ای با حداکثر 8 هشتگ فارسی/انگلیسی باشد. از فارسی طبیعی، تیتر قوی، مزیت روشن و دعوت به اقدام استفاده کن. نوع کمپین: " + campaign + ". شرح کمپین: " + brief;
+        try {
+          let responseText = "";
+          if (provider === "openai") {
+            const r = await fetch(process.env.OPENAI_BASE_URL || "https://api.openai.com/v1/chat/completions", { method: "POST", headers: { "Authorization": "Bearer " + keys.openai, "Content-Type": "application/json" }, body: JSON.stringify({ model: process.env.OPENAI_MODEL || "gpt-4o-mini", temperature: 0.75, response_format: { type: "json_object" }, messages: [{ role: "system", content: "You are a senior Persian performance-marketing creative director. Return valid JSON only." }, { role: "user", content: prompt }] }), signal: AbortSignal.timeout(45000) });
+            const j = await r.json().catch(() => ({})); if (!r.ok) return json(res, 502, { message: "سرویس OpenAI پاسخ موفق نداد؛ تنظیمات مدل و کلید را بررسی کنید." });
+            responseText = j.choices?.[0]?.message?.content || "";
+          } else if (provider === "gemini") {
+            const model = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+            const r = await fetch("https://generativelanguage.googleapis.com/v1beta/models/" + encodeURIComponent(model) + ":generateContent?key=" + encodeURIComponent(keys.gemini), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ generationConfig: { responseMimeType: "application/json", temperature: 0.75 }, contents: [{ role: "user", parts: [{ text: prompt }] }] }), signal: AbortSignal.timeout(45000) });
+            const j = await r.json().catch(() => ({})); if (!r.ok) return json(res, 502, { message: "سرویس Gemini پاسخ موفق نداد؛ تنظیمات مدل و کلید را بررسی کنید." });
+            responseText = j.candidates?.[0]?.content?.parts?.map(p => p.text || "").join("") || "";
+          } else {
+            const r = await fetch("https://api.anthropic.com/v1/messages", { method: "POST", headers: { "x-api-key": keys.anthropic, "anthropic-version": "2023-06-01", "Content-Type": "application/json" }, body: JSON.stringify({ model: process.env.ANTHROPIC_MODEL || "claude-3-5-haiku-latest", max_tokens: 900, temperature: 0.75, system: "You are a senior Persian performance-marketing creative director. Return valid JSON only.", messages: [{ role: "user", content: prompt }] }), signal: AbortSignal.timeout(45000) });
+            const j = await r.json().catch(() => ({})); if (!r.ok) return json(res, 502, { message: "سرویس Anthropic پاسخ موفق نداد؛ تنظیمات مدل و کلید را بررسی کنید." });
+            responseText = j.content?.map(p => p.text || "").join("") || "";
+          }
+          const cleaned = responseText.replace(/^\s*```(?:json)?/i, "").replace(/```\s*$/i, "").trim();
+          const story = JSON.parse(cleaned);
+          const str = (v, max) => String(v || "").trim().slice(0, max);
+          return json(res, 200, { provider, story: { h: str(story.h, 90), p: str(story.p, 180), cta: str(story.cta, 36), caption: str(story.caption, 800), hashtags: Array.isArray(story.hashtags) ? story.hashtags.slice(0, 8).map(x => str(x, 40)) : [], designNotes: str(story.designNotes, 500) } });
+        } catch (e) {
+          return json(res, 502, { message: e?.name === "TimeoutError" ? "زمان پاسخ هوش مصنوعی تمام شد؛ دوباره تلاش کنید." : "پاسخ هوش مصنوعی قابل پردازش نبود؛ دوباره تولید کنید." });
+        }
+      }
+
+      const aiRateLimit = (kind, max) => {
+        const key = String(admin.sub || admin.username || "admin") + ":" + kind;
+        const now = Date.now(), old = AI_STORY_RATE.get(key);
+        const slot = !old || now - old.started > 600000 ? { started: now, count: 0 } : old;
+        if (slot.count >= max) return false;
+        slot.count += 1; AI_STORY_RATE.set(key, slot); return true;
+      };
+      const ensureAiStories = async () => true;
+      const parseAiStory = (raw) => {
+        let txt = String(raw || "").replace(new RegExp(String.fromCharCode(96), "g"), "").trim();
+        const start = txt.indexOf("{"), end = txt.lastIndexOf("}");
+        if (start >= 0 && end > start) txt = txt.slice(start, end + 1);
+        const o = JSON.parse(txt);
+        return { title:String(o.title || "").slice(0,160), body:String(o.body || "").slice(0,700), cta:String(o.cta || "").slice(0,100), caption:String(o.caption || "").slice(0,1200), hashtags:Array.isArray(o.hashtags)?o.hashtags.slice(0,12).map(x=>String(x).slice(0,50)).join(" "):String(o.hashtags || "").slice(0,400), visualPrompt:String(o.visualPrompt || "").slice(0,1800) };
+      };
+      const callStoryProvider = async (provider, key, prompt) => {
+        let response, raw = "";
+        if (provider === "openai") {
+          response = await fetch("https://api.openai.com/v1/chat/completions", { method:"POST", signal:AbortSignal.timeout(45000), headers:{"Authorization":"Bearer "+key,"Content-Type":"application/json"}, body:JSON.stringify({model:process.env.OPENAI_TEXT_MODEL||process.env.OPENAI_MODEL||"gpt-4.1-mini",temperature:0.8,response_format:{type:"json_object"},messages:[{role:"system",content:"You are a senior Persian-language advertising creative director. Return valid JSON only with title, body, cta, caption, hashtags (array), visualPrompt. Write polished natural Persian. Never invent financial rates, guaranteed approvals, bank partnerships, or claims not supplied by the user. visualPrompt describes a premium vertical 9:16 background image with no text, no logos, no watermark."},{role:"user",content:prompt}]}) });
+          const j = await response.json().catch(() => ({}));
+          if (!response.ok) throw new Error("OpenAI پاسخ موفق نداد (" + response.status + ")");
+          raw = j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content;
+        } else if (provider === "gemini") {
+          response = await fetch("https://generativelanguage.googleapis.com/v1beta/models/" + encodeURIComponent(process.env.GEMINI_TEXT_MODEL||process.env.GEMINI_MODEL||"gemini-2.5-flash") + ":generateContent?key=" + encodeURIComponent(key), { method:"POST", signal:AbortSignal.timeout(45000), headers:{"Content-Type":"application/json"}, body:JSON.stringify({systemInstruction:{parts:[{text:"You are a senior Persian-language advertising creative director. Return valid JSON only with title, body, cta, caption, hashtags (array), visualPrompt. Write polished natural Persian. Never invent financial rates, guaranteed approvals, bank partnerships, or claims not supplied by the user. visualPrompt describes a premium vertical 9:16 background image with no text, no logos, no watermark."}]},contents:[{role:"user",parts:[{text:prompt}]}],generationConfig:{responseMimeType:"application/json",temperature:0.8}}) });
+          const j = await response.json().catch(() => ({}));
+          if (!response.ok) throw new Error("Gemini پاسخ موفق نداد (" + response.status + ")");
+          raw = (j.candidates && j.candidates[0] && j.candidates[0].content && j.candidates[0].content.parts || []).map(x => x.text || "").join("");
+        } else if (provider === "anthropic") {
+          response = await fetch("https://api.anthropic.com/v1/messages", { method:"POST", signal:AbortSignal.timeout(45000), headers:{"x-api-key":key,"anthropic-version":"2023-06-01","Content-Type":"application/json"}, body:JSON.stringify({model:process.env.ANTHROPIC_TEXT_MODEL||process.env.ANTHROPIC_MODEL||"claude-sonnet-4-20250514",max_tokens:1200,temperature:0.8,system:"You are a senior Persian-language advertising creative director. Return valid JSON only with title, body, cta, caption, hashtags (array), visualPrompt. Write polished natural Persian. Never invent financial rates, guaranteed approvals, bank partnerships, or claims not supplied by the user. visualPrompt describes a premium vertical 9:16 background image with no text, no logos, no watermark.",messages:[{role:"user",content:prompt}]}) });
+          const j = await response.json().catch(() => ({}));
+          if (!response.ok) throw new Error("Anthropic پاسخ موفق نداد (" + response.status + ")");
+          raw = (j.content || []).filter(x => x.type === "text").map(x => x.text || "").join("");
+        } else throw new Error("ارائه‌دهنده‌ی هوش مصنوعی معتبر نیست.");
+        const p = parseAiStory(raw);
+        if (!p.title || !p.body || !p.cta) throw new Error("پاسخ مدل ناقص بود؛ دوباره تولید کنید.");
+        return { provider:provider, title:p.title, body:p.body, cta:p.cta, caption:p.caption, hashtags:p.hashtags, visualPrompt:p.visualPrompt };
+      };
+      if (req.method === "GET" && route === "/api/v1/admin/ai/stories") {
+        await ensureAiStories();
+        const q = await pool.query("SELECT id,title,status,created_at,payload,(image_data IS NOT NULL) AS has_image FROM ai_story_assets WHERE created_by=$1 ORDER BY created_at DESC LIMIT 30", [Number(admin.sub)]);
+        return json(res,200,{data:q.rows.map(x=>({id:x.id,title:x.title,status:x.status,created_at:x.created_at,story:x.payload,hasImage:x.has_image}))});
+      }
+      if (req.method === "GET" && /^\/api\/v1\/admin\/ai\/stories\/[0-9]+$/.test(route)) {
+        await ensureAiStories();
+        const q = await pool.query("SELECT id,title,status,created_at,payload,image_data FROM ai_story_assets WHERE id=$1 AND created_by=$2 LIMIT 1", [route.split("/").pop(), Number(admin.sub)]);
+        if (!q.rowCount) return json(res,404,{message:"استوری ذخیره‌شده پیدا نشد."});
+        return json(res,200,{id:q.rows[0].id,title:q.rows[0].title,status:q.rows[0].status,created_at:q.rows[0].created_at,story:q.rows[0].payload,imageData:q.rows[0].image_data||""});
+      }
+      if (req.method === "POST" && route === "/api/v1/admin/ai/stories") {
+        const b = await body(req), s = b.story && typeof b.story === "object" ? b.story : b;
+        const clean = {goal:String(s.goal||"").slice(0,240),audience:String(s.audience||"").slice(0,240),offer:String(s.offer||"").slice(0,500),tone:String(s.tone||"professional").slice(0,80),provider:String(s.provider||"auto").slice(0,40),platform:String(s.platform||"instagram").slice(0,40),title:String(s.title||s.h||"").slice(0,160),body:String(s.body||s.p||"").slice(0,700),cta:String(s.cta||"").slice(0,100),caption:String(s.caption||"").slice(0,1200),hashtags:String(s.hashtags||"").slice(0,400),visualPrompt:String(s.visualPrompt||"").slice(0,1800),theme:String(s.theme||s.bg||"plum").slice(0,40)};
+        const title = String(b.title || clean.title || "استوری تبلیغاتی").trim().slice(0,160) || "استوری تبلیغاتی";
+        const status = b.status === "ready" ? "ready" : "draft";
+        const imageData = typeof b.imageData === "string" && /^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(b.imageData) && b.imageData.length <= 2600000 ? b.imageData : null;
+        await ensureAiStories();
+        const q = await pool.query("INSERT INTO ai_story_assets(created_by,title,status,payload,image_data) VALUES($1,$2,$3,$4::jsonb,$5) RETURNING id,created_at", [Number(admin.sub),title,status,JSON.stringify(clean),imageData]);
+        return json(res,201,{id:q.rows[0].id,title:title,status:status,created_at:q.rows[0].created_at,hasImage:Boolean(imageData)});
+      }
+      if (req.method === "POST" && route === "/api/v1/admin/ai/story/generate") {
+        const b = await body(req);
+        if (!aiRateLimit("text",12)) return json(res,429,{message:"برای جلوگیری از هزینه‌ی ناخواسته، ۱۲ تولید در هر ۱۰ دقیقه مجاز است."});
+        const provider = String(b.provider || "auto").toLowerCase();
+        const keys = {openai:process.env.OPENAI_API_KEY||"",gemini:process.env.GEMINI_API_KEY||"",anthropic:process.env.ANTHROPIC_API_KEY||""};
+        const available = Object.keys(keys).filter(k=>keys[k]);
+        if (!available.length) return json(res,503,{message:"کلید هوش مصنوعی روی سرور تنظیم نشده است. یکی از OPENAI_API_KEY، GEMINI_API_KEY یا ANTHROPIC_API_KEY را در فایل محیطی سرور تنظیم کنید."});
+        const selected = provider === "compare" ? available : provider === "auto" ? [available[0]] : [provider];
+        if (selected.some(k=>!keys[k])) return json(res,503,{message:"کلید ارائه‌دهنده‌ی انتخاب‌شده روی سرور تنظیم نشده است."});
+        const f = {goal:String(b.goal||"معرفی خدمات").slice(0,240),audience:String(b.audience||"مخاطبان عمومی").slice(0,240),offer:String(b.offer||"شرایط مالی مشخصی ارائه نشده؛ هیچ عدد یا وعده‌ای نساز").slice(0,500),tone:String(b.tone||"professional").slice(0,80),platform:String(b.platform||"instagram").slice(0,40)};
+        const prompt = "برای برند دیجی‌بایل، یک استوری تبلیغاتی فارسی حرفه‌ای بساز. هدف کمپین: " + f.goal + ". مخاطب: " + f.audience + ". پیشنهاد یا شرایط واقعی که کاربر داده: " + f.offer + ". لحن: " + f.tone + ". بستر: " + f.platform + ". متن کوتاه، خوانا، جذاب و مناسب موبایل باشد. CTA کوتاه و روشن باشد. کپشن و هشتگ‌ها را هم تولید کن. فقط JSON با فیلدهای title, body, cta, caption, hashtags, visualPrompt برگردان. هیچ نرخ، تضمین تأیید وام، شراکت بانکی یا مزیت تأییدنشده‌ای را اختراع نکن.";
+        const results = await Promise.allSettled(selected.map(k=>callStoryProvider(k,keys[k],prompt)));
+        const candidates = results.filter(x=>x.status==="fulfilled").map(x=>x.value);
+        if (!candidates.length) return json(res,502,{message:"مدل‌های انتخاب‌شده پاسخ قابل استفاده ندادند؛ کلید، اعتبار حساب و نام مدل را بررسی کنید."});
+        return json(res,200,{candidates:candidates,compared:selected.length>1});
+      }
+      if (req.method === "POST" && route === "/api/v1/admin/ai/story/audio") {
+        const b = await body(req);
+        if (!aiRateLimit("audio", 5)) return json(res,429,{message:"برای جلوگیری از هزینه ناخواسته، حداکثر ۵ صدای تبلیغاتی در هر ۱۰ دقیقه مجاز است."});
+        const key = process.env.OPENAI_API_KEY || "";
+        if (!key) return json(res,503,{message:"تولید گفتار نیازمند OPENAI_API_KEY در محیط امن سرور است."});
+        const input = String(b.text || "").trim().slice(0,1800);
+        if (input.length < 8) return json(res,400,{message:"متن گویندگی کوتاه یا خالی است."});
+        const voice = ["alloy","ash","coral","echo","fable","onyx","nova","sage","shimmer","marin","cedar"].includes(String(b.voice||"").toLowerCase()) ? String(b.voice).toLowerCase() : "marin";
+        try {
+          const r = await fetch("https://api.openai.com/v1/audio/speech", {method:"POST",signal:AbortSignal.timeout(90000),headers:{"Authorization":"Bearer "+key,"Content-Type":"application/json"},body:JSON.stringify({model:process.env.OPENAI_TTS_MODEL||"gpt-4o-mini-tts",voice,input,instructions:"با فارسی روان و طبیعی، لحن تبلیغاتی حرفه‌ای، مطمئن و گرم صحبت کن. سرعت متوسط، تلفظ واضح و بدون اغراق. فقط متن داده‌شده را بخوان.",response_format:"mp3"})});
+          if (!r.ok) return json(res,502,{message:"سرویس گویندگی پاسخ موفق نداد ("+r.status+")."});
+          const bytes=Buffer.from(await r.arrayBuffer());
+          if(!bytes.length)return json(res,502,{message:"سرویس گویندگی فایل صوتی خالی برگرداند."});
+          return json(res,200,{audioBase64:bytes.toString("base64"),mimeType:"audio/mpeg",voice});
+        } catch(e) { return json(res,502,{message:e?.name==="TimeoutError"?"زمان تولید گویندگی تمام شد؛ دوباره تلاش کنید.":"ارتباط با سرویس گویندگی برقرار نشد."}); }
+      }
+      if (req.method === "POST" && route === "/api/v1/admin/ai/story/image") {
+        const b = await body(req);
+        if (!aiRateLimit("image",4)) return json(res,429,{message:"برای جلوگیری از هزینه‌ی ناخواسته، ۴ تصویر در هر ۱۰ دقیقه مجاز است."});
+        const key = process.env.OPENAI_API_KEY || "";
+        if (!key) return json(res,503,{message:"ساخت تصویر نیازمند OPENAI_API_KEY در فایل محیطی سرور است."});
+        const prompt = String(b.prompt||"").trim().slice(0,1800);
+        if (!prompt) return json(res,400,{message:"توضیح تصویر خالی است."});
+        const imageResponse = await fetch("https://api.openai.com/v1/images/generations", {method:"POST",signal:AbortSignal.timeout(90000),headers:{"Authorization":"Bearer "+key,"Content-Type":"application/json"},body:JSON.stringify({model:process.env.OPENAI_IMAGE_MODEL||"gpt-image-1",prompt:"Create a premium advertising background image for a Persian fintech brand. Vertical 9:16 composition, elegant editorial art direction, strong focal point, refined lighting, high-quality commercial photography or 3D illustration. No text, no letters, no logo, no watermark. Visual direction: "+prompt,size:"1024x1536",quality:"high",output_format:"png",n:1})});
+        const imageJson = await imageResponse.json().catch(()=>({}));
+        if (!imageResponse.ok) return json(res,502,{message:"سرویس ساخت تصویر پاسخ نداد ("+imageResponse.status+")."});
+        const b64 = imageJson.data && imageJson.data[0] && imageJson.data[0].b64_json;
+        if (!b64) return json(res,502,{message:"سرویس تصویر خروجی قابل استفاده نداد."});
+        return json(res,200,{imageData:"data:image/png;base64,"+b64});
+      }
+
+      const loanShape = (p) => ({ id:p.slug,name:p.name,description:p.description,badge:p.badge,isActive:p.is_active,minAmount:Number(p.min_amount),maxAmount:Number(p.max_amount),intervalMonths:intervalMonthsFromStored(p.interval_days),intervalDays:intervalMonthsFromStored(p.interval_days),tiers:p.tiers,conditions:p.conditions,documents:p.documents,title:p.title||p.name,imageUrl:p.image_url,fullDescriptionHtml:p.full_description_html,labels:p.labels,operationalCosts:p.operational_costs,interestMethod:p.interest_method,interestPercent:Number(p.interest_percent),lateDailyCoef:Number(p.late_daily_coef),earlyDailyCoef:Number(p.early_daily_coef),showInList:p.show_in_list,sendReminders:p.send_reminders });
+      const loanRow = (p) => ({ id:p.id,shape:loanShape(p),isActive:p.is_active,sortOrder:p.sort_order,showInList:p.show_in_list,sendReminders:p.send_reminders,legacySourceTable:p.legacy_source_table,legacyId:p.legacy_id,needsReview:Boolean(p.needs_review) });
+      const cleanLoanInput = (b) => {
+        const name=String(b.name||"").trim(), slug=String(b.slug||"").trim();
+        const num=(v)=>{if(v===null||v===undefined||v==="")return null;const n=Number(String(v).replace(/[۰-۹]/g,d=>"۰۱۲۳۴۵۶۷۸۹".indexOf(d)).replace(/[٠-٩]/g,d=>"٠١٢٣٤٥٦٧٨٩".indexOf(d)).replace(/[٬,\s]/g,"").replace(/٫/g,"."));return Number.isFinite(n)?n:null};
+        const minAmount=num(b.minAmount),maxAmount=num(b.maxAmount),intervalDays=num(b.intervalMonths??b.intervalDays),interestPercent=num(b.interestPercent??0),lateDailyCoef=num(b.lateDailyCoef??0),earlyDailyCoef=num(b.earlyDailyCoef??0);
+        const interestMethod=String(b.interestMethod||"Monthly");
+        const tiers=Array.isArray(b.tiers)?b.tiers:[],conditions=b.conditions&&typeof b.conditions==="object"&&!Array.isArray(b.conditions)?b.conditions:{},documents=Array.isArray(b.documents)?b.documents:[],labels=Array.isArray(b.labels)?b.labels:[],operationalCosts=Array.isArray(b.operationalCosts)?b.operationalCosts:[];
+        if(!name||name.length>120||!/^[a-z0-9-]{2,40}$/.test(slug))throw Object.assign(new Error("نام و شناسه انگلیسی معتبر لازم است."),{status:400});
+        if(!Number.isFinite(minAmount)||!Number.isFinite(maxAmount)||minAmount<=0||maxAmount<minAmount)throw Object.assign(new Error("بازه مبلغ وام نامعتبر است."),{status:400});
+        if(!Number.isInteger(intervalDays)||intervalDays<1||intervalDays>12)throw Object.assign(new Error("فاصله اقساط باید بین ۱ تا ۱۲ ماه باشد."),{status:400});
+        if(!["Monthly","Annual","Flat"].includes(interestMethod)||!Number.isFinite(interestPercent)||interestPercent<0||interestPercent>100)throw Object.assign(new Error("نوع یا نرخ بهره نامعتبر است."),{status:400});
+        if(!Number.isFinite(lateDailyCoef)||!Number.isFinite(earlyDailyCoef)||lateDailyCoef<0||lateDailyCoef>1||earlyDailyCoef<0||earlyDailyCoef>1)throw Object.assign(new Error("ضریب روزانه باید بین صفر و یک باشد."),{status:400});
+        if(!tiers.length||tiers.some(t=>!Number.isInteger(Number(t.months))||Number(t.months)<1||!Number.isFinite(Number(t.feePercent??0))||Number(t.feePercent??0)<0||Number(t.feePercent??0)>100||Number(t.downPaymentPercent??0)<0||Number(t.downPaymentPercent??0)>100))throw Object.assign(new Error("حداقل یک گزینه اقساط معتبر لازم است."),{status:400});
+        if(labels.length>10||labels.some(x=>typeof x!=="string"||!x.trim()||x.length>30))throw Object.assign(new Error("حداکثر ۱۰ برچسب، هرکدام تا ۳۰ نویسه."),{status:400});
+        if(operationalCosts.length>10||operationalCosts.some(x=>!String(x.title||"").trim()||Number(x.percent)<0||Number(x.percent)>100))throw Object.assign(new Error("هزینه عملیاتی نامعتبر است."),{status:400});
+        const cleanHtml=String(b.fullDescriptionHtml||"").replace(/<\s*(script|style|iframe|object|embed|form|meta|link)[^>]*>[\s\S]*?<\/\s*\1\s*>/gi,"").replace(/\s+on[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi,"").replace(/(href|src)\s*=\s*(['"])\s*javascript:[\s\S]*?\2/gi,"$1=\"#\"");
+        const imageUrl=String(b.imageUrl||"").slice(0,2200000); if(imageUrl&&!(/^data:image\/(?:svg\+xml|webp|png|jpeg);(?:charset=utf-8;)?base64,/i.test(imageUrl)||/^data:image\/svg\+xml;charset=utf-8,/i.test(imageUrl)||/^https:\/\//i.test(imageUrl)))throw Object.assign(new Error("تصویر طرح معتبر نیست."),{status:400});
+         return {name,slug,description:String(b.description||"").slice(0,500),badge:String(b.badge||"").slice(0,40),minAmount,maxAmount,intervalDays,imageUrl,tiers,conditions,documents,isActive:b.isActive!==false,sortOrder:Number.isFinite(num(b.sortOrder))?Math.trunc(num(b.sortOrder)):0,title:String(b.title||name).slice(0,160),interestMethod,interestPercent,lateDailyCoef,earlyDailyCoef,showInList:b.showInList!==false,sendReminders:b.sendReminders!==false,fullDescriptionHtml:cleanHtml,labels,operationalCosts};
+      };
+      if (req.method === "GET" && route === "/api/v1/admin/loan-products/legacy-candidates") {
+        const q=await pool.query("SELECT source_table,COUNT(*)::int AS row_count FROM legacy_source_data WHERE source_table<>'__legacy_schema__' AND source_table ~* '(loan.?product|loan.?type|loan.?plan|loan.?definition|loan.?configuration|(^|[.])loans?$|وام)' GROUP BY source_table ORDER BY source_table");
+        return json(res,200,q.rows);
+      }
+      // IMPORT_LATEST_VAMCITY_LOAN_DEFINITIONS_V3
+      // IMPORT_LATEST_VAMCITY_LOAN_DEFINITIONS_V3
+      if (req.method === "POST" && route === "/api/v1/admin/loan-products/import-legacy") {
+        // Import only the latest VamCity loan-definition table, never mix in the separate BluVam database.
+        const source=await pool.query("SELECT source_table FROM legacy_source_data WHERE source_table ~* '^vamcityc_vamcity_import_[0-9]{8}[.]dbo[.]Loans$' GROUP BY source_table ORDER BY source_table DESC LIMIT 1");
+        const sourceTable=source.rows[0]?.source_table;
+        if(!sourceTable)return json(res,200,{imported:0,skipped:0,candidateTables:[],message:"جدول واقعی تعریف وام در داده‌های منتقل‌شده پیدا نشد."});
+        const countResult=await pool.query("SELECT COUNT(*)::int AS row_count FROM legacy_source_data WHERE source_table=$1",[sourceTable]);const totalRows=Number(countResult.rows[0]?.row_count)||0;
+        const norm=(x)=>String(x||"").toLowerCase().replace(/[^a-z0-9\u0600-\u06ff]/g,"");
+        const pick=(p,keys)=>{const entries=Object.keys(p||{});for(const key of keys){const wanted=norm(key),k=entries.find(x=>norm(x)===wanted);if(k&&p[k]!==null&&p[k]!==undefined&&p[k]!=="")return p[k]}return null};
+        const num=(v)=>{if(v===null||v===undefined||v==="")return null;const n=Number(String(v).replace(/[۰-۹]/g,d=>"۰۱۲۳۴۵۶۷۸۹".indexOf(d)).replace(/[٠-٩]/g,d=>"٠١٢٣٤٥٦٧٨٩".indexOf(d)).replace(/[٬,\\s]/g,"").replace(/٫/g,"."));return Number.isFinite(n)?n:null};
+        const bool=(v)=>v===true||v===1||String(v).toLowerCase()==="true"||String(v)==="1";
+        const safeHtml=(v)=>String(v||"").slice(0,50000).replace(/<\s*(script|style|iframe|object|embed|form|meta|link)[^>]*>[\s\S]*?<\/\s*\1\s*>/gi,"").replace(/<\s*(script|style|iframe|object|embed|form|meta|link)[^>]*\/?\s*>/gi,"").replace(/\s+on[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi,"").replace(/(href|src)\s*=\s*(['"])\s*javascript:[\s\S]*?\2/gi,"$1=\"#\"");
+        let imported=0,skipped=0;
+        let lastLegacyId=null;
+        while(true){
+          // Process exactly one legacy payload per query. Imported legacy payloads can be large;
+          // keeping even a 100-row batch in Node memory caused the production container to be OOM-killed (exit 137).
+          // Keyset pagination makes this resumable: ON CONFLICT DO NOTHING safely skips rows already imported.
+          const q=await pool.query("SELECT source_table,legacy_id,payload FROM legacy_source_data WHERE source_table=$1 AND ($2::text IS NULL OR legacy_id>$2) ORDER BY legacy_id LIMIT 1",[sourceTable,lastLegacyId]);
+          if(!q.rowCount)break;
+          for(const row of q.rows){
+          lastLegacyId=row.legacy_id;
+          const p=row.payload&&typeof row.payload==="object"?row.payload:{};
+          const name=String(pick(p,["Title","Name","LoanName","LoanTitle","نام وام","عنوان وام"])||"").trim().slice(0,120);
+          const title=String(pick(p,["PlanTitle","Title","Name","عنوان طرح","عنوان"])||name).trim().slice(0,160);
+          if(!name){skipped++;continue}
+          const rawMin=num(pick(p,["MinAmount","MinimumAmount","MinLoanAmount","AmountFrom","FromAmount","حداقل مبلغ"]));
+          const rawMax=num(pick(p,["MaxAmount","MaximumAmount","MaxLoanAmount","AmountTo","ToAmount","حداکثر مبلغ"]));
+          const rawAmount=num(pick(p,["LoanAmount","Amount","AmountValue","مبلغ وام","مبلغ"]));
+          const min=rawMin??rawAmount??0,max=rawMax??rawAmount??rawMin??0;
+          const rate=num(pick(p,["ProfitPercent","InterestPercent","InterestRate","MonthlyInterest","AnnualInterest","RatePercent","درصد بهره","درصد سود","نرخ سود"]));
+          const profitType=pick(p,["LoanProfitType","InterestMethod","InterestType","ProfitType","CalculationMethod","نوع سود","نحوه محاسبه سود"]);
+          const methodText=String(profitType??"").toLowerCase();
+          const method=/annual|year|سالانه|بانک/.test(methodText)||methodText==="1"?"Annual":/flat|once|یکجا/.test(methodText)?"Flat":"Monthly";
+          const allowedRaw=pick(p,["AllowedInstallments","InstallmentOptions","RepaymentOptions"]);
+          let allowed=[];try{const av=typeof allowedRaw==="string"?JSON.parse(allowedRaw):allowedRaw;if(Array.isArray(av))allowed=av.map(t=>num(typeof t==="object"?(t.value??t.months??t.Months??t.installments??t.Installments):t)).filter(n=>n!==null&&n>0&&n<=600).map(Math.trunc);else if(av!==null&&av!==undefined){const n=num(av);if(n>0&&n<=600)allowed=[Math.trunc(n)]}}catch{if(typeof allowedRaw==="string")allowed=allowedRaw.split(/[,;|\/\s]+/).map(num).filter(n=>n!==null&&n>0&&n<=600).map(Math.trunc)}
+          const months=num(pick(p,["Months","InstallmentsCount","InstallmentCount","TermMonths","DurationMonths","MaxInstallments","تعداد اقساط","مدت ماه"]))??(allowed.length?Math.max(...allowed):null);
+          let tiers=[];try{const av=typeof allowedRaw==="string"?JSON.parse(allowedRaw):allowedRaw;if(Array.isArray(av))tiers=av.map(t=>({months:num(typeof t==="object"?(t.value??t.months??t.Months??t.installments??t.Installments):t),feePercent:0,downPaymentPercent:0})).filter(t=>t.months!==null&&t.months>0&&t.months<=600)}catch{}
+          if(!tiers.length&&months&&months>0)tiers=[{months:Math.trunc(months),feePercent:0,downPaymentPercent:0}];
+          const stableSlug="legacy-"+crypto.createHash("sha256").update(sourceTable+"|"+row.legacy_id).digest("hex").slice(0,16);
+          const description=String(pick(p,["PlanShortDescription","ShortDescription","Description","Summary","توضیحات"])||"").slice(0,500);
+          const conditions={};
+          let costs=[];try{const rawCosts=pick(p,["CostsJson","OperationalCostsJson","OperationalCosts"]);const parsed=typeof rawCosts==="string"?JSON.parse(rawCosts):rawCosts;if(Array.isArray(parsed))costs=parsed.map(c=>({title:String(c.title??c.Title??c.name??c.Name??"هزینه").slice(0,100),percent:num(c.percent??c.Percent??c.value??c.Value??c.amount??c.Amount)??0,months:num(c.months??c.Months)??null}))}catch{}const intervalDays=num(pick(p,["IntervalDays","InstallmentIntervalDays","فاصله اقساط"]))??0;const lateCoef=num(pick(p,["DelayPercent","LateDailyCoef","LatePenaltyDailyCoefficient"]))??0;const earlyCoef=num(pick(p,["EarlyPercent","EarlyDailyCoef","EarlyPaymentDailyCoefficient"]))??0;const ins=await pool.query("INSERT INTO loan_products(id,slug,name,title,description,badge,min_amount,max_amount,interval_days,tiers,conditions,documents,is_active,sort_order,interest_method,interest_percent,late_daily_coef,early_daily_coef,show_in_list,send_reminders,labels,full_description_html,operational_costs,legacy_source_table,legacy_id,legacy_payload,needs_review) VALUES($1,$2,$3,$4,$5,'',$6,$7,$8,$9::jsonb,$10::jsonb,'[]'::jsonb,FALSE,$11,$12,$13,$14,$15,FALSE,FALSE,'[]'::jsonb,$16,$17::jsonb,$18,$19,$20::jsonb,$21) ON CONFLICT DO NOTHING RETURNING id",[crypto.randomUUID(),stableSlug,name,title,description,min,max,intervalDays,JSON.stringify(tiers),JSON.stringify(conditions),1000+imported,method,rate??0,lateCoef,earlyCoef,safeHtml(pick(p,["PlanHtml","FullDescriptionHtml"])),JSON.stringify(costs),sourceTable,row.legacy_id,JSON.stringify(Object.fromEntries(["Title","Code","DelayPercent","EarlyPercent","ProfitPercent","MaxAmount","MaxMonthGap","AllowedInstallments","CostsJson","Disable","DisableText","IncludePlan","PlanTitle","PlanShortDescription","HasSponsore","DefaultSponsoreCheckoutDays","LoanProfitType"].filter(k=>p[k]!==undefined).map(k=>[k,p[k]]))), (min<=0 || max<min || tiers.length===0)]);
+          if(ins.rowCount)imported++;else skipped++;
+          if((imported+skipped)>0&&(imported+skipped)%100===0)console.log("LEGACY_LOAN_IMPORT_PROGRESS="+(imported+skipped)+" imported="+imported+" skipped="+skipped);
+          }
+        }
+        const statusSync=await pool.query("UPDATE loan_products lp JOIN legacy_source_data src ON lp.legacy_source_table=src.source_table AND lp.legacy_id=src.legacy_id SET show_in_list=CASE WHEN lower(COALESCE(src.payload->>'IncludePlan','')) IN ('true','1','yes','y') THEN TRUE WHEN lower(COALESCE(src.payload->>'IncludePlan','')) IN ('false','0','no','n') THEN FALSE ELSE lp.show_in_list END, is_active=CASE WHEN lower(COALESCE(src.payload->>'Disable','')) IN ('true','1','yes','y') THEN FALSE WHEN lower(COALESCE(src.payload->>'Disable','')) IN ('false','0','no','n') THEN TRUE WHEN COALESCE(lp.min_amount,0)>0 AND COALESCE(lp.max_amount,0)>=COALESCE(lp.min_amount,0) AND jsonb_typeof(lp.tiers)='array' AND jsonb_array_length(CASE WHEN jsonb_typeof(lp.tiers)='array' THEN lp.tiers ELSE '[]'::jsonb END)>0 THEN TRUE ELSE lp.is_active END, needs_review=(COALESCE(lp.min_amount,0)<=0 OR COALESCE(lp.max_amount,0)<COALESCE(lp.min_amount,0) OR jsonb_typeof(lp.tiers)<>'array' OR jsonb_array_length(CASE WHEN jsonb_typeof(lp.tiers)='array' THEN lp.tiers ELSE '[]'::jsonb END)=0), updated_at=NOW() WHERE src.source_table=$1",[sourceTable]);
+        return json(res,200,{imported,skipped,statusSynced:statusSync.rowCount,candidateTables:[sourceTable],message:imported?"تعریف‌های قدیمی وارد شدند و وضعیت فعال/نمایش از رکورد اصلی بازیابی شد.":"رکوردهای موجود بررسی شدند؛ وضعیت فعال/نمایش از داده قدیمی همگام شد."});
+      }
+      if (req.method === "GET" && route === "/api/v1/admin/loan-products") {
+        const params = url.searchParams;
+        const limit = Math.min(50, Math.max(10, Number.parseInt(params.get("limit") || "10", 10) || 10));
+        const offset = Math.max(0, Number.parseInt(params.get("offset") || "0", 10) || 0);
+        const search = String(params.get("q") || "").trim().slice(0, 120);
+        const method = String(params.get("method") || "").trim();
+        const review = String(params.get("review") || "").trim();
+        const active = String(params.get("active") || "").trim();
+        const where = "WHERE ($1='' OR name ILIKE CONCAT('%',$1,'%') OR title ILIKE CONCAT('%',$1,'%') OR slug ILIKE CONCAT('%',$1,'%') OR COALESCE(legacy_id::text,'') ILIKE CONCAT('%',$1,'%')) AND ($2='' OR interest_method=$2) AND ($3='' OR needs_review=($3='review')) AND ($4='' OR is_active=($4='active'))";
+        const [rows, count, summary] = await Promise.all([
+          pool.query("SELECT * FROM loan_products " + where + " ORDER BY sort_order,created_at DESC LIMIT $5 OFFSET $6", [search,method,review,active,limit,offset]),
+          pool.query("SELECT COUNT(*)::int AS total FROM loan_products " + where, [search,method,review,active]),
+          pool.query("SELECT COUNT(*)::int AS total, COUNT(*) FILTER (WHERE is_active)::int AS active, COUNT(*) FILTER (WHERE needs_review)::int AS review, COUNT(*) FILTER (WHERE show_in_list)::int AS listed FROM loan_products")
+        ]);
+        return json(res,200,{data:rows.rows.map(loanRow),total:count.rows[0].total,limit,offset,summary:summary.rows[0]});
+      }
+      if (req.method === "POST" && route === "/api/v1/admin/loan-products") {
+        const b=cleanLoanInput(await body(req));
+        const q=await pool.query("INSERT INTO loan_products(id,slug,name,title,description,badge,min_amount,max_amount,interval_days,tiers,conditions,documents,is_active,sort_order,interest_method,interest_percent,late_daily_coef,early_daily_coef,show_in_list,send_reminders,labels,full_description_html,operational_costs,image_url) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,$11::jsonb,$12::jsonb,$13,$14,$15,$16,$17,$18,$19,$20,$21::jsonb,$22,$23::jsonb,$24) RETURNING id",[crypto.randomUUID(),b.slug,b.name,b.title,b.description,b.badge,b.minAmount,b.maxAmount,b.intervalDays,JSON.stringify(b.tiers),JSON.stringify(b.conditions),JSON.stringify(b.documents),b.isActive,b.sortOrder,b.interestMethod,b.interestPercent,b.lateDailyCoef,b.earlyDailyCoef,b.showInList,b.sendReminders,JSON.stringify(b.labels),b.fullDescriptionHtml,JSON.stringify(b.operationalCosts),b.imageUrl]);
+        return json(res,201,{id:q.rows[0].id});
+      }
+      const loanToggle=route.match(/^\/api\/v1\/admin\/loan-products\/([0-9a-f-]{36})\/toggle$/i);
+      if(req.method==="POST"&&loanToggle){const q=await pool.query("UPDATE loan_products SET is_active=NOT is_active,show_in_list=CASE WHEN is_active=FALSE THEN TRUE ELSE show_in_list END,updated_at=NOW() WHERE id=$1 AND (is_active=TRUE OR needs_review=FALSE) RETURNING is_active,show_in_list",[loanToggle[1]]);if(q.rowCount)return json(res,200,{isActive:q.rows[0].is_active});const exists=await pool.query("SELECT needs_review FROM loan_products WHERE id=$1",[loanToggle[1]]);if(!exists.rowCount)return json(res,404,{message:"طرح وام پیدا نشد."});if(exists.rows[0].needs_review)return json(res,409,{message:"تعریف وام هنوز نیازمند بررسی است؛ ابتدا اطلاعات واقعی را تکمیل و ذخیره کنید."});return json(res,409,{message:"تغییر وضعیت انجام نشد."})}
+      const loanEdit=route.match(/^\/api\/v1\/admin\/loan-products\/([0-9a-f-]{36})$/i);
+      if(req.method==="PUT"&&loanEdit){
+        const b=cleanLoanInput(await body(req));
+        const q=await pool.query("UPDATE loan_products SET slug=$1,name=$2,title=$3,description=$4,badge=$5,min_amount=$6,max_amount=$7,interval_days=$8,tiers=$9::jsonb,conditions=$10::jsonb,documents=$11::jsonb,is_active=$12,sort_order=$13,interest_method=$14,interest_percent=$15,late_daily_coef=$16,early_daily_coef=$17,show_in_list=$18,send_reminders=$19,labels=$20::jsonb,full_description_html=$21,operational_costs=$22::jsonb,image_url=$23,needs_review=FALSE,updated_at=NOW() WHERE id=$24 RETURNING id", [b.slug,b.name,b.title,b.description,b.badge,b.minAmount,b.maxAmount,b.intervalDays,JSON.stringify(b.tiers),JSON.stringify(b.conditions),JSON.stringify(b.documents),b.isActive,b.sortOrder,b.interestMethod,b.interestPercent,b.lateDailyCoef,b.earlyDailyCoef,b.showInList,b.sendReminders,JSON.stringify(b.labels),b.fullDescriptionHtml,JSON.stringify(b.operationalCosts),b.imageUrl,loanEdit[1]]);
+        return q.rowCount?json(res,200,{id:q.rows[0].id}):json(res,404,{message:"طرح وام پیدا نشد."});
+      }
+
+      if (req.method === "GET" && route === "/api/v1/admin/sms/settings") {
+        const settings = await getKavenegarSettings();
+        return json(res, 200, { data: { provider: "kavenegar", sender: settings.sender, configured: Boolean(settings.apiKey), maskedKey: settings.apiKey ? "••••••••••••••••" : "" } });
+      }
+      if (req.method === "POST" && route === "/api/v1/admin/sms/settings") {
+        const b = await body(req); const apiKey = String(b.apiKey || "").trim(); const sender = String(b.sender || "").trim();
+        if (apiKey && (apiKey.length < 20 || apiKey.length > 256)) return json(res, 400, { message: "کلید API معتبر نیست." });
+        if (!/^\d{5,20}$/.test(sender)) return json(res, 400, { message: "شماره فرستنده باید فقط شامل ۵ تا ۲۰ رقم باشد." });
+        if (JWT_SECRET.length < 32) return json(res, 503, { message: "کلید رمزنگاری امن سرور تنظیم نشده است." });
+        const existing = await pool.query("SELECT api_key_encrypted FROM sms_provider_settings WHERE provider=$1 LIMIT 1", ["kavenegar"]);
+        const encrypted = apiKey ? encryptSetting(apiKey) : (existing.rows[0]?.api_key_encrypted || null);
+        if (!encrypted) return json(res, 400, { message: "کلید API کاوه‌نگار را وارد کنید." });
+        await pool.query("INSERT INTO sms_provider_settings(provider,api_key_encrypted,sender,updated_by,updated_at) VALUES($1,$2,$3,$4,NOW()) ON CONFLICT(provider) DO UPDATE SET api_key_encrypted=EXCLUDED.api_key_encrypted,sender=EXCLUDED.sender,updated_by=EXCLUDED.updated_by,updated_at=NOW()", ["kavenegar", encrypted, sender, Number(admin.sub) || null]);
+        await audit(req, "admin.sms_settings.updated", Number(admin.sub), { provider: "kavenegar", sender });
+        return json(res, 200, { ok: true, data: { provider: "kavenegar", sender, configured: true, maskedKey: "••••••••••••••••" } });
+      }
+      if (req.method === "POST" && route === "/api/v1/admin/sms/test") {
+        const b = await body(req); const phone = String(b.phone || "").trim(); const message = String(b.message || "").trim();
+        if (!/^09\d{9}$/.test(phone)) return json(res, 400, { message: "شماره مقصد باید با 09 شروع شود و ۱۱ رقم باشد." });
+        if (!message || message.length > 1000) return json(res, 400, { message: "متن آزمایشی باید بین ۱ تا ۱۰۰۰ نویسه باشد." });
+        if (limited("sms-test:" + String(admin.sub))) return json(res, 429, { message: "تعداد تست‌ها زیاد است؛ ۱۵ دقیقه بعد دوباره تلاش کنید." });
+        const messageId = await sendSmsText(phone, message);
+        await audit(req, "admin.sms_test.sent", Number(admin.sub), { provider: "kavenegar", phone: maskPhone(phone), messageId });
+        return json(res, 200, { ok: true, message: "کاوه‌نگار ارسال پیامک را پذیرفت.", messageId });
+      }
+      const loanRequestMatch = route.match(new RegExp("^/api/v1/admin/loan-requests/([0-9]+)(?:/(comments|status))?$"));
+      if (loanRequestMatch && req.method === "GET" && !loanRequestMatch[2]) {
+        const id=loanRequestMatch[1];
+        const q=await pool.query("SELECT id,request_key,source_table,legacy_id,applicant_name,mobile,national_code,status,amount,created_at,imported_at,payload,COALESCE(NULLIF(payload->>'CreatedByName',''),NULLIF(payload->>'CreatedByFullName',''),NULLIF(payload->>'CreatedByDisplayName',''),NULLIF(payload->>'CreatorName',''),NULLIF(payload->>'RegisteredByName',''),NULLIF(payload->>'RegisteredByFullName',''),NULLIF(payload->>'RegisterByName',''),NULLIF(payload->>'RegistererFullName',''),NULLIF(payload->>'CreatedByUserName',''),NULLIF(payload->>'CreatorUserName',''),NULLIF(payload->>'RegisteredByUserName',''),NULLIF(payload->>'RegistererName',''),NULLIF(payload->>'RegistrarName',''),NULLIF(payload->>'RegistrarFullName',''),NULLIF(payload->>'CreateUserName',''),NULLIF(payload->>'InsertUserName',''),NULLIF(payload->>'CreatedByUser',''),NULLIF(payload->>'RegisteredBy',''),NULLIF(payload->>'RegisterBy',''),NULLIF(payload->>'AdminName',''),NULLIF(payload->>'OperatorName',''),(SELECT COALESCE(NULLIF(u.payload->>'FullName',''),NULLIF(u.payload->>'DisplayName',''),NULLIF(trim(concat_ws(' ',NULLIF(u.payload->>'FirstName',''),NULLIF(u.payload->>'LastName',''))),''),NULLIF(u.payload->>'UserName',''),NULLIF(u.payload->>'Username','')) FROM legacy_source_data u WHERE u.source_table=regexp_replace(lr.source_table,'[.]UserLoanRequests$','.AspNetUsers') AND u.payload->>'Id'=COALESCE(NULLIF(lr.payload->>'CreatedByUserId',''),NULLIF(lr.payload->>'CreatedById',''),NULLIF(lr.payload->>'CreatedByAdminId',''),NULLIF(lr.payload->>'CreatorUserId',''),NULLIF(lr.payload->>'CreatorId',''),NULLIF(lr.payload->>'RegisterUserId',''),NULLIF(lr.payload->>'RegistererId',''),NULLIF(lr.payload->>'RegisteredById',''),NULLIF(lr.payload->>'InsertUserId',''),NULLIF(lr.payload->>'CreateUserId',''),NULLIF(lr.payload->>'CreatedBy','')) LIMIT 1),NULLIF(payload->>'CreatedBy',''),(SELECT COALESCE(NULLIF(a.payload->>'FullName',''),NULLIF(a.payload->>'DisplayName',''),NULLIF(a.payload->>'Name',''),NULLIF(trim(concat_ws(' ',NULLIF(a.payload->>'FirstName',''),NULLIF(a.payload->>'LastName',''))),''),NULLIF(a.payload->>'UserName',''),NULLIF(a.payload->>'Username','')) FROM legacy_source_data a WHERE a.source_table=regexp_replace(lr.source_table,'[.]UserLoanRequests$','.Agents') AND a.payload->>'Id'=NULLIF(lr.payload->>'AgentId','') LIMIT 1),(SELECT COALESCE(NULLIF(a.payload->>'FullName',''),NULLIF(a.payload->>'DisplayName',''),NULLIF(a.payload->>'Name',''),NULLIF(trim(concat_ws(' ',NULLIF(a.payload->>'FirstName',''),NULLIF(a.payload->>'LastName',''))),''),NULLIF(a.payload->>'UserName',''),NULLIF(a.payload->>'Username','')) FROM legacy_source_data a WHERE a.source_table=regexp_replace(lr.source_table,'[.]UserLoanRequests$','.AspNetUsers') AND a.payload->>'Id'=NULLIF(lr.payload->>'AgentId','') LIMIT 1),NULLIF(payload->>'UserName',''),NULLIF(payload->>'Username',''),'نام ثبت‌کننده در منبع موجود نیست') AS registrar FROM loan_requests lr WHERE lr.id=$1",[id]);
+        if(!q.rowCount)return json(res,404,{message:"درخواست پیدا نشد."});
+        const comments=await pool.query("SELECT id,author_name,comment,created_at FROM loan_request_comments WHERE loan_request_id=$1 ORDER BY created_at DESC,id DESC LIMIT 200",[id]);
+        const history=await pool.query("SELECT id,old_status,new_status,note,changed_by_name,changed_at FROM loan_request_status_history WHERE loan_request_id=$1 ORDER BY changed_at DESC,id DESC LIMIT 100",[id]);
+        return json(res,200,{data:{...q.rows[0],comments:comments.rows,history:history.rows}});
+      }
+      if(loanRequestMatch && req.method==="POST" && loanRequestMatch[2]==="comments"){
+        const id=loanRequestMatch[1],b=await body(req),comment=String(b.comment||"").trim();
+        if(!comment||comment.length>5000)return json(res,400,{message:"متن نظر باید بین ۱ تا ۵۰۰۰ نویسه باشد."});
+        const exists=await pool.query("SELECT id FROM loan_requests WHERE id=$1",[id]);
+        if(!exists.rowCount)return json(res,404,{message:"درخواست پیدا نشد."});
+        const authorId=Number(admin.sub)||null;
+        const author=await pool.query("SELECT COALESCE(NULLIF(full_name,''),NULLIF(username,''),'مدیر سامانه') AS name FROM users WHERE id=$1",[authorId]);
+        const name=author.rows[0]?.name||"مدیر سامانه";
+        const q=await pool.query("INSERT INTO loan_request_comments(loan_request_id,author_user_id,author_name,comment) VALUES($1,$2,$3,$4) RETURNING id,author_name,comment,created_at",[id,authorId,name,comment]);
+        await audit(req,"admin.loan_request.comment_added",authorId,{loanRequestId:id,commentId:q.rows[0].id});
+        return json(res,201,{data:q.rows[0]});
+      }
+      if(loanRequestMatch && req.method==="POST" && loanRequestMatch[2]==="status"){
+        const id=loanRequestMatch[1],b=await body(req),next=String(b.status||"").trim().slice(0,120),note=String(b.note||"").trim().slice(0,2000);
+        if(!next)return json(res,400,{message:"وضعیت جدید را انتخاب کنید."});
+        const authorId=Number(admin.sub)||null;
+        const author=await pool.query("SELECT COALESCE(NULLIF(full_name,''),NULLIF(username,''),'مدیر سامانه') AS name FROM users WHERE id=$1",[authorId]);
+        const name=author.rows[0]?.name||"مدیر سامانه";
+        const prior=await pool.query("SELECT status FROM loan_requests WHERE id=$1",[id]);
+        if(!prior.rowCount)return json(res,404,{message:"درخواست پیدا نشد."});
+        const oldStatus=String(prior.rows[0].status||"");
+        const changed=await pool.query("UPDATE loan_requests SET status=$1 WHERE id=$2 RETURNING id,status,payload",[next,id]);
+        await pool.query("INSERT INTO loan_request_status_history(loan_request_id,old_status,new_status,note,changed_by,changed_by_name) VALUES($1,$2,$3,$4,$5,$6)",[id,oldStatus,next,note,authorId,name]);
+        await audit(req,"admin.loan_request.status_changed",authorId,{loanRequestId:id,newStatus:next});
+        return json(res,200,{data:{id:changed.rows[0].id,status:changed.rows[0].status}});
+      }
+      if (req.method === "GET" && route === "/api/v1/admin/loan-requests") {
+        const page = Math.min(100000, Math.max(1, Number.parseInt(url.searchParams.get("page") || "1", 10) || 1));
+        const pageSize = Math.min(250, Math.max(10, Number.parseInt(url.searchParams.get("pageSize") || "25", 10) || 25));
+        const search = String(url.searchParams.get("q") || "").trim().slice(0,120);
+        const status = String(url.searchParams.get("status") || "").trim().slice(0,120);
+        const from = String(url.searchParams.get("from") || "").trim();
+        const to = String(url.searchParams.get("to") || "").trim();
+        const where = []; const params = [];
+        if (search) { params.push("%" + search + "%"); where.push("(applicant_name ILIKE $" + params.length + " OR mobile ILIKE $" + params.length + " OR national_code ILIKE $" + params.length + " OR legacy_id ILIKE $" + params.length + ")"); }
+        if (status) { params.push(status); where.push("status=$" + params.length); }
+        if (from && /^\d{4}-\d{2}-\d{2}$/.test(from)) { params.push(from); where.push("created_at >= $" + params.length + "::date"); }
+        if (to && /^\d{4}-\d{2}-\d{2}$/.test(to)) { params.push(to); where.push("created_at < ($" + params.length + "::date + INTERVAL '1 day')"); }
+        const filter = where.length ? " WHERE " + where.join(" AND ") : "";
+        const count = await pool.query("SELECT COUNT(*)::int AS total FROM loan_requests" + filter, params);
+        const pageParams = [...params, pageSize, (page - 1) * pageSize];
+        const rows = await pool.query("SELECT id,applicant_name,mobile,national_code,status,amount,created_at,COALESCE(NULLIF(payload->>'CreatedByName',''),NULLIF(payload->>'CreatedByFullName',''),NULLIF(payload->>'CreatedByDisplayName',''),NULLIF(payload->>'CreatorName',''),NULLIF(payload->>'RegisteredByName',''),NULLIF(payload->>'RegisteredByFullName',''),NULLIF(payload->>'RegisterByName',''),NULLIF(payload->>'RegistererFullName',''),NULLIF(payload->>'CreatedByUserName',''),NULLIF(payload->>'CreatorUserName',''),NULLIF(payload->>'RegisteredByUserName',''),NULLIF(payload->>'RegistererName',''),NULLIF(payload->>'RegistrarName',''),NULLIF(payload->>'RegistrarFullName',''),NULLIF(payload->>'CreateUserName',''),NULLIF(payload->>'InsertUserName',''),NULLIF(payload->>'CreatedByUser',''),NULLIF(payload->>'RegisteredBy',''),NULLIF(payload->>'RegisterBy',''),NULLIF(payload->>'AdminName',''),NULLIF(payload->>'OperatorName',''),(SELECT COALESCE(NULLIF(u.payload->>'FullName',''),NULLIF(u.payload->>'DisplayName',''),NULLIF(trim(concat_ws(' ',NULLIF(u.payload->>'FirstName',''),NULLIF(u.payload->>'LastName',''))),''),NULLIF(u.payload->>'UserName',''),NULLIF(u.payload->>'Username','')) FROM legacy_source_data u WHERE u.source_table=regexp_replace(lr.source_table,'[.]UserLoanRequests$','.AspNetUsers') AND u.payload->>'Id'=COALESCE(NULLIF(lr.payload->>'CreatedByUserId',''),NULLIF(lr.payload->>'CreatedById',''),NULLIF(lr.payload->>'CreatedByAdminId',''),NULLIF(lr.payload->>'CreatorUserId',''),NULLIF(lr.payload->>'CreatorId',''),NULLIF(lr.payload->>'RegisterUserId',''),NULLIF(lr.payload->>'RegistererId',''),NULLIF(lr.payload->>'RegisteredById',''),NULLIF(lr.payload->>'InsertUserId',''),NULLIF(lr.payload->>'CreateUserId',''),NULLIF(lr.payload->>'CreatedBy','')) LIMIT 1),NULLIF(payload->>'CreatedBy',''),(SELECT COALESCE(NULLIF(a.payload->>'FullName',''),NULLIF(a.payload->>'DisplayName',''),NULLIF(a.payload->>'Name',''),NULLIF(trim(concat_ws(' ',NULLIF(a.payload->>'FirstName',''),NULLIF(a.payload->>'LastName',''))),''),NULLIF(a.payload->>'UserName',''),NULLIF(a.payload->>'Username','')) FROM legacy_source_data a WHERE a.source_table=regexp_replace(lr.source_table,'[.]UserLoanRequests$','.Agents') AND a.payload->>'Id'=NULLIF(lr.payload->>'AgentId','') LIMIT 1),(SELECT COALESCE(NULLIF(a.payload->>'FullName',''),NULLIF(a.payload->>'DisplayName',''),NULLIF(a.payload->>'Name',''),NULLIF(trim(concat_ws(' ',NULLIF(a.payload->>'FirstName',''),NULLIF(a.payload->>'LastName',''))),''),NULLIF(a.payload->>'UserName',''),NULLIF(a.payload->>'Username','')) FROM legacy_source_data a WHERE a.source_table=regexp_replace(lr.source_table,'[.]UserLoanRequests$','.AspNetUsers') AND a.payload->>'Id'=NULLIF(lr.payload->>'AgentId','') LIMIT 1),NULLIF(payload->>'UserName',''),NULLIF(payload->>'Username',''),'نام ثبت‌کننده در منبع موجود نیست') AS registrar FROM loan_requests lr" + filter + " ORDER BY created_at DESC NULLS LAST, id DESC LIMIT $" + (params.length+1) + " OFFSET $" + (params.length+2), pageParams);
+        const summary = await pool.query("SELECT COUNT(*)::int AS total,COUNT(*) FILTER (WHERE lower(status) ~ '(new|pending|در انتظار|جدید|ثبت)')::int AS pending,COUNT(*) FILTER (WHERE lower(status) ~ '(approve|approved|تایید|تأیید|پذیرش)')::int AS approved,COUNT(*) FILTER (WHERE lower(status) ~ '(reject|رد|لغو|cancel)')::int AS rejected,COUNT(*) FILTER (WHERE created_at::date=CURRENT_DATE)::int AS today FROM loan_requests");
+        const statuses = await pool.query("SELECT status,COUNT(*)::int AS count FROM loan_requests WHERE status<>'' GROUP BY status ORDER BY count DESC,status LIMIT 100");
+        return json(res,200,{data:{rows:rows.rows,total:Number(count.rows[0]?.total)||0,page,pageSize,summary:summary.rows[0],statuses:statuses.rows}});
+      }
+      if (req.method === "GET" && route === "/api/v1/admin/summary") {
+        const db=legacyMaria();
+        const [directory,mainTenants,blueTenants]=await Promise.all([
+          unifiedUserDirectory({page:1,pageSize:1}),
+          db.query("SELECT COUNT(*) AS total FROM Customers"),
+          db.query("SELECT COUNT(*) AS total FROM bluvamdb__Customers")
+        ]);
+        const tenants=(Number(mainTenants[0][0]?.total)||0)+(Number(blueTenants[0][0]?.total)||0);
+        return json(res,200,{data:{users:directory.overallTotal,admins:directory.adminTotal,agents:directory.agentTotal,marketers:directory.marketerTotal,customers:directory.customerTotal,legacy_customers:directory.customerTotal,legacy_users:directory.overallTotal,users_active:directory.activeTotal,users_inactive:directory.inactiveTotal,users_today:directory.todayTotal,latest_user_registration:directory.latestRegistration,latestRegistration:directory.latestRegistration,legacy_customer_tenants:tenants,transfer_accounts:directory.transferTotal,identity_sources:directory.sourceCounts,smsConfigured:Boolean(KAVENEGAR_API_KEY),identitySource:directory.sourceTable,businessDateTimezone:"Asia/Tehran"}});
+      }
+      if (req.method === "GET" && route === "/api/v1/admin/users") {
+        const data=await unifiedUserDirectory({page:1,pageSize:500});
+        return json(res,200,{data:data.rows,total:data.overallTotal,sourceTable:data.sourceTable,sourceCounts:data.sourceCounts});
+      }
+      if (req.method === "GET" && route === "/api/v1/admin/roles") {
+        const db=legacyMaria();
+        const [mainRoles,blueRoles,transferRoles]=await Promise.all([
+          db.query("SELECT Name FROM AspNetRoles ORDER BY Name"),
+          db.query("SELECT Name FROM bluvamdb__AspNetRoles ORDER BY Name"),
+          db.query("SELECT Name FROM OnlineMoneyTransfer__AspNetRoles ORDER BY Name")
+        ]);
+        const builtins=["customer","member","agent","marketer","customermarketer","admin","superadmin"].map(code=>({code,display_name:legacyRoleLabel(code),editable:true}));
+        const map=new Map(builtins.map(r=>[r.code,r]));
+        for(const item of [...mainRoles[0],...blueRoles[0]]){const code=legacyRoleCode(item.Name);map.set(code,{code,display_name:legacyRoleLabel(code)===code?String(item.Name):legacyRoleLabel(code),editable:["customer","member","agent","marketer","customermarketer","admin","superadmin"].includes(code)});}
+        for(const item of transferRoles[0]){const code=legacyRoleCode(item.Name);if(!map.has(code))map.set(code,{code,display_name:String(item.Name||code),editable:false});}
+        return json(res,200,{data:[...map.values()]});
+      }
+      if (req.method === "GET" && route === "/api/v1/admin/users-page") {
+        const page=Math.max(1,Number.parseInt(url.searchParams.get("page")||"1",10)||1);
+        const pageSize=Math.min(100,Math.max(10,Number.parseInt(url.searchParams.get("pageSize")||"50",10)||50));
+        const data=await unifiedUserDirectory({page,pageSize,search:url.searchParams.get("q")||"",role:url.searchParams.get("role")||"",status:url.searchParams.get("status")||""});
+        return json(res,200,{data});
+      }
+      if (req.method === "PATCH" && /^\/api\/v1\/admin\/users\/[^/]+$/.test(route)) {
+        const rawId=decodeURIComponent(route.split("/").pop()),input=await body(req),actorId=Number(admin.sub);
+        const role=input.role===undefined?null:String(input.role).trim().toLowerCase(),active=input.isActive===undefined?null:input.isActive;
+        if(active!==null&&typeof active!=="boolean")return json(res,400,{message:"وضعیت حساب معتبر نیست."});
+        if(role!==null){
+          if(!["customer","member","agent","marketer","customermarketer","admin","superadmin"].includes(role))return json(res,400,{message:"نقش انتخاب‌شده معتبر نیست."});
+          if(admin.role!=="superadmin")return json(res,403,{message:"تغییر نقش فقط برای مدیر ارشد مجاز است."});
+        }
+        const fullName=input.fullName===undefined?null:String(input.fullName).trim().replace(/\s+/g," ").slice(0,160);
+        const phone=input.phone===undefined?null:(String(input.phone).trim()||null),email=input.email===undefined?null:(String(input.email).trim().slice(0,254)||null);
+        if(fullName!==null&&fullName.length<3)return json(res,400,{message:"نام باید حداقل ۳ نویسه باشد."});
+        if(phone!==null&&!phoneOk(phone))return json(res,400,{message:"شماره موبایل باید با قالب ۰۹ و ۱۱ رقم وارد شود."});
+        if(email!==null&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))return json(res,400,{message:"نشانی ایمیل معتبر نیست."});
+        if(rawId.startsWith("legacy:")){
+          const parts=rawId.split(":");
+          const sourceKey=parts.length>=3?parts[1]:"main";
+          const legacyId=parts.length>=3?parts.slice(2).join(":"):parts[1];
+          const configs={
+            main:{users:"AspNetUsers",roles:"AspNetRoles",links:"AspNetUserRoles",roleEditable:true},
+            bluvam:{users:"bluvamdb__AspNetUsers",roles:"bluvamdb__AspNetRoles",links:"bluvamdb__AspNetUserRoles",roleEditable:true},
+            transfer:{users:"OnlineMoneyTransfer__AspNetUsers",roles:"OnlineMoneyTransfer__AspNetRoles",links:"OnlineMoneyTransfer__AspNetUserRoles",roleEditable:false}
+          };
+          const config=configs[sourceKey];
+          if(!config||!legacyId)return json(res,400,{message:"منبع یا شناسه حساب معتبر نیست."});
+          if(role!==null&&!config.roleEditable)return json(res,403,{message:"نقش حساب‌های انتقال وجه از این پنل قابل تغییر نیست."});
+          const db=legacyMaria(),conn=await db.getConnection();let updated;
+          const usersTable=sqlIdent(config.users),rolesTable=sqlIdent(config.roles),linksTable=sqlIdent(config.links);
+          try{
+            await conn.beginTransaction();
+            const [currentRows]=await conn.query("SELECT u.Id,u.IsActive,(SELECT GROUP_CONCAT(DISTINCT r.Name ORDER BY r.Name SEPARATOR ',') FROM "+linksTable+" ur JOIN "+rolesTable+" r ON r.Id=ur.RoleId WHERE ur.UserId=u.Id) AS role_names FROM "+usersTable+" u WHERE u.Id=? LIMIT 1",[legacyId]);
+            if(!currentRows.length){await conn.rollback();return json(res,404,{message:"حساب کاربری پیدا نشد."});}
+            const current=currentRows[0],currentRoleNames=String(current.role_names||"").split(",").filter(Boolean),currentRoles=currentRoleNames.map(legacyRoleCode);
+            if((currentRoles.includes("superadmin")||role==="superadmin")&&admin.role!=="superadmin"){await conn.rollback();return json(res,403,{message:"مدیریت حساب مدیر ارشد فقط برای مدیر ارشد مجاز است."});}
+            if(sourceKey==="main"&&(active===false||(role!==null&&role!==directoryRoleFromNames(currentRoleNames)))){
+              try{
+                const [actorMap]=await conn.query("SELECT MariaDbUserId FROM DigibailAppUserIdentity WHERE AppUserId=? AND LegacySource='mariadb.AspNetUsers' LIMIT 1",[actorId]);
+                if(actorMap.length&&String(actorMap[0].MariaDbUserId)===String(legacyId)){await conn.rollback();return json(res,400,{message:"امکان تغییر نقش یا غیرفعال‌کردن حساب مدیر واردشده وجود ندارد."});}
+              }catch{}
+            }
+            if(currentRoles.includes("superadmin")&&(active===false||(role!==null&&role!=="superadmin"))){
+              const [lastAdmin]=await conn.query("SELECT (SELECT COUNT(DISTINCT u.Id) FROM AspNetUsers u JOIN AspNetUserRoles ur ON ur.UserId=u.Id JOIN AspNetRoles r ON r.Id=ur.RoleId WHERE LOWER(REPLACE(REPLACE(REPLACE(r.Name,' ',''),'-',''),'_',''))='superadmin' AND COALESCE(u.IsActive,1)=1)+(SELECT COUNT(DISTINCT u.Id) FROM bluvamdb__AspNetUsers u JOIN bluvamdb__AspNetUserRoles ur ON ur.UserId=u.Id JOIN bluvamdb__AspNetRoles r ON r.Id=ur.RoleId WHERE LOWER(REPLACE(REPLACE(REPLACE(r.Name,' ',''),'-',''),'_',''))='superadmin' AND COALESCE(u.IsActive,1)=1) AS total");
+              if(Number(lastAdmin[0]?.total||0)<=1){await conn.rollback();return json(res,400,{message:"حداقل یک مدیر ارشد فعال باید در سامانه باقی بماند."});}
+            }
+            const [columnRows]=await conn.query("SELECT COLUMN_NAME FROM information_schema.columns WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=?",[config.users]);
+            const columns=new Set(columnRows.map(x=>String(x.COLUMN_NAME)));
+            const sets=[],values=[];
+            if(fullName!==null){const parts=fullName.split(" "),first=parts.shift()||"",last=parts.join(" ");if(columns.has("FirstName")){sets.push("FirstName=?");values.push(first);}if(columns.has("LastName")){sets.push("LastName=?");values.push(last);}}
+            if(input.phone!==undefined){for(const col of ["Mobile","Phone","PhoneNumber"])if(columns.has(col)){sets.push(sqlIdent(col)+"=?");values.push(phone);}}
+            if(input.email!==undefined&&columns.has("Email")){sets.push("Email=?");values.push(email);}
+            if(active!==null){if(!columns.has("IsActive"))throw new Error(config.users+".IsActive column is missing");sets.push("IsActive=?");values.push(active?1:0);}
+            if(sets.length){values.push(legacyId);await conn.query("UPDATE "+usersTable+" SET "+sets.join(",")+" WHERE Id=?",values);}
+            if(role!==null){
+              const [roleRows]=await conn.query("SELECT Id,Name FROM "+rolesTable);
+              const selected=roleRows.find(r=>legacyRoleCode(r.Name)===role);
+              if(!selected)throw Object.assign(new Error("نقش انتخاب‌شده در منبع حساب وجود ندارد."),{status:400});
+              const coreRoleIds=roleRows.filter(r=>["customer","member","agent","marketer","customermarketer","admin","superadmin"].includes(legacyRoleCode(r.Name))).map(r=>r.Id);
+              if(coreRoleIds.length)await conn.query("DELETE FROM "+linksTable+" WHERE UserId=? AND RoleId IN (?)",[legacyId,coreRoleIds]);
+              await conn.query("INSERT INTO "+linksTable+"(UserId,RoleId) VALUES(?,?)",[legacyId,selected.Id]);
+            }
+            await conn.commit();
+            const phoneExpression=sourceKey==="transfer"?"NULLIF(u.PhoneNumber,'')":"COALESCE(NULLIF(u.Mobile,''),NULLIF(u.Phone,''),NULLIF(u.PhoneNumber,''))";
+            const [result]=await conn.query("SELECT CAST(u.Id AS CHAR) AS legacy_id,COALESCE(NULLIF(TRIM(CONCAT_WS(' ',u.FirstName,u.LastName)),''),u.UserName) AS full_name,"+phoneExpression+" AS phone,u.Email AS email,COALESCE(u.IsActive,1) AS is_active,(SELECT GROUP_CONCAT(DISTINCT r.Name ORDER BY r.Name SEPARATOR ',') FROM "+linksTable+" ur JOIN "+rolesTable+" r ON r.Id=ur.RoleId WHERE ur.UserId=u.Id) AS role_names FROM "+usersTable+" u WHERE u.Id=?",[legacyId]);
+            const names=String(result[0]?.role_names||"").split(",").filter(Boolean),roles=names.map(legacyRoleCode),primary=directoryRoleFromNames(names);
+            updated={...result[0],id:rawId,role:primary,roles:roles.length?roles:[primary],is_active:Boolean(Number(result[0]?.is_active)),source:sourceKey,legacy_source:config.users,role_editable:config.roleEditable};
+          }catch(error){await conn.rollback().catch(()=>{});throw error;}finally{conn.release();}
+          const identitySource={
+            main:"mariadb.AspNetUsers",
+            bluvam:"mariadb.bluvamdb__AspNetUsers",
+            transfer:"mariadb.OnlineMoneyTransfer__AspNetUsers"
+          }[sourceKey];
+          if(identitySource){
+            const mappingColumn=sourceKey==="transfer"?"MariaDbUserKey":"MariaDbUserId";
+            const [mappingRows]=await db.query(
+              "SELECT AppUserId FROM DigibailAppUserIdentity WHERE LegacySource=? AND "+mappingColumn+"=? LIMIT 1",
+              [identitySource,legacyId]
+            );
+            if(mappingRows.length){
+              const appId=Number(mappingRows[0].AppUserId);
+              await pool.query(
+                "UPDATE users SET full_name=COALESCE($1,full_name),phone=CASE WHEN $2=1 THEN $3 ELSE phone END,email=CASE WHEN $4=1 THEN $5 ELSE email END,role=COALESCE($6,role),is_active=COALESCE($7,is_active),updated_at=NOW() WHERE id=$8",
+                [fullName,input.phone!==undefined?1:0,phone,input.email!==undefined?1:0,email,role,active,appId]
+              );
+              if(role!==null)await pool.query(
+                "INSERT INTO user_role_overrides(user_id,role_code,updated_by,updated_at) VALUES($1,$2,$3,NOW()) ON DUPLICATE KEY UPDATE role_code=VALUES(role_code),updated_by=VALUES(updated_by),updated_at=NOW()",
+                [appId,role,actorId]
+              );
+            }
+          }
+          await audit(req,"admin.user.updated",actorId,{targetUserId:rawId,source:"mariadb."+config.users,changed:{fullName:fullName!==null,phone:input.phone!==undefined,email:input.email!==undefined,role:role!==null,isActive:active!==null}});
+          return json(res,200,{data:updated,message:"اطلاعات حساب به‌روزرسانی شد."});
+        }
+        const id=Number(rawId.startsWith("app:")?rawId.slice(4):rawId);
+        if(!Number.isSafeInteger(id)||id<1)return json(res,400,{message:"شناسه حساب معتبر نیست."});
+        const current=await pool.query("SELECT id,role,is_active FROM users WHERE id=$1",[id]);
+        if(!current.rowCount)return json(res,404,{message:"حساب کاربری پیدا نشد."});
+        const target=current.rows[0];
+        if(Number(target.id)===actorId&&role!==null&&role!==target.role)return json(res,400,{message:"نقش حساب مدیر واردشده را نمی‌توان از همین نشست تغییر داد."});
+        if(Number(target.id)===actorId&&active===false)return json(res,400,{message:"امکان غیرفعال‌کردن حساب مدیر واردشده وجود ندارد."});
+        if((target.role==="superadmin"||role==="superadmin")&&admin.role!=="superadmin")return json(res,403,{message:"مدیریت حساب مدیر ارشد فقط برای مدیر ارشد مجاز است."});
+        const client=await pool.connect();let updated;
+        try{
+          await client.query("BEGIN");
+          const result=await client.query("UPDATE users SET full_name=COALESCE($1,full_name),phone=CASE WHEN $2::boolean THEN $3 ELSE phone END,email=CASE WHEN $4::boolean THEN $5 ELSE email END,role=COALESCE($6,role),is_active=COALESCE($7,is_active),updated_at=NOW() WHERE id=$8 RETURNING id,full_name,phone,email,role,is_active,updated_at",[fullName,input.phone!==undefined,phone,input.email!==undefined,email,role,active,id]);
+          updated=result.rows[0];if(role!==null)await client.query("INSERT INTO user_role_overrides(user_id,role_code,updated_by,updated_at) VALUES($1,$2,$3,NOW()) ON CONFLICT(user_id) DO UPDATE SET role_code=EXCLUDED.role_code,updated_by=EXCLUDED.updated_by,updated_at=NOW()",[id,role,actorId]);await client.query("COMMIT");
+        }catch(error){await client.query("ROLLBACK");throw error;}finally{client.release();}
+        try{
+          const mirror=await pool.query("SELECT id,username,phone,full_name,national_code,email,is_active,COALESCE((SELECT role_code FROM user_role_overrides o WHERE o.user_id=users.id),role) AS effective_role,to_char(created_at AT TIME ZONE 'Asia/Tehran','YYYY-MM-DD HH24:MI:SS.US') AS created_at_tehran FROM users WHERE id=$1",[id]);
+          if(mirror.rowCount)await syncUserToMariaDB(legacyMaria(),mirror.rows[0]);
+        }catch(mirrorError){console.error("MARIADB_ADMIN_USER_MIRROR_FAILED="+String(mirrorError.code||mirrorError.name||"unknown"));}
+        await audit(req,"admin.user.updated",actorId,{targetUserId:id,source:"app.users",changed:{fullName:fullName!==null,phone:input.phone!==undefined,email:input.email!==undefined,role:role!==null,isActive:active!==null}});
+        return json(res,200,{data:updated,message:"اطلاعات حساب به‌روزرسانی شد."});
+      }
+      if (req.method === "GET" && route === "/api/v1/admin/legacy-customers") {
+        const directory=await unifiedUserDirectory({page:1,pageSize:1,role:"customer"});
+        return json(res,200,{data:{legacy_customers:directory.customerTotal,legacy_users:directory.overallTotal,today:directory.customerTodayTotal,latestRegistration:directory.latestRegistration,sourceTable:directory.sourceTable,sourceCounts:directory.sourceCounts,timezone:"Asia/Tehran"}});
+      }
+      if (req.method === "GET" && route === "/api/v1/admin/legacy-customers-page") {
+        const page=Math.max(1,Number.parseInt(url.searchParams.get("page")||"1",10)||1);
+        const pageSize=Math.min(100,Math.max(10,Number.parseInt(url.searchParams.get("pageSize")||"50",10)||50));
+        const data=await unifiedUserDirectory({page,pageSize,search:url.searchParams.get("q")||"",role:"customer"});
+        return json(res,200,{data:{...data,legacy_customers:data.customerTotal,overallCustomerTotal:data.customerTotal}});
+      }
+      if (req.method === "GET" && route === "/api/v1/admin/legacy-agents-page") {
+        const page=Math.max(1,Number.parseInt(url.searchParams.get("page")||"1",10)||1),pageSize=Math.min(100,Math.max(10,Number.parseInt(url.searchParams.get("pageSize")||"25",10)||25));
+        const search=String(url.searchParams.get("q")||""),status=String(url.searchParams.get("status")||"");
+        const data=await unifiedUserDirectory({page,pageSize,search,role:"agent",status});
+        const db=legacyMaria();
+        const [mainCustomerStats]=await db.query("SELECT COUNT(*) AS total FROM AspNetUsers child WHERE child.AgentId IN (SELECT agent.Id FROM AspNetUsers agent WHERE EXISTS(SELECT 1 FROM AspNetUserRoles ur JOIN AspNetRoles r ON r.Id=ur.RoleId WHERE ur.UserId=agent.Id AND LOWER(REPLACE(REPLACE(REPLACE(r.Name,' ',''),'-',''),'_',''))='agent')) AND NOT EXISTS(SELECT 1 FROM AspNetUserRoles ur JOIN AspNetRoles r ON r.Id=ur.RoleId WHERE ur.UserId=child.Id AND LOWER(REPLACE(REPLACE(REPLACE(r.Name,' ',''),'-',''),'_','')) IN ('agent','admin','superadmin','marketer','customermarketer','appapiuser','sponsor'))");
+        const [blueCustomerStats]=await db.query("SELECT COUNT(*) AS total FROM bluvamdb__AspNetUsers child WHERE child.AgentId IN (SELECT agent.Id FROM bluvamdb__AspNetUsers agent WHERE EXISTS(SELECT 1 FROM bluvamdb__AspNetUserRoles ur JOIN bluvamdb__AspNetRoles r ON r.Id=ur.RoleId WHERE ur.UserId=agent.Id AND LOWER(REPLACE(REPLACE(REPLACE(r.Name,' ',''),'-',''),'_',''))='agent')) AND NOT EXISTS(SELECT 1 FROM bluvamdb__AspNetUserRoles ur JOIN bluvamdb__AspNetRoles r ON r.Id=ur.RoleId WHERE ur.UserId=child.Id AND LOWER(REPLACE(REPLACE(REPLACE(r.Name,' ',''),'-',''),'_','')) IN ('agent','admin','superadmin','marketer','customermarketer','appapiuser','sponsor'))");
+        const overallTotal=data.agentTotal,activeTotal=data.activeAgentTotal;
+        const ids=data.rows.filter(r=>r.source==="mariadb").map(r=>String(r.legacy_id));
+        let metadata=[];
+        if(ids.length){
+          const [found]=await db.query("SELECT CAST(u.Id AS CHAR) AS id,COALESCE(NULLIF(md.CompanyName,''),NULLIF(u.BusinessName,'')) AS business_name,md.AgentFactorCommission AS commission_percent,md.MaxAgentFactorCommission AS max_commission_percent,md.AgentType AS agent_type,md.Status AS agent_status,md.AgentCategoryActivities AS agent_category_activities,md.IsOnline AS is_online,md.IsPhysical AS is_physical,u.LastLoginDate AS last_login,(SELECT COUNT(*) FROM AspNetUsers child WHERE child.AgentId=u.Id) AS assigned_users_count,(SELECT COUNT(*) FROM AspNetUsers child WHERE child.AgentId=u.Id AND EXISTS(SELECT 1 FROM AspNetUserRoles ur JOIN AspNetRoles r ON r.Id=ur.RoleId WHERE ur.UserId=child.Id AND LOWER(REPLACE(REPLACE(REPLACE(r.Name,' ',''),'-',''),'_',''))='agent')) AS subagents_count,(SELECT COUNT(*) FROM AspNetUsers child WHERE child.AgentId=u.Id AND NOT EXISTS(SELECT 1 FROM AspNetUserRoles ur JOIN AspNetRoles r ON r.Id=ur.RoleId WHERE ur.UserId=child.Id AND LOWER(REPLACE(REPLACE(REPLACE(r.Name,' ',''),'-',''),'_','')) IN ('agent','admin','superadmin','marketer','customermarketer','appapiuser','sponsor'))) AS customer_count,(SELECT COUNT(*) FROM UserLoanRequests lr WHERE lr.AgentId=u.Id) AS loan_requests_count FROM AspNetUsers u LEFT JOIN AgentMetaData md ON md.UserId=u.Id WHERE u.Id IN (?)",[ids]);
+          metadata=found;
+        }
+        const metaById=new Map(metadata.map(r=>[String(r.id),r]));
+        const rows=data.rows.map(r=>{
+          const m=r.source==="mariadb"?metaById.get(String(r.legacy_id)):null;
+          return {...r,business_name:m?.business_name||null,commission_percent:m?.commission_percent==null?null:Number(m.commission_percent),max_commission_percent:m?.max_commission_percent==null?null:Number(m.max_commission_percent),agent_type:m?.agent_type??null,agent_status:m?.agent_status??null,agent_category_activities:m?.agent_category_activities??null,is_online:m?.is_online==null?null:Boolean(Number(m.is_online)),is_physical:m?.is_physical==null?null:Boolean(Number(m.is_physical)),last_login:m?.last_login??null,assigned_users_count:m?.assigned_users_count==null?null:Number(m.assigned_users_count),customer_count:m?.customer_count==null?null:Number(m.customer_count),subagents_count:m?.subagents_count==null?null:Number(m.subagents_count),loan_requests_count:m?.loan_requests_count==null?null:Number(m.loan_requests_count),raw_payload:{id:r.id,legacy_id:r.legacy_id,source:r.source||r.legacy_source,role:r.role,is_active:r.is_active,legacy_agent_id:r.legacy_agent_id}};
+        });
+        return json(res,200,{data:{...data,rows,overallTotal,activeTotal,customerTotal:(Number(mainCustomerStats[0]?.total)||0)+(Number(blueCustomerStats[0]?.total)||0),identitySource:"MariaDB.AspNetUsers + bluvamdb__AspNetUsers + AgentMetaData"}});
+      }
+      if (req.method === "GET" && route === "/api/v1/admin/legacy-source-tables") {
+        const db = legacyMaria(), database = process.env.MARIADB_DATABASE || "digibail_vamcitydigibilepay";
+        const [tables] = await db.query("SELECT TABLE_NAME FROM information_schema.tables WHERE TABLE_SCHEMA=? AND TABLE_TYPE='BASE TABLE' AND TABLE_NAME NOT LIKE '__vamcity\\_%' ORDER BY TABLE_NAME", [database]);
+        const data = [];
+        for (const item of tables) {
+          const table = String(item.TABLE_NAME);
+          const [counts] = await db.query("SELECT COUNT(*) AS row_count FROM " + sqlIdent(table));
+          data.push({ source_table: table, row_count: Number(counts[0]?.row_count) || 0 });
+        }
+        return json(res, 200, { data });
+      }
+      if (req.method === "GET" && route === "/api/v1/admin/legacy-source-data") {
+        const sourceTable = String(url.searchParams.get("table") || "");
+        if (!/^[A-Za-z0-9_]{1,120}$/.test(sourceTable)) return json(res, 400, { message: "نوع داده قدیمی معتبر نیست." });
+        const limit = Math.min(500, Math.max(1, Number.parseInt(url.searchParams.get("limit") || "500", 10) || 500));
+        const offset = Math.max(0, Number.parseInt(url.searchParams.get("offset") || "0", 10) || 0);
+        const db = legacyMaria(), database = process.env.MARIADB_DATABASE || "digibail_vamcitydigibilepay";
+        const [exists] = await db.query("SELECT TABLE_NAME FROM information_schema.tables WHERE TABLE_SCHEMA=? AND TABLE_NAME=? AND TABLE_TYPE='BASE TABLE' LIMIT 1", [database, sourceTable]);
+        if (!exists.length) return json(res, 404, { message: "جدول منتقل‌شده پیدا نشد." });
+        const [keys] = await db.query("SELECT COLUMN_NAME FROM information_schema.key_column_usage WHERE TABLE_SCHEMA=? AND TABLE_NAME=? AND CONSTRAINT_NAME='PRIMARY' ORDER BY ORDINAL_POSITION", [database, sourceTable]);
+        const [columns] = await db.query("SELECT COLUMN_NAME,DATA_TYPE FROM information_schema.columns WHERE TABLE_SCHEMA=? AND TABLE_NAME=? ORDER BY ORDINAL_POSITION", [database, sourceTable]);
+        const primary = keys.map(x => x.COLUMN_NAME);
+        const order = primary.length ? primary.map(sqlIdent).join(",") : (columns[0] ? sqlIdent(columns[0].COLUMN_NAME) : "1");
+        const [countRows] = await db.query("SELECT COUNT(*) AS total FROM " + sqlIdent(sourceTable));
+        const [rows] = await db.query("SELECT * FROM " + sqlIdent(sourceTable) + " ORDER BY " + order + " LIMIT ? OFFSET ?", [limit, offset]);
+        return json(res, 200, { data: rows.map((payload,index)=>({ legacy_id: primary.length ? primary.map(k=>String(payload[k] ?? "")).join(" / ") : String(offset+index+1), payload, imported_at: null })), total: Number(countRows[0]?.total)||0, columns: columns.map(x=>({name:x.COLUMN_NAME,type:x.DATA_TYPE})) });
+      }
+      if (req.method === "GET" && route === "/api/v1/admin/legacy-relational-tables") {
+        const q=await pool.query(
+          "SELECT source_schema,source_table,source_rows,imported_rows,imported_at FROM digibail_legacy_manifest ORDER BY source_schema,source_table"
+        );
+        return json(res,200,q.rows);
+      }
+      if (req.method === "GET" && route === "/api/v1/admin/legacy-relational-data") {
+        const sourceTable=String(url.searchParams.get("table")||"");
+        const match=/^([A-Za-z0-9_]{1,63})\\.([A-Za-z0-9_]{1,63})$/.exec(sourceTable);
+        if(!match)return json(res,400,{message:"نام جدول معتبر نیست."});
+        const [,sourceSchema,tableName]=match;
+        const manifest=await pool.query(
+          "SELECT source_rows,imported_rows FROM digibail_legacy_manifest WHERE source_schema=$1 AND source_table=$2",
+          [sourceSchema,tableName]
+        );
+        if(!manifest.rowCount)return json(res,404,{message:"جدول در ساختار منتقل‌شده پیدا نشد."});
+        const limit=Math.min(100,Math.max(1,Number.parseInt(url.searchParams.get("limit")||"50",10)||50));
+        const offset=Math.max(0,Number.parseInt(url.searchParams.get("offset")||"0",10)||0);
+        const [columns,rows]=await Promise.all([
+          pool.query(
+            "SELECT column_name,data_type,is_nullable,ordinal_position,primary_key_order,referenced_schema,referenced_table,referenced_column FROM digibail_legacy_columns WHERE source_schema=$1 AND source_table=$2 ORDER BY ordinal_position",
+            [sourceSchema,tableName]
+          ),
+          pool.query(
+            "SELECT legacy_id,payload FROM digibail_legacy_relational_rows WHERE source_schema=$1 AND source_table=$2 ORDER BY legacy_id LIMIT $3 OFFSET $4",
+            [sourceSchema,tableName,limit,offset]
+          )
+        ]);
+        const primaryKeys=columns.rows.filter(x=>x.primary_key_order!==null&&x.primary_key_order!==undefined)
+          .sort((a,b)=>Number(a.primary_key_order)-Number(b.primary_key_order)).map(x=>x.column_name);
+        const foreignKeys=columns.rows.filter(x=>x.referenced_table).map(x=>({
+          column_name:x.column_name,
+          referenced_schema:x.referenced_schema,
+          referenced_table:String(x.referenced_table).replace(/^([^_]+)__(.+)$/,"$1.$2"),
+          referenced_column:x.referenced_column
+        }));
+        const dataRows=rows.rows.map(row=>({
+          legacy_id:row.legacy_id,
+          payload:typeof row.payload==="string"?(JSON.parse(row.payload||"{}")):row.payload
+        }));
+        return json(res,200,{
+          sourceTable,
+          rows:dataRows,
+          columns:columns.rows.map(x=>({column_name:x.column_name,data_type:x.data_type,is_nullable:x.is_nullable,ordinal_position:x.ordinal_position})),
+          primaryKeys,
+          foreignKeys,
+          total:Number(manifest.rows[0].imported_rows)||0,
+          sourceRows:Number(manifest.rows[0].source_rows)||0,
+          offset,
+          limit
+        });
+      }
+      if (req.method === "GET" && route === "/api/v1/admin/beta-inquiries") {
+        const q = await pool.query("SELECT id,reference,user_id,national_code,status,status_note,created_at FROM beta_inquiries ORDER BY created_at DESC LIMIT 500");
+        return json(res,200,{data:q.rows});
+      }
+      if (req.method === "GET" && route === "/api/v1/admin/documents") {
+        const q = await pool.query("SELECT id,user_id,kind,status,created_on,updated_at,review_note,fields::text AS fields_json,file_name,mime_type FROM customer_documents ORDER BY created_on DESC LIMIT 500");
+        return json(res, 200, { data:q.rows });
+      }
+      if (req.method === "POST" && route === "/api/v1/admin/documents/review") {
+        const b = await body(req); const id = String(b.id || "");
+        const status = String(b.status || "");
+        const note = String(b.note || "").trim().slice(0,2000);
+        if (!/^[0-9a-f-]{36}$/i.test(id) || !["Verified","Rejected","Pending"].includes(status)) return json(res, 400, { message:"شناسه یا وضعیت مدرک معتبر نیست." });
+        const q = await pool.query("UPDATE customer_documents SET status=$1,review_note=$2,updated_at=NOW() WHERE id=$3 RETURNING id,user_id,status", [status,note||null,id]);
+        if (!q.rowCount) return json(res, 404, { message:"مدرک پیدا نشد." });
+        await audit(req,"admin.documents.reviewed",Number(admin.sub)||null,{documentId:id,status});
+        return json(res,200,{ok:true,data:q.rows[0]});
+      }
+      if (req.method === "GET" && route === "/api/v1/admin/contracts") {
+        const q = await pool.query("SELECT id,user_id,title,number,status,expires_at,created_on,signed_at,rejected_at,rejection_note FROM customer_contracts ORDER BY created_on DESC LIMIT 500");
+        return json(res,200,{data:q.rows});
+      }
+      if (req.method === "POST" && route === "/api/v1/admin/contracts/create") {
+        const b = await body(req);
+        const userId = Number(b.userId);
+        const title = String(b.title||"").trim().slice(0,240);
+        const number = String(b.number||"").trim().slice(0,120);
+        const bodyHtml = String(b.bodyHtml||"").trim();
+        const expiresAt = b.expiresAt ? new Date(b.expiresAt) : null;
+        if (!Number.isSafeInteger(userId)||userId<1||!title||!number||!bodyHtml||bodyHtml.length>200000||(expiresAt&&!Number.isFinite(expiresAt.getTime()))) return json(res,400,{message:"اطلاعات قرارداد معتبر نیست."});
+        const owner = await pool.query("SELECT id FROM users WHERE id=$1 AND is_active=TRUE",[userId]);
+        if(!owner.rowCount) return json(res,404,{message:"کاربر فعال پیدا نشد."});
+        const q=await pool.query("INSERT INTO customer_contracts(id,user_id,title,number,body_html,expires_at) VALUES($1,$2,$3,$4,$5,$6) RETURNING id,title,number,status,created_on",[crypto.randomUUID(),userId,title,number,bodyHtml,expiresAt?expiresAt.toISOString():null]);
+        await audit(req,"admin.contracts.created",Number(admin.sub)||null,{contractId:q.rows[0].id,userId});
+        return json(res,201,{ok:true,data:q.rows[0]});
+      }
+      if (req.method === "GET" && route === "/api/v1/admin/sms/templates") {
+        const q = await pool.query("SELECT id,legacy_id,title,body,is_system,status,category,provider_panel,is_pattern_base,pattern_base_code,reject_reason,updated_at FROM sms_templates ORDER BY id");
+        return json(res, 200, { data: { items: q.rows, configured: Boolean(KAVENEGAR_API_KEY) } });
+      }
+      if (req.method === "POST" && route === "/api/v1/admin/sms/templates/update") {
+        const b = await body(req); const id = Number(b.id); const title = String(b.title || "").trim(); const text = String(b.body || "").trim();
+        if (!Number.isSafeInteger(id) || id < 1 || !title || title.length > 200 || !text || text.length > 4000) return json(res, 400, { message: "عنوان و متن الگو معتبر نیست." });
+        const q = await pool.query("UPDATE sms_templates SET title=$1,body=$2,status=$3,pattern_base_code=$4,updated_at=NOW() WHERE id=$5 RETURNING id,title,body,status,pattern_base_code", [title,text,Number.isInteger(Number(b.status))?Number(b.status):0,String(b.patternBaseCode||"").slice(0,500)||null,id]);
+        if (!q.rowCount) return json(res, 404, { message: "الگوی پیامک پیدا نشد." });
+        await audit(req, "admin.sms_template.updated", Number(admin.sub), { templateId: id });
+        return json(res, 200, { data: q.rows[0] });
+      }
+      if (req.method === "POST" && route === "/api/v1/admin/sms/test") {
+        const b = await body(req); const phone = String(b.phone || ""); const text = String(b.message || "").trim();
+        if (!phoneOk(phone) || !text || text.length > 1000) return json(res, 400, { message: "شماره موبایل یا متن پیام معتبر نیست." });
+        try {
+          const messageId = await sendSmsText(phone, text);
+          await pool.query("INSERT INTO sms_logs(recipient_masked,status,provider_message_id,created_by) VALUES($1,'sent',$2,$3)", [maskPhone(phone),messageId,Number(admin.sub)||null]);
+          await audit(req, "admin.sms.test.sent", Number(admin.sub), { recipient: maskPhone(phone) });
+          return json(res, 200, { ok: true, message: "درخواست ارسال پیامک به سرویس‌دهنده تحویل شد." });
+        } catch (e) {
+          await pool.query("INSERT INTO sms_logs(recipient_masked,status,error_code,created_by) VALUES($1,'failed',$2,$3)", [maskPhone(phone),String(e.code||"sms_delivery_failed").slice(0,80),Number(admin.sub)||null]).catch(()=>{});
+          throw e;
+        }
+      }
+      if (req.method === "GET" && route === "/api/v1/admin/sms/logs") {
+        const q = await pool.query("SELECT id,template_id,recipient_masked,status,provider_message_id,error_code,created_at FROM sms_logs ORDER BY created_at DESC LIMIT 100");
+        return json(res, 200, { data: q.rows });
+      }
+      return json(res, 404, { message: "مسیر مدیریت پیدا نشد." });
+    }
+    if (req.method === "POST" && route === "/api/v1/beta/inquiry") {
+      const userId = authenticatedUserId(req);
+      if (!userId) return json(res, 401, { message: "برای استعلام ابتدا وارد حساب شوید." });
+      const b = await body(req);
+      const nationalCode = String(b.nationalCode || "").replace(/[۰-۹]/g,d=>"۰۱۲۳۴۵۶۷۸۹".indexOf(d)).replace(/[٠-٩]/g,d=>"٠١٢٣٤٥٦٧٨٩".indexOf(d));
+      if (b.consent !== true) return json(res, 400, { message: "رضایت استعلام بانکی باید تأیید شود." });
+      if (!nationalCodeOk(nationalCode)) return json(res, 400, { message: "کد ملی معتبر نیست." });
+      const user = await pool.query("SELECT national_code FROM users WHERE id=$1 AND is_active=TRUE", [userId]);
+      if (!user.rowCount) return json(res, 401, { message: "حساب کاربری فعال پیدا نشد." });
+      if (String(user.rows[0].national_code || "").trim() !== nationalCode) {
+        return json(res, 400, { message: "کد ملی واردشده با کد ملی ثبت‌شده در حساب یکسان نیست." });
+      }
+      const reference = "BETA-" + crypto.randomBytes(4).toString("hex").toUpperCase();
+      const statusNote = "درخواست و رضایت ثبت شد؛ اتصال API رسمی بانک رفاه تنظیم نشده و استعلام به بانک ارسال نشده است.";
+      const q = await pool.query(
+        "INSERT INTO beta_inquiries(id,reference,user_id,national_code,status,status_note) VALUES($1,$2,$3,$4,'pending_provider',$5) RETURNING reference,status,status_note,created_at",
+        [crypto.randomUUID(),reference,userId,nationalCode,statusNote]
+      );
+      await audit(req,"beta.inquiry.created",userId,{reference});
+      return json(res,202,{data:{ref:q.rows[0].reference,status:q.rows[0].status,message:q.rows[0].status_note,createdAt:q.rows[0].created_at}});
+    }
+    if (route.startsWith("/api/v1/me/loan-applications")) {
+      const userId = authenticatedUserId(req);
+      if (!userId) return json(res, 401, { message: "برای ثبت یا مشاهده درخواست وام وارد حساب شوید." });
+
+      if (req.method === "GET" && route === "/api/v1/me/loan-applications") {
+        const q = await pool.query("SELECT id,reference,loan_product_id AS \"loanProductId\",loan_name AS \"loanName\",amount,installment_months AS \"installmentMonths\",down_payment AS \"downPayment\",monthly_payment AS \"monthlyPayment\",status,details,created_at AS \"createdAt\" FROM customer_loan_applications WHERE user_id=$1 ORDER BY created_at DESC", [userId]);
+        return json(res,200,{data:q.rows});
+      }
+      if (req.method === "POST" && route === "/api/v1/me/loan-applications") {
+        const b=await body(req), amount=Number(b.amount), months=Number(b.installmentMonths), productId=String(b.loanProductId||"");
+        if(!/^[0-9a-f-]{36}$/i.test(productId)||!Number.isFinite(amount)||amount<=0||!Number.isInteger(months)||months<1||months>600) return json(res,400,{message:"طرح، مبلغ یا تعداد اقساط معتبر نیست."});
+        const product=await pool.query("SELECT id,name,title,min_amount,max_amount,tiers,is_active,needs_review FROM loan_products WHERE id=$1",[productId]);
+        if(!product.rowCount||!product.rows[0].is_active||product.rows[0].needs_review) return json(res,409,{message:"این طرح برای ثبت درخواست فعال و تأییدشده نیست."});
+        const p=product.rows[0], min=Number(p.min_amount), max=Number(p.max_amount);
+        if(amount<min||amount>max) return json(res,400,{message:"مبلغ درخواستی خارج از بازه مجاز طرح است."});
+        const tiers=Array.isArray(p.tiers)?p.tiers:[], tier=tiers.find(t=>Number(t.months)===months);
+        if(!tier) return json(res,400,{message:"تعداد اقساط انتخابی در تعریف این طرح وجود ندارد."});
+        const down=amount*Math.max(0,Number(tier.downPaymentPercent)||0)/100;
+        const rate=Number(b.interestPercent)||0, method=String(b.interestMethod||"Monthly");
+        const fee=method==="Annual"?amount*rate/100*months/12:method==="Flat"?amount*rate/100:amount*rate/100*months;
+        const monthly=Math.max(0,amount-down+fee)/months;
+        const ref="DBL-"+crypto.randomBytes(5).toString("hex").toUpperCase();
+        const details={interestMethod:method,interestPercent:rate,feePercent:Number(tier.feePercent)||0,source:"customer-portal"};
+        const q=await pool.query("INSERT INTO customer_loan_applications(reference,user_id,loan_product_id,loan_name,amount,installment_months,down_payment,monthly_payment,details) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb) RETURNING id,reference,status,created_at AS \"createdAt\"",[ref,userId,productId,p.title||p.name,amount,months,down,monthly,JSON.stringify(details)]);
+        await audit(req,"loan.application.created",userId,{applicationId:q.rows[0].id,reference:ref,loanProductId:productId,amount,months});
+        return json(res,201,{data:{...q.rows[0],loanName:p.title||p.name,amount,installmentMonths:months,downPayment:down,monthlyPayment:monthly},message:"درخواست در سامانه ثبت شد."});
+      }
+      return json(res,405,{message:"عملیات درخواست وام پشتیبانی نمی‌شود."});
+    }
+    if (route.startsWith("/api/v1/me/documents")) {
+      const userId = authenticatedUserId(req);
+      if (!userId) return json(res, 401, { message: "برای مشاهده مدارک وارد حساب شوید." });
+      if (req.method === "GET" && route === "/api/v1/me/documents") {
+        const q = await pool.query(
+          "SELECT id,kind,status,created_on AS \"createdOn\",review_note AS \"reviewNote\",fields::text AS \"fieldsJson\",ocr_text AS \"ocrText\",file_name AS \"fileName\" FROM customer_documents WHERE user_id=$1 ORDER BY created_on DESC",
+          [userId]
+        );
+        return json(res, 200, { data: q.rows });
+      }
+      if (req.method === "POST" && route === "/api/v1/me/documents") {
+        const { fields, file } = await multipartBody(req);
+        const kind = String(fields.kind || "").trim();
+        if (!["کارت ملی","شناسنامه","فیش حقوقی","سایر"].includes(kind)) return json(res, 400, { message: "نوع مدرک معتبر نیست." });
+        if (!file || !file.data.length) return json(res, 400, { message: "فایل مدرک انتخاب نشده است." });
+        if (file.data.length > 6_000_000) return json(res, 413, { message: "حجم عکس حداکثر ۶ مگابایت است." });
+        if (!["image/jpeg","image/png","image/webp"].includes(file.mime)) return json(res, 415, { message: "فقط تصویر JPG، PNG یا WEBP پذیرفته می‌شود." });
+        const safeName = String(file.name || "document").replace(/[\\/\\r\\n\0]/g,"_").slice(0,255) || "document";
+        const q = await pool.query(
+          "INSERT INTO customer_documents(id,user_id,kind,file_name,mime_type,file_data,fields) VALUES($1,$2,$3,$4,$5,$6,$7::jsonb) RETURNING id",
+          [crypto.randomUUID(),userId,kind,safeName,file.mime,file.data,JSON.stringify({fields:{fullName:"",nationalCode:""}})]
+        );
+        await audit(req, "documents.uploaded", userId, { documentId:q.rows[0].id, kind, size:file.data.length });
+        return json(res, 201, { ok:true, ocr:false, id:q.rows[0].id });
+      }
+      const fileMatch = route.match(/^\/api\/v1\/me\/documents\/([0-9a-f-]+)\/file$/i);
+      if (req.method === "GET" && fileMatch) {
+        const q = await pool.query("SELECT mime_type,file_data FROM customer_documents WHERE id=$1 AND user_id=$2", [fileMatch[1],userId]);
+        if (!q.rowCount) return json(res, 404, { message: "فایل مدرک پیدا نشد." });
+        res.writeHead(200, { "Content-Type":q.rows[0].mime_type, "Cache-Control":"no-store", "X-Content-Type-Options":"nosniff" });
+        return res.end(q.rows[0].file_data);
+      }
+      const fieldsMatch = route.match(/^\/api\/v1\/me\/documents\/([0-9a-f-]+)\/fields$/i);
+      if (req.method === "PUT" && fieldsMatch) {
+        const b = await body(req);
+        if (!b.fields || typeof b.fields !== "object" || Array.isArray(b.fields)) return json(res, 400, { message: "اطلاعات مدرک معتبر نیست." });
+        const q = await pool.query("UPDATE customer_documents SET fields=$1::jsonb,updated_at=NOW() WHERE id=$2 AND user_id=$3 AND status<>'Verified' RETURNING id", [JSON.stringify(b.fields),fieldsMatch[1],userId]);
+        if (!q.rowCount) return json(res, 404, { message: "مدرک پیدا نشد یا تأیید نهایی شده است." });
+        await audit(req, "documents.fields_updated", userId, { documentId:fieldsMatch[1] });
+        return json(res, 200, { ok:true });
+      }
+      const idMatch = route.match(/^\/api\/v1\/me\/documents\/([0-9a-f-]+)$/i);
+      if (req.method === "DELETE" && idMatch) {
+        const q = await pool.query("DELETE FROM customer_documents WHERE id=$1 AND user_id=$2 AND status='Pending' RETURNING id", [idMatch[1],userId]);
+        if (!q.rowCount) return json(res, 404, { message: "مدرک پیدا نشد یا دیگر قابل حذف نیست." });
+        await audit(req, "documents.deleted", userId, { documentId:idMatch[1] });
+        return json(res, 200, { ok:true });
+      }
+      return json(res, 404, { message: "مسیر مدارک پیدا نشد." });
+    }
+    if (route.startsWith("/api/v1/me/contracts")) {
+      const userId = authenticatedUserId(req);
+      if (!userId) return json(res, 401, { message: "برای مشاهده قراردادها وارد حساب شوید." });
+      if (req.method === "GET" && route === "/api/v1/me/contracts") {
+        const q = await pool.query("SELECT id,title,number,status,expires_at AS \"expiresAt\",created_on AS \"createdOn\" FROM customer_contracts WHERE user_id=$1 ORDER BY created_on DESC", [userId]);
+        return json(res, 200, { data:q.rows });
+      }
+      const htmlMatch = route.match(/^\/api\/v1\/me\/contracts\/([0-9a-f-]+)\/html$/i);
+      if (req.method === "GET" && htmlMatch) {
+        const q = await pool.query("SELECT body_html FROM customer_contracts WHERE id=$1 AND user_id=$2", [htmlMatch[1],userId]);
+        if (!q.rowCount) return json(res, 404, { message: "قرارداد پیدا نشد." });
+        res.writeHead(200, { "Content-Type":"text/html; charset=utf-8", "Cache-Control":"no-store", "Content-Security-Policy":"default-src 'none'; style-src 'unsafe-inline'; img-src data:" });
+        return res.end(q.rows[0].body_html);
+      }
+      const contractMatch = route.match(/^\/api\/v1\/me\/contracts\/([0-9a-f-]+)\/(sign|reject)$/i);
+      if (contractMatch && req.method === "POST") {
+        const action = contractMatch[2].toLowerCase();
+        const b = await body(req);
+        const status = action === "sign" ? "Signed" : "Rejected";
+        const note = action === "reject" ? String(b.note || "").trim().slice(0,2000) : null;
+        const q = await pool.query(
+          "UPDATE customer_contracts SET status=$1,signed_at=CASE WHEN $1='Signed' THEN NOW() ELSE signed_at END,rejected_at=CASE WHEN $1='Rejected' THEN NOW() ELSE rejected_at END,rejection_note=$2,updated_at=NOW() WHERE id=$3 AND user_id=$4 AND status IN ('Presented','AwaitingSignature') AND (expires_at IS NULL OR expires_at>NOW()) RETURNING id",
+          [status,note,contractMatch[1],userId]
+        );
+        if (!q.rowCount) return json(res, 404, { message: "قرارداد پیدا نشد یا دیگر قابل امضا نیست." });
+        await audit(req, action === "sign" ? "contracts.signed" : "contracts.rejected", userId, { contractId:contractMatch[1] });
+        return json(res, 200, { ok:true });
+      }
+      return json(res, 404, { message: "مسیر قراردادها پیدا نشد." });
+    }
+    if (req.method === "POST" && route === "/api/v1/security/password-reset/request") {
+      const b = await body(req); const phone = String(b.phone || ""); const ip = clientIp(req) || "unknown";
+      if (limited("reset:" + ip)) return json(res, 429, { message: "تلاش‌های زیاد؛ کمی بعد دوباره امتحان کنید." });
+      if (!phoneOk(phone)) return json(res, 400, { message: "شماره موبایل معتبر نیست." });
+      if (!await consumeCaptcha(b.captchaId, b.captchaAnswer)) return json(res, 400, { message: "کد امنیتی نامعتبر یا منقضی شده است." });
+      if (OTP_PEPPER.length < 32) return json(res, 503, { message: "تنظیم امنیتی OTP موجود نیست." });
+      const user = await pool.query("SELECT id FROM users WHERE phone=$1 AND is_active=TRUE ORDER BY CASE WHEN legacy_source='mariadb.AspNetUsers' THEN 0 WHEN legacy_source IS NULL THEN 1 ELSE 2 END,id LIMIT 1", [phone]);
+      if (!user.rowCount) {
+        await audit(req, "auth.password_reset.requested_unknown");
+        resetLimit("reset:" + ip);
+        return json(res, 200, { ok: true, message: "اگر شماره به حساب فعال متصل باشد، کد بازیابی ارسال می‌شود.", expiresIn: 120, resendIn: 60 });
+      }
+      const previous = await pool.query("SELECT resend_at FROM otp_challenges WHERE phone=$1 AND purpose='password_reset' AND consumed_at IS NULL ORDER BY created_at DESC LIMIT 1", [phone]);
+      if (previous.rowCount && new Date(previous.rows[0].resend_at).getTime() > Date.now()) {
+        return json(res, 429, { message: "برای ارسال مجدد کمی صبر کنید.", resendIn: Math.ceil((new Date(previous.rows[0].resend_at).getTime()-Date.now())/1000) });
+      }
+      const code = String(crypto.randomInt(100000,1000000)); const id = crypto.randomUUID();
+      await sendOtp(phone, code);
+      await pool.query("INSERT INTO otp_challenges(id,phone,purpose,code_hash,expires_at,resend_at) VALUES($1,$2,'password_reset',$3,NOW()+INTERVAL '2 minutes',NOW()+INTERVAL '60 seconds')", [id,phone,hash(code,OTP_PEPPER)]);
+      await audit(req, "auth.password_reset.code_sent", user.rows[0].id);
+      resetLimit("reset:" + ip);
+      return json(res, 200, { ok:true, message:"کد بازیابی ارسال شد.", expiresIn:120, resendIn:60 });
+    }
+    if (req.method === "POST" && route === "/api/v1/security/password-reset/confirm") {
+      const b = await body(req); const phone = String(b.phone || ""); const code = String(b.code || ""); const password = String(b.password || "");
+      if (!phoneOk(phone) || !/^\d{6}$/.test(code)) return json(res, 400, { message: "شماره یا کد بازیابی معتبر نیست." });
+      if (password.length < 10 || password.length > 128) return json(res, 400, { message: "رمز جدید باید بین ۱۰ تا ۱۲۸ نویسه باشد." });
+      if (OTP_PEPPER.length < 32) return json(res, 503, { message: "تنظیم امنیتی OTP موجود نیست." });
+      const result = await pool.query("SELECT * FROM otp_challenges WHERE phone=$1 AND purpose='password_reset' AND consumed_at IS NULL AND expires_at>NOW() ORDER BY created_at DESC LIMIT 1", [phone]);
+      if (!result.rowCount) return json(res, 400, { message: "کد منقضی شده یا وجود ندارد." });
+      const challenge = result.rows[0];
+      if (challenge.attempts >= 5) return json(res, 429, { message: "تعداد تلاش مجاز تمام شده است." });
+      if (hash(code,OTP_PEPPER) !== challenge.code_hash) {
+        await pool.query("UPDATE otp_challenges SET attempts=attempts+1 WHERE id=$1", [challenge.id]);
+        return json(res, 400, { message: "کد بازیابی نادرست است." });
+      }
+      const user = await pool.query("SELECT id FROM users WHERE phone=$1 AND is_active=TRUE LIMIT 1", [phone]);
+      if (!user.rowCount) return json(res, 400, { message: "بازیابی برای این حساب ممکن نیست." });
+      const passwordHash = await bcrypt.hash(password,12);
+      const client=await pool.connect();
+      try {
+        await client.query("BEGIN");
+        await client.query("UPDATE users SET password_hash=$1,updated_at=NOW() WHERE id=$2",[passwordHash,user.rows[0].id]);
+        await client.query("UPDATE otp_challenges SET consumed_at=NOW() WHERE id=$1",[challenge.id]);
+        await client.query("COMMIT");
+      } catch(e) {
+        await client.query("ROLLBACK").catch(()=>{});
+        throw e;
+      } finally { client.release(); }
+      await audit(req,"auth.password_reset.completed",user.rows[0].id);
+      return json(res,200,{ok:true,message:"رمز عبور تغییر کرد. اکنون وارد شوید."});
+    }
+    if (req.method === "GET" && route === "/api/v1/security/captcha") {
+      if (CAPTCHA_PEPPER.length < 32) return json(res, 503, { message: "تنظیم امنیتی کپچا موجود نیست." });
+      const value = String(crypto.randomInt(10000, 100000)); const id = crypto.randomUUID();
+      await pool.query("INSERT INTO captcha_challenges(id,answer_hash,expires_at) VALUES($1,$2,NOW()+INTERVAL '5 minutes')", [id, hash(value, CAPTCHA_PEPPER)]);
+      return json(res, 200, { id, image: "data:image/svg+xml;base64," + Buffer.from(captchaSvg(value)).toString("base64") });
+    }
+    if (req.method === "POST" && route === "/api/v1/security/login") {
+      const b = await body(req); const ip = clientIp(req) || "unknown";
+      if (limited("login:" + ip)) return json(res, 429, { message: "تلاش‌های ناموفق زیاد بود. کمی بعد دوباره امتحان کنید." });
+      if (!await consumeCaptcha(b.captchaId, b.captchaAnswer)) return json(res, 400, { message: "کد امنیتی نامعتبر یا منقضی شده است." });
+      const username = String(b.username || "").trim().slice(0, 80);
+      const password = String(b.password || "");
+      // Prefer the exact account name or phone. The legacy "admin" alias is only a fallback,
+      // otherwise it can accidentally select the bootstrap account instead of the real migrated admin.
+      const candidates = await pool.query(
+        "SELECT id,phone,full_name,username,password_hash,role,is_active,legacy_source FROM users WHERE phone=$1 OR lower(username)=lower($1) ORDER BY CASE WHEN lower(username)=lower($1) THEN 0 ELSE 1 END,CASE WHEN legacy_source='mariadb.AspNetUsers' THEN 0 WHEN legacy_source IS NULL THEN 1 WHEN legacy_source='mariadb.bluvamdb__AspNetUsers' THEN 2 ELSE 3 END,id ASC LIMIT 20",
+        [username]
+      );
+      if (username.toLowerCase() === "admin") {
+        const alias = await pool.query("SELECT id,phone,full_name,username,password_hash,role,is_active,legacy_source FROM users WHERE lower(username)='digibail-admin' LIMIT 1");
+        candidates.rows.push(...alias.rows);
+      }
+      let u=null;
+      for(const candidate of candidates.rows){
+        if(!candidate.is_active)continue;
+        if(await verifyPassword(password,candidate.password_hash)){u=candidate;break;}
+      }
+      if(!u){
+        await audit(req, "auth.login.failed");
+        return json(res, 401, { message: "نام کاربری یا رمز عبور نادرست است." });
+      }
+      resetLimit("login:" + ip);
+      if (String(u.password_hash).startsWith("aspnet:")) {
+        const upgraded = await bcrypt.hash(password, 12);
+        await pool.query("UPDATE users SET password_hash=$1,updated_at=NOW() WHERE id=$2", [upgraded, u.id]);
+      }
+      await audit(req, "auth.login.success", u.id);
+      const token = tokenFor(u);
+      return authJson(res, 200, token, { accessToken: token, user: { id: u.id, phone: u.phone, fullName: u.full_name, role: u.role } });
+    }
+    if (req.method === "POST" && route === "/api/v1/security/otp/request") {
+      const b = await body(req); const phone = String(b.phone || ""); const purpose = b.purpose === "register" ? "register" : "login";
+      if (!phoneOk(phone)) return json(res, 400, { message: "شماره موبایل معتبر نیست." });
+      if (!await consumeCaptcha(b.captchaId, b.captchaAnswer)) return json(res, 400, { message: "کد امنیتی نامعتبر یا منقضی شده است." });
+      const exists = await pool.query("SELECT id FROM users WHERE phone=$1", [phone]);
+      if (purpose === "register" && exists.rowCount) return json(res, 409, { message: "این شماره قبلاً ثبت شده است." });
+      if (purpose === "login" && !exists.rowCount) return json(res, 404, { message: "حسابی با این شماره پیدا نشد." });
+      const previous = await pool.query("SELECT resend_at FROM otp_challenges WHERE phone=$1 AND purpose=$2 AND consumed_at IS NULL ORDER BY created_at DESC LIMIT 1", [phone, purpose]);
+      if (previous.rowCount && new Date(previous.rows[0].resend_at).getTime() > Date.now()) {
+        const seconds = Math.ceil((new Date(previous.rows[0].resend_at).getTime() - Date.now()) / 1000);
+        return json(res, 429, { message: "برای ارسال مجدد کمی صبر کنید.", expiresIn: 120, resendIn: seconds });
+      }
+      if (OTP_PEPPER.length < 32) return json(res, 503, { message: "تنظیم امنیتی OTP موجود نیست." });
+      const code = String(crypto.randomInt(100000, 1000000)); const id = crypto.randomUUID();
+      await sendOtp(phone, code);
+      await pool.query("INSERT INTO otp_challenges(id,phone,purpose,code_hash,expires_at,resend_at) VALUES($1,$2,$3,$4,NOW()+INTERVAL '2 minutes',NOW()+INTERVAL '60 seconds')", [id, phone, purpose, hash(code, OTP_PEPPER)]);
+      await audit(req, "auth.otp.requested", exists.rows[0]?.id || null, { purpose });
+      return json(res, 200, { ok: true, message: "کد ارسال شد", expiresIn: 120, resendIn: 60 });
+    }
+    if (req.method === "GET" && route === "/api/v1/security/otp/status") {
+      const phone = String(url.searchParams.get("phone") || "");
+      const result = await pool.query("SELECT GREATEST(0,EXTRACT(EPOCH FROM (expires_at-NOW())))::int AS expires_in,GREATEST(0,EXTRACT(EPOCH FROM (resend_at-NOW())))::int AS resend_in FROM otp_challenges WHERE phone=$1 AND consumed_at IS NULL ORDER BY created_at DESC LIMIT 1", [phone]);
+      return json(res, 200, { expiresIn: result.rows[0]?.expires_in || 0, resendIn: result.rows[0]?.resend_in || 0 });
+    }
+    if (req.method === "POST" && route === "/api/v1/security/otp/verify") {
+      const b = await body(req); const phone = String(b.phone || ""); const purpose = b.purpose === "register" ? "register" : "login";
+      const result = await pool.query("SELECT * FROM otp_challenges WHERE phone=$1 AND purpose=$2 AND consumed_at IS NULL AND expires_at>NOW() ORDER BY created_at DESC LIMIT 1", [phone, purpose]);
+      if (!result.rowCount) return json(res, 400, { message: "کد منقضی شده یا وجود ندارد." });
+      const challenge = result.rows[0];
+      if (challenge.attempts >= 5) return json(res, 429, { message: "تعداد تلاش مجاز تمام شده است." });
+      if (OTP_PEPPER.length < 32 || hash(String(b.code || ""), OTP_PEPPER) !== challenge.code_hash) {
+        await pool.query("UPDATE otp_challenges SET attempts=attempts+1 WHERE id=$1", [challenge.id]);
+        return json(res, 400, { message: "کد تأیید نادرست است." });
+      }
+      await pool.query("UPDATE otp_challenges SET consumed_at=NOW() WHERE id=$1", [challenge.id]);
+      if (purpose === "register") {
+        if (JWT_SECRET.length < 32) return json(res, 503, { message: "تنظیم امنیتی توکن موجود نیست." });
+        return json(res, 200, { ticket: jwt.sign({ purpose: "register", phone }, JWT_SECRET, { expiresIn: "10m", issuer: "digibail" }) });
+      }
+      const users = await pool.query("SELECT id,phone,full_name,role,is_active FROM users WHERE phone=$1 ORDER BY CASE WHEN legacy_source='mariadb.AspNetUsers' THEN 0 WHEN legacy_source IS NULL THEN 1 ELSE 2 END,id LIMIT 1", [phone]);
+      if (!users.rowCount || !users.rows[0].is_active) return json(res, 404, { message: "حسابی با این شماره نیست." });
+      const u = users.rows[0]; await audit(req, "auth.otp.login.success", u.id);
+      const token = tokenFor(u);
+      return authJson(res, 200, token, { accessToken: token, user: { id: u.id, phone: u.phone, fullName: u.full_name, role: u.role } });
+    }
+    if (req.method === "POST" && route === "/api/v1/security/register") {
+      const b = await body(req);
+      if (JWT_SECRET.length < 32) return json(res, 503, { message: "تنظیم امنیتی توکن موجود نیست." });
+      let ticket;
+      try { ticket = jwt.verify(String(b.ticket || ""), JWT_SECRET, { issuer: "digibail" }); }
+      catch { return json(res, 400, { message: "تأیید شماره معتبر نیست؛ دوباره شماره را تأیید کنید." }); }
+      if (ticket.purpose !== "register" || !phoneOk(ticket.phone)) return json(res, 400, { message: "مجوز ثبت‌نام معتبر نیست." });
+      if (!await consumeCaptcha(b.captchaId, b.captchaAnswer)) return json(res, 400, { message: "کد امنیتی نامعتبر یا منقضی شده است." });
+      const fullName = String(b.fullName || "").trim().replace(/\s+/g, " "); const nationalCode = String(b.nationalCode || "");
+      const password = String(b.password || ""); const email = b.email ? String(b.email).trim().slice(0, 254) : null;
+      if (fullName.length < 5 || fullName.length > 160) return json(res, 400, { message: "نام و نام خانوادگی را کامل وارد کنید." });
+      if (!nationalCodeOk(nationalCode)) return json(res, 400, { message: "کد ملی معتبر نیست." });
+      if (password.length < 10 || password.length > 128) return json(res, 400, { message: "رمز عبور باید حداقل ۱۰ نویسه باشد." });
+      const duplicate=await pool.query("SELECT id FROM users WHERE phone=$1 OR national_code=$2 LIMIT 1",[ticket.phone,nationalCode]);
+      if(duplicate.rowCount)return json(res,409,{message:"شماره موبایل یا کد ملی قبلاً ثبت شده است."});
+      const passwordHash = await bcrypt.hash(password, 12);
+      try {
+        const created = await pool.query("INSERT INTO users(phone,full_name,national_code,email,password_hash) VALUES($1,$2,$3,$4,$5) RETURNING id,phone,full_name,role", [ticket.phone, fullName, nationalCode, email, passwordHash]);
+        const u = created.rows[0];
+        try{
+          const mirror=await pool.query("SELECT id,username,phone,full_name,national_code,email,is_active,COALESCE((SELECT role_code FROM user_role_overrides o WHERE o.user_id=users.id),role) AS effective_role,to_char(created_at AT TIME ZONE 'Asia/Tehran','YYYY-MM-DD HH24:MI:SS.US') AS created_at_tehran FROM users WHERE id=$1",[u.id]);
+          await syncUserToMariaDB(legacyMaria(),mirror.rows[0]);
+          console.log("MARIADB_NEW_REGISTRATION_MIRROR=PASS");
+        }catch(mirrorError){console.error("MARIADB_NEW_REGISTRATION_MIRROR_FAILED="+String(mirrorError.code||mirrorError.name||"unknown"));}
+        await audit(req, "auth.register.success", u.id);
+        const token = tokenFor(u);
+        return authJson(res, 201, token, { accessToken: token, user: { id: u.id, phone: u.phone, fullName: u.full_name, role: u.role } });
+      } catch (error) {
+        if (error.code === "23505" || error.code === "ER_DUP_ENTRY") return json(res, 409, { message: "شماره موبایل یا کد ملی قبلاً ثبت شده است." });
+        throw error;
+      }
+    }
+    if (req.method === "POST" && route === "/api/v1/security/register/ocr") return json(res, 501, { message: "سرویس OCR تا زمان اتصال ارائه‌دهنده و تنظیم کلید محرمانه فعال نیست." });
+    if (route.startsWith("/api/")) return json(res, 404, { message: "مسیر API پیدا نشد." });
+    return false;
+  } catch (error) {
+    const status = error.status || 500;
+    if (status >= 500) console.error("api_error", { route, status, code: error.code || "internal_error" });
+    return json(res, status, { message: status === 500 ? "خطای داخلی سرور." : error.message, code: error.code || undefined });
+  }
+}
+export async function closePool() { await mariadbPool.end(); }
+ THEN CONCAT('0',u.PhoneNumber) ELSE NULLIF(u.PhoneNumber,'') END":"COALESCE(NULLIF(u.Mobile,''),NULLIF(u.Phone,''),NULLIF(u.PhoneNumber,''))";
+            const [result]=await conn.query("SELECT CAST(u.Id AS CHAR) AS legacy_id,COALESCE(NULLIF(TRIM(CONCAT_WS(' ',u.FirstName,u.LastName)),''),u.UserName) AS full_name,"+phoneExpression+" AS phone,u.Email AS email,COALESCE(u.IsActive,1) AS is_active,(SELECT GROUP_CONCAT(DISTINCT r.Name ORDER BY r.Name SEPARATOR ',') FROM "+linksTable+" ur JOIN "+rolesTable+" r ON r.Id=ur.RoleId WHERE ur.UserId=u.Id) AS role_names FROM "+usersTable+" u WHERE u.Id=?",[legacyId]);
+            const names=String(result[0]?.role_names||"").split(",").filter(Boolean),roles=names.map(legacyRoleCode),primary=directoryRoleFromNames(names);
+            updated={...result[0],id:rawId,role:primary,roles:roles.length?roles:[primary],is_active:Boolean(Number(result[0]?.is_active)),source:sourceKey,legacy_source:config.users,role_editable:config.roleEditable};
+          }catch(error){await conn.rollback().catch(()=>{});throw error;}finally{conn.release();}
+          const identitySource={
+            main:"mariadb.AspNetUsers",
+            bluvam:"mariadb.bluvamdb__AspNetUsers",
+            transfer:"mariadb.OnlineMoneyTransfer__AspNetUsers"
+          }[sourceKey];
+          if(identitySource){
+            const mappingColumn=sourceKey==="transfer"?"MariaDbUserKey":"MariaDbUserId";
+            const [mappingRows]=await db.query(
+              "SELECT AppUserId FROM DigibailAppUserIdentity WHERE LegacySource=? AND "+mappingColumn+"=? LIMIT 1",
+              [identitySource,legacyId]
+            );
+            if(mappingRows.length){
+              const appId=Number(mappingRows[0].AppUserId);
+              await pool.query(
+                "UPDATE users SET full_name=COALESCE($1,full_name),phone=CASE WHEN $2=1 THEN $3 ELSE phone END,email=CASE WHEN $4=1 THEN $5 ELSE email END,role=COALESCE($6,role),is_active=COALESCE($7,is_active),updated_at=NOW() WHERE id=$8",
+                [fullName,input.phone!==undefined?1:0,phone,input.email!==undefined?1:0,email,role,active,appId]
+              );
+              if(role!==null)await pool.query(
+                "INSERT INTO user_role_overrides(user_id,role_code,updated_by,updated_at) VALUES($1,$2,$3,NOW()) ON DUPLICATE KEY UPDATE role_code=VALUES(role_code),updated_by=VALUES(updated_by),updated_at=NOW()",
+                [appId,role,actorId]
+              );
+            }
+          }
+          await audit(req,"admin.user.updated",actorId,{targetUserId:rawId,source:"mariadb."+config.users,changed:{fullName:fullName!==null,phone:input.phone!==undefined,email:input.email!==undefined,role:role!==null,isActive:active!==null}});
+          return json(res,200,{data:updated,message:"اطلاعات حساب به‌روزرسانی شد."});
+        }
+        const id=Number(rawId.startsWith("app:")?rawId.slice(4):rawId);
+        if(!Number.isSafeInteger(id)||id<1)return json(res,400,{message:"شناسه حساب معتبر نیست."});
+        const current=await pool.query("SELECT id,role,is_active FROM users WHERE id=$1",[id]);
+        if(!current.rowCount)return json(res,404,{message:"حساب کاربری پیدا نشد."});
+        const target=current.rows[0];
+        if(Number(target.id)===actorId&&role!==null&&role!==target.role)return json(res,400,{message:"نقش حساب مدیر واردشده را نمی‌توان از همین نشست تغییر داد."});
+        if(Number(target.id)===actorId&&active===false)return json(res,400,{message:"امکان غیرفعال‌کردن حساب مدیر واردشده وجود ندارد."});
+        if((target.role==="superadmin"||role==="superadmin")&&admin.role!=="superadmin")return json(res,403,{message:"مدیریت حساب مدیر ارشد فقط برای مدیر ارشد مجاز است."});
+        const client=await pool.connect();let updated;
+        try{
+          await client.query("BEGIN");
+          const result=await client.query("UPDATE users SET full_name=COALESCE($1,full_name),phone=CASE WHEN $2::boolean THEN $3 ELSE phone END,email=CASE WHEN $4::boolean THEN $5 ELSE email END,role=COALESCE($6,role),is_active=COALESCE($7,is_active),updated_at=NOW() WHERE id=$8 RETURNING id,full_name,phone,email,role,is_active,updated_at",[fullName,input.phone!==undefined,phone,input.email!==undefined,email,role,active,id]);
+          updated=result.rows[0];if(role!==null)await client.query("INSERT INTO user_role_overrides(user_id,role_code,updated_by,updated_at) VALUES($1,$2,$3,NOW()) ON CONFLICT(user_id) DO UPDATE SET role_code=EXCLUDED.role_code,updated_by=EXCLUDED.updated_by,updated_at=NOW()",[id,role,actorId]);await client.query("COMMIT");
+        }catch(error){await client.query("ROLLBACK");throw error;}finally{client.release();}
+        try{
+          const mirror=await pool.query("SELECT id,username,phone,full_name,national_code,email,is_active,COALESCE((SELECT role_code FROM user_role_overrides o WHERE o.user_id=users.id),role) AS effective_role,to_char(created_at AT TIME ZONE 'Asia/Tehran','YYYY-MM-DD HH24:MI:SS.US') AS created_at_tehran FROM users WHERE id=$1",[id]);
+          if(mirror.rowCount)await syncUserToMariaDB(legacyMaria(),mirror.rows[0]);
+        }catch(mirrorError){console.error("MARIADB_ADMIN_USER_MIRROR_FAILED="+String(mirrorError.code||mirrorError.name||"unknown"));}
+        await audit(req,"admin.user.updated",actorId,{targetUserId:id,source:"app.users",changed:{fullName:fullName!==null,phone:input.phone!==undefined,email:input.email!==undefined,role:role!==null,isActive:active!==null}});
+        return json(res,200,{data:updated,message:"اطلاعات حساب به‌روزرسانی شد."});
+      }
+      if (req.method === "GET" && route === "/api/v1/admin/legacy-customers") {
+        const directory=await unifiedUserDirectory({page:1,pageSize:1,role:"customer"});
+        return json(res,200,{data:{legacy_customers:directory.customerTotal,legacy_users:directory.overallTotal,today:directory.customerTodayTotal,latestRegistration:directory.latestRegistration,sourceTable:directory.sourceTable,sourceCounts:directory.sourceCounts,timezone:"Asia/Tehran"}});
+      }
+      if (req.method === "GET" && route === "/api/v1/admin/legacy-customers-page") {
+        const page=Math.max(1,Number.parseInt(url.searchParams.get("page")||"1",10)||1);
+        const pageSize=Math.min(100,Math.max(10,Number.parseInt(url.searchParams.get("pageSize")||"50",10)||50));
+        const data=await unifiedUserDirectory({page,pageSize,search:url.searchParams.get("q")||"",role:"customer"});
+        return json(res,200,{data:{...data,legacy_customers:data.customerTotal,overallCustomerTotal:data.customerTotal}});
+      }
+      if (req.method === "GET" && route === "/api/v1/admin/legacy-agents-page") {
+        const page=Math.max(1,Number.parseInt(url.searchParams.get("page")||"1",10)||1),pageSize=Math.min(100,Math.max(10,Number.parseInt(url.searchParams.get("pageSize")||"25",10)||25));
+        const search=String(url.searchParams.get("q")||""),status=String(url.searchParams.get("status")||"");
+        const data=await unifiedUserDirectory({page,pageSize,search,role:"agent",status});
+        const db=legacyMaria();
+        const [mainCustomerStats]=await db.query("SELECT COUNT(*) AS total FROM AspNetUsers child WHERE child.AgentId IN (SELECT agent.Id FROM AspNetUsers agent WHERE EXISTS(SELECT 1 FROM AspNetUserRoles ur JOIN AspNetRoles r ON r.Id=ur.RoleId WHERE ur.UserId=agent.Id AND LOWER(REPLACE(REPLACE(REPLACE(r.Name,' ',''),'-',''),'_',''))='agent')) AND NOT EXISTS(SELECT 1 FROM AspNetUserRoles ur JOIN AspNetRoles r ON r.Id=ur.RoleId WHERE ur.UserId=child.Id AND LOWER(REPLACE(REPLACE(REPLACE(r.Name,' ',''),'-',''),'_','')) IN ('agent','admin','superadmin','marketer','customermarketer','appapiuser','sponsor'))");
+        const [blueCustomerStats]=await db.query("SELECT COUNT(*) AS total FROM bluvamdb__AspNetUsers child WHERE child.AgentId IN (SELECT agent.Id FROM bluvamdb__AspNetUsers agent WHERE EXISTS(SELECT 1 FROM bluvamdb__AspNetUserRoles ur JOIN bluvamdb__AspNetRoles r ON r.Id=ur.RoleId WHERE ur.UserId=agent.Id AND LOWER(REPLACE(REPLACE(REPLACE(r.Name,' ',''),'-',''),'_',''))='agent')) AND NOT EXISTS(SELECT 1 FROM bluvamdb__AspNetUserRoles ur JOIN bluvamdb__AspNetRoles r ON r.Id=ur.RoleId WHERE ur.UserId=child.Id AND LOWER(REPLACE(REPLACE(REPLACE(r.Name,' ',''),'-',''),'_','')) IN ('agent','admin','superadmin','marketer','customermarketer','appapiuser','sponsor'))");
+        const overallTotal=data.agentTotal,activeTotal=data.activeAgentTotal;
+        const ids=data.rows.filter(r=>r.source==="mariadb").map(r=>String(r.legacy_id));
+        let metadata=[];
+        if(ids.length){
+          const [found]=await db.query("SELECT CAST(u.Id AS CHAR) AS id,COALESCE(NULLIF(md.CompanyName,''),NULLIF(u.BusinessName,'')) AS business_name,md.AgentFactorCommission AS commission_percent,md.MaxAgentFactorCommission AS max_commission_percent,md.AgentType AS agent_type,md.Status AS agent_status,md.AgentCategoryActivities AS agent_category_activities,md.IsOnline AS is_online,md.IsPhysical AS is_physical,u.LastLoginDate AS last_login,(SELECT COUNT(*) FROM AspNetUsers child WHERE child.AgentId=u.Id) AS assigned_users_count,(SELECT COUNT(*) FROM AspNetUsers child WHERE child.AgentId=u.Id AND EXISTS(SELECT 1 FROM AspNetUserRoles ur JOIN AspNetRoles r ON r.Id=ur.RoleId WHERE ur.UserId=child.Id AND LOWER(REPLACE(REPLACE(REPLACE(r.Name,' ',''),'-',''),'_',''))='agent')) AS subagents_count,(SELECT COUNT(*) FROM AspNetUsers child WHERE child.AgentId=u.Id AND NOT EXISTS(SELECT 1 FROM AspNetUserRoles ur JOIN AspNetRoles r ON r.Id=ur.RoleId WHERE ur.UserId=child.Id AND LOWER(REPLACE(REPLACE(REPLACE(r.Name,' ',''),'-',''),'_','')) IN ('agent','admin','superadmin','marketer','customermarketer','appapiuser','sponsor'))) AS customer_count,(SELECT COUNT(*) FROM UserLoanRequests lr WHERE lr.AgentId=u.Id) AS loan_requests_count FROM AspNetUsers u LEFT JOIN AgentMetaData md ON md.UserId=u.Id WHERE u.Id IN (?)",[ids]);
+          metadata=found;
+        }
+        const metaById=new Map(metadata.map(r=>[String(r.id),r]));
+        const rows=data.rows.map(r=>{
+          const m=r.source==="mariadb"?metaById.get(String(r.legacy_id)):null;
+          return {...r,business_name:m?.business_name||null,commission_percent:m?.commission_percent==null?null:Number(m.commission_percent),max_commission_percent:m?.max_commission_percent==null?null:Number(m.max_commission_percent),agent_type:m?.agent_type??null,agent_status:m?.agent_status??null,agent_category_activities:m?.agent_category_activities??null,is_online:m?.is_online==null?null:Boolean(Number(m.is_online)),is_physical:m?.is_physical==null?null:Boolean(Number(m.is_physical)),last_login:m?.last_login??null,assigned_users_count:m?.assigned_users_count==null?null:Number(m.assigned_users_count),customer_count:m?.customer_count==null?null:Number(m.customer_count),subagents_count:m?.subagents_count==null?null:Number(m.subagents_count),loan_requests_count:m?.loan_requests_count==null?null:Number(m.loan_requests_count),raw_payload:{id:r.id,legacy_id:r.legacy_id,source:r.source||r.legacy_source,role:r.role,is_active:r.is_active,legacy_agent_id:r.legacy_agent_id}};
+        });
+        return json(res,200,{data:{...data,rows,overallTotal,activeTotal,customerTotal:(Number(mainCustomerStats[0]?.total)||0)+(Number(blueCustomerStats[0]?.total)||0),identitySource:"MariaDB.AspNetUsers + bluvamdb__AspNetUsers + AgentMetaData"}});
+      }
+      if (req.method === "GET" && route === "/api/v1/admin/legacy-source-tables") {
+        const db = legacyMaria(), database = process.env.MARIADB_DATABASE || "digibail_vamcitydigibilepay";
+        const [tables] = await db.query("SELECT TABLE_NAME FROM information_schema.tables WHERE TABLE_SCHEMA=? AND TABLE_TYPE='BASE TABLE' AND TABLE_NAME NOT LIKE '__vamcity\\_%' ORDER BY TABLE_NAME", [database]);
+        const data = [];
+        for (const item of tables) {
+          const table = String(item.TABLE_NAME);
+          const [counts] = await db.query("SELECT COUNT(*) AS row_count FROM " + sqlIdent(table));
+          data.push({ source_table: table, row_count: Number(counts[0]?.row_count) || 0 });
+        }
+        return json(res, 200, { data });
+      }
+      if (req.method === "GET" && route === "/api/v1/admin/legacy-source-data") {
+        const sourceTable = String(url.searchParams.get("table") || "");
+        if (!/^[A-Za-z0-9_]{1,120}$/.test(sourceTable)) return json(res, 400, { message: "نوع داده قدیمی معتبر نیست." });
+        const limit = Math.min(500, Math.max(1, Number.parseInt(url.searchParams.get("limit") || "500", 10) || 500));
+        const offset = Math.max(0, Number.parseInt(url.searchParams.get("offset") || "0", 10) || 0);
+        const db = legacyMaria(), database = process.env.MARIADB_DATABASE || "digibail_vamcitydigibilepay";
+        const [exists] = await db.query("SELECT TABLE_NAME FROM information_schema.tables WHERE TABLE_SCHEMA=? AND TABLE_NAME=? AND TABLE_TYPE='BASE TABLE' LIMIT 1", [database, sourceTable]);
+        if (!exists.length) return json(res, 404, { message: "جدول منتقل‌شده پیدا نشد." });
+        const [keys] = await db.query("SELECT COLUMN_NAME FROM information_schema.key_column_usage WHERE TABLE_SCHEMA=? AND TABLE_NAME=? AND CONSTRAINT_NAME='PRIMARY' ORDER BY ORDINAL_POSITION", [database, sourceTable]);
+        const [columns] = await db.query("SELECT COLUMN_NAME,DATA_TYPE FROM information_schema.columns WHERE TABLE_SCHEMA=? AND TABLE_NAME=? ORDER BY ORDINAL_POSITION", [database, sourceTable]);
+        const primary = keys.map(x => x.COLUMN_NAME);
+        const order = primary.length ? primary.map(sqlIdent).join(",") : (columns[0] ? sqlIdent(columns[0].COLUMN_NAME) : "1");
+        const [countRows] = await db.query("SELECT COUNT(*) AS total FROM " + sqlIdent(sourceTable));
+        const [rows] = await db.query("SELECT * FROM " + sqlIdent(sourceTable) + " ORDER BY " + order + " LIMIT ? OFFSET ?", [limit, offset]);
+        return json(res, 200, { data: rows.map((payload,index)=>({ legacy_id: primary.length ? primary.map(k=>String(payload[k] ?? "")).join(" / ") : String(offset+index+1), payload, imported_at: null })), total: Number(countRows[0]?.total)||0, columns: columns.map(x=>({name:x.COLUMN_NAME,type:x.DATA_TYPE})) });
+      }
+      if (req.method === "GET" && route === "/api/v1/admin/legacy-relational-tables") {
+        const q=await pool.query(
+          "SELECT source_schema,source_table,source_rows,imported_rows,imported_at FROM digibail_legacy_manifest ORDER BY source_schema,source_table"
+        );
+        return json(res,200,q.rows);
+      }
+      if (req.method === "GET" && route === "/api/v1/admin/legacy-relational-data") {
+        const sourceTable=String(url.searchParams.get("table")||"");
+        const match=/^([A-Za-z0-9_]{1,63})\\.([A-Za-z0-9_]{1,63})$/.exec(sourceTable);
+        if(!match)return json(res,400,{message:"نام جدول معتبر نیست."});
+        const [,sourceSchema,tableName]=match;
+        const manifest=await pool.query(
+          "SELECT source_rows,imported_rows FROM digibail_legacy_manifest WHERE source_schema=$1 AND source_table=$2",
+          [sourceSchema,tableName]
+        );
+        if(!manifest.rowCount)return json(res,404,{message:"جدول در ساختار منتقل‌شده پیدا نشد."});
+        const limit=Math.min(100,Math.max(1,Number.parseInt(url.searchParams.get("limit")||"50",10)||50));
+        const offset=Math.max(0,Number.parseInt(url.searchParams.get("offset")||"0",10)||0);
+        const [columns,rows]=await Promise.all([
+          pool.query(
+            "SELECT column_name,data_type,is_nullable,ordinal_position,primary_key_order,referenced_schema,referenced_table,referenced_column FROM digibail_legacy_columns WHERE source_schema=$1 AND source_table=$2 ORDER BY ordinal_position",
+            [sourceSchema,tableName]
+          ),
+          pool.query(
+            "SELECT legacy_id,payload FROM digibail_legacy_relational_rows WHERE source_schema=$1 AND source_table=$2 ORDER BY legacy_id LIMIT $3 OFFSET $4",
+            [sourceSchema,tableName,limit,offset]
+          )
+        ]);
+        const primaryKeys=columns.rows.filter(x=>x.primary_key_order!==null&&x.primary_key_order!==undefined)
+          .sort((a,b)=>Number(a.primary_key_order)-Number(b.primary_key_order)).map(x=>x.column_name);
+        const foreignKeys=columns.rows.filter(x=>x.referenced_table).map(x=>({
+          column_name:x.column_name,
+          referenced_schema:x.referenced_schema,
+          referenced_table:String(x.referenced_table).replace(/^([^_]+)__(.+)$/,"$1.$2"),
+          referenced_column:x.referenced_column
+        }));
+        const dataRows=rows.rows.map(row=>({
+          legacy_id:row.legacy_id,
+          payload:typeof row.payload==="string"?(JSON.parse(row.payload||"{}")):row.payload
+        }));
+        return json(res,200,{
+          sourceTable,
+          rows:dataRows,
+          columns:columns.rows.map(x=>({column_name:x.column_name,data_type:x.data_type,is_nullable:x.is_nullable,ordinal_position:x.ordinal_position})),
+          primaryKeys,
+          foreignKeys,
+          total:Number(manifest.rows[0].imported_rows)||0,
+          sourceRows:Number(manifest.rows[0].source_rows)||0,
+          offset,
+          limit
+        });
+      }
+      if (req.method === "GET" && route === "/api/v1/admin/beta-inquiries") {
+        const q = await pool.query("SELECT id,reference,user_id,national_code,status,status_note,created_at FROM beta_inquiries ORDER BY created_at DESC LIMIT 500");
+        return json(res,200,{data:q.rows});
+      }
+      if (req.method === "GET" && route === "/api/v1/admin/documents") {
+        const q = await pool.query("SELECT id,user_id,kind,status,created_on,updated_at,review_note,fields::text AS fields_json,file_name,mime_type FROM customer_documents ORDER BY created_on DESC LIMIT 500");
+        return json(res, 200, { data:q.rows });
+      }
+      if (req.method === "POST" && route === "/api/v1/admin/documents/review") {
+        const b = await body(req); const id = String(b.id || "");
+        const status = String(b.status || "");
+        const note = String(b.note || "").trim().slice(0,2000);
+        if (!/^[0-9a-f-]{36}$/i.test(id) || !["Verified","Rejected","Pending"].includes(status)) return json(res, 400, { message:"شناسه یا وضعیت مدرک معتبر نیست." });
+        const q = await pool.query("UPDATE customer_documents SET status=$1,review_note=$2,updated_at=NOW() WHERE id=$3 RETURNING id,user_id,status", [status,note||null,id]);
+        if (!q.rowCount) return json(res, 404, { message:"مدرک پیدا نشد." });
+        await audit(req,"admin.documents.reviewed",Number(admin.sub)||null,{documentId:id,status});
+        return json(res,200,{ok:true,data:q.rows[0]});
+      }
+      if (req.method === "GET" && route === "/api/v1/admin/contracts") {
+        const q = await pool.query("SELECT id,user_id,title,number,status,expires_at,created_on,signed_at,rejected_at,rejection_note FROM customer_contracts ORDER BY created_on DESC LIMIT 500");
+        return json(res,200,{data:q.rows});
+      }
+      if (req.method === "POST" && route === "/api/v1/admin/contracts/create") {
+        const b = await body(req);
+        const userId = Number(b.userId);
+        const title = String(b.title||"").trim().slice(0,240);
+        const number = String(b.number||"").trim().slice(0,120);
+        const bodyHtml = String(b.bodyHtml||"").trim();
+        const expiresAt = b.expiresAt ? new Date(b.expiresAt) : null;
+        if (!Number.isSafeInteger(userId)||userId<1||!title||!number||!bodyHtml||bodyHtml.length>200000||(expiresAt&&!Number.isFinite(expiresAt.getTime()))) return json(res,400,{message:"اطلاعات قرارداد معتبر نیست."});
+        const owner = await pool.query("SELECT id FROM users WHERE id=$1 AND is_active=TRUE",[userId]);
+        if(!owner.rowCount) return json(res,404,{message:"کاربر فعال پیدا نشد."});
+        const q=await pool.query("INSERT INTO customer_contracts(id,user_id,title,number,body_html,expires_at) VALUES($1,$2,$3,$4,$5,$6) RETURNING id,title,number,status,created_on",[crypto.randomUUID(),userId,title,number,bodyHtml,expiresAt?expiresAt.toISOString():null]);
+        await audit(req,"admin.contracts.created",Number(admin.sub)||null,{contractId:q.rows[0].id,userId});
+        return json(res,201,{ok:true,data:q.rows[0]});
+      }
+      if (req.method === "GET" && route === "/api/v1/admin/sms/templates") {
+        const q = await pool.query("SELECT id,legacy_id,title,body,is_system,status,category,provider_panel,is_pattern_base,pattern_base_code,reject_reason,updated_at FROM sms_templates ORDER BY id");
+        return json(res, 200, { data: { items: q.rows, configured: Boolean(KAVENEGAR_API_KEY) } });
+      }
+      if (req.method === "POST" && route === "/api/v1/admin/sms/templates/update") {
+        const b = await body(req); const id = Number(b.id); const title = String(b.title || "").trim(); const text = String(b.body || "").trim();
+        if (!Number.isSafeInteger(id) || id < 1 || !title || title.length > 200 || !text || text.length > 4000) return json(res, 400, { message: "عنوان و متن الگو معتبر نیست." });
+        const q = await pool.query("UPDATE sms_templates SET title=$1,body=$2,status=$3,pattern_base_code=$4,updated_at=NOW() WHERE id=$5 RETURNING id,title,body,status,pattern_base_code", [title,text,Number.isInteger(Number(b.status))?Number(b.status):0,String(b.patternBaseCode||"").slice(0,500)||null,id]);
+        if (!q.rowCount) return json(res, 404, { message: "الگوی پیامک پیدا نشد." });
+        await audit(req, "admin.sms_template.updated", Number(admin.sub), { templateId: id });
+        return json(res, 200, { data: q.rows[0] });
+      }
+      if (req.method === "POST" && route === "/api/v1/admin/sms/test") {
+        const b = await body(req); const phone = String(b.phone || ""); const text = String(b.message || "").trim();
+        if (!phoneOk(phone) || !text || text.length > 1000) return json(res, 400, { message: "شماره موبایل یا متن پیام معتبر نیست." });
+        try {
+          const messageId = await sendSmsText(phone, text);
+          await pool.query("INSERT INTO sms_logs(recipient_masked,status,provider_message_id,created_by) VALUES($1,'sent',$2,$3)", [maskPhone(phone),messageId,Number(admin.sub)||null]);
+          await audit(req, "admin.sms.test.sent", Number(admin.sub), { recipient: maskPhone(phone) });
+          return json(res, 200, { ok: true, message: "درخواست ارسال پیامک به سرویس‌دهنده تحویل شد." });
+        } catch (e) {
+          await pool.query("INSERT INTO sms_logs(recipient_masked,status,error_code,created_by) VALUES($1,'failed',$2,$3)", [maskPhone(phone),String(e.code||"sms_delivery_failed").slice(0,80),Number(admin.sub)||null]).catch(()=>{});
+          throw e;
+        }
+      }
+      if (req.method === "GET" && route === "/api/v1/admin/sms/logs") {
+        const q = await pool.query("SELECT id,template_id,recipient_masked,status,provider_message_id,error_code,created_at FROM sms_logs ORDER BY created_at DESC LIMIT 100");
+        return json(res, 200, { data: q.rows });
+      }
+      return json(res, 404, { message: "مسیر مدیریت پیدا نشد." });
+    }
+    if (req.method === "POST" && route === "/api/v1/beta/inquiry") {
+      const userId = authenticatedUserId(req);
+      if (!userId) return json(res, 401, { message: "برای استعلام ابتدا وارد حساب شوید." });
+      const b = await body(req);
+      const nationalCode = String(b.nationalCode || "").replace(/[۰-۹]/g,d=>"۰۱۲۳۴۵۶۷۸۹".indexOf(d)).replace(/[٠-٩]/g,d=>"٠١٢٣٤٥٦٧٨٩".indexOf(d));
+      if (b.consent !== true) return json(res, 400, { message: "رضایت استعلام بانکی باید تأیید شود." });
+      if (!nationalCodeOk(nationalCode)) return json(res, 400, { message: "کد ملی معتبر نیست." });
+      const user = await pool.query("SELECT national_code FROM users WHERE id=$1 AND is_active=TRUE", [userId]);
+      if (!user.rowCount) return json(res, 401, { message: "حساب کاربری فعال پیدا نشد." });
+      if (String(user.rows[0].national_code || "").trim() !== nationalCode) {
+        return json(res, 400, { message: "کد ملی واردشده با کد ملی ثبت‌شده در حساب یکسان نیست." });
+      }
+      const reference = "BETA-" + crypto.randomBytes(4).toString("hex").toUpperCase();
+      const statusNote = "درخواست و رضایت ثبت شد؛ اتصال API رسمی بانک رفاه تنظیم نشده و استعلام به بانک ارسال نشده است.";
+      const q = await pool.query(
+        "INSERT INTO beta_inquiries(id,reference,user_id,national_code,status,status_note) VALUES($1,$2,$3,$4,'pending_provider',$5) RETURNING reference,status,status_note,created_at",
+        [crypto.randomUUID(),reference,userId,nationalCode,statusNote]
+      );
+      await audit(req,"beta.inquiry.created",userId,{reference});
+      return json(res,202,{data:{ref:q.rows[0].reference,status:q.rows[0].status,message:q.rows[0].status_note,createdAt:q.rows[0].created_at}});
+    }
+    if (route.startsWith("/api/v1/me/loan-applications")) {
+      const userId = authenticatedUserId(req);
+      if (!userId) return json(res, 401, { message: "برای ثبت یا مشاهده درخواست وام وارد حساب شوید." });
+
+      if (req.method === "GET" && route === "/api/v1/me/loan-applications") {
+        const q = await pool.query("SELECT id,reference,loan_product_id AS \"loanProductId\",loan_name AS \"loanName\",amount,installment_months AS \"installmentMonths\",down_payment AS \"downPayment\",monthly_payment AS \"monthlyPayment\",status,details,created_at AS \"createdAt\" FROM customer_loan_applications WHERE user_id=$1 ORDER BY created_at DESC", [userId]);
+        return json(res,200,{data:q.rows});
+      }
+      if (req.method === "POST" && route === "/api/v1/me/loan-applications") {
+        const b=await body(req), amount=Number(b.amount), months=Number(b.installmentMonths), productId=String(b.loanProductId||"");
+        if(!/^[0-9a-f-]{36}$/i.test(productId)||!Number.isFinite(amount)||amount<=0||!Number.isInteger(months)||months<1||months>600) return json(res,400,{message:"طرح، مبلغ یا تعداد اقساط معتبر نیست."});
+        const product=await pool.query("SELECT id,name,title,min_amount,max_amount,tiers,is_active,needs_review FROM loan_products WHERE id=$1",[productId]);
+        if(!product.rowCount||!product.rows[0].is_active||product.rows[0].needs_review) return json(res,409,{message:"این طرح برای ثبت درخواست فعال و تأییدشده نیست."});
+        const p=product.rows[0], min=Number(p.min_amount), max=Number(p.max_amount);
+        if(amount<min||amount>max) return json(res,400,{message:"مبلغ درخواستی خارج از بازه مجاز طرح است."});
+        const tiers=Array.isArray(p.tiers)?p.tiers:[], tier=tiers.find(t=>Number(t.months)===months);
+        if(!tier) return json(res,400,{message:"تعداد اقساط انتخابی در تعریف این طرح وجود ندارد."});
+        const down=amount*Math.max(0,Number(tier.downPaymentPercent)||0)/100;
+        const rate=Number(b.interestPercent)||0, method=String(b.interestMethod||"Monthly");
+        const fee=method==="Annual"?amount*rate/100*months/12:method==="Flat"?amount*rate/100:amount*rate/100*months;
+        const monthly=Math.max(0,amount-down+fee)/months;
+        const ref="DBL-"+crypto.randomBytes(5).toString("hex").toUpperCase();
+        const details={interestMethod:method,interestPercent:rate,feePercent:Number(tier.feePercent)||0,source:"customer-portal"};
+        const q=await pool.query("INSERT INTO customer_loan_applications(reference,user_id,loan_product_id,loan_name,amount,installment_months,down_payment,monthly_payment,details) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb) RETURNING id,reference,status,created_at AS \"createdAt\"",[ref,userId,productId,p.title||p.name,amount,months,down,monthly,JSON.stringify(details)]);
+        await audit(req,"loan.application.created",userId,{applicationId:q.rows[0].id,reference:ref,loanProductId:productId,amount,months});
+        return json(res,201,{data:{...q.rows[0],loanName:p.title||p.name,amount,installmentMonths:months,downPayment:down,monthlyPayment:monthly},message:"درخواست در سامانه ثبت شد."});
+      }
+      return json(res,405,{message:"عملیات درخواست وام پشتیبانی نمی‌شود."});
+    }
+    if (route.startsWith("/api/v1/me/documents")) {
+      const userId = authenticatedUserId(req);
+      if (!userId) return json(res, 401, { message: "برای مشاهده مدارک وارد حساب شوید." });
+      if (req.method === "GET" && route === "/api/v1/me/documents") {
+        const q = await pool.query(
+          "SELECT id,kind,status,created_on AS \"createdOn\",review_note AS \"reviewNote\",fields::text AS \"fieldsJson\",ocr_text AS \"ocrText\",file_name AS \"fileName\" FROM customer_documents WHERE user_id=$1 ORDER BY created_on DESC",
+          [userId]
+        );
+        return json(res, 200, { data: q.rows });
+      }
+      if (req.method === "POST" && route === "/api/v1/me/documents") {
+        const { fields, file } = await multipartBody(req);
+        const kind = String(fields.kind || "").trim();
+        if (!["کارت ملی","شناسنامه","فیش حقوقی","سایر"].includes(kind)) return json(res, 400, { message: "نوع مدرک معتبر نیست." });
+        if (!file || !file.data.length) return json(res, 400, { message: "فایل مدرک انتخاب نشده است." });
+        if (file.data.length > 6_000_000) return json(res, 413, { message: "حجم عکس حداکثر ۶ مگابایت است." });
+        if (!["image/jpeg","image/png","image/webp"].includes(file.mime)) return json(res, 415, { message: "فقط تصویر JPG، PNG یا WEBP پذیرفته می‌شود." });
+        const safeName = String(file.name || "document").replace(/[\\/\\r\\n\0]/g,"_").slice(0,255) || "document";
+        const q = await pool.query(
+          "INSERT INTO customer_documents(id,user_id,kind,file_name,mime_type,file_data,fields) VALUES($1,$2,$3,$4,$5,$6,$7::jsonb) RETURNING id",
+          [crypto.randomUUID(),userId,kind,safeName,file.mime,file.data,JSON.stringify({fields:{fullName:"",nationalCode:""}})]
+        );
+        await audit(req, "documents.uploaded", userId, { documentId:q.rows[0].id, kind, size:file.data.length });
+        return json(res, 201, { ok:true, ocr:false, id:q.rows[0].id });
+      }
+      const fileMatch = route.match(/^\/api\/v1\/me\/documents\/([0-9a-f-]+)\/file$/i);
+      if (req.method === "GET" && fileMatch) {
+        const q = await pool.query("SELECT mime_type,file_data FROM customer_documents WHERE id=$1 AND user_id=$2", [fileMatch[1],userId]);
+        if (!q.rowCount) return json(res, 404, { message: "فایل مدرک پیدا نشد." });
+        res.writeHead(200, { "Content-Type":q.rows[0].mime_type, "Cache-Control":"no-store", "X-Content-Type-Options":"nosniff" });
+        return res.end(q.rows[0].file_data);
+      }
+      const fieldsMatch = route.match(/^\/api\/v1\/me\/documents\/([0-9a-f-]+)\/fields$/i);
+      if (req.method === "PUT" && fieldsMatch) {
+        const b = await body(req);
+        if (!b.fields || typeof b.fields !== "object" || Array.isArray(b.fields)) return json(res, 400, { message: "اطلاعات مدرک معتبر نیست." });
+        const q = await pool.query("UPDATE customer_documents SET fields=$1::jsonb,updated_at=NOW() WHERE id=$2 AND user_id=$3 AND status<>'Verified' RETURNING id", [JSON.stringify(b.fields),fieldsMatch[1],userId]);
+        if (!q.rowCount) return json(res, 404, { message: "مدرک پیدا نشد یا تأیید نهایی شده است." });
+        await audit(req, "documents.fields_updated", userId, { documentId:fieldsMatch[1] });
+        return json(res, 200, { ok:true });
+      }
+      const idMatch = route.match(/^\/api\/v1\/me\/documents\/([0-9a-f-]+)$/i);
+      if (req.method === "DELETE" && idMatch) {
+        const q = await pool.query("DELETE FROM customer_documents WHERE id=$1 AND user_id=$2 AND status='Pending' RETURNING id", [idMatch[1],userId]);
+        if (!q.rowCount) return json(res, 404, { message: "مدرک پیدا نشد یا دیگر قابل حذف نیست." });
+        await audit(req, "documents.deleted", userId, { documentId:idMatch[1] });
+        return json(res, 200, { ok:true });
+      }
+      return json(res, 404, { message: "مسیر مدارک پیدا نشد." });
+    }
+    if (route.startsWith("/api/v1/me/contracts")) {
+      const userId = authenticatedUserId(req);
+      if (!userId) return json(res, 401, { message: "برای مشاهده قراردادها وارد حساب شوید." });
+      if (req.method === "GET" && route === "/api/v1/me/contracts") {
+        const q = await pool.query("SELECT id,title,number,status,expires_at AS \"expiresAt\",created_on AS \"createdOn\" FROM customer_contracts WHERE user_id=$1 ORDER BY created_on DESC", [userId]);
+        return json(res, 200, { data:q.rows });
+      }
+      const htmlMatch = route.match(/^\/api\/v1\/me\/contracts\/([0-9a-f-]+)\/html$/i);
+      if (req.method === "GET" && htmlMatch) {
+        const q = await pool.query("SELECT body_html FROM customer_contracts WHERE id=$1 AND user_id=$2", [htmlMatch[1],userId]);
+        if (!q.rowCount) return json(res, 404, { message: "قرارداد پیدا نشد." });
+        res.writeHead(200, { "Content-Type":"text/html; charset=utf-8", "Cache-Control":"no-store", "Content-Security-Policy":"default-src 'none'; style-src 'unsafe-inline'; img-src data:" });
+        return res.end(q.rows[0].body_html);
+      }
+      const contractMatch = route.match(/^\/api\/v1\/me\/contracts\/([0-9a-f-]+)\/(sign|reject)$/i);
+      if (contractMatch && req.method === "POST") {
+        const action = contractMatch[2].toLowerCase();
+        const b = await body(req);
+        const status = action === "sign" ? "Signed" : "Rejected";
+        const note = action === "reject" ? String(b.note || "").trim().slice(0,2000) : null;
+        const q = await pool.query(
+          "UPDATE customer_contracts SET status=$1,signed_at=CASE WHEN $1='Signed' THEN NOW() ELSE signed_at END,rejected_at=CASE WHEN $1='Rejected' THEN NOW() ELSE rejected_at END,rejection_note=$2,updated_at=NOW() WHERE id=$3 AND user_id=$4 AND status IN ('Presented','AwaitingSignature') AND (expires_at IS NULL OR expires_at>NOW()) RETURNING id",
+          [status,note,contractMatch[1],userId]
+        );
+        if (!q.rowCount) return json(res, 404, { message: "قرارداد پیدا نشد یا دیگر قابل امضا نیست." });
+        await audit(req, action === "sign" ? "contracts.signed" : "contracts.rejected", userId, { contractId:contractMatch[1] });
+        return json(res, 200, { ok:true });
+      }
+      return json(res, 404, { message: "مسیر قراردادها پیدا نشد." });
+    }
+    if (req.method === "POST" && route === "/api/v1/security/password-reset/request") {
+      const b = await body(req); const phone = String(b.phone || ""); const ip = clientIp(req) || "unknown";
+      if (limited("reset:" + ip)) return json(res, 429, { message: "تلاش‌های زیاد؛ کمی بعد دوباره امتحان کنید." });
+      if (!phoneOk(phone)) return json(res, 400, { message: "شماره موبایل معتبر نیست." });
+      if (!await consumeCaptcha(b.captchaId, b.captchaAnswer)) return json(res, 400, { message: "کد امنیتی نامعتبر یا منقضی شده است." });
+      if (OTP_PEPPER.length < 32) return json(res, 503, { message: "تنظیم امنیتی OTP موجود نیست." });
+      const user = await pool.query("SELECT id FROM users WHERE phone=$1 AND is_active=TRUE ORDER BY CASE WHEN legacy_source='mariadb.AspNetUsers' THEN 0 WHEN legacy_source IS NULL THEN 1 ELSE 2 END,id LIMIT 1", [phone]);
+      if (!user.rowCount) {
+        await audit(req, "auth.password_reset.requested_unknown");
+        resetLimit("reset:" + ip);
+        return json(res, 200, { ok: true, message: "اگر شماره به حساب فعال متصل باشد، کد بازیابی ارسال می‌شود.", expiresIn: 120, resendIn: 60 });
+      }
+      const previous = await pool.query("SELECT resend_at FROM otp_challenges WHERE phone=$1 AND purpose='password_reset' AND consumed_at IS NULL ORDER BY created_at DESC LIMIT 1", [phone]);
+      if (previous.rowCount && new Date(previous.rows[0].resend_at).getTime() > Date.now()) {
+        return json(res, 429, { message: "برای ارسال مجدد کمی صبر کنید.", resendIn: Math.ceil((new Date(previous.rows[0].resend_at).getTime()-Date.now())/1000) });
+      }
+      const code = String(crypto.randomInt(100000,1000000)); const id = crypto.randomUUID();
+      await sendOtp(phone, code);
+      await pool.query("INSERT INTO otp_challenges(id,phone,purpose,code_hash,expires_at,resend_at) VALUES($1,$2,'password_reset',$3,NOW()+INTERVAL '2 minutes',NOW()+INTERVAL '60 seconds')", [id,phone,hash(code,OTP_PEPPER)]);
+      await audit(req, "auth.password_reset.code_sent", user.rows[0].id);
+      resetLimit("reset:" + ip);
+      return json(res, 200, { ok:true, message:"کد بازیابی ارسال شد.", expiresIn:120, resendIn:60 });
+    }
+    if (req.method === "POST" && route === "/api/v1/security/password-reset/confirm") {
+      const b = await body(req); const phone = String(b.phone || ""); const code = String(b.code || ""); const password = String(b.password || "");
+      if (!phoneOk(phone) || !/^\d{6}$/.test(code)) return json(res, 400, { message: "شماره یا کد بازیابی معتبر نیست." });
+      if (password.length < 10 || password.length > 128) return json(res, 400, { message: "رمز جدید باید بین ۱۰ تا ۱۲۸ نویسه باشد." });
+      if (OTP_PEPPER.length < 32) return json(res, 503, { message: "تنظیم امنیتی OTP موجود نیست." });
+      const result = await pool.query("SELECT * FROM otp_challenges WHERE phone=$1 AND purpose='password_reset' AND consumed_at IS NULL AND expires_at>NOW() ORDER BY created_at DESC LIMIT 1", [phone]);
+      if (!result.rowCount) return json(res, 400, { message: "کد منقضی شده یا وجود ندارد." });
+      const challenge = result.rows[0];
+      if (challenge.attempts >= 5) return json(res, 429, { message: "تعداد تلاش مجاز تمام شده است." });
+      if (hash(code,OTP_PEPPER) !== challenge.code_hash) {
+        await pool.query("UPDATE otp_challenges SET attempts=attempts+1 WHERE id=$1", [challenge.id]);
+        return json(res, 400, { message: "کد بازیابی نادرست است." });
+      }
+      const user = await pool.query("SELECT id FROM users WHERE phone=$1 AND is_active=TRUE LIMIT 1", [phone]);
+      if (!user.rowCount) return json(res, 400, { message: "بازیابی برای این حساب ممکن نیست." });
+      const passwordHash = await bcrypt.hash(password,12);
+      const client=await pool.connect();
+      try {
+        await client.query("BEGIN");
+        await client.query("UPDATE users SET password_hash=$1,updated_at=NOW() WHERE id=$2",[passwordHash,user.rows[0].id]);
+        await client.query("UPDATE otp_challenges SET consumed_at=NOW() WHERE id=$1",[challenge.id]);
+        await client.query("COMMIT");
+      } catch(e) {
+        await client.query("ROLLBACK").catch(()=>{});
+        throw e;
+      } finally { client.release(); }
+      await audit(req,"auth.password_reset.completed",user.rows[0].id);
+      return json(res,200,{ok:true,message:"رمز عبور تغییر کرد. اکنون وارد شوید."});
+    }
+    if (req.method === "GET" && route === "/api/v1/security/captcha") {
+      if (CAPTCHA_PEPPER.length < 32) return json(res, 503, { message: "تنظیم امنیتی کپچا موجود نیست." });
+      const value = String(crypto.randomInt(10000, 100000)); const id = crypto.randomUUID();
+      await pool.query("INSERT INTO captcha_challenges(id,answer_hash,expires_at) VALUES($1,$2,NOW()+INTERVAL '5 minutes')", [id, hash(value, CAPTCHA_PEPPER)]);
+      return json(res, 200, { id, image: "data:image/svg+xml;base64," + Buffer.from(captchaSvg(value)).toString("base64") });
+    }
+    if (req.method === "POST" && route === "/api/v1/security/login") {
+      const b = await body(req); const ip = clientIp(req) || "unknown";
+      if (limited("login:" + ip)) return json(res, 429, { message: "تلاش‌های ناموفق زیاد بود. کمی بعد دوباره امتحان کنید." });
+      if (!await consumeCaptcha(b.captchaId, b.captchaAnswer)) return json(res, 400, { message: "کد امنیتی نامعتبر یا منقضی شده است." });
+      const username = String(b.username || "").trim().slice(0, 80);
+      const password = String(b.password || "");
+      // Prefer the exact account name or phone. The legacy "admin" alias is only a fallback,
+      // otherwise it can accidentally select the bootstrap account instead of the real migrated admin.
+      const candidates = await pool.query(
+        "SELECT id,phone,full_name,username,password_hash,role,is_active,legacy_source FROM users WHERE phone=$1 OR lower(username)=lower($1) ORDER BY CASE WHEN lower(username)=lower($1) THEN 0 ELSE 1 END,CASE WHEN legacy_source='mariadb.AspNetUsers' THEN 0 WHEN legacy_source IS NULL THEN 1 WHEN legacy_source='mariadb.bluvamdb__AspNetUsers' THEN 2 ELSE 3 END,id ASC LIMIT 20",
+        [username]
+      );
+      if (username.toLowerCase() === "admin") {
+        const alias = await pool.query("SELECT id,phone,full_name,username,password_hash,role,is_active,legacy_source FROM users WHERE lower(username)='digibail-admin' LIMIT 1");
+        candidates.rows.push(...alias.rows);
+      }
+      let u=null;
+      for(const candidate of candidates.rows){
+        if(!candidate.is_active)continue;
+        if(await verifyPassword(password,candidate.password_hash)){u=candidate;break;}
+      }
+      if(!u){
+        await audit(req, "auth.login.failed");
+        return json(res, 401, { message: "نام کاربری یا رمز عبور نادرست است." });
+      }
+      resetLimit("login:" + ip);
+      if (String(u.password_hash).startsWith("aspnet:")) {
+        const upgraded = await bcrypt.hash(password, 12);
+        await pool.query("UPDATE users SET password_hash=$1,updated_at=NOW() WHERE id=$2", [upgraded, u.id]);
+      }
+      await audit(req, "auth.login.success", u.id);
+      const token = tokenFor(u);
+      return authJson(res, 200, token, { accessToken: token, user: { id: u.id, phone: u.phone, fullName: u.full_name, role: u.role } });
+    }
+    if (req.method === "POST" && route === "/api/v1/security/otp/request") {
+      const b = await body(req); const phone = String(b.phone || ""); const purpose = b.purpose === "register" ? "register" : "login";
+      if (!phoneOk(phone)) return json(res, 400, { message: "شماره موبایل معتبر نیست." });
+      if (!await consumeCaptcha(b.captchaId, b.captchaAnswer)) return json(res, 400, { message: "کد امنیتی نامعتبر یا منقضی شده است." });
+      const exists = await pool.query("SELECT id FROM users WHERE phone=$1", [phone]);
+      if (purpose === "register" && exists.rowCount) return json(res, 409, { message: "این شماره قبلاً ثبت شده است." });
+      if (purpose === "login" && !exists.rowCount) return json(res, 404, { message: "حسابی با این شماره پیدا نشد." });
+      const previous = await pool.query("SELECT resend_at FROM otp_challenges WHERE phone=$1 AND purpose=$2 AND consumed_at IS NULL ORDER BY created_at DESC LIMIT 1", [phone, purpose]);
+      if (previous.rowCount && new Date(previous.rows[0].resend_at).getTime() > Date.now()) {
+        const seconds = Math.ceil((new Date(previous.rows[0].resend_at).getTime() - Date.now()) / 1000);
+        return json(res, 429, { message: "برای ارسال مجدد کمی صبر کنید.", expiresIn: 120, resendIn: seconds });
+      }
+      if (OTP_PEPPER.length < 32) return json(res, 503, { message: "تنظیم امنیتی OTP موجود نیست." });
+      const code = String(crypto.randomInt(100000, 1000000)); const id = crypto.randomUUID();
+      await sendOtp(phone, code);
+      await pool.query("INSERT INTO otp_challenges(id,phone,purpose,code_hash,expires_at,resend_at) VALUES($1,$2,$3,$4,NOW()+INTERVAL '2 minutes',NOW()+INTERVAL '60 seconds')", [id, phone, purpose, hash(code, OTP_PEPPER)]);
+      await audit(req, "auth.otp.requested", exists.rows[0]?.id || null, { purpose });
+      return json(res, 200, { ok: true, message: "کد ارسال شد", expiresIn: 120, resendIn: 60 });
+    }
+    if (req.method === "GET" && route === "/api/v1/security/otp/status") {
+      const phone = String(url.searchParams.get("phone") || "");
+      const result = await pool.query("SELECT GREATEST(0,EXTRACT(EPOCH FROM (expires_at-NOW())))::int AS expires_in,GREATEST(0,EXTRACT(EPOCH FROM (resend_at-NOW())))::int AS resend_in FROM otp_challenges WHERE phone=$1 AND consumed_at IS NULL ORDER BY created_at DESC LIMIT 1", [phone]);
+      return json(res, 200, { expiresIn: result.rows[0]?.expires_in || 0, resendIn: result.rows[0]?.resend_in || 0 });
+    }
+    if (req.method === "POST" && route === "/api/v1/security/otp/verify") {
+      const b = await body(req); const phone = String(b.phone || ""); const purpose = b.purpose === "register" ? "register" : "login";
+      const result = await pool.query("SELECT * FROM otp_challenges WHERE phone=$1 AND purpose=$2 AND consumed_at IS NULL AND expires_at>NOW() ORDER BY created_at DESC LIMIT 1", [phone, purpose]);
+      if (!result.rowCount) return json(res, 400, { message: "کد منقضی شده یا وجود ندارد." });
+      const challenge = result.rows[0];
+      if (challenge.attempts >= 5) return json(res, 429, { message: "تعداد تلاش مجاز تمام شده است." });
+      if (OTP_PEPPER.length < 32 || hash(String(b.code || ""), OTP_PEPPER) !== challenge.code_hash) {
+        await pool.query("UPDATE otp_challenges SET attempts=attempts+1 WHERE id=$1", [challenge.id]);
+        return json(res, 400, { message: "کد تأیید نادرست است." });
+      }
+      await pool.query("UPDATE otp_challenges SET consumed_at=NOW() WHERE id=$1", [challenge.id]);
+      if (purpose === "register") {
+        if (JWT_SECRET.length < 32) return json(res, 503, { message: "تنظیم امنیتی توکن موجود نیست." });
+        return json(res, 200, { ticket: jwt.sign({ purpose: "register", phone }, JWT_SECRET, { expiresIn: "10m", issuer: "digibail" }) });
+      }
+      const users = await pool.query("SELECT id,phone,full_name,role,is_active FROM users WHERE phone=$1 ORDER BY CASE WHEN legacy_source='mariadb.AspNetUsers' THEN 0 WHEN legacy_source IS NULL THEN 1 ELSE 2 END,id LIMIT 1", [phone]);
+      if (!users.rowCount || !users.rows[0].is_active) return json(res, 404, { message: "حسابی با این شماره نیست." });
+      const u = users.rows[0]; await audit(req, "auth.otp.login.success", u.id);
+      const token = tokenFor(u);
+      return authJson(res, 200, token, { accessToken: token, user: { id: u.id, phone: u.phone, fullName: u.full_name, role: u.role } });
+    }
+    if (req.method === "POST" && route === "/api/v1/security/register") {
+      const b = await body(req);
+      if (JWT_SECRET.length < 32) return json(res, 503, { message: "تنظیم امنیتی توکن موجود نیست." });
+      let ticket;
+      try { ticket = jwt.verify(String(b.ticket || ""), JWT_SECRET, { issuer: "digibail" }); }
+      catch { return json(res, 400, { message: "تأیید شماره معتبر نیست؛ دوباره شماره را تأیید کنید." }); }
+      if (ticket.purpose !== "register" || !phoneOk(ticket.phone)) return json(res, 400, { message: "مجوز ثبت‌نام معتبر نیست." });
+      if (!await consumeCaptcha(b.captchaId, b.captchaAnswer)) return json(res, 400, { message: "کد امنیتی نامعتبر یا منقضی شده است." });
+      const fullName = String(b.fullName || "").trim().replace(/\s+/g, " "); const nationalCode = String(b.nationalCode || "");
+      const password = String(b.password || ""); const email = b.email ? String(b.email).trim().slice(0, 254) : null;
+      if (fullName.length < 5 || fullName.length > 160) return json(res, 400, { message: "نام و نام خانوادگی را کامل وارد کنید." });
+      if (!nationalCodeOk(nationalCode)) return json(res, 400, { message: "کد ملی معتبر نیست." });
+      if (password.length < 10 || password.length > 128) return json(res, 400, { message: "رمز عبور باید حداقل ۱۰ نویسه باشد." });
+      const duplicate=await pool.query("SELECT id FROM users WHERE phone=$1 OR national_code=$2 LIMIT 1",[ticket.phone,nationalCode]);
+      if(duplicate.rowCount)return json(res,409,{message:"شماره موبایل یا کد ملی قبلاً ثبت شده است."});
+      const passwordHash = await bcrypt.hash(password, 12);
+      try {
+        const created = await pool.query("INSERT INTO users(phone,full_name,national_code,email,password_hash) VALUES($1,$2,$3,$4,$5) RETURNING id,phone,full_name,role", [ticket.phone, fullName, nationalCode, email, passwordHash]);
+        const u = created.rows[0];
+        try{
+          const mirror=await pool.query("SELECT id,username,phone,full_name,national_code,email,is_active,COALESCE((SELECT role_code FROM user_role_overrides o WHERE o.user_id=users.id),role) AS effective_role,to_char(created_at AT TIME ZONE 'Asia/Tehran','YYYY-MM-DD HH24:MI:SS.US') AS created_at_tehran FROM users WHERE id=$1",[u.id]);
+          await syncUserToMariaDB(legacyMaria(),mirror.rows[0]);
+          console.log("MARIADB_NEW_REGISTRATION_MIRROR=PASS");
+        }catch(mirrorError){console.error("MARIADB_NEW_REGISTRATION_MIRROR_FAILED="+String(mirrorError.code||mirrorError.name||"unknown"));}
+        await audit(req, "auth.register.success", u.id);
+        const token = tokenFor(u);
+        return authJson(res, 201, token, { accessToken: token, user: { id: u.id, phone: u.phone, fullName: u.full_name, role: u.role } });
+      } catch (error) {
+        if (error.code === "23505" || error.code === "ER_DUP_ENTRY") return json(res, 409, { message: "شماره موبایل یا کد ملی قبلاً ثبت شده است." });
+        throw error;
+      }
+    }
+    if (req.method === "POST" && route === "/api/v1/security/register/ocr") return json(res, 501, { message: "سرویس OCR تا زمان اتصال ارائه‌دهنده و تنظیم کلید محرمانه فعال نیست." });
+    if (route.startsWith("/api/")) return json(res, 404, { message: "مسیر API پیدا نشد." });
+    return false;
+  } catch (error) {
+    const status = error.status || 500;
+    if (status >= 500) console.error("api_error", { route, status, code: error.code || "internal_error" });
+    return json(res, status, { message: status === 500 ? "خطای داخلی سرور." : error.message, code: error.code || undefined });
+  }
+}
+export async function closePool() { await mariadbPool.end(); }
+ THEN CONCAT('0',u.PhoneNumber) ELSE u.PhoneNumber END AS phone,u.Email AS email,u.NationalCode AS national_code,NULL AS customer_code,NULL AS legacy_agent_id,NULL AS legacy_customer_id,COALESCE(u.IsActive,1) AS is_active,NULL AS created_at,NULL AS created_day,COALESCE(rr.roles_raw,'') AS roles_raw,COALESCE(rr.roles_norm,'') AS roles_norm FROM OnlineMoneyTransfer__AspNetUsers u LEFT JOIN (SELECT ur.UserId,GROUP_CONCAT(DISTINCT r.Name ORDER BY r.Name SEPARATOR ',') AS roles_raw,GROUP_CONCAT(DISTINCT LOWER(REPLACE(REPLACE(REPLACE(r.Name,' ',''),'-',''),'_','')) ORDER BY r.Name SEPARATOR ',') AS roles_norm FROM OnlineMoneyTransfer__AspNetUserRoles ur JOIN OnlineMoneyTransfer__AspNetRoles r ON r.Id=ur.RoleId GROUP BY ur.UserId) rr ON rr.UserId=u.Id"
   ].join(" UNION ALL ");
   const q=String(search||"").trim().slice(0,120),mWhere=[],mValues=[];
   const staffSql="(FIND_IN_SET('admin',roles_norm)>0 OR FIND_IN_SET('superadmin',roles_norm)>0 OR FIND_IN_SET('agent',roles_norm)>0 OR FIND_IN_SET('marketer',roles_norm)>0 OR FIND_IN_SET('customermarketer',roles_norm)>0 OR FIND_IN_SET('appapiuser',roles_norm)>0 OR FIND_IN_SET('sponsor',roles_norm)>0)";
