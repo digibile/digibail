@@ -26,6 +26,8 @@ services:
       MARIADB_SOCKET: /var/run/mysqld/mysqld.sock
       PORT: 1631
       HOST: 0.0.0.0
+    group_add:
+      - "${MARIADB_SOCKET_GID:?MariaDB socket group id is required}"
     volumes:
       - /var/lib/mysql/mysql.sock:/var/run/mysqld/mysqld.sock
     ports:
