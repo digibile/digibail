@@ -7,12 +7,6 @@ const ROOT = "/home/digibail/domains/digebail.ir";
 const SQLC = "public_html-db-1";
 const SOURCE_DB = "vamcityc_vamcity_import_20261028";
 const MAX_BUFFER = 1024 * 1024 * 1024;
-const selected = [
-  "AspNetUsers","AspNetRoles","AspNetUserRoles","AspNetUserClaims","AspNetRoleClaims",
-  "Customers","AgentMetaData","AgentLoans","AgentFactors","AgentFactorItem",
-  "AgentLoanAuthorizationItem","SubAgentTransactions","WithdrawAgentFactor",
-  "CustomerMarketerCommissions","CustomerOrders","CustomerPurchasePlan","MemberPurchases"
-];
 const dockerPrefix = (() => {
   try { execFileSync("sudo", ["-n","docker","info"], {stdio:"ignore"}); return ["sudo","-n","docker"]; }
   catch { execFileSync("docker", ["info"], {stdio:"ignore"}); return ["docker"]; }
@@ -32,7 +26,7 @@ function jsonRows(raw, label) {
   return JSON.parse(raw.slice(first,last+1).replace(/[\r\n]/g,""));
 }
 let SQLCMD="", SA_PASS="";
-const temp=mkdtempSync(join(tmpdir(),"digibail-customer-import-"));
+const temp=mkdtempSync(join(tmpdir(),"digibail-full-vamcity-import-"));
 try {
   SQLCMD=clean(docker(["exec",SQLC,"sh","-lc","command -v /opt/mssql-tools18/bin/sqlcmd || command -v /opt/mssql-tools/bin/sqlcmd || command -v sqlcmd"])).split("\n")[0];
   SA_PASS=clean(docker(["exec",SQLC,"printenv","MSSQL_SA_PASSWORD"]));
@@ -65,9 +59,7 @@ try {
   }
 
   const tableRows=rows(
-    "SELECT s.name AS schemaName,t.name AS tableName FROM sys.tables t JOIN sys.schemas s ON s.schema_id=t.schema_id WHERE s.name=N'dbo' AND t.name IN ("+
-    selected.map(n=>"N'"+n.replace(/'/g,"''")+"'").join(",")+
-    ") ORDER BY t.name FOR JSON PATH, INCLUDE_NULL_VALUES;",
+    "SELECT s.name AS schemaName,t.name AS tableName FROM sys.tables t JOIN sys.schemas s ON s.schema_id=t.schema_id WHERE s.name=N'dbo' AND t.is_ms_shipped=0 ORDER BY t.name FOR JSON PATH, INCLUDE_NULL_VALUES;",
     "selected table list"
   );
   const tables=tableRows.map(x=>({schemaName:x.schemaName,tableName:x.tableName}));
