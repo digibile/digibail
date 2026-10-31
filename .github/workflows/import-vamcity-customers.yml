@@ -30,7 +30,7 @@ jobs:
             READY=0
             for n in $(seq 1 90); do
               APP_ID="$($D compose ps -q app 2>/dev/null || true)"
-              if [ -n "$APP_ID" ] && $D exec "$APP_ID" grep -q "DIGIBAIL_IMPORT_FIX_20261031_DROP_EXCLUDED_SENSITIVE_COLUMNS_V4" /app/scripts/migrate-legacy-digibail.js 2>/dev/null && curl -fsS http://127.0.0.1:1631/healthz >/dev/null 2>&1; then READY=1; break; fi
+              if [ -n "$APP_ID" ] && $D exec "$APP_ID" grep -q "DIGIBAIL_IMPORT_FIX_20261031_DROP_SENSITIVE_AFTER_CREATE_V5" /app/scripts/migrate-legacy-digibail.js 2>/dev/null && curl -fsS http://127.0.0.1:1631/healthz >/dev/null 2>&1; then READY=1; break; fi
               sleep 5
             done
             [ "$READY" -eq 1 ] || { echo "APP_RELEASE_NOT_READY"; exit 21; }
