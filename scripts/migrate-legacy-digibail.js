@@ -3,7 +3,7 @@ import crypto from "node:crypto";
 import bcrypt from "bcryptjs";
 import { Pool } from "pg";
 
-// DIGIBAIL_RELATIONAL_EXPORT_V2
+// DIGIBAIL_RELATIONAL_EXPORT_V3_WITH_SCHEMA
 
 const input = JSON.parse(await readFile(process.argv[2] || "/tmp/legacy-migration.json", "utf8"));
 const auditedSchema = JSON.parse(await readFile(new URL("./digibail-legacy-schema.json", import.meta.url), "utf8"));
