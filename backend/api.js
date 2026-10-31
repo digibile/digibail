@@ -813,10 +813,10 @@ export async function handleApi(req, res, url) {
           const legacyId=rawId.slice(7),db=legacyMaria(),conn=await db.getConnection();let updated;
           try{
             await conn.beginTransaction();
-            const [currentRows]=await conn.query("SELECT u.Id,u.IsActive,(SELECT r.Name FROM AspNetUserRoles ur JOIN AspNetRoles r ON r.Id=ur.RoleId WHERE ur.UserId=u.Id ORDER BY r.Name LIMIT 1) AS role_name FROM AspNetUsers u WHERE u.Id=? LIMIT 1",[legacyId]);
+            const [currentRows]=await conn.query("SELECT u.Id,u.IsActive,(SELECT GROUP_CONCAT(DISTINCT r.Name ORDER BY r.Name SEPARATOR ',') FROM AspNetUserRoles ur JOIN AspNetRoles r ON r.Id=ur.RoleId WHERE ur.UserId=u.Id) AS role_names FROM AspNetUsers u WHERE u.Id=? LIMIT 1",[legacyId]);
             if(!currentRows.length){await conn.rollback();return json(res,404,{message:"حساب کاربری پیدا نشد."});}
-            const current=currentRows[0],currentRole=legacyRoleCode(current.role_name||"customer");
-            if((currentRole==="superadmin"||role==="superadmin")&&admin.role!=="superadmin"){await conn.rollback();return json(res,403,{message:"مدیریت حساب مدیر ارشد فقط برای مدیر ارشد مجاز است."});}
+            const current=currentRows[0],currentRoles=String(current.role_names||"").split(",").filter(Boolean).map(legacyRoleCode);
+            if((currentRoles.includes("superadmin")||role==="superadmin")&&admin.role!=="superadmin"){await conn.rollback();return json(res,403,{message:"مدیریت حساب مدیر ارشد فقط برای مدیر ارشد مجاز است."});}
             const [columnRows]=await conn.query("SELECT COLUMN_NAME FROM information_schema.columns WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='AspNetUsers'");
             const columns=new Set(columnRows.map(x=>String(x.COLUMN_NAME)));
             const sets=[],values=[];
