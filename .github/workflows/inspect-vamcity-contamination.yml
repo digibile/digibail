@@ -72,7 +72,6 @@ jobs:
             UNION ALL SELECT 'loan_request_status_history_vamcity',count(*) FROM loan_request_status_history WHERE legacy_source_table LIKE 'vamcityc_%'
             UNION ALL SELECT 'loan_products_vamcity',count(*) FROM v_products
             UNION ALL SELECT 'comments_referencing_vamcity_requests',count(*) FROM loan_request_comments c JOIN v_requests r ON r.id=c.loan_request_id
-            UNION ALL SELECT 'applications_referencing_vamcity_products',count(*) FROM customer_loan_applications a JOIN v_products p ON p.id=a.loan_product_id
             UNION ALL SELECT 'sms_logs_referencing_vamcity_templates',count(*) FROM sms_logs l JOIN v_sms_rows s ON s.id=l.template_id
             UNION ALL SELECT 'documents_owned_by_vamcity_users',count(*) FROM customer_documents d JOIN v_user_rows u ON u.id=d.user_id
             UNION ALL SELECT 'contracts_owned_by_vamcity_users',count(*) FROM customer_contracts c JOIN v_user_rows u ON u.id=c.user_id
