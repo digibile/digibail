@@ -61,7 +61,10 @@ jobs:
               /DEFAULT\s*(?:\r?\n)\s*`__raw_/i,
               /ENGINE=InnoDB DEFAULT\s*(?:\r?\n)\s*`__raw_/i,
               /\bVA\s*(?:\r?\n)\s*`__raw_/i,
-              /COMMENT[^\n]*temporal value[^\n]*CHARSET=/i
+              /COMMENT[^\n]*temporal value[^\n]*CHARSET=/i,
+              /CHARSET=\s*(?:\r?\n)\s*`__raw_/i,
+              /ENGINE=InnoDB DEFAULT CHARSET=[^\n]*\r?\n\s*`__raw_/i,
+              /^\s*`[A-Za-z0-9_]+`\s+(?:VA|I)\s*$/m
             ];
             if (invalid.some(pattern => pattern.test(ddl))) {
               throw new Error('Malformed generated SQL detected in ' + file);
