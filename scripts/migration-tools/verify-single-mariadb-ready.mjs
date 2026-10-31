@@ -29,11 +29,12 @@ async function main(){
   const manifest=await count("SELECT COUNT(*) AS n FROM digibail_legacy_manifest WHERE source_schema='legacy_digibail'");
   if(manifest!==59)throw new Error("Expected 59 legacy table manifests; found "+manifest);
   const sources=[
-    ["mariadb.AspNetUsers","AspNetUsers"],
-    ["mariadb.bluvamdb__AspNetUsers","bluvamdb__AspNetUsers"],
-    ["mariadb.OnlineMoneyTransfer__AspNetUsers","OnlineMoneyTransfer__AspNetUsers"]
+    {source:"mariadb.AspNetUsers",table:"AspNetUsers",idKind:"numeric"},
+    {source:"mariadb.bluvamdb__AspNetUsers",table:"bluvamdb__AspNetUsers",idKind:"numeric"},
+    {source:"mariadb.OnlineMoneyTransfer__AspNetUsers",table:"OnlineMoneyTransfer__AspNetUsers",idKind:"guid"}
   ];
-  for(const [source,table] of sources){
+  for(const item of sources){
+    const {source,table,idKind}=item;
     const [exists]=await db.query(
       "SELECT 1 FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name=?",
       [table]
@@ -42,11 +43,14 @@ async function main(){
     const sourceCount=await count("SELECT COUNT(*) AS n FROM \`"+table+"\`");
     const mapped=await count("SELECT COUNT(*) AS n FROM DigibailAppUserIdentity WHERE LegacySource=?",[source]);
     if(sourceCount!==mapped)throw new Error("Identity mapping count mismatch for "+table+": source="+sourceCount+" mapped="+mapped);
+    const idJoin=idKind==="guid"
+      ?"map.MariaDbUserKey=CAST(legacy.Id AS CHAR) AND map.MariaDbUserId IS NULL"
+      :"map.MariaDbUserId=CAST(legacy.Id AS UNSIGNED)";
     const broken=await count(
-      "SELECT COUNT(*) AS n FROM DigibailAppUserIdentity m "+
-      "LEFT JOIN users app ON app.id=m.AppUserId "+
-      "LEFT JOIN \`"+table+"\` legacy ON CAST(legacy.Id AS UNSIGNED)=m.MariaDbUserId "+
-      "WHERE m.LegacySource=? AND (app.id IS NULL OR legacy.Id IS NULL)",
+      "SELECT COUNT(*) AS n FROM DigibailAppUserIdentity map "+
+      "LEFT JOIN users app ON app.id=map.AppUserId "+
+      "LEFT JOIN \`"+table+"\` legacy ON "+idJoin+" "+
+      "WHERE map.LegacySource=? AND (app.id IS NULL OR legacy.Id IS NULL)",
       [source]
     );
     if(broken!==0)throw new Error("Identity map contains missing app/source IDs for "+table+": "+broken);
