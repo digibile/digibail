@@ -25,7 +25,7 @@ async function postgresOnlyAccounts(mariaDb, limit=10000) {
   }
   const norm=v=>String(v||"").replace(/\D/g,"");
   const known=new Set(existing.flatMap(r=>[r.mobile,r.phone,r.phone_number].map(norm)).filter(Boolean));
-  return q.rows.filter(r=>!r.phone||!known.has(norm(r.phone))).map(r=>({...r,role:r.effective_role,legacy_id:String(r.id),mobile:r.phone,email:r.email,legacy_username:r.username,customer_code:String(r.id),registered_at:r.created_at,roles:[r.effective_role],account_type:directoryAccountType(r.effective_role),source_table:"postgres.users"}));
+  return q.rows.filter(r=>!r.phone||!known.has(norm(r.phone))).map(r=>({...r,role:r.effective_role,id:"pg:"+String(r.id),legacy_id:String(r.id),mobile:r.phone,email:r.email,legacy_username:r.username,customer_code:String(r.id),registered_at:r.created_at,roles:[r.effective_role],account_type:directoryAccountType(r.effective_role),source_table:"postgres.users"}));
 }
 
 function legacyRoleCode(value) {
@@ -85,7 +85,7 @@ function directoryAccountType(role) {
 }
 function mapMariaDirectoryUser(r) {
   const roleNames=String(r.roles||"").split(",").filter(Boolean),role=directoryRoleFromNames(roleNames);
-  return {id:-Number(r.Id),legacy_id:String(r.Id),username:r.UserName||null,legacy_username:r.UserName||null,full_name:[r.FirstName,r.LastName].filter(Boolean).join(" ").trim()||r.UserName||r.Mobile||"کاربر بدون نام",phone:r.Mobile||r.Phone||r.PhoneNumber||null,mobile:r.Mobile||r.Phone||r.PhoneNumber||null,email:r.Email||null,national_code:r.NationalCode||null,role,roles:roleNames.map(x=>String(x).toLowerCase().replace(/[^a-z]/g,"")),is_active:Boolean(r.IsActive),created_at:r.RegDate||null,registered_at:r.RegDate||null,legacy_source:"MariaDB.AspNetUsers",source_table:"AspNetUsers",legacy_customer_id:r.CustomerId||null,legacy_agent_id:r.AgentId||null,password_reset_required:true,account_type:directoryAccountType(role)};
+  return {id:"legacy:"+String(r.Id),legacy_id:String(r.Id),username:r.UserName||null,legacy_username:r.UserName||null,full_name:[r.FirstName,r.LastName].filter(Boolean).join(" ").trim()||r.UserName||r.Mobile||"کاربر بدون نام",phone:r.Mobile||r.Phone||r.PhoneNumber||null,mobile:r.Mobile||r.Phone||r.PhoneNumber||null,email:r.Email||null,national_code:r.NationalCode||null,role,roles:roleNames.map(x=>String(x).toLowerCase().replace(/[^a-z]/g,"")),is_active:Boolean(r.IsActive),created_at:r.RegDate||null,registered_at:r.RegDate||null,legacy_source:"MariaDB.AspNetUsers",source_table:"AspNetUsers",legacy_customer_id:r.CustomerId||null,legacy_agent_id:r.AgentId||null,password_reset_required:true,account_type:directoryAccountType(role)};
 }
 const sqlIdent = value => "`" + String(value).replace(/`/g, "``") + "`";
 
