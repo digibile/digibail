@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { dbHealth, handleApi, verifyAdminSession, verifySession } from "./backend/api.js";
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
+// run legacy import after deployment to sync the audited identity source.
 const PORT = Number.parseInt(process.env.PORT || "1631", 10);
 const HOST = process.env.HOST || "0.0.0.0";
 const ROUTES = new Map([
