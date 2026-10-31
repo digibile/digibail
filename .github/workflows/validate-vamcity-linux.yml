@@ -1,0 +1,74 @@
+name: Validate VamCity Linux database package
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [migration/vamcity-linux-cpanel-directadmin]
+    paths:
+      - "database/mysql/**"
+      - "scripts/build-vamcity-unified-schema.mjs"
+      - ".github/workflows/validate-vamcity-linux.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  validate-schema:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Build one-database schema
+        run: node scripts/build-vamcity-unified-schema.mjs
+      - name: Verify table totals and one target database
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const sql = fs.readFileSync('database/mysql/vamcitydigibilepay.sql', 'utf8');
+          const tables = sql.split('\n')
+            .filter(line => line.startsWith('CREATE TABLE `'))
+            .map(line => line.slice('CREATE TABLE `'.length, line.indexOf('`', 'CREATE TABLE `'.length)));
+          const expected = { main: 88, bluvamdb: 56, transfer: 12 };
+          if (tables.length !== 156 || new Set(tables).size !== 156) {
+            throw new Error('Expected 156 unique tables, got ' + tables.length);
+          }
+          if (!sql.includes('CREATE DATABASE IF NOT EXISTS `vamcitydigibilepay`')) {
+            throw new Error('Unified target database declaration missing');
+          }
+          if (/CREATE DATABASE IF NOT EXISTS `vamcitydigibilepay_(bluvamdb|transferdb)`/i.test(sql)) {
+            throw new Error('Side source databases must not be created');
+          }
+          const counts = {
+            main: tables.filter(x => !x.startsWith('bluvamdb__') && !x.startsWith('transferdb__')).length,
+            bluvamdb: tables.filter(x => x.startsWith('bluvamdb__')).length,
+            transfer: tables.filter(x => x.startsWith('transferdb__')).length
+          };
+          if (counts.main !== expected.main || counts.bluvamdb !== expected.bluvamdb || counts.transfer !== expected.transfer) {
+            throw new Error('Unexpected source table distribution: ' + JSON.stringify(counts));
+          }
+          const sourceFiles = [
+            'database/mysql/schema-main.sql',
+            'database/mysql/schema-bluvamdb.sql',
+            'database/mysql/schema-transfer.sql',
+            'database/mysql/vamcitydigibilepay.sql'
+          ];
+          for (const file of sourceFiles) {
+            const ddl = fs.readFileSync(file, 'utf8');
+            const invalid = [
+              /DEFAULT\s*(?:\r?\n)\s*`__raw_/i,
+              /ENGINE=InnoDB DEFAULT\s*(?:\r?\n)\s*`__raw_/i,
+              /\bVA\s*(?:\r?\n)\s*`__raw_/i,
+              /COMMENT[^\n]*temporal value[^\n]*CHARSET=/i,
+              /CHARSET=\s*(?:\r?\n)\s*`__raw_/i,
+              /ENGINE=InnoDB DEFAULT CHARSET=[^\n]*\r?\n\s*`__raw_/i,
+              /^\s*`[A-Za-z0-9_]+`\s+(?:VA|I)\s*$/m
+            ];
+            if (invalid.some(pattern => pattern.test(ddl))) {
+              throw new Error('Malformed generated SQL detected in ' + file);
+            }
+          }
+          console.log(JSON.stringify({ database: 'vamcitydigibilepay', tables: tables.length, counts, ddlSyntaxGuard: 'passed' }));
+          NODE
