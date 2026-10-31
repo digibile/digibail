@@ -45,13 +45,14 @@ CREATE TABLE IF NOT EXISTS access_roles (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS user_role_assignments (
+ id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
  user_id BIGINT NOT NULL,
  role_code VARCHAR(40) NOT NULL,
  legacy_source VARCHAR(120) NOT NULL,
  legacy_user_id VARCHAR(160) NOT NULL,
  legacy_role_id VARCHAR(160) NOT NULL,
- PRIMARY KEY(user_id,role_code),
  UNIQUE KEY uq_digibail_user_role_legacy(legacy_source,legacy_user_id,legacy_role_id),
+ KEY ix_digibail_user_role_user(user_id,role_code),
  CONSTRAINT fk_digibail_user_roles_user FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
  CONSTRAINT fk_digibail_user_roles_role FOREIGN KEY(role_code) REFERENCES access_roles(code) ON DELETE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
