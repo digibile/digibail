@@ -771,31 +771,17 @@ export async function handleApi(req, res, url) {
         return json(res,200,{data:q.rows});
       }
       if (req.method === "GET" && route === "/api/v1/admin/roles") {
-        const q=await pool.query("SELECT code,display_name FROM access_roles ORDER BY display_name,code");
-        const builtins=[["customer","مشتری"],["member","عضو"],["agent","نماینده"],["marketer","بازاریاب"],["customermarketer","بازاریاب مشتری"],["admin","مدیر"],["superadmin","مدیر ارشد"]];
-        const roles=new Map(builtins.map(([code,display_name])=>[code,{code,display_name,editable:true}]));
-        for(const r of q.rows)roles.set(r.code,{code:r.code,display_name:r.display_name,editable:["customer","member","agent","marketer","customermarketer","admin","superadmin"].includes(r.code)});
-        return json(res,200,{data:[...roles.values()]});
+        const db=legacyMaria(),[sourceRoles]=await db.query("SELECT Name FROM AspNetRoles ORDER BY Name");
+        const builtins=["customer","member","agent","marketer","customermarketer","admin","superadmin"].map(code=>({code,display_name:legacyRoleLabel(code),editable:true}));
+        const map=new Map(builtins.map(r=>[r.code,r]));
+        for(const item of sourceRoles){const code=legacyRoleCode(item.Name);map.set(code,{code,display_name:legacyRoleLabel(code)===code?String(item.Name):legacyRoleLabel(code),editable:["customer","member","agent","marketer","customermarketer","admin","superadmin"].includes(code)});}
+        return json(res,200,{data:[...map.values()]});
       }
       if (req.method === "GET" && route === "/api/v1/admin/users-page") {
         const page=Math.max(1,Number.parseInt(url.searchParams.get("page")||"1",10)||1);
         const pageSize=Math.min(100,Math.max(10,Number.parseInt(url.searchParams.get("pageSize")||"50",10)||50));
-        const search=String(url.searchParams.get("q")||"").trim().slice(0,120);
-        const role=String(url.searchParams.get("role")||"").trim().toLowerCase();
-        const status=String(url.searchParams.get("status")||"").trim().toLowerCase();
-        const where=[],params=[];
-        if(search){params.push("%"+search+"%");where.push("(u.full_name ILIKE $"+params.length+" OR u.phone ILIKE $"+params.length+" OR u.email ILIKE $"+params.length+" OR u.username ILIKE $"+params.length+" OR u.legacy_username ILIKE $"+params.length+" OR u.national_code ILIKE $"+params.length+" OR u.legacy_id ILIKE $"+params.length+" OR u.id::text ILIKE $"+params.length+")");}
-        if(role){params.push(role);where.push("((EXISTS(SELECT 1 FROM user_role_overrides o WHERE o.user_id=u.id) AND EXISTS(SELECT 1 FROM user_role_overrides o WHERE o.user_id=u.id AND o.role_code=$"+params.length+")) OR (NOT EXISTS(SELECT 1 FROM user_role_overrides o WHERE o.user_id=u.id) AND (u.role=$"+params.length+" OR EXISTS(SELECT 1 FROM user_role_assignments a WHERE a.user_id=u.id AND a.role_code=$"+params.length+"))))");}
-        if(status==="active")where.push("u.is_active=TRUE");
-        if(status==="inactive")where.push("u.is_active=FALSE");
-        const filter=where.length?" WHERE "+where.join(" AND "):"";
-        const [count,overall,stats,rows]=await Promise.all([
-          pool.query("SELECT COUNT(*)::int AS total FROM users u"+filter,params),
-          pool.query("SELECT COUNT(*)::int AS total,(to_char(MAX(created_at) AT TIME ZONE 'Asia/Tehran','YYYY-MM-DD\"T\"HH24:MI:SS')||'+03:30') AS latest_registration FROM users"),
-          pool.query("SELECT COUNT(*) FILTER(WHERE is_active)::int AS active,COUNT(*) FILTER(WHERE NOT is_active)::int AS inactive,COUNT(*) FILTER(WHERE (created_at AT TIME ZONE 'Asia/Tehran')::date=(NOW() AT TIME ZONE 'Asia/Tehran')::date)::int AS today FROM users"),
-          pool.query("SELECT u.id,u.username,u.legacy_username,u.phone,u.full_name,u.email,u.national_code,u.role,u.is_active,u.password_reset_required,u.created_at,u.updated_at,u.legacy_source,u.legacy_id,u.legacy_customer_id,u.legacy_agent_id,COALESCE((SELECT json_agg(role_code ORDER BY role_code) FROM (SELECT role_code FROM user_role_overrides WHERE user_id=u.id UNION SELECT role_code FROM user_role_assignments WHERE user_id=u.id AND NOT EXISTS(SELECT 1 FROM user_role_overrides WHERE user_id=u.id)) rr),json_build_array(u.role)) AS roles FROM users u"+filter+" ORDER BY u.created_at DESC NULLS LAST,u.id DESC LIMIT $"+(params.length+1)+" OFFSET $"+(params.length+2),[...params,pageSize,(page-1)*pageSize])
-        ]);
-        return json(res,200,{data:{rows:rows.rows,total:Number(count.rows[0]?.total)||0,overallTotal:Number(overall.rows[0]?.total)||0,activeTotal:Number(stats.rows[0]?.active)||0,inactiveTotal:Number(stats.rows[0]?.inactive)||0,todayTotal:Number(stats.rows[0]?.today)||0,latestRegistration:overall.rows[0]?.latest_registration||null,page,pageSize,sourceTable:"users",timezone:"Asia/Tehran"}});
+        const data=await unifiedUserDirectory({page,pageSize,search:url.searchParams.get("q")||"",role:url.searchParams.get("role")||"",status:url.searchParams.get("status")||""});
+        return json(res,200,{data});
       }
       if (req.method === "PATCH" && /^\/api\/v1\/admin\/users\/\d+$/.test(route)) {
         const id=Number(route.split("/").pop()),input=await body(req);
@@ -834,18 +820,10 @@ export async function handleApi(req, res, url) {
         return json(res,200,{data:{legacy_customers:total,legacy_users:total,today:(Number(todayRows[0]?.total)||0)+fresh.filter(r=>new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Tehran",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date(r.created_at))===new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Tehran",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date())).length,latestRegistration:latest,sourceTable:"MariaDB.AspNetUsers",additionalSource:"new PostgreSQL registrations",timezone:"Asia/Tehran"}});
       }
       if (req.method === "GET" && route === "/api/v1/admin/legacy-customers-page") {
-        const page=Math.max(1,Number.parseInt(url.searchParams.get("page")||"1",10)||1),pageSize=Math.min(100,Math.max(10,Number.parseInt(url.searchParams.get("pageSize")||"50",10)||50)),search=String(url.searchParams.get("q")||"").trim().slice(0,120),db=legacyMaria(),where=[],values=[];
-        if(search){where.push("(u.FirstName LIKE ? OR u.LastName LIKE ? OR CONCAT_WS(' ',u.FirstName,u.LastName) LIKE ? OR u.Mobile LIKE ? OR u.Phone LIKE ? OR u.PhoneNumber LIKE ? OR u.Email LIKE ? OR u.UserName LIKE ? OR u.NationalCode LIKE ? OR u.UserCode LIKE ? OR CAST(u.Id AS CHAR) LIKE ? OR u.AffiliateCode LIKE ?)");for(let i=0;i<12;i++)values.push("%"+search+"%");}
-        const filter=where.length?" WHERE "+where.join(" AND "):"";
-        const [countResult,freshAll]=await Promise.all([db.query("SELECT COUNT(*) AS total FROM AspNetUsers u"+filter,values),postgresOnlyAccounts(db,10000)]);const count=countResult[0]||{};
-        const fresh=search?freshAll.filter(r=>[r.name,r.mobile,r.email,r.legacy_username,r.national_code,r.legacy_id].some(v=>String(v||"").toLowerCase().includes(search.toLowerCase()))):freshAll;
-        const offset=Math.max(0,(page-1)*pageSize-fresh.length),limit=pageSize+fresh.length;
-        const [legacyRows]=await db.query("SELECT CAST(u.Id AS CHAR) AS legacy_id,COALESCE(NULLIF(TRIM(CONCAT_WS(' ',u.FirstName,u.LastName)),''),NULLIF(u.UserName,''),NULLIF(u.Mobile,''),'کاربر بدون نام') AS name,COALESCE(NULLIF(u.Mobile,''),NULLIF(u.Phone,''),NULLIF(u.PhoneNumber,'')) AS mobile,u.Email AS email,COALESCE(NULLIF(u.UserCode,''),CAST(u.Id AS CHAR)) AS customer_code,u.RegDate AS registered_at,CAST(u.CustomerId AS CHAR) AS customer_id,CAST(u.AgentId AS CHAR) AS agent_id,u.UserName AS legacy_username,u.IsActive AS is_active,(SELECT GROUP_CONCAT(DISTINCT r.Name ORDER BY r.Name SEPARATOR ',') FROM AspNetUserRoles ur JOIN AspNetRoles r ON r.Id=ur.RoleId WHERE ur.UserId=u.Id) AS roles FROM AspNetUsers u"+filter+" ORDER BY u.RegDate DESC,u.Id DESC LIMIT ? OFFSET ?",[...values,limit,offset]);
-        const classify=roles=>{const r=String(roles||"").toLowerCase().replace(/[^a-z,]/g,"").split(",");return r.some(x=>x==="superadmin"||x==="admin")?"مدیر سامانه":r.includes("agent")?"نماینده":r.some(x=>x.includes("marketer"))?"بازاریاب":"مشتری سامانه";};
-        const merged=[...fresh,...legacyRows.map(r=>({...r,roles:String(r.roles||"").split(",").filter(Boolean),account_type:classify(r.roles),source_table:"AspNetUsers"}))].sort((a,b)=>new Date(b.registered_at||0)-new Date(a.registered_at||0));
-        const rows=merged.slice((page-1)*pageSize,page*pageSize);
-        const total=(Number(count.total)||0)+fresh.length;
-        return json(res,200,{data:{rows,total,overallTotal:total,todayTotal:null,page,pageSize,sourceTable:"MariaDB.AspNetUsers",additionalSource:"new PostgreSQL registrations",timezone:"Asia/Tehran"}});
+        const page=Math.max(1,Number.parseInt(url.searchParams.get("page")||"1",10)||1);
+        const pageSize=Math.min(100,Math.max(10,Number.parseInt(url.searchParams.get("pageSize")||"50",10)||50));
+        const data=await unifiedUserDirectory({page,pageSize,search:url.searchParams.get("q")||""});
+        return json(res,200,{data:{...data,legacy_customers:data.overallTotal}});
       }
       if (req.method === "GET" && route === "/api/v1/admin/legacy-agents-page") {
         const page=Math.max(1,Number.parseInt(url.searchParams.get("page")||"1",10)||1),pageSize=Math.min(100,Math.max(10,Number.parseInt(url.searchParams.get("pageSize")||"25",10)||25)),search=String(url.searchParams.get("q")||"").trim().slice(0,120),status=String(url.searchParams.get("status")||"").trim();
