@@ -10,7 +10,7 @@ const auditedSchema = JSON.parse(await readFile(new URL("./digibail-legacy-schem
 input.columnDefinitions = input.columnDefinitions?.length ? input.columnDefinitions : auditedSchema.columnDefinitions;
 input.primaryKeys = input.primaryKeys?.length ? input.primaryKeys : auditedSchema.primaryKeys;
 input.foreignKeys = input.foreignKeys?.length ? input.foreignKeys : auditedSchema.foreignKeys;
-const pool = new Pool({ connectionString: process.env.DATABASE_URL, max: 3, connectionTimeoutMillis: 10000 });
+const pool = new Pool({ connectionString: process.env.DATABASE_URL, max: 1, connectionTimeoutMillis: 10000 });
 const TARGET_SCHEMA = "legacy_digibail";
 const qid = s => '"' + String(s).replace(/"/g, '""') + '"';
 const qtable = (s,t) => qid(TARGET_SCHEMA) + "." + qid(String(s) + "__" + String(t));
