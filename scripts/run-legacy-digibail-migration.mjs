@@ -9,6 +9,8 @@ const APP_CONTAINER="public_html-web-1";
 const DB_NAME="Digibail";
 const temp=fs.mkdtempSync(path.join(os.tmpdir(),"digibail-relational-"));
 fs.chmodSync(temp,0o700);
+let appIdForCleanup=null;
+process.on("exit",()=>{try{if(appIdForCleanup)runDocker(["exec",appIdForCleanup,"rm","-f","/tmp/legacy-migration.json"]);}catch{}try{fs.rmSync(temp,{recursive:true,force:true});}catch{}});
 function command(bin,args,opts={}) {
   const r=spawnSync(bin,args,{encoding:opts.encoding===null?null:"utf8",maxBuffer:opts.maxBuffer||80*1024*1024,env:{...process.env,...(opts.env||{})}});
   if(r.error)throw r.error;
@@ -108,6 +110,7 @@ const schemaDefinitions=genericTables.map(t=>({sourceTable:t.sourceTable,rowCoun
 const data={users:special["users.json"],customers:special["customers.json"],smsPatterns:special["sms.json"],purchasePlans:special["plans.json"],loanRequestStatuses:special["statuses.json"],identityRoles:special["roles.json"],identityUserRoles:special["userroles.json"],identityClaims:special["claims.json"],genericTables,schemaDefinitions,columnDefinitions,primaryKeys,foreignKeys};
 const inputFile=path.join(temp,"input.json");fs.writeFileSync(inputFile,JSON.stringify(data),{mode:0o600});
 const appId=String(runDocker(["compose","ps","-q","app"])).trim();
+appIdForCleanup=appId||null;
 if(!appId)throw new Error("Current Digibail app container is missing.");
 runDocker(["cp",inputFile,appId+":/tmp/legacy-migration.json"]);
 runDocker(["exec","-u","0",appId,"chown","node:node","/tmp/legacy-migration.json"]);
