@@ -58,7 +58,7 @@ const sets=[
 
 function quote(value){return "\`"+String(value).replace(/\`/g,"\`\`")+"\`";}
 function roleCodeSql(nameExpression){
-  const norm="LOWER(REPLACE(REPLACE(REPLACE("+nameExpression+",' ',''),'-',''),'_',''))";
+  const norm="LOWER(REPLACE(REPLACE(REPLACE(COALESCE("+nameExpression+",'unknown'),' ',''),'-',''),'_',''))";
   return "CASE "+norm+
     " WHEN 'superadmin' THEN 'superadmin'"+
     " WHEN 'admin' THEN 'admin'"+
