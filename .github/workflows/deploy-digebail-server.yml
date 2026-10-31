@@ -58,10 +58,13 @@ jobs:
 
       - name: Validate environment and inspect live web routing
         uses: appleboy/ssh-action@v1.2.2
+        env:
+          MYSQL_PASS: ${{ secrets.VAMCITY_MYSQL_PASSWORD }}
         with:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
+          envs: MYSQL_PASS
           script: |
             set -eu
             ROOT="/home/digibail/domains/digebail.ir"
@@ -115,6 +118,20 @@ jobs:
               unset DB_PASS JWT OTP CAPTCHA
               echo "SECURE_ENV_CREATED=1 (secret values hidden)"
             fi
+            if [ -z "${MYSQL_PASS:-}" ]; then
+              echo "BLOCKED: VAMCITY_MYSQL_PASSWORD is required for the live admin data connection."
+              exit 25
+            fi
+            umask 077
+            grep -vE '^(MARIADB_DATABASE|MARIADB_USER|MARIADB_PASSWORD|MARIADB_SOCKET)=' .env > .env.mariadb.tmp || true
+            {
+              printf 'MARIADB_DATABASE=digibail_vamcitydigibilepay\\n'
+              printf 'MARIADB_USER=digibail_vamcitydigibilepay\\n'
+              printf 'MARIADB_PASSWORD=%s\\n' "$MYSQL_PASS"
+              printf 'MARIADB_SOCKET=/var/run/mysqld/mysqld.sock\\n'
+            } >> .env.mariadb.tmp
+            mv .env.mariadb.tmp .env
+            chmod 600 .env
             for key in POSTGRES_DB POSTGRES_USER POSTGRES_PASSWORD DATABASE_URL JWT_SECRET OTP_PEPPER CAPTCHA_PEPPER; do
               if ! grep -qE "^${key}=.+" .env; then
                 echo "BLOCKED: missing or empty required setting: $key"
