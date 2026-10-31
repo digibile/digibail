@@ -111,7 +111,7 @@ jobs:
               exit 25
             fi
             umask 077
-            grep -vE '^(MARIADB_DATABASE|MARIADB_USER|MARIADB_PASSWORD|MARIADB_SOCKET)=' .env > .env.mariadb.tmp || true
+            grep -vE '^(MARIADB_DATABASE|MARIADB_USER|MARIADB_PASSWORD|MARIADB_SOCKET|MARIADB_SOCKET_GID)=' .env > .env.mariadb.tmp || true
             {
               printf 'MARIADB_DATABASE=digibail_vamcitydigibilepay\n'
               printf 'MARIADB_USER=digibail_vamcitydigibilepay\n'
@@ -150,7 +150,7 @@ jobs:
               exit 24
             fi
             echo "=== start the freshly built release ==="
-            $DOCKER compose up -d --no-build
+            $DOCKER compose up -d --remove-orphans --no-build
             echo "=== wait for application and legacy API health ==="
             HEALTH_OK=0
             for n in $(seq 1 48); do
