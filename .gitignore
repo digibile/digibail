@@ -7,3 +7,6 @@ database/migration/*.json
 *.bak
 *.mdf
 *.ldf
+
+# Local database exports are private and must never enter Git.
+backups/

@@ -1,0 +1,8 @@
+{
+  "name": "digibail-mariadb-cutover-verifier",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "mysql2": "^3.15.3"
+  }
+}

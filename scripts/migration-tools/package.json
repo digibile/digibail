@@ -1,0 +1,11 @@
+{
+  "name": "digibail-one-time-migration-tools",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "pg": "^8.13.1",
+    "mysql2": "^3.15.3",
+    "bcryptjs": "^2.4.3",
+    "jsonwebtoken": "^9.0.2"
+  }
+}
