@@ -1,0 +1,47 @@
+name: Inspect VamCity login key length before resuming MariaDB import
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/inspect-vamcity-login-key-length.yml
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Read source key lengths and target index safely
+        uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          command_timeout: 5m
+          script: |
+            set -eu
+            if sudo -n docker info >/dev/null 2>&1; then D='sudo -n docker'; else D='docker'; fi
+            SQLC=public_html-db-1
+            SQLCMD="$($D exec "$SQLC" sh -lc 'command -v /opt/mssql-tools18/bin/sqlcmd || command -v /opt/mssql-tools/bin/sqlcmd || command -v sqlcmd' | head -n 1)"
+            PASS="$($D exec "$SQLC" printenv MSSQL_SA_PASSWORD 2>/dev/null || true)"
+            [ -n "$PASS" ] || PASS="$($D exec "$SQLC" printenv SA_PASSWORD 2>/dev/null || true)"
+            [ -n "$SQLCMD" ] && [ -n "$PASS" ]
+            echo "=== SOURCE LOGIN KEY LENGTHS AND PREFIX COLLISIONS ==="
+            $D exec -e SQLCMDPASSWORD="$PASS" "$SQLC" "$SQLCMD" -S localhost -U sa -C -b -W -h -1 -s '|' -d vamcityc_vamcity_import_20261028 -Q "SET NOCOUNT ON; SELECT COUNT(*),COALESCE(MAX(LEN(LoginProvider)),0),COALESCE(MAX(LEN(ProviderKey)),0) FROM dbo.AspNetUserLogins; SELECT COUNT(*) FROM (SELECT LEFT(LoginProvider,191) a,LEFT(ProviderKey,191) b FROM dbo.AspNetUserLogins GROUP BY LEFT(LoginProvider,191),LEFT(ProviderKey,191) HAVING COUNT(*)>1) x;"
+            echo "=== TARGET TABLE STATE ==="
+            if [ -s database/migration/config.php ]; then
+              php -r '
+                $c=require "database/migration/config.php";$m=$c["mysql"];
+                $db=new mysqli($m["host"],$m["user"],$m["password"],"digibail_vamcitydigibilepay",(int)$m["port"],$m["socket"]??null);
+                if($db->connect_errno){echo "TARGET_CONNECT=FAILED\n";exit(2);}
+                $q=$db->query("SELECT COUNT(*) n FROM AspNetUserLogins");echo "TARGET_LOGIN_ROWS=".$q->fetch_assoc()["n"]."\n";
+                $q=$db->query("SHOW CREATE TABLE AspNetUserLogins");$r=$q->fetch_row();echo $r[1]."\n";
+              '
+            else
+              echo "TARGET_CONFIG_MISSING"
+            fi
+            unset PASS
