@@ -33,16 +33,17 @@ jobs:
             echo "=== Pre-backup disk and database size ==="
             df -h /home/digibail
             $D compose exec -T db sh -lc 'psql -X -U "$POSTGRES_USER" -d "$POSTGRES_DB" -P pager=off -c "SELECT pg_size_pretty(pg_database_size(current_database())) AS database_size,pg_database_size(current_database()) AS bytes"'
-            if $D run --rm --user 0:0 -v "$BACKUP_DIR:/backup:ro" postgres:16-alpine sh -lc 'test -e /backup/digibail_before_vamcity_isolation_20261031.dump' >/dev/null 2>&1; then
+            DB_ID="$($D compose ps -q db)"
+            if $D cp "$BACKUP" "$DB_ID:/tmp/digibail-host-backup.dump" >/dev/null 2>&1; then
               echo "BACKUP_ALREADY_PRESENT=1"
             else
               echo "=== Create custom-format snapshot inside PostgreSQL container ==="
-              $D compose exec -T db sh -lc 'pg_dump -Fc -U "$POSTGRES_USER" -d "$POSTGRES_DB" -f /tmp/digibail_before_vamcity_isolation_20261031.dump && chmod 600 /tmp/digibail_before_vamcity_isolation_20261031.dump && pg_restore --list /tmp/digibail_before_vamcity_isolation_20261031.dump >/dev/null && stat -c %s /tmp/digibail_before_vamcity_isolation_20261031.dump && sha256sum /tmp/digibail_before_vamcity_isolation_20261031.dump'
-              DB_ID="$($D compose ps -q db)"
+              $D compose exec -T db sh -lc 'pg_dump -Fc -U "$POSTGRES_USER" -d "$POSTGRES_DB" -f /tmp/digibail_before_vamcity_isolation_20261031.dump && chmod 600 /tmp/digibail_before_vamcity_isolation_20261031.dump && pg_restore --list /tmp/digibail_before_vamcity_isolation_20261031.dump >/dev/null'
               $D cp "$DB_ID:$TEMP" "$BACKUP"
+              $D cp "$BACKUP" "$DB_ID:/tmp/digibail-host-backup.dump"
             fi
-            echo "=== Verify copied archive on host ==="
-            $D run --rm --user 0:0 -v "$BACKUP:/backup.dump:ro" postgres:16-alpine sh -lc 'pg_restore --list /backup.dump >/dev/null && stat -c %s /backup.dump && sha256sum /backup.dump'
+            echo "=== Verify copied archive from the host ==="
+            $D exec --user 0 "$DB_ID" sh -lc 'pg_restore --list /tmp/digibail-host-backup.dump >/dev/null && stat -c %s /tmp/digibail-host-backup.dump && sha256sum /tmp/digibail-host-backup.dump'
             $D compose exec -T db rm -f "$TEMP"
             echo "BACKUP_VERIFIED=1"
             echo "BACKUP_PATH=$BACKUP"
