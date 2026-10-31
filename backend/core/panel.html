@@ -1667,16 +1667,19 @@ V.dash=view('real-dashboard-drilldown',async function(){
   api('GET','/api/v1/admin/orders').catch(()=>[]),
   api('GET','/api/v1/admin/virtual-cards').catch(()=>[]),
   api('GET','/api/v1/admin/ledger/entries').catch(()=>[]),
-  api('GET','/api/v1/admin/loan-products').catch(()=>[])
+  api('GET','/api/v1/admin/loan-products').catch(()=>[]),
+  api('GET','/api/v1/admin/summary').catch(()=>({data:{}}))
  ]);
- const users=drillRows(rs[0]),customers=drillRows(rs[1]),sms=drillRows(rs[2]),beta=drillRows(rs[3]),legacy=drillRows(rs[4]),orders=drillRows(rs[5]),cards=drillRows(rs[6]),ledger=drillRows(rs[7]),products=drillRows(rs[8]);
- const total=legacy.reduce((n,t)=>n+(Number(t.row_count)||0),0),active=products.filter(p=>p.isActive).length,review=products.filter(p=>p.needsReview).length;
+ const users=drillRows(rs[0]),customers=drillRows(rs[1]),sms=drillRows(rs[2]),beta=drillRows(rs[3]),legacy=drillRows(rs[4]),orders=drillRows(rs[5]),cards=drillRows(rs[6]),ledger=drillRows(rs[7]),products=drillRows(rs[8]),summary=rs[9]?.data||{};
+ const usersTotal=Number(summary.users)||users.length,customerCount=Number(rs[1]?.legacy_customers)||usersTotal,total=legacy.reduce((n,t)=>n+(Number(t.row_count)||0),0),active=products.filter(p=>p.isActive).length,review=products.filter(p=>p.needsReview).length;
  const items=[
   ['تعریف‌های کل وام',nf(products.length),'products','all','فهرست واقعی تعریف‌های ذخیره‌شده'],
   ['طرح‌های وام فعال',nf(active),'products','active','فقط طرح‌های فعال'],
   ['طرح‌های نیازمند بازبینی',nf(review),'products','review','رکوردهای علامت‌خورده برای بررسی'],
-  ['حساب‌های کاربری',nf(users.length),'users','','مشاهده حساب‌های واقعی'],
-  ['مشتریان',nf(customers.length),'legacyCustomers','','سوابق منتقل‌شده'],
+  ['حساب‌های کاربری',nf(usersTotal),'users','','همه حساب‌های جدید و منتقل‌شده'],
+  ['ثبت‌نام امروز',nf(Number(summary.users_today)||0),'users','','بر اساس ساعت رسمی ایران'],
+  ['نمایندگان',nf(Number(summary.agents)||0),'users','agent','حساب‌های دارای نقش نماینده'],
+  ['مشتریان',nf(customerCount),'legacyCustomers','','سوابق و حساب‌های واقعی'],
   ['الگوهای پیامک',nf(sms.length),'smsLegacy','','الگوها و گزارش ارسال'],
   ['استعلام‌های بتا',nf(beta.length),'betaRequests','','فهرست درخواست‌ها'],
   ['جدول‌های قدیمی',nf(legacy.length),'legacyData','','انتخاب جدول و مشاهده رکوردها'],
