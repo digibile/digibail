@@ -134,10 +134,10 @@ function installSchema(mysqli $db,string $path,string $source): void {
     $sql=preg_replace('/;\s*--[^\r\n]*/',';',$sql);
     if($source==='vamcityc_bluvamdb_import_20261028'){
         $rename=static fn($name)=>shortName('bluvamdb__'.$name);
-        $sql=preg_replace_callback('/\b(CREATE\s+TABLE|ALTER\s+TABLE|REFERENCES)\s+\`([^\`]+)\`/i',
-            static fn($m)=>$m[1].' \`'.$rename($m[2]).'\`',$sql);
-        $sql=preg_replace_callback('/\b(CONSTRAINT\s+)\`([^\`]+)\`/i',
-            static fn($m)=>$m[1].'\`'.$rename($m[2]).'\`',$sql);
+        $sql=preg_replace_callback('/\b(CREATE\s+TABLE|ALTER\s+TABLE|REFERENCES)\s+`([^`]+)`/i',
+            static fn($m)=>$m[1].' `'.$rename($m[2]).'`',$sql);
+        $sql=preg_replace_callback('/\b(CONSTRAINT\s+)`([^`]+)`/i',
+            static fn($m)=>$m[1].'`'.$rename($m[2]).'`',$sql);
     }
     foreach(explode(';',$sql) as $statement) {
         $statement=trim($statement);
