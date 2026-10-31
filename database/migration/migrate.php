@@ -311,7 +311,8 @@ foreach($sources as $s){
         $key=$t['schema_name'].'.'.$t['table_name'];
         $tn=mappedTable($t['schema_name'],$t['table_name'],$source);
         $cols=$colsBy[$key]??[];
-        widenTextColumns($db,$tn,$cols);
+        // Empty source tables have no values to preserve; do not widen their indexed columns unnecessarily.
+        if($expected>0) widenTextColumns($db,$tn,$cols);
         $pk=$pkBy[$key]??[]; ksort($pk); $pk=array_values($pk);
         $expected=(int)$t['row_count'];
         $st=$db->query("SELECT expected_rows,imported_rows,status FROM ".qi('__vamcity_migration_state')
