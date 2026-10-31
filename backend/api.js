@@ -829,7 +829,8 @@ export async function handleApi(req, res, url) {
               const [roleRows]=await conn.query("SELECT Id,Name FROM AspNetRoles");
               const selected=roleRows.find(r=>legacyRoleCode(r.Name)===role);
               if(!selected)throw Object.assign(new Error("نقش انتخاب‌شده در فهرست نقش‌های پایگاه داده وجود ندارد."),{status:400});
-              await conn.query("DELETE FROM AspNetUserRoles WHERE UserId=?",[legacyId]);
+              const coreRoleIds=roleRows.filter(r=>["customer","member","agent","marketer","customermarketer","admin","superadmin"].includes(legacyRoleCode(r.Name))).map(r=>r.Id);
+              if(coreRoleIds.length)await conn.query("DELETE FROM AspNetUserRoles WHERE UserId=? AND RoleId IN (?)",[legacyId,coreRoleIds]);
               await conn.query("INSERT INTO AspNetUserRoles(UserId,RoleId) VALUES(?,?)",[legacyId,selected.Id]);
             }
             await conn.commit();
