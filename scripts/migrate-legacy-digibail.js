@@ -83,7 +83,7 @@ try{
     await pool.query("INSERT INTO "+table+" ("+names.map(qid).join(",")+") VALUES ("+vals.map((_,i)=>"$"+(i+1)).join(",")+")"+conflict,vals);
    }
   }
-  for(const c of cols)if(Boolean(c.isIdentity)){const rel=TARGET_SCHEMA+"."+s+"__"+t;await pool.query("SELECT setval(pg_get_serial_sequence($1,$2),COALESCE(MAX("+qid(c.columnName)+"),1),MAX("+qid(c.columnName)+") IS NOT NULL) FROM "+table,[rel,c.columnName]);}
+  for(const c of cols)if(Boolean(c.isIdentity)){const rel=qid(TARGET_SCHEMA)+"."+qid(s+"__"+t);await pool.query("SELECT setval(pg_get_serial_sequence($1,$2),COALESCE(MAX("+qid(c.columnName)+"),1),MAX("+qid(c.columnName)+") IS NOT NULL) FROM "+table,[rel,c.columnName]);}
   for(const c of cols)if(!Boolean(c.isNullable))await pool.query("ALTER TABLE "+table+" ALTER COLUMN "+qid(c.columnName)+" SET NOT NULL");
   if(!pk.length)await pool.query("ALTER TABLE "+table+" ALTER COLUMN "+qid("__legacy_row_number")+" SET NOT NULL");
   manifest.push({schemaName:s,tableName:t,sourceRows:rows.length,importedRows:rows.length});mirrorRows+=rows.length;mirrorTables++;
