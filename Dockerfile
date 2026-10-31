@@ -7,7 +7,6 @@ COPY --chown=node:node server.js start.js migrate.js next-server.js next.config.
 COPY --chown=node:node backend ./backend
 COPY --chown=node:node scripts/create-admin.js ./scripts/create-admin.js
 COPY --chown=node:node scripts/provision-recovery-admin.js ./scripts/provision-recovery-admin.js
-COPY --chown=node:node scripts/migrate-postgres-app-data-to-mariadb.mjs ./scripts/migrate-postgres-app-data-to-mariadb.mjs
 COPY --chown=node:node scripts/import-legacy-mariadb-users.mjs ./scripts/import-legacy-mariadb-users.mjs
 COPY --chown=node:node web ./web
 COPY --chown=node:node app ./app
