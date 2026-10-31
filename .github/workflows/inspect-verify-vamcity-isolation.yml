@@ -49,12 +49,12 @@ jobs:
               (SELECT count(*) FROM sms_templates) AS total_sms_templates,
               (SELECT count(*) FROM user_role_assignments) AS total_user_role_assignments"'
             echo "=== Refresh PostgreSQL statistics after committed cleanup ==="
-            $D compose exec -T db sh -lc 'psql -X -U "$POSTGRES_USER" -d "$POSTGRES_DB" -P pager=off -c "VACUUM (ANALYZE) legacy_source_data"'
-            $D compose exec -T db sh -lc 'psql -X -U "$POSTGRES_USER" -d "$POSTGRES_DB" -P pager=off -c "VACUUM (ANALYZE) legacy_customers"'
-            $D compose exec -T db sh -lc 'psql -X -U "$POSTGRES_USER" -d "$POSTGRES_DB" -P pager=off -c "VACUUM (ANALYZE) users"'
-            $D compose exec -T db sh -lc 'psql -X -U "$POSTGRES_USER" -d "$POSTGRES_DB" -P pager=off -c "VACUUM (ANALYZE) loan_requests"'
-            $D compose exec -T db sh -lc 'psql -X -U "$POSTGRES_USER" -d "$POSTGRES_DB" -P pager=off -c "VACUUM (ANALYZE) loan_request_status_history"'
-            $D compose exec -T db sh -lc 'psql -X -U "$POSTGRES_USER" -d "$POSTGRES_DB" -P pager=off -c "VACUUM (ANALYZE) loan_products"'
+            $D compose exec -T db sh -lc 'psql -X -U "$POSTGRES_USER" -d "$POSTGRES_DB" -P pager=off -c "ANALYZE legacy_source_data"'
+            $D compose exec -T db sh -lc 'psql -X -U "$POSTGRES_USER" -d "$POSTGRES_DB" -P pager=off -c "ANALYZE legacy_customers"'
+            $D compose exec -T db sh -lc 'psql -X -U "$POSTGRES_USER" -d "$POSTGRES_DB" -P pager=off -c "ANALYZE users"'
+            $D compose exec -T db sh -lc 'psql -X -U "$POSTGRES_USER" -d "$POSTGRES_DB" -P pager=off -c "ANALYZE loan_requests"'
+            $D compose exec -T db sh -lc 'psql -X -U "$POSTGRES_USER" -d "$POSTGRES_DB" -P pager=off -c "ANALYZE loan_request_status_history"'
+            $D compose exec -T db sh -lc 'psql -X -U "$POSTGRES_USER" -d "$POSTGRES_DB" -P pager=off -c "ANALYZE loan_products"'
             echo "=== Live HTTPS health ==="
             curl -fsS --max-time 15 https://digebail.ir/healthz
             echo
