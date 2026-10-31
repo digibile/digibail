@@ -227,6 +227,18 @@ jobs:
             const customerBody = await customerResponse.json();
             const customerRows = customerBody.data?.rows || [];
             if (!customerRows.length || !(Number(customerBody.data?.overallTotal) > 0)) throw new Error("MariaDB customer directory returned no real rows");
+            const userPageResponse = await fetch(base + "/api/v1/admin/users-page?page=1&pageSize=10", { headers: { Cookie: cookie } });
+            if (!userPageResponse.ok) throw new Error("Unified user directory failed: " + userPageResponse.status);
+            const userPageBody = await userPageResponse.json();
+            const userPage = userPageBody.data || {};
+            if (!Array.isArray(userPage.rows) || !userPage.rows.length || Number(userPage.overallTotal) !== Number(summary.users)) throw new Error("Unified user directory total does not match live PostgreSQL users");
+            const rolesResponse = await fetch(base + "/api/v1/admin/roles", { headers: { Cookie: cookie } });
+            if (!rolesResponse.ok) throw new Error("Identity role catalog failed: " + rolesResponse.status);
+            const rolesBody = await rolesResponse.json();
+            const roles = rolesBody.data || [];
+            if (!roles.some(r => r.code === "agent") || !roles.some(r => r.code === "admin")) throw new Error("Agent/admin roles are missing from the identity role catalog");
+            if (!Number.isFinite(Number(summary.users_today)) || !summary.latest_user_registration) throw new Error("Daily registration or latest registration metrics are missing");
+            console.log("UNIFIED_USER_DIRECTORY_SMOKE=PASS total=" + userPage.overallTotal + " today=" + summary.users_today + " roles=" + roles.length);
             const tablesResponse = await fetch(base + "/api/v1/admin/legacy-source-tables", { headers: { Cookie: cookie } });
             if (!tablesResponse.ok) throw new Error("MariaDB source tables endpoint failed: " + tablesResponse.status);
             const tablesBody = await tablesResponse.json();
