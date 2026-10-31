@@ -785,7 +785,7 @@ export async function handleApi(req, res, url) {
             if((currentRoles.includes("superadmin")||role==="superadmin")&&admin.role!=="superadmin"){await conn.rollback();return json(res,403,{message:"مدیریت حساب مدیر ارشد فقط برای مدیر ارشد مجاز است."});}
             if(sourceKey==="main"&&(active===false||(role!==null&&role!==directoryRoleFromNames(currentRoleNames)))){
               try{
-                const [actorMap]=await conn.query("SELECT MariaDbUserId FROM DigibailAppUserIdentity WHERE AppUserId=? LIMIT 1",[actorId]);
+                const [actorMap]=await conn.query("SELECT MariaDbUserId FROM DigibailAppUserIdentity WHERE AppUserId=? AND LegacySource='mariadb.AspNetUsers' LIMIT 1",[actorId]);
                 if(actorMap.length&&String(actorMap[0].MariaDbUserId)===String(legacyId)){await conn.rollback();return json(res,400,{message:"امکان تغییر نقش یا غیرفعال‌کردن حساب مدیر واردشده وجود ندارد."});}
               }catch{}
             }
@@ -815,7 +815,7 @@ export async function handleApi(req, res, url) {
             updated={...result[0],id:rawId,role:primary,roles:roles.length?roles:[primary],is_active:Boolean(Number(result[0]?.is_active)),source:sourceKey,legacy_source:config.users,role_editable:config.roleEditable};
           }catch(error){await conn.rollback().catch(()=>{});throw error;}finally{conn.release();}
           if(sourceKey==="main"){
-            const [mappingRows]=await db.query("SELECT AppUserId FROM DigibailAppUserIdentity WHERE MariaDbUserId=? LIMIT 1",[legacyId]);
+            const [mappingRows]=await db.query("SELECT AppUserId FROM DigibailAppUserIdentity WHERE LegacySource='mariadb.AspNetUsers' AND MariaDbUserId=? LIMIT 1",[legacyId]);
             if(mappingRows.length){
               const appId=Number(mappingRows[0].AppUserId);
               await pool.query(
