@@ -3,6 +3,7 @@ import { mkdtempSync, writeFileSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+// Full import covers VamCity, BluVam and TransferDb source archives.
 const ROOT = "/home/digibail/domains/digebail.ir";
 const SQLC = "public_html-db-1";
 const SOURCE_DB = "vamcityc_vamcity_import_20261028";
