@@ -26,7 +26,7 @@ function normalizedPhone(v){let n=digits(v);if(n.startsWith("0098"))n="0"+n.slic
 function normalizedNationalCode(v){const n=digits(v);if(!/^\d{10}$/.test(n)||/^(\d)\1{9}$/.test(n))return null;const sum=n.slice(0,9).split("").reduce((a,d,i)=>a+Number(d)*(10-i),0)%11;return (sum<2?Number(n[9])===sum:Number(n[9])===11-sum)?n:null;}
 function dateOrNull(v){if(!v)return null;const d=new Date(v);return Number.isNaN(d.getTime())?null:d.toISOString();}
 function sqlAction(v){const x=String(v||"").toUpperCase();if(x.includes("CASCADE"))return "CASCADE";if(x.includes("SET_NULL"))return "SET NULL";if(x.includes("SET_DEFAULT"))return "SET DEFAULT";return "NO ACTION";}
-const columns=(input.columnDefinitions||[]).filter(c=>!(String(c.schemaName).toLowerCase()==="dbo"&&((String(c.tableName).toLowerCase()==="aspnetusers"&&["passwordhash","securitystamp","concurrencystamp","otp"].includes(String(c.columnName).toLowerCase()))||(String(c.tableName).toLowerCase()==="customers"&&String(c.columnName).toLowerCase()==="initpassword"))));
+const columns=(input.columnDefinitions||[]).filter(c=>!((String(c.tableName).toLowerCase()==="aspnetusers"&&["passwordhash","securitystamp","concurrencystamp","otp"].includes(String(c.columnName).toLowerCase()))||(String(c.tableName).toLowerCase()==="customers"&&String(c.columnName).toLowerCase()==="initpassword")));
 const tables=input.genericTables||[], primaryKeys=input.primaryKeys||[], foreignKeys=input.foreignKeys||[];
 if((tables.length||columns.length||input.schemaDefinitions?.length)&&(!tables.length||!columns.length||!input.schemaDefinitions?.length))throw new Error("Incomplete relational export: table rows and full schema metadata are required.");
 const expected=new Set(input.schemaDefinitions.map(x=>x.sourceTable));
