@@ -9,7 +9,7 @@ const TARGET_SCHEMA = "legacy_digibail";
 const qid = s => '"' + String(s).replace(/"/g, '""') + '"';
 const qtable = (s,t) => qid(TARGET_SCHEMA) + "." + qid(String(s) + "__" + String(t));
 const sourceKey = (s,t) => String(s) + "." + String(t);
-const safeName = s => String(s).replace(/[^a-zA-Z0-9_]/g, "_").slice(0,55);
+const safeName = s => { const raw=String(s).replace(/[^a-zA-Z0-9_]/g,"_"); return raw.length<=55?raw:raw.slice(0,44)+"_"+crypto.createHash("sha1").update(raw).digest("hex").slice(0,10); };
 const types = {bigint:"BIGINT",int:"INTEGER",smallint:"SMALLINT",tinyint:"SMALLINT",bit:"BOOLEAN",uniqueidentifier:"UUID",decimal:"NUMERIC",numeric:"NUMERIC",money:"NUMERIC(19,4)",smallmoney:"NUMERIC(10,4)",float:"DOUBLE PRECISION",real:"REAL",date:"DATE",datetime:"TIMESTAMP",datetime2:"TIMESTAMP",smalldatetime:"TIMESTAMP",datetimeoffset:"TIMESTAMPTZ",time:"TIME",binary:"BYTEA",varbinary:"BYTEA",image:"BYTEA",timestamp:"BYTEA",rowversion:"BYTEA",xml:"XML",text:"TEXT",ntext:"TEXT",varchar:"TEXT",nvarchar:"TEXT",char:"TEXT",nchar:"TEXT"};
 function pgType(c){const t=String(c.dataType||"").toLowerCase();if(t==="decimal"||t==="numeric")return "NUMERIC("+Math.max(1,Number(c.precision)||38)+","+Math.max(0,Number(c.scale)||0)+")";return types[t]||"TEXT";}
 function convert(c,v){if(v===null||v===undefined)return null;const t=String(c.dataType||"").toLowerCase();if(["binary","varbinary","image","timestamp","rowversion"].includes(t))return Buffer.isBuffer(v)?v:Buffer.from(String(v),"base64");if(t==="bit")return v===true||v===1||String(v).toLowerCase()==="true"||String(v)==="1";if(["decimal","numeric","money","smallmoney","bigint","int","smallint","tinyint"].includes(t))return String(v);if(["float","real"].includes(t))return Number(v);if(t==="uniqueidentifier")return String(v).toLowerCase();if(t==="sql_variant")return String(v);return v;}
@@ -52,6 +52,7 @@ try{
   const exists=await pool.query("SELECT 1 FROM pg_constraint WHERE conname=$1 AND connamespace=$2::regnamespace LIMIT 1",[constraint,TARGET_SCHEMA]);
   if(!exists.rowCount)await pool.query("ALTER TABLE "+table+" ADD CONSTRAINT "+qid(constraint)+" PRIMARY KEY ("+parts.map(p=>qid(p.columnName)).join(",")+")");
  }
+ for(const def of input.schemaDefinitions){const [s,t]=String(def.sourceTable).split(".");const key=sourceKey(s,t);if((pkGroups.get(key)||[]).length)continue;const table=qtable(s,t),constraint=safeName("pk_"+s+"_"+t);const exists=await pool.query("SELECT 1 FROM pg_constraint WHERE conname=$1 AND connamespace=$2::regnamespace LIMIT 1",[constraint,TARGET_SCHEMA]);if(!exists.rowCount)await pool.query("ALTER TABLE "+table+" ADD CONSTRAINT "+qid(constraint)+" PRIMARY KEY ("+qid("__legacy_row_number")+")");}
  for(const [key,f] of fkGroups){
   const targetPk=(pkGroups.get(sourceKey(f.referencedSchemaName,f.referencedTableName))||[]).map(x=>x.columnName);
   const refCols=f.parts.map(x=>x.referencedColumnName);
