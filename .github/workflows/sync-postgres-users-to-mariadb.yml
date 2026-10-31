@@ -1,4 +1,5 @@
 name: Sync PostgreSQL registrations to MariaDB
+# sync PostgreSQL registrations to MariaDB only after successful production deploy; backup is mandatory.
 
 on:
   workflow_run:
