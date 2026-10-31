@@ -249,6 +249,8 @@ jobs:
             const tables = tablesBody.data || [];
             if (!Array.isArray(tables) || !tables.some(t => t.source_table === "Customers" && Number(t.row_count) > 0)) throw new Error("MariaDB Customers table is not visible in admin API");
             console.log("MARIADB_ADMIN_CUSTOMERS_SMOKE=PASS rows=" + customerRows.length + " total=" + customerBody.data.overallTotal);
+            const identityTables = ["AspNetUsers","AspNetRoles","AspNetUserRoles","Customers","Agents","AgentMetaDatas","AgentMetaData","CustomerMarketers"];
+            console.log("MARIADB_IDENTITY_INVENTORY=" + JSON.stringify(tables.filter(t => identityTables.includes(t.source_table))));
             console.log("MARIADB_ADMIN_TABLES_SMOKE=PASS tables=" + tables.length);
             const page = await fetch(base + "/admin.html", { headers: { Cookie: cookie } });
             const html = await page.text();
