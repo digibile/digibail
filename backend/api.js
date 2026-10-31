@@ -53,7 +53,7 @@ async function unifiedUserDirectory({page=1,pageSize=50,search="",role="",status
     db.query("SELECT CAST(u.Id AS CHAR) AS legacy_id,COALESCE(NULLIF(TRIM(CONCAT_WS(' ',u.FirstName,u.LastName)),''),NULLIF(u.UserName,''),NULLIF(u.Mobile,''),'کاربر بدون نام') AS full_name,u.UserName AS username,u.UserName AS legacy_username,COALESCE(NULLIF(u.Mobile,''),NULLIF(u.Phone,''),NULLIF(u.PhoneNumber,'')) AS phone,u.Email AS email,u.NationalCode AS national_code,u.UserCode AS customer_code,u.AgentId AS legacy_agent_id,CAST(u.CustomerId AS CHAR) AS legacy_customer_id,COALESCE(u.IsActive,1) AS is_active,DATE_FORMAT(u.RegDate,'%Y-%m-%dT%H:%i:%s+03:30') AS created_at,DATE_FORMAT(u.RegDate,'%Y-%m-%dT%H:%i:%s+03:30') AS registered_at,(SELECT GROUP_CONCAT(DISTINCT r.Name ORDER BY r.Name SEPARATOR ',') FROM AspNetUserRoles ur JOIN AspNetRoles r ON r.Id=ur.RoleId WHERE ur.UserId=u.Id) AS roles_raw,(SELECT r.Name FROM AspNetUserRoles ur JOIN AspNetRoles r ON r.Id=ur.RoleId WHERE ur.UserId=u.Id ORDER BY CASE LOWER(REPLACE(REPLACE(REPLACE(r.Name,' ',''),'-',''),'_','')) WHEN 'superadmin' THEN 1 WHEN 'admin' THEN 2 WHEN 'agent' THEN 3 WHEN 'marketer' THEN 4 WHEN 'customermarketer' THEN 5 WHEN 'member' THEN 6 ELSE 7 END,r.Name LIMIT 1) AS primary_role FROM AspNetUsers u"+mFilter+" ORDER BY u.RegDate DESC,u.Id DESC LIMIT ?",[...mValues,Math.min(200000,page*pageSize)])
   ]);
   const mariaRows=mRows[0].map(r=>{const roles=String(r.roles_raw||"").split(",").filter(Boolean).map(legacyRoleCode);const roleCode=legacyRoleCode(r.primary_role||"customer");return {...r,id:"legacy:"+String(r.legacy_id),name:r.full_name,mobile:r.phone,customer_number:r.customer_code,role:roleCode,roles:roles.length?roles:[roleCode],account_type:accountTypeForRoles(roles.length?roles:[roleCode]),legacy_source:"AspNetUsers",source:"mariadb",password_reset_required:false,is_active:Boolean(Number(r.is_active))};});
-  const fresh=(await postgresOnlyAccounts(db,10000)).map(r=>({...r,name:r.full_name,mobile:r.phone,customer_number:r.customer_code,source:"postgres"}));
+  const fresh=(await postgresOnlyAccounts(db,100000)).map(r=>({...r,name:r.full_name,mobile:r.phone,customer_number:r.customer_code,source:"postgres"}));
   const norm=v=>String(v||"").toLowerCase();
   const freshFiltered=fresh.filter(r=>{
     if(role&&String(r.effective_role||r.role)!==role)return false;
@@ -763,7 +763,7 @@ export async function handleApi(req, res, url) {
           db.query("SELECT COUNT(*) AS total,SUM(CASE WHEN COALESCE(IsActive,1)=1 THEN 1 ELSE 0 END) AS active,SUM(CASE WHEN COALESCE(IsActive,1)=0 THEN 1 ELSE 0 END) AS inactive,DATE_FORMAT(MAX(RegDate),'%Y-%m-%dT%H:%i:%s+03:30') AS latest_registration,SUM(CASE WHEN DATE(RegDate)=DATE(CONVERT_TZ(UTC_TIMESTAMP(),'+00:00','+03:30')) THEN 1 ELSE 0 END) AS today FROM AspNetUsers"),
           db.query("SELECT LOWER(r.Name) AS role,COUNT(DISTINCT u.Id) AS total FROM AspNetUsers u JOIN AspNetUserRoles ur ON ur.UserId=u.Id JOIN AspNetRoles r ON r.Id=ur.RoleId GROUP BY LOWER(r.Name)"),
           db.query("SELECT COUNT(DISTINCT u.Id) AS total FROM AspNetUsers u WHERE EXISTS(SELECT 1 FROM AspNetUserRoles ur JOIN AspNetRoles r ON r.Id=ur.RoleId WHERE ur.UserId=u.Id AND LOWER(REPLACE(REPLACE(REPLACE(r.Name,' ',''),'-',''),'_','')) IN ('admin','superadmin','agent','marketer','customermarketer'))"),
-          postgresOnlyAccounts(db,10000)
+          postgresOnlyAccounts(db,100000)
         ]);
         const mariaStats=mariaStatsResult[0]?.[0]||{},roleMap=new Map(roleStatsResult[0].map(r=>[String(r.role||"").replace(/[^a-z]/g,""),Number(r.total)||0]));
         const freshToday=fresh.filter(r=>new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Tehran",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date(r.created_at))===new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Tehran",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date())).length;
@@ -778,7 +778,7 @@ export async function handleApi(req, res, url) {
         return json(res,200,{data:{users,admins,agents,customers,legacy_customers:customers,legacy_users:users,users_active:(Number(mariaStats.active)||0)+fresh.filter(r=>r.is_active).length,users_inactive:(Number(mariaStats.inactive)||0)+fresh.filter(r=>!r.is_active).length,users_today:(Number(mariaStats.today)||0)+freshToday,latest_user_registration:latestRegistration,latestRegistration,legacy_customer_tenants:Number(tenantRows[0]?.total)||0,smsConfigured:Boolean(KAVENEGAR_API_KEY),identitySource:"MariaDB.AspNetUsers+new PostgreSQL registrations",businessDateTimezone:"Asia/Tehran"}});
       }
       if (req.method === "GET" && route === "/api/v1/admin/users") {
-        const db=legacyMaria(),[fresh,[legacyRows]]=await Promise.all([postgresOnlyAccounts(db,10000),db.query("SELECT u.Id,u.FirstName,u.LastName,u.Mobile,u.Phone,u.PhoneNumber,u.Email,u.NationalCode,u.UserName,u.IsActive,u.RegDate,u.CustomerId,u.AgentId,(SELECT GROUP_CONCAT(DISTINCT r.Name ORDER BY r.Name SEPARATOR ',') FROM AspNetUserRoles ur JOIN AspNetRoles r ON r.Id=ur.RoleId WHERE ur.UserId=u.Id) AS roles FROM AspNetUsers u ORDER BY u.RegDate DESC,u.Id DESC LIMIT 500")]);
+        const db=legacyMaria(),[fresh,[legacyRows]]=await Promise.all([postgresOnlyAccounts(db,100000),db.query("SELECT u.Id,u.FirstName,u.LastName,u.Mobile,u.Phone,u.PhoneNumber,u.Email,u.NationalCode,u.UserName,u.IsActive,u.RegDate,u.CustomerId,u.AgentId,(SELECT GROUP_CONCAT(DISTINCT r.Name ORDER BY r.Name SEPARATOR ',') FROM AspNetUserRoles ur JOIN AspNetRoles r ON r.Id=ur.RoleId WHERE ur.UserId=u.Id) AS roles FROM AspNetUsers u ORDER BY u.RegDate DESC,u.Id DESC LIMIT 500")]);
         const merged=[...fresh,...legacyRows.map(mapMariaDirectoryUser)].sort((a,b)=>new Date(b.created_at||0)-new Date(a.created_at||0));
         const [counts]=await db.query("SELECT COUNT(*) AS total FROM AspNetUsers");
         return json(res,200,{data:merged.slice(0,500),total:(Number(counts[0]?.total)||0)+fresh.length,sourceTable:"MariaDB.AspNetUsers",additionalSource:"new PostgreSQL registrations"});
@@ -862,7 +862,7 @@ export async function handleApi(req, res, url) {
         const db=legacyMaria();
         const [mariaResult,fresh,staffRows,todayRows,latestRows]=await Promise.all([
           db.query("SELECT COUNT(*) AS total FROM AspNetUsers"),
-          postgresOnlyAccounts(db,10000),
+          postgresOnlyAccounts(db,100000),
           db.query("SELECT COUNT(DISTINCT u.Id) AS total FROM AspNetUsers u WHERE EXISTS(SELECT 1 FROM AspNetUserRoles ur JOIN AspNetRoles r ON r.Id=ur.RoleId WHERE ur.UserId=u.Id AND LOWER(REPLACE(REPLACE(REPLACE(r.Name,' ',''),'-',''),'_','')) IN ('admin','superadmin','agent','marketer','customermarketer'))"),
           db.query("SELECT COUNT(*) AS total FROM AspNetUsers WHERE DATE(RegDate)=DATE(CONVERT_TZ(UTC_TIMESTAMP(),'+00:00','+03:30'))"),
           db.query("SELECT DATE_FORMAT(MAX(RegDate),'%Y-%m-%dT%H:%i:%s+03:30') AS latest FROM AspNetUsers")
@@ -886,7 +886,7 @@ export async function handleApi(req, res, url) {
         const data=await unifiedUserDirectory({page,pageSize,search,role:"agent",status});
         const db=legacyMaria();
         const [mariaStats]=await db.query("SELECT COUNT(DISTINCT u.Id) AS total,SUM(CASE WHEN COALESCE(u.IsActive,1)=1 THEN 1 ELSE 0 END) AS active FROM AspNetUsers u WHERE EXISTS(SELECT 1 FROM AspNetUserRoles ur JOIN AspNetRoles r ON r.Id=ur.RoleId WHERE ur.UserId=u.Id AND LOWER(REPLACE(REPLACE(REPLACE(r.Name,' ',''),'-',''),'_',''))='agent')");
-        const fresh=await postgresOnlyAccounts(db,10000),freshAgents=fresh.filter(r=>r.effective_role==="agent");
+        const fresh=await postgresOnlyAccounts(db,100000),freshAgents=fresh.filter(r=>r.effective_role==="agent");
         const overallTotal=(Number(mariaStats[0]?.total)||0)+freshAgents.length,activeTotal=(Number(mariaStats[0]?.active)||0)+freshAgents.filter(r=>r.is_active).length;
         const rows=data.rows.map(r=>({...r,name:r.full_name||r.username,business_name:null,commission_percent:null,last_login:null,customer_count:null,subagents_count:null,loan_requests_count:null,raw_payload:{id:r.id,legacy_id:r.legacy_id,source:r.source||r.legacy_source,role:r.role,is_active:r.is_active,legacy_agent_id:r.legacy_agent_id}}));
         return json(res,200,{data:{...data,rows,overallTotal,activeTotal,customerTotal:null,identitySource:"MariaDB.AspNetUsers roles + new PostgreSQL registrations"}});
