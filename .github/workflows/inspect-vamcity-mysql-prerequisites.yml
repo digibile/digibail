@@ -48,6 +48,12 @@ jobs:
               fi
             done
             echo "=== MYSQL CLIENT AND DATABASE NAMES ==="
+            if sudo -n mysql -NBe "SELECT VERSION(), CURRENT_USER()" 2>/dev/null; then
+              echo "MYSQL_SOCKET_ROOT_ACCESS=AVAILABLE"
+              sudo -n mysql -NBe "SHOW DATABASES" | grep -E "^(vamcitydigibilepay|vamcitydigibilepay_bluvamdb|vamcitydigibilepay_transferdb)$" || true
+            else
+              echo "MYSQL_SOCKET_ROOT_ACCESS=UNAVAILABLE"
+            fi
             command -v mysql || true
             command -v mariadb || true
             if [ -s /usr/local/directadmin/conf/mysql.conf ] && command -v mysql >/dev/null 2>&1; then
