@@ -960,7 +960,7 @@ export async function handleApi(req, res, url) {
         if (!Number.isSafeInteger(userId)||userId<1||!title||!number||!bodyHtml||bodyHtml.length>200000||(expiresAt&&!Number.isFinite(expiresAt.getTime()))) return json(res,400,{message:"اطلاعات قرارداد معتبر نیست."});
         const owner = await pool.query("SELECT id FROM users WHERE id=$1 AND is_active=TRUE",[userId]);
         if(!owner.rowCount) return json(res,404,{message:"کاربر فعال پیدا نشد."});
-        const q=await pool.query("INSERT INTO customer_contracts(user_id,title,number,body_html,expires_at) VALUES($1,$2,$3,$4,$5) RETURNING id,title,number,status,created_on",[userId,title,number,bodyHtml,expiresAt?expiresAt.toISOString():null]);
+        const q=await pool.query("INSERT INTO customer_contracts(id,user_id,title,number,body_html,expires_at) VALUES($1,$2,$3,$4,$5,$6) RETURNING id,title,number,status,created_on",[crypto.randomUUID(),userId,title,number,bodyHtml,expiresAt?expiresAt.toISOString():null]);
         await audit(req,"admin.contracts.created",Number(admin.sub)||null,{contractId:q.rows[0].id,userId});
         return json(res,201,{ok:true,data:q.rows[0]});
       }
@@ -1010,8 +1010,8 @@ export async function handleApi(req, res, url) {
       const reference = "BETA-" + crypto.randomBytes(4).toString("hex").toUpperCase();
       const statusNote = "درخواست و رضایت ثبت شد؛ اتصال API رسمی بانک رفاه تنظیم نشده و استعلام به بانک ارسال نشده است.";
       const q = await pool.query(
-        "INSERT INTO beta_inquiries(reference,user_id,national_code,status,status_note) VALUES($1,$2,$3,'pending_provider',$4) RETURNING reference,status,status_note,created_at",
-        [reference,userId,nationalCode,statusNote]
+        "INSERT INTO beta_inquiries(id,reference,user_id,national_code,status,status_note) VALUES($1,$2,$3,$4,'pending_provider',$5) RETURNING reference,status,status_note,created_at",
+        [crypto.randomUUID(),reference,userId,nationalCode,statusNote]
       );
       await audit(req,"beta.inquiry.created",userId,{reference});
       return json(res,202,{data:{ref:q.rows[0].reference,status:q.rows[0].status,message:q.rows[0].status_note,createdAt:q.rows[0].created_at}});
@@ -1064,8 +1064,8 @@ export async function handleApi(req, res, url) {
         if (!["image/jpeg","image/png","image/webp"].includes(file.mime)) return json(res, 415, { message: "فقط تصویر JPG، PNG یا WEBP پذیرفته می‌شود." });
         const safeName = String(file.name || "document").replace(/[\\/\\r\\n\0]/g,"_").slice(0,255) || "document";
         const q = await pool.query(
-          "INSERT INTO customer_documents(user_id,kind,file_name,mime_type,file_data,fields) VALUES($1,$2,$3,$4,$5,$6::jsonb) RETURNING id",
-          [userId,kind,safeName,file.mime,file.data,JSON.stringify({fields:{fullName:"",nationalCode:""}})]
+          "INSERT INTO customer_documents(id,user_id,kind,file_name,mime_type,file_data,fields) VALUES($1,$2,$3,$4,$5,$6,$7::jsonb) RETURNING id",
+          [crypto.randomUUID(),userId,kind,safeName,file.mime,file.data,JSON.stringify({fields:{fullName:"",nationalCode:""}})]
         );
         await audit(req, "documents.uploaded", userId, { documentId:q.rows[0].id, kind, size:file.data.length });
         return json(res, 201, { ok:true, ocr:false, id:q.rows[0].id });
