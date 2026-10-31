@@ -25,9 +25,7 @@ $container = 'public_html-db-1';
 $batchSize = 500;
 
 $sources = [
-    ['source'=>'vamcityc_vamcity_import_20261028','target'=>'vamcitydigibilepay','schema'=>'schema-main.sql'],
-    ['source'=>'vamcityc_bluvamdb_import_20261028','target'=>'vamcitydigibilepay_bluvamdb','schema'=>'schema-bluvamdb.sql'],
-    ['source'=>'vamcityc_transferDb_import_20261028','target'=>'vamcitydigibilepay_transferdb','schema'=>'schema-transfer.sql'],
+    ['source'=>'vamcityc_vamcity_import_20261028','target'=>'digibail_vamcitydigibilepay','schema'=>'schema-main.sql'],
 ];
 
 function logLine(string $s): void { echo '['.date('H:i:s').'] '.$s.PHP_EOL; }
