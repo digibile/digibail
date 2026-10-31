@@ -58,13 +58,13 @@ CREATE TABLE IF NOT EXISTS user_role_overrides (
  CONSTRAINT fk_digibail_role_override_user FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE IF NOT EXISTS DigibailUserIdentity (
- PostgresUserId BIGINT NOT NULL PRIMARY KEY,
+CREATE TABLE IF NOT EXISTS DigibailAppUserIdentity (
+ AppUserId BIGINT NOT NULL PRIMARY KEY,
  MariaDbUserId BIGINT NOT NULL,
  RoleCode VARCHAR(40) NOT NULL,
  CreatedAt DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
  UpdatedAt DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
- UNIQUE KEY uq_DigibailUserIdentity_MariaDbUserId(MariaDbUserId)
+ UNIQUE KEY uq_DigibailAppUserIdentity_MariaDbUserId(MariaDbUserId)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS sms_provider_settings (
@@ -254,7 +254,7 @@ CREATE TABLE IF NOT EXISTS loan_request_status_history (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS beta_inquiries (
- id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+ id CHAR(36) NOT NULL PRIMARY KEY,
  reference VARCHAR(32) NOT NULL,
  user_id BIGINT NOT NULL,
  national_code CHAR(10) NOT NULL,
