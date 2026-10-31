@@ -132,7 +132,7 @@ try {
   const inputPath=join(temp,"legacy-migration.json");
   writeFileSync(inputPath,JSON.stringify(input),{mode:0o600});
   console.log("CUSTOMER_IMPORT_PAYLOAD_READY="+JSON.stringify({tables:tables.length,columns:columnDefinitions.length,primaryKeys:primaryKeys.length,foreignKeyColumns:foreignKeys.length,sourceRows:totalRows,users:users.length,roles:identityRoles.length,userRoles:identityUserRoles.length,customers:customers.length,bytes:readFileSync(inputPath).length}));
-  const output=docker(["compose","run","--rm","-T","--no-deps","-v",inputPath+":/tmp/legacy-migration.json:ro","app","node","/app/scripts/migrate-legacy-digibail.js","/tmp/legacy-migration.json"],{cwd:ROOT});
+  const output=docker(["compose","run","--rm","-T","--no-deps","-u","0","-v",inputPath+":/tmp/legacy-migration.json:ro","app","node","/app/scripts/migrate-legacy-digibail.js","/tmp/legacy-migration.json"],{cwd:ROOT});
   console.log(output.slice(-10000));
   const verifyCmd='export PGPASSWORD="$POSTGRES_PASSWORD"; psql -X -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -At';
   const verify=docker(["compose","exec","-T","db","sh","-lc",verifyCmd],{cwd:ROOT,input:
