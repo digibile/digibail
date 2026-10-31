@@ -19,7 +19,7 @@ concurrency:
 
 jobs:
   import:
-    if: github.ref == 'refs/heads/main'
+    if: false # VamCity is a separate project; never import its records into Digibail
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
