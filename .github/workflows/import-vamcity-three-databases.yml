@@ -1,0 +1,83 @@
+name: Import all VamCity databases into the single Digibail MariaDB
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/import-vamcity-three-databases.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vamcity-three-database-mariadb-import
+  cancel-in-progress: false
+
+jobs:
+  import:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - name: Run audited three-database migration on digebail.ir
+        uses: appleboy/ssh-action@v1.2.2
+        env:
+          MYSQL_PASS: ${{ secrets.VAMCITY_MYSQL_PASSWORD }}
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          envs: MYSQL_PASS
+          command_timeout: 170m
+          script: |
+            set -eu
+            ROOT="/home/digibail/domains/digebail.ir"
+            cd "$ROOT"
+            [ -n "${MYSQL_PASS:-}" ] || { echo "BLOCKED: repository secret VAMCITY_MYSQL_PASSWORD is not configured; no target data was changed."; exit 41; }
+            test -s database/migration/migrate.php
+            test -s database/mysql/schema-main.sql
+            test -s database/mysql/schema-bluvamdb.sql
+            test -s database/mysql/schema-transfer.sql
+            umask 077
+            MYSQL_PASS="$MYSQL_PASS" php -r '
+              $password=getenv("MYSQL_PASS");
+              if($password===false || $password===""){fwrite(STDERR,"Missing database password\n");exit(2);}
+              $config=[
+                "mysql"=>[
+                  "host"=>"localhost",
+                  "port"=>3306,
+                  "user"=>"digibail_vamcitydigibilepay",
+                  "password"=>$password,
+                  "socket"=>"/var/lib/mysql/mysql.sock"
+                ],
+                "targets"=>[
+                  "vamcityc_vamcity_import_20261028"=>"digibail_vamcitydigibilepay",
+                  "vamcityc_bluvamdb_import_20261028"=>"digibail_vamcitydigibilepay",
+                  "vamcityc_transferDb_import_20261028"=>"digibail_vamcitydigibilepay"
+                ],
+                "batch_size"=>500
+              ];
+              $body="<?php\nreturn ".var_export($config,true).";\n";
+              if(file_put_contents("database/migration/config.php",$body,LOCK_EX)===false){fwrite(STDERR,"Could not write migration config\n");exit(3);}
+              chmod("database/migration/config.php",0600);
+            '
+            php -l database/migration/config.php
+            echo "=== START THREE-SOURCE MIGRATION ==="
+            php database/migration/migrate.php --execute
+            echo "=== FINAL PER-SOURCE COUNTS ==="
+            php -r '
+              $c=require "database/migration/config.php"; $m=$c["mysql"];
+              $db=new mysqli($m["host"],$m["user"],$m["password"],"digibail_vamcitydigibilepay",$m["port"],$m["socket"]);
+              if($db->connect_errno){fwrite(STDERR,"TARGET_VERIFY_CONNECT_FAILED\n");exit(50);}
+              $q=$db->query("SELECT source_database,COUNT(*) completed_tables,SUM(imported_rows) imported_rows FROM __vamcity_migration_state WHERE status=\x27complete\x27 GROUP BY source_database ORDER BY source_database");
+              $totTables=0; $totRows=0;
+              while($r=$q->fetch_assoc()){
+                echo "SOURCE=".$r["source_database"]." TABLES=".$r["completed_tables"]." ROWS=".$r["imported_rows"]."\n";
+                $totTables+=(int)$r["completed_tables"]; $totRows+=(int)$r["imported_rows"];
+              }
+              echo "TOTAL_COMPLETED_TABLES=".$totTables." TOTAL_IMPORTED_ROWS=".$totRows."\n";
+              if($totTables!==156 || $totRows!==817798){fwrite(STDERR,"FINAL_TOTAL_MISMATCH\n");exit(51);}
+              echo "ALL_THREE_DATABASES_VERIFIED_IN_ONE_MARIADB_DATABASE=1\n";
+              $db->close();
+            '
