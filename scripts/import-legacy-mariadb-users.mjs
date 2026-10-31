@@ -1,5 +1,5 @@
 import { createPool } from "mysql2/promise";
-import { migrate } from "../backend/api.js";
+import { migrate, closePool } from "../backend/api.js";
 
 const pool=createPool({
   socketPath:process.env.MARIADB_SOCKET||"/tmp/mysql.sock",
@@ -152,7 +152,7 @@ async function main(){
     }
     if(!process.argv.includes("--apply"))console.log("DRY_RUN_ONLY=1 no account rows were changed.");
     else console.log("DIGIBAIL_LEGACY_ACCOUNT_IMPORT=PASS all account sources are mapped into MariaDB users.");
-  }finally{await pool.end();}
+  }finally{await Promise.allSettled([pool.end(),closePool()]);}
 }
 main().catch(error=>{
   console.error("DIGIBAIL_LEGACY_ACCOUNT_IMPORT_FAILED="+String(error.code||error.name||"unknown")+":"+String(error.message||"").slice(0,600));
