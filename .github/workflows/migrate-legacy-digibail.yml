@@ -2,10 +2,6 @@ name: Migrate legacy Digibail accounts and SMS patterns
 
 on:
   workflow_dispatch:
-  push:
-    paths:
-      - .github/workflows/migrate-legacy-digibail.yml
-      - scripts/migrate-legacy-digibail.js
 
 permissions:
   contents: read
