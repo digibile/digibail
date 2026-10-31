@@ -814,15 +814,26 @@ export async function handleApi(req, res, url) {
             const names=String(result[0]?.role_names||"").split(",").filter(Boolean),roles=names.map(legacyRoleCode),primary=directoryRoleFromNames(names);
             updated={...result[0],id:rawId,role:primary,roles:roles.length?roles:[primary],is_active:Boolean(Number(result[0]?.is_active)),source:sourceKey,legacy_source:config.users,role_editable:config.roleEditable};
           }catch(error){await conn.rollback().catch(()=>{});throw error;}finally{conn.release();}
-          if(sourceKey==="main"){
-            const [mappingRows]=await db.query("SELECT AppUserId FROM DigibailAppUserIdentity WHERE LegacySource='mariadb.AspNetUsers' AND MariaDbUserId=? LIMIT 1",[legacyId]);
+          const identitySource={
+            main:"mariadb.AspNetUsers",
+            bluvam:"mariadb.bluvamdb__AspNetUsers",
+            transfer:"mariadb.OnlineMoneyTransfer__AspNetUsers"
+          }[sourceKey];
+          if(identitySource){
+            const [mappingRows]=await db.query(
+              "SELECT AppUserId FROM DigibailAppUserIdentity WHERE LegacySource=? AND MariaDbUserId=? LIMIT 1",
+              [identitySource,legacyId]
+            );
             if(mappingRows.length){
               const appId=Number(mappingRows[0].AppUserId);
               await pool.query(
                 "UPDATE users SET full_name=COALESCE($1,full_name),phone=CASE WHEN $2=1 THEN $3 ELSE phone END,email=CASE WHEN $4=1 THEN $5 ELSE email END,role=COALESCE($6,role),is_active=COALESCE($7,is_active),updated_at=NOW() WHERE id=$8",
                 [fullName,input.phone!==undefined?1:0,phone,input.email!==undefined?1:0,email,role,active,appId]
               );
-              if(role!==null)await pool.query("INSERT INTO user_role_overrides(user_id,role_code,updated_by,updated_at) VALUES($1,$2,$3,NOW()) ON DUPLICATE KEY UPDATE role_code=VALUES(role_code),updated_by=VALUES(updated_by),updated_at=NOW()",[appId,role,actorId]);
+              if(role!==null)await pool.query(
+                "INSERT INTO user_role_overrides(user_id,role_code,updated_by,updated_at) VALUES($1,$2,$3,NOW()) ON DUPLICATE KEY UPDATE role_code=VALUES(role_code),updated_by=VALUES(updated_by),updated_at=NOW()",
+                [appId,role,actorId]
+              );
             }
           }
           await audit(req,"admin.user.updated",actorId,{targetUserId:rawId,source:"mariadb."+config.users,changed:{fullName:fullName!==null,phone:input.phone!==undefined,email:input.email!==undefined,role:role!==null,isActive:active!==null}});
