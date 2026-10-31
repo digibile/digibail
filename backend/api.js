@@ -686,27 +686,85 @@ export async function handleApi(req, res, url) {
         return json(res,200,{data:{rows:rows.rows,total:Number(count.rows[0]?.total)||0,page,pageSize,summary:summary.rows[0],statuses:statuses.rows}});
       }
       if (req.method === "GET" && route === "/api/v1/admin/summary") {
-        const q = await pool.query("SELECT (SELECT COUNT(*) FROM users) AS users,(SELECT COUNT(*) FROM users WHERE lower(role) IN ('admin','superadmin')) AS admins,(SELECT COUNT(*) FROM sms_templates) AS sms_templates,(SELECT COUNT(*) FROM sms_logs) AS sms_logs");
-        const db=legacyMaria(), [customers]=await db.query("SELECT COUNT(*) AS total FROM AspNetUsers"), [customerTenants]=await db.query("SELECT COUNT(*) AS total FROM Customers");
-        const configured = Boolean(KAVENEGAR_API_KEY);
-        return json(res, 200, { data: { ...q.rows[0], legacy_customers:Number(customers[0]?.total)||0, legacy_users:Number(customers[0]?.total)||0, legacy_customer_tenants:Number(customerTenants[0]?.total)||0, smsConfigured: configured } });
+        const q = await pool.query("SELECT COUNT(*)::int AS users,COUNT(*) FILTER (WHERE role IN ('admin','superadmin'))::int AS admins,COUNT(*) FILTER (WHERE role='agent' OR EXISTS (SELECT 1 FROM user_role_assignments a WHERE a.user_id=users.id AND a.role_code='agent'))::int AS agents,COUNT(*) FILTER (WHERE is_active)::int AS users_active,COUNT(*) FILTER (WHERE NOT is_active)::int AS users_inactive,COUNT(*) FILTER (WHERE (created_at AT TIME ZONE 'Asia/Tehran')::date=(NOW() AT TIME ZONE 'Asia/Tehran')::date)::int AS users_today,MAX(created_at) AS latest_user_registration,(SELECT COUNT(*)::int FROM sms_templates) AS sms_templates,(SELECT COUNT(*)::int FROM sms_logs) AS sms_logs FROM users");
+        const db=legacyMaria(), [customerTenants]=await db.query("SELECT COUNT(*) AS total FROM Customers");
+        return json(res,200,{data:{...q.rows[0],legacy_customers:Number(q.rows[0]?.users)||0,legacy_users:Number(q.rows[0]?.users)||0,legacy_customer_tenants:Number(customerTenants[0]?.total)||0,smsConfigured:Boolean(KAVENEGAR_API_KEY),identitySource:"postgres.users",businessDateTimezone:"Asia/Tehran"}});
       }
       if (req.method === "GET" && route === "/api/v1/admin/users") {
-        const q = await pool.query("SELECT id,username,legacy_username,phone,full_name,email,role,is_active,password_reset_required,created_at,legacy_source,COALESCE((SELECT json_agg(role_code ORDER BY role_code) FROM user_role_assignments WHERE user_id=users.id),json_build_array(role)) AS roles FROM users ORDER BY created_at DESC,id DESC LIMIT 500");
-        return json(res, 200, { data: q.rows });
+        const q = await pool.query("SELECT id,username,legacy_username,phone,full_name,email,role,is_active,password_reset_required,created_at,legacy_source,legacy_id,COALESCE((SELECT json_agg(role_code ORDER BY role_code) FROM (SELECT role_code FROM user_role_assignments WHERE user_id=users.id UNION SELECT users.role) rr),json_build_array(role)) AS roles FROM users ORDER BY created_at DESC,id DESC LIMIT 500");
+        return json(res,200,{data:q.rows});
+      }
+      if (req.method === "GET" && route === "/api/v1/admin/roles") {
+        const q=await pool.query("SELECT code,display_name FROM access_roles ORDER BY display_name,code");
+        const builtins=[["customer","مشتری"],["member","عضو"],["agent","نماینده"],["marketer","بازاریاب"],["customermarketer","بازاریاب مشتری"],["admin","مدیر"],["superadmin","مدیر ارشد"]];
+        const roles=new Map(builtins.map(([code,display_name])=>[code,{code,display_name}]));
+        for(const r of q.rows)roles.set(r.code,{code:r.code,display_name:r.display_name});
+        return json(res,200,{data:[...roles.values()]});
+      }
+      if (req.method === "GET" && route === "/api/v1/admin/users-page") {
+        const page=Math.max(1,Number.parseInt(url.searchParams.get("page")||"1",10)||1);
+        const pageSize=Math.min(100,Math.max(10,Number.parseInt(url.searchParams.get("pageSize")||"50",10)||50));
+        const search=String(url.searchParams.get("q")||"").trim().slice(0,120);
+        const role=String(url.searchParams.get("role")||"").trim().toLowerCase();
+        const status=String(url.searchParams.get("status")||"").trim().toLowerCase();
+        const where=[],params=[];
+        if(search){params.push("%"+search+"%");where.push("(u.full_name ILIKE $"+params.length+" OR u.phone ILIKE $"+params.length+" OR u.email ILIKE $"+params.length+" OR u.username ILIKE $"+params.length+" OR u.legacy_username ILIKE $"+params.length+" OR u.national_code ILIKE $"+params.length+" OR u.legacy_id ILIKE $"+params.length+" OR u.id::text ILIKE $"+params.length+")");}
+        if(role){params.push(role);where.push("(u.role=$"+params.length+" OR EXISTS(SELECT 1 FROM user_role_assignments a WHERE a.user_id=u.id AND a.role_code=$"+params.length+"))");}
+        if(status==="active")where.push("u.is_active=TRUE");
+        if(status==="inactive")where.push("u.is_active=FALSE");
+        const filter=where.length?" WHERE "+where.join(" AND "):"";
+        const [count,overall,stats,rows]=await Promise.all([
+          pool.query("SELECT COUNT(*)::int AS total FROM users u"+filter,params),
+          pool.query("SELECT COUNT(*)::int AS total,MAX(created_at) AS latest_registration FROM users"),
+          pool.query("SELECT COUNT(*) FILTER(WHERE is_active)::int AS active,COUNT(*) FILTER(WHERE NOT is_active)::int AS inactive,COUNT(*) FILTER(WHERE (created_at AT TIME ZONE 'Asia/Tehran')::date=(NOW() AT TIME ZONE 'Asia/Tehran')::date)::int AS today FROM users"),
+          pool.query("SELECT u.id,u.username,u.legacy_username,u.phone,u.full_name,u.email,u.national_code,u.role,u.is_active,u.password_reset_required,u.created_at,u.updated_at,u.legacy_source,u.legacy_id,u.legacy_customer_id,u.legacy_agent_id,COALESCE((SELECT json_agg(role_code ORDER BY role_code) FROM (SELECT role_code FROM user_role_assignments WHERE user_id=u.id UNION SELECT u.role) rr),json_build_array(u.role)) AS roles FROM users u"+filter+" ORDER BY u.created_at DESC NULLS LAST,u.id DESC LIMIT $"+(params.length+1)+" OFFSET $"+(params.length+2),[...params,pageSize,(page-1)*pageSize])
+        ]);
+        return json(res,200,{data:{rows:rows.rows,total:Number(count.rows[0]?.total)||0,overallTotal:Number(overall.rows[0]?.total)||0,activeTotal:Number(stats.rows[0]?.active)||0,inactiveTotal:Number(stats.rows[0]?.inactive)||0,todayTotal:Number(stats.rows[0]?.today)||0,latestRegistration:overall.rows[0]?.latest_registration||null,page,pageSize,sourceTable:"users",timezone:"Asia/Tehran"}});
+      }
+      if (req.method === "PATCH" && /^\/api\/v1\/admin\/users\/\d+$/.test(route)) {
+        const id=Number(route.split("/").pop()),input=await body(req);
+        const current=await pool.query("SELECT id,role,is_active FROM users WHERE id=$1",[id]);
+        if(!current.rowCount)return json(res,404,{message:"حساب کاربری پیدا نشد."});
+        const target=current.rows[0],actorId=Number(admin.sub);
+        const role=input.role===undefined?null:String(input.role).trim().toLowerCase(),active=input.isActive===undefined?null:input.isActive;
+        if(active!==null&&typeof active!=="boolean")return json(res,400,{message:"وضعیت حساب معتبر نیست."});
+        if(role!==null){
+          if(!["customer","member","agent","marketer","customermarketer","admin","superadmin"].includes(role))return json(res,400,{message:"نقش انتخاب‌شده معتبر نیست."});
+          if(admin.role!=="superadmin")return json(res,403,{message:"تغییر نقش فقط برای مدیر ارشد مجاز است."});
+        }
+        if(Number(target.id)===actorId&&active===false)return json(res,400,{message:"امکان غیرفعال‌کردن حساب مدیر واردشده وجود ندارد."});
+        if((target.role==="superadmin"||role==="superadmin")&&admin.role!=="superadmin")return json(res,403,{message:"مدیریت حساب مدیر ارشد فقط برای مدیر ارشد مجاز است."});
+        const fullName=input.fullName===undefined?null:String(input.fullName).trim().replace(/\s+/g," ").slice(0,160);
+        const phone=input.phone===undefined?null:(String(input.phone).trim()||null),email=input.email===undefined?null:(String(input.email).trim().slice(0,254)||null);
+        if(fullName!==null&&fullName.length<3)return json(res,400,{message:"نام باید حداقل ۳ نویسه باشد."});
+        if(phone!==null&&!phoneOk(phone))return json(res,400,{message:"شماره موبایل باید با قالب ۰۹ و ۱۱ رقم وارد شود."});
+        if(email!==null&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))return json(res,400,{message:"نشانی ایمیل معتبر نیست."});
+        const client=await pool.connect();let updated;
+        try{
+          await client.query("BEGIN");
+          const result=await client.query("UPDATE users SET full_name=COALESCE($1,full_name),phone=CASE WHEN $2::boolean THEN $3 ELSE phone END,email=CASE WHEN $4::boolean THEN $5 ELSE email END,role=COALESCE($6,role),is_active=COALESCE($7,is_active),updated_at=NOW() WHERE id=$8 RETURNING id,full_name,phone,email,role,is_active,updated_at",[fullName,input.phone!==undefined,phone,input.email!==undefined,email,role,active,id]);
+          updated=result.rows[0];await client.query("COMMIT");
+        }catch(error){await client.query("ROLLBACK");throw error;}finally{client.release();}
+        await audit(req,"admin.user.updated",actorId,{targetUserId:id,changed:{fullName:fullName!==null,phone:input.phone!==undefined,email:input.email!==undefined,role:role!==null,isActive:active!==null}});
+        return json(res,200,{data:updated,message:"اطلاعات حساب به‌روزرسانی شد."});
+      }
+      if (req.method === "GET" && route === "/api/v1/admin/legacy-customers") {
+        const q=await pool.query("SELECT COUNT(*)::int AS total,MAX(created_at) AS latest_registration,COUNT(*) FILTER(WHERE (created_at AT TIME ZONE 'Asia/Tehran')::date=(NOW() AT TIME ZONE 'Asia/Tehran')::date)::int AS today FROM users");
+        return json(res,200,{data:{legacy_customers:Number(q.rows[0]?.total)||0,legacy_users:Number(q.rows[0]?.total)||0,today:Number(q.rows[0]?.today)||0,latestRegistration:q.rows[0]?.latest_registration||null,sourceTable:"users",timezone:"Asia/Tehran"}});
       }
       if (req.method === "GET" && route === "/api/v1/admin/legacy-customers-page") {
-        const page=Math.max(1,Number.parseInt(url.searchParams.get("page")||"1",10)||1), pageSize=Math.min(100,Math.max(10,Number.parseInt(url.searchParams.get("pageSize")||"50",10)||50)), search=String(url.searchParams.get("q")||"").trim().slice(0,120);
-        const db=legacyMaria(), where=[], values=[];
-        if(search){
-          where.push("(u.FirstName LIKE ? OR u.LastName LIKE ? OR CONCAT_WS(' ',u.FirstName,u.LastName) LIKE ? OR u.Mobile LIKE ? OR u.Phone LIKE ? OR u.PhoneNumber LIKE ? OR u.Email LIKE ? OR u.UserName LIKE ? OR u.NationalCode LIKE ? OR u.UserCode LIKE ? OR CAST(u.Id AS CHAR) LIKE ? OR u.AffiliateCode LIKE ?)");
-          for(let i=0;i<12;i++)values.push("%"+search+"%");
-        }
+        const page=Math.max(1,Number.parseInt(url.searchParams.get("page")||"1",10)||1),pageSize=Math.min(100,Math.max(10,Number.parseInt(url.searchParams.get("pageSize")||"50",10)||50)),search=String(url.searchParams.get("q")||"").trim().slice(0,120),from=String(url.searchParams.get("from")||"").trim(),to=String(url.searchParams.get("to")||"").trim();
+        const where=[],params=[];
+        if(search){params.push("%"+search+"%");where.push("(u.full_name ILIKE $"+params.length+" OR u.phone ILIKE $"+params.length+" OR u.email ILIKE $"+params.length+" OR u.username ILIKE $"+params.length+" OR u.legacy_username ILIKE $"+params.length+" OR u.national_code ILIKE $"+params.length+" OR u.legacy_id ILIKE $"+params.length+" OR u.id::text ILIKE $"+params.length+")");}
+        if(from&&/^\d{4}-\d{2}-\d{2}$/.test(from)){params.push(from);where.push("u.created_at >= ($"+params.length+"::date::timestamp AT TIME ZONE 'Asia/Tehran')");}
+        if(to&&/^\d{4}-\d{2}-\d{2}$/.test(to)){params.push(to);where.push("u.created_at < (($"+params.length+"::date + INTERVAL '1 day')::timestamp AT TIME ZONE 'Asia/Tehran')");}
         const filter=where.length?" WHERE "+where.join(" AND "):"";
-        const [count]=await db.query("SELECT COUNT(*) AS total FROM AspNetUsers u"+filter,values);
-        const [overall]=await db.query("SELECT COUNT(*) AS total,MAX(RegDate) AS latest_registration FROM AspNetUsers");
-        const [rows]=await db.query("SELECT CAST(u.Id AS CHAR) AS legacy_id,COALESCE(NULLIF(TRIM(CONCAT_WS(' ',u.FirstName,u.LastName)),''),NULLIF(u.UserName,''),NULLIF(u.Mobile,''),'کاربر بدون نام') AS name,COALESCE(NULLIF(u.Mobile,''),NULLIF(u.Phone,''),NULLIF(u.PhoneNumber,'')) AS mobile,u.Email AS email,COALESCE(NULLIF(u.UserCode,''),CAST(u.Id AS CHAR)) AS customer_code,COALESCE(NULLIF(u.UserCode,''),CAST(u.Id AS CHAR)) AS customer_number,u.RegDate AS registered_at,c.ExpireDate AS expires_at,COALESCE(c.Permanent,0) AS is_permanent,COALESCE(c.Purchased,0) AS purchased,u.UserName AS legacy_username,CASE WHEN u.CustomerId IS NULL THEN 'حساب کاربری' ELSE 'مشتری سامانه' END AS account_type,'AspNetUsers' AS legacy_source_table,CAST(u.CustomerId AS CHAR) AS customer_id,c.Name AS customer_account_name,u.IsActive AS is_active,u.RegistrationCompleted AS registration_completed,u.NationalCode AS national_code,u.City AS city,u.AgentId AS agent_id FROM AspNetUsers u LEFT JOIN Customers c ON c.Id=u.CustomerId"+filter+" ORDER BY u.RegDate DESC,u.Id DESC LIMIT ? OFFSET ?",[...values,pageSize,(page-1)*pageSize]);
-        return json(res,200,{data:{rows,total:Number(count[0]?.total)||0,overallTotal:Number(overall[0]?.total)||0,latestRegistration:overall[0]?.latest_registration||null,page,pageSize,sourceTable:"AspNetUsers",customerTenantCount:(await db.query("SELECT COUNT(*) AS total FROM Customers"))[0][0]?.total||0}});
+        const [count,overall,rows]=await Promise.all([
+          pool.query("SELECT COUNT(*)::int AS total FROM users u"+filter,params),
+          pool.query("SELECT COUNT(*)::int AS total,MAX(created_at) AS latest_registration,COUNT(*) FILTER(WHERE (created_at AT TIME ZONE 'Asia/Tehran')::date=(NOW() AT TIME ZONE 'Asia/Tehran')::date)::int AS today FROM users"),
+          pool.query("SELECT u.id,COALESCE(u.legacy_id,u.id::text) AS legacy_id,COALESCE(NULLIF(u.full_name,''),NULLIF(u.username,''),NULLIF(u.phone,''),'کاربر بدون نام') AS name,u.phone AS mobile,u.email,u.username AS legacy_username,COALESCE(u.legacy_id,u.id::text) AS customer_code,COALESCE(u.legacy_id,u.id::text) AS customer_number,u.created_at AS registered_at,u.role,COALESCE((SELECT json_agg(role_code ORDER BY role_code) FROM (SELECT role_code FROM user_role_assignments WHERE user_id=u.id UNION SELECT u.role) rr),json_build_array(u.role)) AS roles,u.is_active,u.national_code,u.legacy_source AS legacy_source_table,u.legacy_customer_id AS customer_id,u.legacy_agent_id AS agent_id,CASE WHEN u.role IN ('admin','superadmin') THEN 'مدیر سامانه' WHEN u.role='agent' OR EXISTS(SELECT 1 FROM user_role_assignments a WHERE a.user_id=u.id AND a.role_code='agent') THEN 'نماینده' WHEN u.role IN ('marketer','customermarketer') THEN 'بازاریاب' ELSE 'مشتری / کاربر' END AS account_type FROM users u"+filter+" ORDER BY u.created_at DESC NULLS LAST,u.id DESC LIMIT $"+(params.length+1)+" OFFSET $"+(params.length+2),[...params,pageSize,(page-1)*pageSize])
+        ]);
+        return json(res,200,{data:{rows:rows.rows,total:Number(count.rows[0]?.total)||0,overallTotal:Number(overall.rows[0]?.total)||0,todayTotal:Number(overall.rows[0]?.today)||0,latestRegistration:overall.rows[0]?.latest_registration||null,page,pageSize,sourceTable:"users",timezone:"Asia/Tehran"}});
       }
       if (req.method === "GET" && route === "/api/v1/admin/legacy-agents-page") {
         const page=Math.max(1,Number.parseInt(url.searchParams.get("page")||"1",10)||1);
