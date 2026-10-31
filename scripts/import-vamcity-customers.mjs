@@ -38,8 +38,8 @@ try {
     });
   }
   function rows(query,label,db=SOURCE_DB) { return jsonRows(sql("SET NOCOUNT ON; "+query,[],db),label); }
-  function count(table,db=SOURCE_DB) {
-    const raw=sql("SET NOCOUNT ON; SELECT COUNT_BIG(*) FROM dbo.["+table.replace(/]/g,"]]")+"]; ",[],db);
+  function count(table,db=SOURCE_DB,schema="dbo") {
+    const raw=sql("SET NOCOUNT ON; SELECT COUNT_BIG(*) FROM ["+schema.replace(/]/g,"]]" )+"].["+table.replace(/]/g,"]]")+"]; ",[],db);
     const numericLines=raw.split(/\r?\n/).map(x=>x.trim()).filter(x=>/^\d+$/.test(x));
     const n=Number(numericLines[numericLines.length-1]);
     if(!Number.isSafeInteger(n)) throw new Error("Could not count source table "+db+".dbo."+table);
@@ -54,51 +54,53 @@ try {
     const online=onlineRaw.split(/\r?\n/).map(x=>x.trim()).filter(x=>/^\d+$/.test(x)).slice(-1)[0]||"";
     if(online!=="1") throw new Error("Required restored source database is not ONLINE: "+db.name);
     const tableRows=rows(
-      "SELECT s.name AS schemaName,t.name AS tableName FROM sys.tables t JOIN sys.schemas s ON s.schema_id=t.schema_id WHERE s.name=N'dbo' AND t.is_ms_shipped=0 ORDER BY t.name FOR JSON PATH, INCLUDE_NULL_VALUES;",
+      "SELECT s.name AS schemaName,t.name AS tableName FROM sys.tables t JOIN sys.schemas s ON s.schema_id=t.schema_id WHERE t.is_ms_shipped=0 ORDER BY s.name,t.name FOR JSON PATH, INCLUDE_NULL_VALUES;",
       "table list "+db.name,db.name
     );
     if(!tableRows.length) throw new Error("No user tables found in "+db.name);
-    const tables=tableRows.map(x=>({schemaName:db.alias,tableName:x.tableName}));
-    const inList=tables.map(t=>"N'"+t.tableName.replace(/'/g,"''")+"'").join(",");
+    const targetSchema=(sourceSchema)=>db.alias==="dbo"&&sourceSchema==="dbo"?"dbo":db.alias+"_"+sourceSchema;
+    const tables=tableRows.map(x=>({sourceSchema:x.schemaName,schemaName:targetSchema(x.schemaName),tableName:x.tableName}));
     schemaDefinitions.push(...tables.map(t=>({sourceTable:t.schemaName+"."+t.tableName})));
     const cols=rows(
-      "SELECT N'"+db.alias+"' AS schemaName,t.name AS tableName,c.name AS columnName,ty.name AS dataType,c.max_length AS maxLength,c.precision AS [precision],c.scale AS scale,c.is_nullable AS isNullable,c.is_identity AS isIdentity "+
+      "SELECT s.name AS schemaName,t.name AS tableName,c.name AS columnName,ty.name AS dataType,c.max_length AS maxLength,c.precision AS [precision],c.scale AS scale,c.is_nullable AS isNullable,c.is_identity AS isIdentity "+
       "FROM sys.columns c JOIN sys.tables t ON t.object_id=c.object_id JOIN sys.schemas s ON s.schema_id=t.schema_id JOIN sys.types ty ON ty.user_type_id=c.user_type_id "+
-      "WHERE s.name=N'dbo' AND t.name IN ("+inList+") ORDER BY t.name,c.column_id FOR JSON PATH, INCLUDE_NULL_VALUES;",
+      "WHERE t.is_ms_shipped=0 ORDER BY s.name,t.name,c.column_id FOR JSON PATH, INCLUDE_NULL_VALUES;",
       "column metadata "+db.name,db.name
     );
     const pks=rows(
-      "SELECT N'"+db.alias+"' AS schemaName,t.name AS tableName,i.name AS constraintName,c.name AS columnName,ic.key_ordinal AS keyOrdinal "+
+      "SELECT s.name AS schemaName,t.name AS tableName,i.name AS constraintName,c.name AS columnName,ic.key_ordinal AS keyOrdinal "+
       "FROM sys.indexes i JOIN sys.index_columns ic ON ic.object_id=i.object_id AND ic.index_id=i.index_id JOIN sys.columns c ON c.object_id=ic.object_id AND c.column_id=ic.column_id "+
       "JOIN sys.tables t ON t.object_id=i.object_id JOIN sys.schemas s ON s.schema_id=t.schema_id "+
-      "WHERE i.is_primary_key=1 AND s.name=N'dbo' AND t.name IN ("+inList+") ORDER BY t.name,ic.key_ordinal FOR JSON PATH, INCLUDE_NULL_VALUES;",
+      "WHERE i.is_primary_key=1 AND t.is_ms_shipped=0 ORDER BY s.name,t.name,ic.key_ordinal FOR JSON PATH, INCLUDE_NULL_VALUES;",
       "primary key metadata "+db.name,db.name
     );
     const fks=rows(
-      "SELECT N'"+db.alias+"' AS schemaName,pt.name AS tableName,fk.name AS constraintName,pc.name AS columnName,N'"+db.alias+"' AS referencedSchemaName,rt.name AS referencedTableName,rc.name AS referencedColumnName,fkc.constraint_column_id AS keyOrdinal,fk.delete_referential_action_desc AS deleteAction,fk.update_referential_action_desc AS updateAction "+
+      "SELECT ps.name AS schemaName,pt.name AS tableName,fk.name AS constraintName,pc.name AS columnName,rs.name AS referencedSchemaName,rt.name AS referencedTableName,rc.name AS referencedColumnName,fkc.constraint_column_id AS keyOrdinal,fk.delete_referential_action_desc AS deleteAction,fk.update_referential_action_desc AS updateAction "+
       "FROM sys.foreign_keys fk JOIN sys.foreign_key_columns fkc ON fkc.constraint_object_id=fk.object_id "+
       "JOIN sys.tables pt ON pt.object_id=fkc.parent_object_id JOIN sys.schemas ps ON ps.schema_id=pt.schema_id JOIN sys.columns pc ON pc.object_id=fkc.parent_object_id AND pc.column_id=fkc.parent_column_id "+
       "JOIN sys.tables rt ON rt.object_id=fkc.referenced_object_id JOIN sys.schemas rs ON rs.schema_id=rt.schema_id JOIN sys.columns rc ON rc.object_id=fkc.referenced_object_id AND rc.column_id=fkc.referenced_column_id "+
-      "WHERE ps.name=N'dbo' AND rs.name=N'dbo' AND pt.name IN ("+inList+") AND rt.name IN ("+inList+") ORDER BY pt.name,fk.name,fkc.constraint_column_id FOR JSON PATH, INCLUDE_NULL_VALUES;",
+      "WHERE pt.is_ms_shipped=0 AND rt.is_ms_shipped=0 ORDER BY ps.name,pt.name,fk.name,fkc.constraint_column_id FOR JSON PATH, INCLUDE_NULL_VALUES;",
       "foreign key metadata "+db.name,db.name
     );
-    columnDefinitions.push(...cols);primaryKeys.push(...pks);foreignKeys.push(...fks);
+    columnDefinitions.push(...cols.map(x=>({...x,schemaName:targetSchema(x.schemaName)})));
+    primaryKeys.push(...pks.map(x=>({...x,schemaName:targetSchema(x.schemaName)})));
+    foreignKeys.push(...fks.map(x=>({...x,schemaName:targetSchema(x.schemaName),referencedSchemaName:targetSchema(x.referencedSchemaName)})));
     const dbCounts={tables:tables.length,rows:0};
     for(const t of tables) {
       const name=t.tableName;
-      const data=rows("SELECT * FROM dbo.["+name.replace(/]/g,"]]")+"] FOR JSON PATH, INCLUDE_NULL_VALUES;",db.name+"."+name,db.name);
-      const expected=count(name,db.name);
-      if(data.length!==expected) throw new Error("Row count mismatch for "+db.name+".dbo."+name+": expected "+expected+" got "+data.length);
-      genericTables.push({sourceTable:db.alias+"."+name,rows:data});
+      const data=rows("SELECT * FROM ["+t.sourceSchema.replace(/]/g,"]]")+ "].["+name.replace(/]/g,"]]")+"] FOR JSON PATH, INCLUDE_NULL_VALUES;",db.name+"."+t.sourceSchema+"."+name,db.name);
+      const expected=count(name,db.name,t.sourceSchema);
+      if(data.length!==expected) throw new Error("Row count mismatch for "+db.name+"."+t.sourceSchema+"."+name+": expected "+expected+" got "+data.length);
+      genericTables.push({sourceTable:t.schemaName+"."+name,rows:data});
       totalRows+=data.length;dbCounts.rows+=data.length;
       console.log("SOURCE_TABLE_EXPORTED="+db.name+".dbo."+name+" rows="+data.length);
     }
     sourceInventory[db.name]=dbCounts;
-    exportedByDatabase.set(db.name,new Set(tables.map(t=>t.tableName)));
+    exportedByDatabase.set(db.name,new Set(tables.map(t=>t.sourceSchema+"."+t.tableName)));
     console.log("SOURCE_DATABASE_EXPORTED="+db.name+" "+JSON.stringify(dbCounts));
   }
   const mainTables=exportedByDatabase.get(SOURCE_DB);
-  for(const required of ["AspNetUsers","AspNetRoles","AspNetUserRoles","Customers"])if(!mainTables.has(required))throw new Error("Required main identity/customer table missing: "+required);
+  for(const required of ["AspNetUsers","AspNetRoles","AspNetUserRoles","Customers"])if(!mainTables.has("dbo."+required))throw new Error("Required main identity/customer table missing: "+required);
   const countMain=table=>count(table,SOURCE_DB);
   const counts={users:countMain("AspNetUsers"),roles:countMain("AspNetRoles"),userRoles:countMain("AspNetUserRoles"),customers:countMain("Customers")};
   console.log("SOURCE_CUSTOMER_INVENTORY="+JSON.stringify(counts));
