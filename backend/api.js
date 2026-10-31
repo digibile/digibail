@@ -771,7 +771,7 @@ export async function handleApi(req, res, url) {
         const match=/^([A-Za-z0-9_]{1,63})\.([A-Za-z0-9_]{1,63})$/.exec(sourceTable);
         if(!match)return json(res,400,{message:"نام جدول معتبر نیست."});
         const [,sourceSchema,tableName]=match;
-        const manifest=await pool.query("SELECT source_rows FROM legacy_digibail._import_manifest WHERE source_schema=$1 AND source_table=$2",[sourceSchema,tableName]);
+        const manifest=await pool.query("SELECT source_rows,imported_rows FROM legacy_digibail._import_manifest WHERE source_schema=$1 AND source_table=$2",[sourceSchema,tableName]);
         if(!manifest.rowCount)return json(res,404,{message:"جدول در ساختار منتقل‌شده پیدا نشد."});
         const limit=Math.min(100,Math.max(1,Number.parseInt(url.searchParams.get("limit")||"50",10)||50));
         const offset=Math.max(0,Number.parseInt(url.searchParams.get("offset")||"0",10)||0);
@@ -782,7 +782,7 @@ export async function handleApi(req, res, url) {
         const order=primary.rows.length?primary.rows.map(x=>qid(x.column_name)).join(","):"ctid";
         const sql="SELECT * FROM "+qid("legacy_digibail")+"."+qid(tableName)+" ORDER BY "+order+" LIMIT $1 OFFSET $2";
         const rows=await pool.query(sql,[limit,offset]);
-        return json(res,200,{sourceTable,rows:rows.rows,columns:columns.rows,primaryKeys:primary.rows.map(x=>x.column_name),foreignKeys:foreign.rows,total:Number(manifest.rows[0].source_rows)||0,offset,limit});
+        return json(res,200,{sourceTable,rows:rows.rows,columns:columns.rows,primaryKeys:primary.rows.map(x=>x.column_name),foreignKeys:foreign.rows,total:Number(manifest.rows[0].imported_rows)||0,offset,limit});
       }
       if (req.method === "GET" && route === "/api/v1/admin/beta-inquiries") {
         const q = await pool.query("SELECT id,reference,user_id,national_code,status,status_note,created_at FROM beta_inquiries ORDER BY created_at DESC LIMIT 500");
