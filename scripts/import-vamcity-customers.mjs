@@ -7,7 +7,7 @@ import { join } from "node:path";
 const ROOT = "/home/digibail/domains/digebail.ir";
 const SQLC = "public_html-db-1";
 const SOURCE_DB = "vamcityc_vamcity_import_20261028";
-const SOURCE_DATABASES = [{name:SOURCE_DB,alias:"dbo"},{name:"vamcityc_bluvamdb_import_20261028",alias:"bluvam"},{name:"vamcityc_transferDb_import_20261028",alias:"transferdb"}];
+const SOURCE_DATABASES = [{name:SOURCE_DB,alias:"dbo"}];
 const MAX_BUFFER = 1024 * 1024 * 1024;
 const dockerPrefix = (() => {
   try { execFileSync("sudo", ["-n","docker","info"], {stdio:"ignore"}); return ["sudo","-n","docker"]; }
