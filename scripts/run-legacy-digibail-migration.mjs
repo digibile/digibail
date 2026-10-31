@@ -20,10 +20,11 @@ try{command("sudo",["-n","docker","info"],{maxBuffer:1024*1024});docker=["sudo",
 catch{command("docker",["info"],{maxBuffer:1024*1024});}
 const runDocker=(args,opts={})=>command(docker[0],docker.slice(1).concat(args),opts);
 function jsonOutput(raw,label){
- const first=raw.indexOf("["),last=raw.lastIndexOf("]");
- if(first<0||last<first)throw new Error("SQL Server JSON export missing for "+label);
- const text=raw.slice(first,last+1).replace(/[\r\n]/g,"");
- return JSON.parse(text);
+ const first=raw.indexOf("[");if(first<0)throw new Error("SQL Server JSON export missing for "+label);
+ let depth=0,inString=false,escaped=false,end=-1;
+ for(let i=first;i<raw.length;i++){const ch=raw[i];if(inString){if(escaped)escaped=false;else if(ch==="\\\\")escaped=true;else if(ch===\'"\')inString=false;continue;}if(ch===\'"\'){inString=true;continue;}if(ch==="[")depth++;else if(ch==="]"){depth--;if(depth===0){end=i;break;}}}
+ if(end<0)throw new Error("SQL Server JSON array is incomplete for "+label);
+ return JSON.parse(raw.slice(first,end+1).replace(/[\\r\\n]/g,""));
 }
 function sql(query,extra=[]){
  const out=runDocker(["exec","-e","SQLCMDPASSWORD="+dbPassword,SQL_CONTAINER,sqlcmd,"-S","localhost","-U",dbUser,"-C","-b","-w","65535","-y","0","-d",DB_NAME,"-Q",query].concat(extra));
@@ -36,8 +37,7 @@ function parseConnection(s){
  return {database:pick("initial catalog","database"),user:pick("user id","uid","user"),password:pick("password","pwd")};
 }
 let sqlcmd="/opt/mssql-tools18/bin/sqlcmd";
-const has18=runDocker(["exec",SQL_CONTAINER,"test","-x",sqlcmd],{maxBuffer:1024*1024});
-if(!has18)sqlcmd="/opt/mssql-tools/bin/sqlcmd";
+let has18=false;try{runDocker(["exec",SQL_CONTAINER,"test","-x",sqlcmd],{maxBuffer:1024*1024});has18=true;}catch{}if(!has18)sqlcmd="/opt/mssql-tools/bin/sqlcmd";
 const env=String(runDocker(["inspect","--format","{{range .Config.Env}}{{println .}}{{end}}",SQL_CONTAINER]));
 const saPassword=(env.match(/^(?:MSSQL_SA_PASSWORD|SA_PASSWORD)=(.*)$/m)||[])[1]||"";
 const appEnv=String(runDocker(["inspect","--format","{{range .Config.Env}}{{println .}}{{end}}",APP_CONTAINER]));
@@ -54,8 +54,7 @@ if(appCreds.database&&appCreds.database.toLowerCase()!==DB_NAME.toLowerCase())th
 console.log("LEGACY_SQL_AUTH=verified");
 const composeApp=String(runDocker(["compose","ps","-q","app"],{maxBuffer:1024*1024})).trim();
 if(!composeApp)throw new Error("Production app container not found.");
-const marker=String(runDocker(["exec",composeApp,"grep","-q","DIGIBAIL_RELATIONAL_EXPORT_V2","/app/scripts/migrate-legacy-digibail.js"],{maxBuffer:1024*1024}));
-if(marker)throw new Error("Relational importer version marker not found in production app.");
+let markerFound=false;try{runDocker(["exec",composeApp,"grep","-q","DIGIBAIL_RELATIONAL_EXPORT_V2","/app/scripts/migrate-legacy-digibail.js"],{maxBuffer:1024*1024});markerFound=true;}catch{}if(!markerFound)throw new Error("Relational importer version marker not found in production app.");
 const backupDir=path.join(ROOT,".migration-backups");
 fs.mkdirSync(backupDir,{recursive:true,mode:0o700});fs.chmodSync(backupDir,0o700);
 const backup=path.join(backupDir,"digibail-before-relational-"+new Date().toISOString().replace(/[-:TZ.]/g,"").slice(0,14)+".sql.gz");
