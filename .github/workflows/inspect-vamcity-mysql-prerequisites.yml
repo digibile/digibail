@@ -47,6 +47,18 @@ jobs:
                 sed -n 's/^[[:space:]]*\([A-Za-z_][A-Za-z0-9_]*\)[[:space:]]*=.*/MYSQL_CONFIG_KEY=\1/p' "$F"
               fi
             done
+            echo "=== HOST MYSQL CREDENTIAL FILE METADATA ==="
+            $D run --rm --user 0:0 -v /:/host:ro mariadb:10.6 sh -lc '
+              for f in /host/root/.my.cnf /host/etc/mysql/debian.cnf /host/etc/my.cnf /host/root/.mylogin.cnf /host/usr/local/directadmin/conf/mysql.conf /host/usr/local/directadmin/conf/mysql.conf.d/mysql.conf; do
+                if [ -s "$f" ]; then
+                  echo "MYSQL_CREDENTIAL_FILE_FOUND=$f"
+                  stat -c "FILE_MODE=%a OWNER=%u:%g SIZE=%s" "$f"
+                  sed -n "s/^[[:space:]]*\\([A-Za-z_][A-Za-z0-9_]*\\)[[:space:]]*=.*/FILE_KEY=\\1/p" "$f"
+                fi
+              done
+              echo "=== DIRECTADMIN MYSQL USER METADATA ==="
+              find /host/usr/local/directadmin/data/users -maxdepth 3 -type f \\( -name "db.conf" -o -name "mysql.conf" -o -name "*.conf" \\) -print 2>/dev/null | grep -E "/(admin|digibail)/" | head -n 40 || true
+            '
             echo "=== HOST MYSQL SOCKETS ==="
             for S in /var/lib/mysql/mysql.sock /run/mysqld/mysqld.sock /var/run/mysqld/mysqld.sock; do
               if [ -S "$S" ]; then echo "MYSQL_SOCKET_FOUND=$S"; fi
