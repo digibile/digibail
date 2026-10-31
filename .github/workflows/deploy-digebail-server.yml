@@ -246,6 +246,11 @@ jobs:
             if (!roles.some(r => r.code === "agent") || !roles.some(r => r.code === "admin")) throw new Error("Agent/admin roles are missing from the identity role catalog");
             if (!Number.isFinite(Number(summary.users_today)) || !summary.latest_user_registration) throw new Error("Daily registration or latest registration metrics are missing");
             console.log("UNIFIED_USER_DIRECTORY_SMOKE=PASS total=" + userPage.overallTotal + " today=" + summary.users_today + " roles=" + roles.length);
+            const agentsResponse = await fetch(base + "/api/v1/admin/legacy-agents-page?page=1&pageSize=10", { headers: { Cookie: cookie } });
+            if (!agentsResponse.ok) throw new Error("MariaDB representative directory failed: " + agentsResponse.status);
+            const agentsBody = await agentsResponse.json();
+            if (!Number.isFinite(Number(agentsBody.data?.overallTotal))) throw new Error("Representative total is missing");
+            console.log("MARIADB_AGENT_DIRECTORY_SMOKE=PASS total=" + agentsBody.data.overallTotal + " sample_rows=" + (agentsBody.data.rows || []).length + " customer_links=" + (agentsBody.data.customerTotal ?? "n/a"));
             const tablesResponse = await fetch(base + "/api/v1/admin/legacy-source-tables", { headers: { Cookie: cookie } });
             if (!tablesResponse.ok) throw new Error("MariaDB source tables endpoint failed: " + tablesResponse.status);
             const tablesBody = await tablesResponse.json();
