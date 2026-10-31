@@ -687,9 +687,9 @@ export async function handleApi(req, res, url) {
       }
       if (req.method === "GET" && route === "/api/v1/admin/summary") {
         const q = await pool.query("SELECT (SELECT COUNT(*) FROM users) AS users,(SELECT COUNT(*) FROM users WHERE lower(role) IN ('admin','superadmin')) AS admins,(SELECT COUNT(*) FROM sms_templates) AS sms_templates,(SELECT COUNT(*) FROM sms_logs) AS sms_logs");
-        const db=legacyMaria(), [customers]=await db.query("SELECT COUNT(*) AS total FROM Customers"), [legacyUsers]=await db.query("SELECT COUNT(*) AS total FROM AspNetUsers");
+        const db=legacyMaria(), [customers]=await db.query("SELECT COUNT(*) AS total FROM AspNetUsers"), [customerTenants]=await db.query("SELECT COUNT(*) AS total FROM Customers");
         const configured = Boolean(KAVENEGAR_API_KEY);
-        return json(res, 200, { data: { ...q.rows[0], legacy_customers:Number(customers[0]?.total)||0, legacy_users:Number(legacyUsers[0]?.total)||0, smsConfigured: configured } });
+        return json(res, 200, { data: { ...q.rows[0], legacy_customers:Number(customers[0]?.total)||0, legacy_users:Number(customers[0]?.total)||0, legacy_customer_tenants:Number(customerTenants[0]?.total)||0, smsConfigured: configured } });
       }
       if (req.method === "GET" && route === "/api/v1/admin/users") {
         const q = await pool.query("SELECT id,username,legacy_username,phone,full_name,email,role,is_active,password_reset_required,created_at,legacy_source,COALESCE((SELECT json_agg(role_code ORDER BY role_code) FROM user_role_assignments WHERE user_id=users.id),json_build_array(role)) AS roles FROM users ORDER BY created_at DESC,id DESC LIMIT 500");
@@ -698,12 +698,15 @@ export async function handleApi(req, res, url) {
       if (req.method === "GET" && route === "/api/v1/admin/legacy-customers-page") {
         const page=Math.max(1,Number.parseInt(url.searchParams.get("page")||"1",10)||1), pageSize=Math.min(100,Math.max(10,Number.parseInt(url.searchParams.get("pageSize")||"50",10)||50)), search=String(url.searchParams.get("q")||"").trim().slice(0,120);
         const db=legacyMaria(), where=[], values=[];
-        if(search){where.push("(Name LIKE ? OR Mobile LIKE ? OR Email LIKE ? OR CAST(Code AS CHAR) LIKE ? OR Id LIKE ? OR AffCode LIKE ?)");for(let i=0;i<6;i++)values.push("%"+search+"%");}
+        if(search){
+          where.push("(u.FirstName LIKE ? OR u.LastName LIKE ? OR CONCAT_WS(' ',u.FirstName,u.LastName) LIKE ? OR u.Mobile LIKE ? OR u.Phone LIKE ? OR u.PhoneNumber LIKE ? OR u.Email LIKE ? OR u.UserName LIKE ? OR u.NationalCode LIKE ? OR u.UserCode LIKE ? OR CAST(u.Id AS CHAR) LIKE ? OR u.AffiliateCode LIKE ?)");
+          for(let i=0;i<12;i++)values.push("%"+search+"%");
+        }
         const filter=where.length?" WHERE "+where.join(" AND "):"";
-        const [count]=await db.query("SELECT COUNT(*) AS total FROM Customers"+filter,values);
-        const [overall]=await db.query("SELECT COUNT(*) AS total,MAX(RegDate) AS latest_registration FROM Customers");
-        const [rows]=await db.query("SELECT Id AS legacy_id,Name AS name,Mobile AS mobile,Email AS email,Code AS customer_code,Code AS customer_number,RegDate AS registered_at,ExpireDate AS expires_at,Permanent AS is_permanent,Purchased AS purchased,AffCode AS affiliate_code,ParkDomain AS parked_domain,NULL AS legacy_username,'مشتری منتقل‌شده' AS account_type,'Customers' AS legacy_source_table FROM Customers"+filter+" ORDER BY RegDate DESC,Code DESC LIMIT ? OFFSET ?",[...values,pageSize,(page-1)*pageSize]);
-        return json(res,200,{data:{rows,total:Number(count[0]?.total)||0,overallTotal:Number(overall[0]?.total)||0,latestRegistration:overall[0]?.latest_registration||null,page,pageSize}});
+        const [count]=await db.query("SELECT COUNT(*) AS total FROM AspNetUsers u"+filter,values);
+        const [overall]=await db.query("SELECT COUNT(*) AS total,MAX(RegDate) AS latest_registration FROM AspNetUsers");
+        const [rows]=await db.query("SELECT CAST(u.Id AS CHAR) AS legacy_id,COALESCE(NULLIF(TRIM(CONCAT_WS(' ',u.FirstName,u.LastName)),''),NULLIF(u.UserName,''),NULLIF(u.Mobile,''),'کاربر بدون نام') AS name,COALESCE(NULLIF(u.Mobile,''),NULLIF(u.Phone,''),NULLIF(u.PhoneNumber,'')) AS mobile,u.Email AS email,COALESCE(NULLIF(u.UserCode,''),CAST(u.Id AS CHAR)) AS customer_code,COALESCE(NULLIF(u.UserCode,''),CAST(u.Id AS CHAR)) AS customer_number,u.RegDate AS registered_at,c.ExpireDate AS expires_at,COALESCE(c.Permanent,0) AS is_permanent,COALESCE(c.Purchased,0) AS purchased,u.UserName AS legacy_username,CASE WHEN u.CustomerId IS NULL THEN 'حساب کاربری' ELSE 'مشتری سامانه' END AS account_type,'AspNetUsers' AS legacy_source_table,CAST(u.CustomerId AS CHAR) AS customer_id,c.Name AS customer_account_name,u.IsActive AS is_active,u.RegistrationCompleted AS registration_completed,u.NationalCode AS national_code,u.City AS city,u.AgentId AS agent_id FROM AspNetUsers u LEFT JOIN Customers c ON c.Id=u.CustomerId"+filter+" ORDER BY u.RegDate DESC,u.Id DESC LIMIT ? OFFSET ?",[...values,pageSize,(page-1)*pageSize]);
+        return json(res,200,{data:{rows,total:Number(count[0]?.total)||0,overallTotal:Number(overall[0]?.total)||0,latestRegistration:overall[0]?.latest_registration||null,page,pageSize,sourceTable:"AspNetUsers",customerTenantCount:(await db.query("SELECT COUNT(*) AS total FROM Customers"))[0][0]?.total||0}});
       }
       if (req.method === "GET" && route === "/api/v1/admin/legacy-agents-page") {
         const page=Math.max(1,Number.parseInt(url.searchParams.get("page")||"1",10)||1);
