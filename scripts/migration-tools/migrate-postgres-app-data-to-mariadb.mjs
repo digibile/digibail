@@ -247,7 +247,7 @@ async function importExistingMariaIdentityMap(mysql) {
     "SELECT 1 FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name='DigibailUserIdentity'"
   );
   if(!exists.length)return 0;
-  const [maps]=await mysql.query("SELECT PostgresUserId,MariaDbUserId,RoleCode FROM DigibailUserIdentity");
+  const [maps]=await mysql.query("SELECT m.PostgresUserId,m.MariaDbUserId,m.RoleCode FROM DigibailUserIdentity m JOIN users app ON app.id=m.PostgresUserId JOIN AspNetUsers legacy ON legacy.Id=m.MariaDbUserId");
   for(const item of maps) {
     await mysql.query(
       "INSERT INTO DigibailAppUserIdentity(AppUserId,LegacySource,MariaDbUserId,MariaDbUserKey,RoleCode) VALUES(?,'mariadb.AspNetUsers',?,NULL,?) "+
