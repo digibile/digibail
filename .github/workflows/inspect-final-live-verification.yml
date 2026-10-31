@@ -36,7 +36,7 @@ jobs:
               (SELECT count(*) FROM legacy_digibail._import_manifest) AS relational_manifest_tables,
               (SELECT count(*) FILTER (WHERE imported_rows>0) FROM legacy_digibail._import_manifest) AS tables_with_imported_rows,
               (SELECT coalesce(sum(imported_rows),0) FROM legacy_digibail._import_manifest) AS total_relational_rows,
-              (SELECT count(*) FROM pg_catalog.pg_tables WHERE schemaname=chr(108)||chr(101)||chr(103)||chr(97)||chr(99)||chr(121)||chr(95)||chr(100)||chr(105)||chr(103)||chr(105)||chr(98)||chr(97)||chr(105)) AS physical_relational_tables,
+              (SELECT count(DISTINCT table_name) FROM information_schema.columns WHERE table_schema=chr(108)||chr(101)||chr(103)||chr(97)||chr(99)||chr(121)||chr(95)||chr(100)||chr(105)||chr(103)||chr(105)||chr(98)||chr(97)||chr(105)) AS physical_relational_tables,
               (SELECT count(*) FROM legacy_source_data WHERE source_table=chr(100)||chr(98)||chr(111)||chr(46)||chr(65)||chr(115)||chr(112)||chr(78)||chr(101)||chr(116)||chr(85)||chr(115)||chr(101)||chr(114)||chr(115)) AS original_users,
               (SELECT count(*) FROM legacy_source_data WHERE source_table=chr(65)||chr(115)||chr(112)||chr(78)||chr(101)||chr(116)||chr(82)||chr(111)||chr(108)||chr(101)||chr(115)) AS original_roles,
               (SELECT count(*) FROM legacy_source_data WHERE source_table=chr(65)||chr(115)||chr(112)||chr(78)||chr(101)||chr(116)||chr(85)||chr(115)||chr(101)||chr(114)||chr(82)||chr(111)||chr(108)||chr(101)||chr(115)) AS original_user_role_links,
@@ -129,16 +129,19 @@ jobs:
             echo "=== Filesystem and inode usage (read-only) ==="
             df -h /home/digibail
             df -i /home/digibail
-            echo "=== Top-level filesystem usage (read-only) ==="
-            for path in /home /var /opt /root; do
-              if [ -d "$path" ]; then du -xhd1 "$path" 2>/dev/null | sort -h | tail -n 12 || true; fi
+            echo "=== Root-level filesystem usage (read-only) ==="
+            if sudo -n true 2>/dev/null; then SUDO="sudo -n"; else SUDO=""; fi
+            $SUDO du -xhd1 / 2>/dev/null | sort -h | tail -n 25 || true
+            echo "=== Large directories (read-only) ==="
+            for path in /usr /usr/local /usr/local/directadmin /var/lib /var/log /var/cache /opt /home /root /snap; do
+              if [ -d "$path" ]; then echo "--- $path"; $SUDO du -xhd1 "$path" 2>/dev/null | sort -h | tail -n 15 || true; fi
             done
-            echo "=== Digibail account storage breakdown (read-only) ==="
-            for path in /home/digibail /home/digibail/domains /home/digibail/domains/digebail.ir /home/digibail/.local /home/digibail/backups; do
-              if [ -d "$path" ]; then echo "--- $path"; du -xhd1 "$path" 2>/dev/null | sort -h | tail -n 15 || true; fi
+            echo "=== Largest individual files over 1 GiB (read-only) ==="
+            $SUDO find / -xdev -type f -size +1G -printf '%s %p\\n' 2>/dev/null | sort -nr | head -n 30 || true
+            echo "=== Digibail backup sizes (read-only) ==="
+            for path in /home/digibail/domains/digebail.ir/.migration-backups /home/digibail/.local/backups; do
+              if [ -d "$path" ]; then echo "--- $path"; $SUDO du -ah "$path" 2>/dev/null | sort -h | tail -n 20 || true; fi
             done
-            echo "=== Docker and containerd storage breakdown (read-only) ==="
-            for path in /var/lib/docker /var/lib/containerd; do
-              if [ -d "$path" ]; then echo "--- $path"; du -xhd1 "$path" 2>/dev/null | sort -h | tail -n 15 || true; fi
-            done
+            echo "=== Docker storage driver and root (read-only) ==="
+            $D info --format 'DockerRootDir={{.DockerRootDir}} StorageDriver={{.Driver}}' || true
             echo "DIGIBAIL_PRODUCTION_FINAL_VERIFICATION=PASS"
