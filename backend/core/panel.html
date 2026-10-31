@@ -1717,17 +1717,48 @@ V.products=view('products-drilldown',async function(){
   (shown.length?table:'<div class="empty">با این فیلتر رکوردی پیدا نشد.</div>')+
   '<div class="product-pager"><span class="sub">صفحه '+nf(state.productPage)+' از '+nf(pageCount)+'</span><div class="frow"><button class="btn" data-product-page="'+Math.max(1,state.productPage-1)+'" '+(state.productPage<=1?'disabled':'')+'>قبلی</button><button class="btn" data-product-page="'+Math.min(pageCount,state.productPage+1)+'" '+(state.productPage>=pageCount?'disabled':'')+'>بعدی</button></div></div></div>';
 });
-V.users=view('users-live',async function(){
- const users=drillRows(await api('GET','/api/v1/admin/users'));
- return head('حساب‌های کاربری','فهرست واقعی حساب‌ها؛ بدون رمز عبور یا داده‌های محرمانه.')+'<div class="panel"><div class="sub" style="margin-bottom:10px">تعداد حساب‌های قابل مشاهده: '+nf(users.length)+'</div>'+tbl([
-  ['نام',u=>esc(u.full_name||u.username||'—')],
-  ['نام کاربری',u=>'<code>'+esc(u.username||'—')+'</code>'],
+let userDirectoryRoles=[];
+async function loadUsersDirectory(page=1){
+ const q=document.getElementById('userDirectorySearch')?.value||'',role=document.getElementById('userDirectoryRole')?.value||'',status=document.getElementById('userDirectoryStatus')?.value||'';
+ const p=new URLSearchParams({page,pageSize:50,q,role,status});
+ const d=await api('GET','/api/v1/admin/users-page?'+p),rows=d.rows||[];
+ state.userDirectoryPage=page;state.userDirectoryRows=rows;
+ const stats=document.getElementById('userDirectoryStats');
+ if(stats)stats.innerHTML=tiles([['کل حساب‌ها',nf(d.overallTotal)],['فعال',nf(d.activeTotal)],['غیرفعال',nf(d.inactiveTotal)],['ثبت‌نام امروز',nf(d.todayTotal)],['آخرین ثبت‌نام',d.latestRegistration?new Date(d.latestRegistration).toLocaleString('fa-IR',{timeZone:'Asia/Tehran'}):'—']]);
+ const options=userDirectoryRoles.map(r=>'<option value="'+esc(r.code)+'">'+esc(r.display_name)+'</option>').join('');
+ const table=document.getElementById('userDirectoryRows');
+ if(table)table.innerHTML=tbl([
+  ['نام و شناسه',u=>'<b>'+esc(u.full_name||u.username||'—')+'</b><div class="sub">شناسه '+nf(u.id)+' · '+esc(u.legacy_source||'ثبت‌نام جدید')+'</div>'],
   ['موبایل',u=>esc(u.phone||'—')],
   ['ایمیل',u=>esc(u.email||'—')],
-  ['نقش',u=>esc(u.role||'—')],
+  ['نقش',u=>'<select data-user-role="'+u.id+'" style="max-width:150px">'+userDirectoryRoles.map(r=>'<option value="'+esc(r.code)+'" '+(u.role===r.code?'selected':'')+'>'+esc(r.display_name)+'</option>').join('')+'</select><div class="sub">'+esc((u.roles||[]).join('، '))+'</div>'],
   ['وضعیت',u=>'<span class="pill '+(u.is_active?'a':'r')+'">'+(u.is_active?'فعال':'غیرفعال')+'</span>'],
-  ['ایجاد',u=>u.created_at?new Date(u.created_at).toLocaleDateString('fa-IR'):'—']
- ],users)+'</div>';
+  ['تاریخ ثبت',u=>u.created_at?new Date(u.created_at).toLocaleString('fa-IR',{timeZone:'Asia/Tehran'}):'—'],
+  ['عملیات',u=>'<button class="btn" data-user-edit="'+u.id+'">ویرایش اطلاعات</button> <button class="btn '+(u.is_active?'bad':'ok')+'" data-user-toggle="'+u.id+'">'+(u.is_active?'غیرفعال‌سازی':'فعال‌سازی')+'</button>']
+ ],rows);
+ const pager=document.getElementById('userDirectoryPager');
+ if(pager)pager.innerHTML='<span>نمایش '+nf(rows.length)+' از '+nf(d.total)+' نتیجه · صفحه '+nf(page)+' از '+nf(Math.max(1,Math.ceil(d.total/50)))+'</span><button class="btn" data-user-page="'+Math.max(1,page-1)+'" '+(page<=1?'disabled':'')+'>قبلی</button><button class="btn solid" data-user-page="'+(page+1)+'" '+(page*50>=d.total?'disabled':'')+'>بعدی</button>';
+}
+V.users=view('users-live',async function(){
+ const rr=await api('GET','/api/v1/admin/roles');userDirectoryRoles=rr.data||[];
+ if(!state.userDirectoryEventsBound){
+  state.userDirectoryEventsBound=true;
+  document.addEventListener('click',async e=>{
+   const page=e.target.closest('[data-user-page]');
+   if(page&&!page.disabled){loadUsersDirectory(Number(page.dataset.userPage)||1).catch(x=>toast(x.message));return}
+   const toggle=e.target.closest('[data-user-toggle]');
+   if(toggle){const id=Number(toggle.dataset.userToggle),u=(state.userDirectoryRows||[]).find(x=>Number(x.id)===id);if(!u)return;if(!confirm((u.is_active?'غیرفعال‌سازی':'فعال‌سازی')+' حساب '+(u.full_name||u.phone||id)+' انجام شود؟'))return;try{await api('PATCH','/api/v1/admin/users/'+id,{isActive:!u.is_active});toast('وضعیت حساب به‌روزرسانی شد');await loadUsersDirectory(state.userDirectoryPage||1)}catch(x){toast(x.message)}return}
+   const edit=e.target.closest('[data-user-edit]');
+   if(edit){const id=Number(edit.dataset.userEdit),u=(state.userDirectoryRows||[]).find(x=>Number(x.id)===id);if(!u)return;const fullName=prompt('نام و نام خانوادگی',u.full_name||'');if(fullName===null)return;const phone=prompt('شماره موبایل',u.phone||'');if(phone===null)return;const email=prompt('ایمیل',u.email||'');if(email===null)return;try{await api('PATCH','/api/v1/admin/users/'+id,{fullName,phone,email});toast('اطلاعات کاربر ذخیره شد');await loadUsersDirectory(state.userDirectoryPage||1)}catch(x){toast(x.message)}return}
+   if(e.target.id==='userDirectorySearchBtn')loadUsersDirectory(1).catch(x=>toast(x.message));
+  });
+  document.addEventListener('change',async e=>{const sel=e.target.closest('[data-user-role]');if(!sel)return;const id=Number(sel.dataset.userRole),u=(state.userDirectoryRows||[]).find(x=>Number(x.id)===id);if(!u)return;try{await api('PATCH','/api/v1/admin/users/'+id,{role:sel.value});toast('نقش کاربر به‌روزرسانی شد');await loadUsersDirectory(state.userDirectoryPage||1)}catch(x){toast(x.message);sel.value=u.role}});
+  document.addEventListener('keydown',e=>{if(e.target.id==='userDirectorySearch'&&e.key==='Enter'){e.preventDefault();loadUsersDirectory(1).catch(x=>toast(x.message))}});
+ }
+ setTimeout(()=>loadUsersDirectory(1).catch(x=>toast(x.message)),0);
+ return head('مدیریت کاربران، مدیران و نمایندگان','فهرست واحد از حساب‌های منتقل‌شده و ثبت‌نام‌های جدید؛ نقش، وضعیت و مشخصات از دیتابیس عملیاتی خوانده و ویرایش می‌شود.')+
+ '<div id="userDirectoryStats" class="dash-grid"><div class="panel sub">در حال محاسبه آمار واقعی…</div></div>'+
+ '<div class="panel"><div class="bar"><input id="userDirectorySearch" type="search" placeholder="جستجو نام، موبایل، ایمیل، کد ملی یا شناسه"><select id="userDirectoryRole"><option value="">همه نقش‌ها</option>'+userDirectoryRoles.map(r=>'<option value="'+esc(r.code)+'">'+esc(r.display_name)+'</option>').join('')+'</select><select id="userDirectoryStatus"><option value="">همه وضعیت‌ها</option><option value="active">فعال</option><option value="inactive">غیرفعال</option></select><button class="btn solid" id="userDirectorySearchBtn">جستجو</button></div><div id="userDirectoryRows"><p class="sub">در حال دریافت حساب‌ها…</p></div><div id="userDirectoryPager" class="bar"></div><p class="sub">تغییر نقش فقط برای مدیر ارشد مجاز است. حساب مدیر واردشده قابل غیرفعال‌سازی نیست. تغییرات در گزارش حسابرسی ثبت می‌شود.</p></div>';
 });
 state.sb=state.sb||{h:'',p:'',cta:'مشاهده طرح‌ها',bg:'plum',c:'#ffffff',align:'right',fs:30,ch:{},caption:'',hashtags:'',visualPrompt:''};
 state.sb.goal=state.sb.goal||'معرفی طرح اعتباری';state.sb.audience=state.sb.audience||'خریداران و خانواده‌ها';state.sb.offer=state.sb.offer||'';state.sb.tone=state.sb.tone||'حرفه‌ای، شفاف و متقاعدکننده';state.sb.provider=state.sb.provider||'auto';state.sb.platform=state.sb.platform||'instagram';state.sb.imageData=state.sb.imageData||'';state.sb.designNotes=state.sb.designNotes||'';
