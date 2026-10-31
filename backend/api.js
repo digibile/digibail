@@ -789,35 +789,29 @@ export async function handleApi(req, res, url) {
       }
       if (req.method === "GET" && route === "/api/v1/admin/summary") {
         const db=legacyMaria();
-        const [mariaStatsResult,roleStatsResult,staffRows,fresh]=await Promise.all([
-          db.query("SELECT COUNT(*) AS total,SUM(CASE WHEN COALESCE(IsActive,1)=1 THEN 1 ELSE 0 END) AS active,SUM(CASE WHEN COALESCE(IsActive,1)=0 THEN 1 ELSE 0 END) AS inactive,DATE_FORMAT(MAX(RegDate),'%Y-%m-%dT%H:%i:%s+03:30') AS latest_registration,SUM(CASE WHEN DATE(RegDate)=DATE(CONVERT_TZ(UTC_TIMESTAMP(),'+00:00','+03:30')) THEN 1 ELSE 0 END) AS today FROM AspNetUsers"),
-          db.query("SELECT LOWER(r.Name) AS role,COUNT(DISTINCT u.Id) AS total FROM AspNetUsers u JOIN AspNetUserRoles ur ON ur.UserId=u.Id JOIN AspNetRoles r ON r.Id=ur.RoleId GROUP BY LOWER(r.Name)"),
-          db.query("SELECT COUNT(DISTINCT u.Id) AS total FROM AspNetUsers u WHERE EXISTS(SELECT 1 FROM AspNetUserRoles ur JOIN AspNetRoles r ON r.Id=ur.RoleId WHERE ur.UserId=u.Id AND LOWER(REPLACE(REPLACE(REPLACE(r.Name,' ',''),'-',''),'_','')) IN ('admin','superadmin','agent','marketer','customermarketer','appapiuser','sponsor'))"),
-          postgresOnlyAccounts(db,100000)
+        const [directory,mainTenants,blueTenants]=await Promise.all([
+          unifiedUserDirectory({page:1,pageSize:1}),
+          db.query("SELECT COUNT(*) AS total FROM Customers"),
+          db.query("SELECT COUNT(*) AS total FROM bluvamdb__Customers")
         ]);
-        const mariaStats=mariaStatsResult[0]?.[0]||{},roleMap=new Map(roleStatsResult[0].map(r=>[String(r.role||"").replace(/[^a-z]/g,""),Number(r.total)||0]));
-        const freshToday=fresh.filter(r=>new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Tehran",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date(r.created_at))===new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Tehran",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date())).length;
-        const mariaTotal=Number(mariaStats.total)||0,freshTotal=fresh.length,users=mariaTotal+freshTotal;
-        const admins=(roleMap.get("admin")||0)+(roleMap.get("superadmin")||0)+fresh.filter(r=>["admin","superadmin"].includes(r.effective_role)).length;
-        const agents=(roleMap.get("agent")||0)+fresh.filter(r=>r.effective_role==="agent").length;
-        const marketers=(roleMap.get("marketer")||0)+(roleMap.get("customermarketer")||0)+fresh.filter(r=>["marketer","customermarketer"].includes(r.effective_role)).length;
-        const customers=Math.max(0,mariaTotal-(Number(staffRows[0][0]?.total)||0))+fresh.filter(r=>!["admin","superadmin","agent","marketer","customermarketer","legacy_appapiuser","legacy_sponsor"].includes(r.effective_role)).length;
-        const mariaLatest=mariaStats.latest_registration?new Date(mariaStats.latest_registration):null,freshLatest=fresh[0]?.created_at?new Date(fresh[0].created_at):null;
-        const latestRegistration=freshLatest&&(!mariaLatest||freshLatest>mariaLatest)?freshLatest.toISOString():mariaStats.latest_registration?new Date(mariaStats.latest_registration).toISOString():null;
-        const [tenantRows]=await db.query("SELECT COUNT(*) AS total FROM Customers");
-        return json(res,200,{data:{users,admins,agents,customers,legacy_customers:customers,legacy_users:users,users_active:(Number(mariaStats.active)||0)+fresh.filter(r=>r.is_active).length,users_inactive:(Number(mariaStats.inactive)||0)+fresh.filter(r=>!r.is_active).length,users_today:(Number(mariaStats.today)||0)+freshToday,latest_user_registration:latestRegistration,latestRegistration,legacy_customer_tenants:Number(tenantRows[0]?.total)||0,smsConfigured:Boolean(KAVENEGAR_API_KEY),identitySource:"MariaDB.AspNetUsers+new PostgreSQL registrations",businessDateTimezone:"Asia/Tehran"}});
+        const tenants=(Number(mainTenants[0][0]?.total)||0)+(Number(blueTenants[0][0]?.total)||0);
+        return json(res,200,{data:{users:directory.overallTotal,admins:directory.adminTotal,agents:directory.agentTotal,marketers:directory.marketerTotal,customers:directory.customerTotal,legacy_customers:directory.customerTotal,legacy_users:directory.overallTotal,users_active:directory.activeTotal,users_inactive:directory.inactiveTotal,users_today:directory.todayTotal,latest_user_registration:directory.latestRegistration,latestRegistration:directory.latestRegistration,legacy_customer_tenants:tenants,transfer_accounts:directory.transferTotal,identity_sources:directory.sourceCounts,smsConfigured:Boolean(KAVENEGAR_API_KEY),identitySource:directory.sourceTable,businessDateTimezone:"Asia/Tehran"}});
       }
       if (req.method === "GET" && route === "/api/v1/admin/users") {
-        const db=legacyMaria(),[fresh,[legacyRows]]=await Promise.all([postgresOnlyAccounts(db,100000),db.query("SELECT u.Id,u.FirstName,u.LastName,u.Mobile,u.Phone,u.PhoneNumber,u.Email,u.NationalCode,u.UserName,u.IsActive,u.RegDate,u.CustomerId,u.AgentId,(SELECT GROUP_CONCAT(DISTINCT r.Name ORDER BY r.Name SEPARATOR ',') FROM AspNetUserRoles ur JOIN AspNetRoles r ON r.Id=ur.RoleId WHERE ur.UserId=u.Id) AS roles FROM AspNetUsers u ORDER BY u.RegDate DESC,u.Id DESC LIMIT 500")]);
-        const merged=[...fresh,...legacyRows.map(mapMariaDirectoryUser)].sort((a,b)=>new Date(b.created_at||0)-new Date(a.created_at||0));
-        const [counts]=await db.query("SELECT COUNT(*) AS total FROM AspNetUsers");
-        return json(res,200,{data:merged.slice(0,500),total:(Number(counts[0]?.total)||0)+fresh.length,sourceTable:"MariaDB.AspNetUsers",additionalSource:"new PostgreSQL registrations"});
+        const data=await unifiedUserDirectory({page:1,pageSize:500});
+        return json(res,200,{data:data.rows,total:data.overallTotal,sourceTable:data.sourceTable,sourceCounts:data.sourceCounts});
       }
       if (req.method === "GET" && route === "/api/v1/admin/roles") {
-        const db=legacyMaria(),[sourceRoles]=await db.query("SELECT Name FROM AspNetRoles ORDER BY Name");
+        const db=legacyMaria();
+        const [mainRoles,blueRoles,transferRoles]=await Promise.all([
+          db.query("SELECT Name FROM AspNetRoles ORDER BY Name"),
+          db.query("SELECT Name FROM bluvamdb__AspNetRoles ORDER BY Name"),
+          db.query("SELECT Name FROM OnlineMoneyTransfer__AspNetRoles ORDER BY Name")
+        ]);
         const builtins=["customer","member","agent","marketer","customermarketer","admin","superadmin"].map(code=>({code,display_name:legacyRoleLabel(code),editable:true}));
         const map=new Map(builtins.map(r=>[r.code,r]));
-        for(const item of sourceRoles){const code=legacyRoleCode(item.Name);map.set(code,{code,display_name:legacyRoleLabel(code)===code?String(item.Name):legacyRoleLabel(code),editable:["customer","member","agent","marketer","customermarketer","admin","superadmin"].includes(code)});}
+        for(const item of [...mainRoles[0],...blueRoles[0]]){const code=legacyRoleCode(item.Name);map.set(code,{code,display_name:legacyRoleLabel(code)===code?String(item.Name):legacyRoleLabel(code),editable:["customer","member","agent","marketer","customermarketer","admin","superadmin"].includes(code)});}
+        for(const item of transferRoles[0]){const code=legacyRoleCode(item.Name);if(!map.has(code))map.set(code,{code,display_name:String(item.Name||code),editable:false});}
         return json(res,200,{data:[...map.values()]});
       }
       if (req.method === "GET" && route === "/api/v1/admin/users-page") {
@@ -909,26 +903,14 @@ export async function handleApi(req, res, url) {
         return json(res,200,{data:updated,message:"اطلاعات حساب به‌روزرسانی شد."});
       }
       if (req.method === "GET" && route === "/api/v1/admin/legacy-customers") {
-        const db=legacyMaria();
-        const [mariaResult,fresh,staffRows,todayRows,latestRows]=await Promise.all([
-          db.query("SELECT COUNT(*) AS total FROM AspNetUsers"),
-          postgresOnlyAccounts(db,100000),
-          db.query("SELECT COUNT(DISTINCT u.Id) AS total FROM AspNetUsers u WHERE EXISTS(SELECT 1 FROM AspNetUserRoles ur JOIN AspNetRoles r ON r.Id=ur.RoleId WHERE ur.UserId=u.Id AND LOWER(REPLACE(REPLACE(REPLACE(r.Name,' ',''),'-',''),'_','')) IN ('admin','superadmin','agent','marketer','customermarketer'))"),
-          db.query("SELECT COUNT(*) AS total FROM AspNetUsers WHERE DATE(RegDate)=DATE(CONVERT_TZ(UTC_TIMESTAMP(),'+00:00','+03:30'))"),
-          db.query("SELECT DATE_FORMAT(MAX(RegDate),'%Y-%m-%dT%H:%i:%s+03:30') AS latest FROM AspNetUsers")
-        ]);
-        const mariaTotal=Number(mariaResult[0][0]?.total)||0,total=mariaTotal+fresh.length;
-        const freshStaff=fresh.filter(r=>["admin","superadmin","agent","marketer","customermarketer"].includes(r.effective_role)).length;
-        const customerTotal=Math.max(0,mariaTotal-(Number(staffRows[0][0]?.total)||0))+fresh.length-freshStaff;
-        const freshToday=fresh.filter(r=>new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Tehran",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date(r.created_at))===new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Tehran",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date())).length;
-        const latest=[latestRows[0][0]?.latest,fresh[0]?.created_at].filter(Boolean).sort((x,y)=>new Date(y)-new Date(x))[0]||null;
-        return json(res,200,{data:{legacy_customers:customerTotal,legacy_users:total,today:(Number(todayRows[0][0]?.total)||0)+freshToday,latestRegistration:latest,sourceTable:"MariaDB.AspNetUsers",additionalSource:"new PostgreSQL registrations",timezone:"Asia/Tehran"}});
+        const directory=await unifiedUserDirectory({page:1,pageSize:1,role:"customer"});
+        return json(res,200,{data:{legacy_customers:directory.customerTotal,legacy_users:directory.overallTotal,today:directory.customerTodayTotal,latestRegistration:directory.latestRegistration,sourceTable:directory.sourceTable,sourceCounts:directory.sourceCounts,timezone:"Asia/Tehran"}});
       }
       if (req.method === "GET" && route === "/api/v1/admin/legacy-customers-page") {
         const page=Math.max(1,Number.parseInt(url.searchParams.get("page")||"1",10)||1);
         const pageSize=Math.min(100,Math.max(10,Number.parseInt(url.searchParams.get("pageSize")||"50",10)||50));
-        const data=await unifiedUserDirectory({page,pageSize,search:url.searchParams.get("q")||""});
-        return json(res,200,{data:{...data,legacy_customers:data.overallTotal}});
+        const data=await unifiedUserDirectory({page,pageSize,search:url.searchParams.get("q")||"",role:"customer"});
+        return json(res,200,{data:{...data,legacy_customers:data.customerTotal,overallCustomerTotal:data.customerTotal}});
       }
       if (req.method === "GET" && route === "/api/v1/admin/legacy-agents-page") {
         const page=Math.max(1,Number.parseInt(url.searchParams.get("page")||"1",10)||1),pageSize=Math.min(100,Math.max(10,Number.parseInt(url.searchParams.get("pageSize")||"25",10)||25));
