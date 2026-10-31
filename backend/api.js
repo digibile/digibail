@@ -153,7 +153,8 @@ export async function migrate() {
   const root = path.dirname(fileURLToPath(import.meta.url));
   const schema = await readFile(path.join(root, "db", "002_mariadb_app.sql"), "utf8");
   const statements = schema
-    .split(/;\\s*(?:\\r?\\n|$)/)
+    .replace(/^\s*--.*$/gm, "")
+    .split(/;\s*(?:\r?\n|$)/)
     .map(statement => statement.trim())
     .filter(statement => statement && !statement.startsWith("--"));
   for (const statement of statements) {
