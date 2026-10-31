@@ -1,0 +1,50 @@
+name: Backup Digibail PostgreSQL before data isolation
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/inspect-db-backup-before-isolation.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Create and verify a full PostgreSQL backup without changing live data
+        uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          command_timeout: 14m
+          script: |
+            set -eu
+            ROOT="/home/digibail/domains/digebail.ir"
+            BACKUP_DIR="/home/digibail/backups"
+            BACKUP="$BACKUP_DIR/digibail_before_vamcity_isolation_20261031.dump"
+            cd "$ROOT"
+            if sudo -n docker info >/dev/null 2>&1; then D="sudo -n docker"; elif docker info >/dev/null 2>&1; then D="docker"; else echo "BLOCKED: Docker unavailable"; exit 20; fi
+            mkdir -p "$BACKUP_DIR"
+            chmod 700 "$BACKUP_DIR"
+            echo "=== Pre-backup disk and database size ==="
+            df -h "$BACKUP_DIR"
+            $D compose exec -T db sh -lc 'psql -X -U "$POSTGRES_USER" -d "$POSTGRES_DB" -P pager=off -c "SELECT pg_size_pretty(pg_database_size(current_database())) AS database_size,pg_database_size(current_database()) AS bytes"'
+            if [ -e "$BACKUP" ]; then echo "BLOCKED: backup path already exists; refusing to overwrite."; exit 21; fi
+            echo "=== Creating consistent custom-format backup ==="
+            $D compose exec -T db sh -lc 'pg_dump -Fc -U "$POSTGRES_USER" -d "$POSTGRES_DB"' > "$BACKUP"
+            chmod 600 "$BACKUP"
+            test -s "$BACKUP"
+            echo "=== Verify archive structure ==="
+            cat "$BACKUP" | $D compose exec -T db pg_restore --list - >/dev/null
+            echo "BACKUP_VERIFIED=1"
+            echo "BACKUP_PATH=$BACKUP"
+            echo "BACKUP_BYTES=$(stat -c %s "$BACKUP")"
+            echo "BACKUP_SHA256=$(sha256sum "$BACKUP" | awk '{print $1}')"
+            du -h "$BACKUP"
+            echo "=== Post-backup disk ==="
+            df -h "$BACKUP_DIR"
