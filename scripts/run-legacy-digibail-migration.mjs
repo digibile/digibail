@@ -22,9 +22,15 @@ const runDocker=(args,opts={})=>command(docker[0],docker.slice(1).concat(args),o
 function jsonOutput(raw,label){
  const first=raw.indexOf("[");if(first<0)throw new Error("SQL Server JSON export missing for "+label);
  let depth=0,inString=false,escaped=false,end=-1;
- for(let i=first;i<raw.length;i++){const ch=raw[i];if(inString){if(escaped)escaped=false;else if(ch==="\\\\")escaped=true;else if(ch===\'"\')inString=false;continue;}if(ch===\'"\'){inString=true;continue;}if(ch==="[")depth++;else if(ch==="]"){depth--;if(depth===0){end=i;break;}}}
+ for(let i=first;i<raw.length;i++){
+  const ch=raw[i];
+  if(inString){if(escaped)escaped=false;else if(ch==="\\")escaped=true;else if(ch==='"')inString=false;continue;}
+  if(ch==='"'){inString=true;continue;}
+  if(ch==="[")depth++;
+  else if(ch==="]"){depth--;if(depth===0){end=i;break;}}
+ }
  if(end<0)throw new Error("SQL Server JSON array is incomplete for "+label);
- return JSON.parse(raw.slice(first,end+1).replace(/[\\r\\n]/g,""));
+ return JSON.parse(raw.slice(first,end+1).replace(/[\r\n]/g,""));
 }
 function sql(query,extra=[]){
  const out=runDocker(["exec","-e","SQLCMDPASSWORD="+dbPassword,SQL_CONTAINER,sqlcmd,"-S","localhost","-U",dbUser,"-C","-b","-w","65535","-y","0","-d",DB_NAME,"-Q",query].concat(extra));
