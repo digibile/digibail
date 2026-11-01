@@ -21,14 +21,25 @@ final class LegacyIdentityRepository
         }
 
         $user = $this->findUser($identifier);
-        if ($user === null || (int) $user['IsActive'] !== 1 || !$this->isLockoutExpired($user)) {
+        if ($user === null) {
+            error_log('[AUTH_DIAG] password_login lookup=not_unique_or_missing');
+            return null;
+        }
+        if ((int) $user['IsActive'] !== 1) {
+            error_log('[AUTH_DIAG] password_login account=inactive user_id=' . (string) $user['Id']);
+            return null;
+        }
+        if (!$this->isLockoutExpired($user)) {
+            error_log('[AUTH_DIAG] password_login account=locked user_id=' . (string) $user['Id']);
             return null;
         }
 
         $storedHash = is_string($user['PasswordHash'] ?? null) ? $user['PasswordHash'] : null;
         if (!\App\Security\PasswordVerifier::verify($password, $storedHash)) {
+            error_log('[AUTH_DIAG] password_login password=verification_failed user_id=' . (string) $user['Id']);
             return null;
         }
+        error_log('[AUTH_DIAG] password_login result=verified user_id=' . (string) $user['Id']);
 
         if (\App\Security\PasswordVerifier::needsBcryptUpgrade($storedHash)) {
             $this->upgradeHash((string) $user['Id'], (string) $storedHash, $password);
@@ -199,10 +210,20 @@ final class LegacyIdentityRepository
     public function findActiveByPhone(string $phone): ?array
     {
         $user = $this->findUser(self::normalizeDigits($phone));
-        if ($user === null || (int) $user['IsActive'] !== 1 || !$this->isLockoutExpired($user)) {
+        if ($user === null) {
+            error_log('[AUTH_DIAG] phone_lookup result=not_unique_or_missing');
+            return null;
+        }
+        if ((int) $user['IsActive'] !== 1) {
+            error_log('[AUTH_DIAG] phone_lookup result=inactive user_id=' . (string) $user['Id']);
+            return null;
+        }
+        if (!$this->isLockoutExpired($user)) {
+            error_log('[AUTH_DIAG] phone_lookup result=locked user_id=' . (string) $user['Id']);
             return null;
         }
 
+        error_log('[AUTH_DIAG] phone_lookup result=found user_id=' . (string) $user['Id']);
         return $this->shapeUser($user, $this->rolesFor((string) $user['Id']));
     }
 
@@ -338,7 +359,12 @@ final class LegacyIdentityRepository
         ]);
 
         $matches = $statement->fetchAll();
-        return count($matches) === 1 ? $matches[0] : null;
+        if (count($matches) !== 1) {
+            error_log('[AUTH_DIAG] identity_query match_count=' . count($matches));
+            return null;
+        }
+
+        return $matches[0];
     }
 
     /** @return list<string> */
