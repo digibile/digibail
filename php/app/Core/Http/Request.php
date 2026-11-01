@@ -8,11 +8,17 @@ final readonly class Request
 {
     /**
      * @param array<string, string> $headers
+     * @param array<string, mixed> $query
+     * @param array<string, mixed> $input
+     * @param array<string, mixed> $files
      */
     public function __construct(
         public string $method,
         public string $path,
-        public array $headers = []
+        public array $headers = [],
+        public array $query = [],
+        public array $input = [],
+        public array $files = []
     ) {
     }
 
@@ -34,10 +40,24 @@ final readonly class Request
             }
         }
 
+        $input = $_POST;
+        $contentType = strtolower(trim(explode(';', $normalizedHeaders['content-type'] ?? '')[0]));
+
+        if ($contentType === 'application/json') {
+            $raw = file_get_contents('php://input');
+            if (is_string($raw) && $raw !== '') {
+                $decoded = json_decode($raw, true);
+                $input = is_array($decoded) ? $decoded : [];
+            }
+        }
+
         return new self(
             strtoupper((string) ($_SERVER['REQUEST_METHOD'] ?? 'GET')),
             $path,
-            $normalizedHeaders
+            $normalizedHeaders,
+            $_GET,
+            $input,
+            $_FILES
         );
     }
 }
