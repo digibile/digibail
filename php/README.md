@@ -24,7 +24,8 @@ This directory is the isolated PHP implementation track. The existing Node.js, N
 - OTP login and registration-phone verification using Kavenegar, including the optional verification template and SMS-text fallback.
 - Password-reset request, OTP verification ticket and bcrypt password update. Reset rotates the ASP.NET Identity security stamp and clears lockout counters.
 - Initial OTP-verified customer registration writes to the existing `AspNetUsers` table, checks duplicate phone/national-code values and assigns the configured role through `AspNetUserRoles`. It does not create a parallel user table. `CustomerId`/tenant association and cross-database identity mapping remain unresolved, so this route is not approved for production yet.
-- Additive MariaDB DDL for PHP security challenge/rate-limit storage. Existing identity and business tables are not altered.
+- Public tenant configuration and tenant-scoped loan-product list/detail endpoints, with host-to-tenant resolution and a unique active-default fallback. Existing product rows are read-only in this increment.
+- Additive MariaDB DDL for PHP security challenge/rate-limit and tenancy/loan-product support. Existing identity and business tables are not altered.
 - CI tests for password hash formats, JWT signatures/expiry/role claims, route registration and PHP syntax across PHP 8.3, 8.4 and 8.5.
 
 ## Apply the additive security schema
