@@ -3,3 +3,5 @@ One-time trigger for the backed-up additive import of the original Digibail SQL 
 Retry trigger after adding an indexed AUTO_INCREMENT column to the generated Digibail schema. The importer is resumable and the existing database backup remains preserved.
 
 Retry after ensuring SQL Server identity columns are the leftmost member of an InnoDB index, including composite primary-key cases.
+
+Retry after handling SQL Server year-0001 temporal sentinels with exact raw-value sidecars in MariaDB.
