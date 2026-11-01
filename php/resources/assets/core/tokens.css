@@ -1,0 +1,13 @@
+:root {
+  --db-font-family: Tahoma, Arial, sans-serif;
+  --db-color-text: #182230;
+  --db-color-muted: #667085;
+  --db-color-surface: #ffffff;
+  --db-color-background: #f5f7fa;
+  --db-color-border: #e4e7ec;
+  --db-color-primary: #2457a7;
+  --db-radius-sm: 6px;
+  --db-radius-md: 10px;
+  --db-radius-lg: 16px;
+  --db-shadow-panel: 0 8px 28px rgb(16 24 40 / 8%);
+}
