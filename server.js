@@ -36,6 +36,28 @@ const server = http.createServer(async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   const url = new URL(req.url || "/", "http://localhost");
 
+  if (url.pathname.startsWith("/assets/")) {
+    const assetName = url.pathname.slice("/assets/".length);
+    if (!/^[a-zA-Z0-9._-]+$/.test(assetName)) {
+      return send(res, 400, "text/plain; charset=utf-8", "Bad request");
+    }
+    const assetPath = path.resolve(ROOT, "web", "assets", assetName);
+    const assetRoot = path.resolve(ROOT, "web", "assets") + path.sep;
+    if (!assetPath.startsWith(assetRoot)) {
+      return send(res, 400, "text/plain; charset=utf-8", "Bad request");
+    }
+    try {
+      const content = await readFile(assetPath);
+      res.writeHead(200, {
+        "Content-Type": MIME[path.extname(assetPath)] || "application/octet-stream",
+        "Cache-Control": "public, max-age=3600"
+      });
+      return res.end(req.method === "HEAD" ? undefined : content);
+    } catch {
+      return send(res, 404, "text/plain; charset=utf-8", "Asset not found");
+    }
+  }
+
   if (url.pathname === "/healthz") {
     try {
       await dbHealth();
