@@ -25,6 +25,21 @@ if ($adminLoanTogglePath->status !== 405 || ($adminLoanTogglePath->headers['Allo
     throw new RuntimeException('Admin loan-product toggle must be registered as POST.');
 }
 
+$tenantUpdateWrongMethod = $router->dispatch(new Request('GET', '/api/v1/admin/tenants/00000000-0000-4000-8000-000000000001'));
+if ($tenantUpdateWrongMethod->status !== 405 || ($tenantUpdateWrongMethod->headers['Allow'] ?? '') !== 'PUT') {
+    throw new RuntimeException('Tenant update must be registered as PUT.');
+}
+
+$tenantDomainWrongMethod = $router->dispatch(new Request('GET', '/api/v1/admin/tenants/00000000-0000-4000-8000-000000000001/domains'));
+if ($tenantDomainWrongMethod->status !== 405 || ($tenantDomainWrongMethod->headers['Allow'] ?? '') !== 'POST') {
+    throw new RuntimeException('Tenant domain creation must be registered as POST.');
+}
+
+$tenantDomainDeleteWrongMethod = $router->dispatch(new Request('POST', '/api/v1/admin/tenants/00000000-0000-4000-8000-000000000001/domains/00000000-0000-4000-8000-000000000002'));
+if ($tenantDomainDeleteWrongMethod->status !== 405 || ($tenantDomainDeleteWrongMethod->headers['Allow'] ?? '') !== 'DELETE') {
+    throw new RuntimeException('Tenant domain deletion must be registered as DELETE.');
+}
+
 $tenantConfigPath = $router->dispatch(new Request('POST', '/api/v1/tenant/config'));
 if ($tenantConfigPath->status !== 405 || ($tenantConfigPath->headers['Allow'] ?? '') !== 'GET') {
     throw new RuntimeException('The tenant configuration endpoint must be registered as GET.');
