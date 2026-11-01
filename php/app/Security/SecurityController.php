@@ -86,6 +86,7 @@ final class SecurityController
             'role' => $role,
             'roles' => $tokenRoles,
             'phone' => (string) ($user['mobile'] ?? ''),
+            'core_uid' => $user['core_user_id'] ?? null,
         ];
 
         try {
@@ -105,6 +106,7 @@ final class SecurityController
                 'expiresAt' => $expiresAt,
                 'user' => [
                     'id' => $user['id'],
+                    'coreUserId' => $user['core_user_id'] ?? null,
                     'phone' => $user['mobile'],
                     'fullName' => $user['display_name'],
                     'role' => $role,
@@ -410,6 +412,7 @@ final class SecurityController
         return Response::json([
             'data' => [
                 'id' => $user['id'],
+                'coreUserId' => $user['core_user_id'] ?? null,
                 'phone' => $user['mobile'],
                 'fullName' => $user['display_name'],
                 'username' => $user['username'],
