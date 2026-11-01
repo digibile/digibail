@@ -32,10 +32,12 @@ final class VamCityLoanRequestController
         }
 
         $page = max(1, min(100000, (int) ($request->query['page'] ?? 1)));
-        $pageSize = max(10, min(100, (int) ($request->query['pageSize'] ?? 50)));
+        $pageSize = max(10, min(250, (int) ($request->query['pageSize'] ?? 25)));
         $search = trim((string) ($request->query['q'] ?? ''));
         $search = mb_substr($search, 0, 120, 'UTF-8');
-        $status = trim((string) ($request->query['status'] ?? ''));
+        $status = mb_substr(trim((string) ($request->query['status'] ?? '')), 0, 120, 'UTF-8');
+        $from = trim((string) ($request->query['from'] ?? ''));
+        $to = trim((string) ($request->query['to'] ?? ''));
         $where = [];
         $params = [];
 
@@ -57,11 +59,20 @@ final class VamCityLoanRequestController
             $params['status_agent'] = $status;
             $params['status_title'] = $status;
         }
+        if (preg_match('/^\\d{4}-\\d{2}-\\d{2}$/', $from) === 1 && self::validDate($from)) {
+            $where[] = 'r.RequestDate >= :from_date';
+            $params['from_date'] = $from . ' 00:00:00';
+        }
+        if (preg_match('/^\\d{4}-\\d{2}-\\d{2}$/', $to) === 1 && self::validDate($to)) {
+            $where[] = 'r.RequestDate < DATE_ADD(:to_date, INTERVAL 1 DAY)';
+            $params['to_date'] = $to . ' 00:00:00';
+        }
 
         $from = ' FROM UserLoanRequests r
             LEFT JOIN AspNetUsers u ON u.Id = r.UserId
             LEFT JOIN Loans l ON l.Id = r.LoanId
-            LEFT JOIN LoanRequestStatuses s ON s.Id = r.StatusId';
+            LEFT JOIN LoanRequestStatuses s ON s.Id = r.StatusId
+            LEFT JOIN AspNetUsers agent ON agent.Id = r.AgentId';
         $filter = $where === [] ? '' : ' WHERE ' . implode(' AND ', $where);
 
         $count = $this->db->prepare('SELECT COUNT(*)' . $from . $filter);
@@ -78,6 +89,7 @@ final class VamCityLoanRequestController
                 CONCAT_WS(\' \', NULLIF(u.FirstName, \'\'), NULLIF(u.LastName, \'\')) AS applicantName,
                 COALESCE(u.Mobile, u.Phone, u.PhoneNumber) AS mobile,
                 u.NationalCode AS nationalCode,
+                CONCAT_WS(' ', NULLIF(agent.FirstName, ''), NULLIF(agent.LastName, '')) AS agentName,
                 r.Amount AS amount,
                 r.Installment AS installment,
                 r.InstallmentCount AS installmentCount,
@@ -143,5 +155,11 @@ final class VamCityLoanRequestController
                 'source' => 'MariaDB.UserLoanRequests',
             ],
         ]);
+    }
+
+    private static function validDate(string $value): bool
+    {
+        [$year, $month, $day] = array_map('intval', explode('-', $value));
+        return checkdate($month, $day, $year);
     }
 }
