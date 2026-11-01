@@ -95,7 +95,7 @@ jobs:
                 mismatched_tables=$((mismatched_tables+1))
                 continue
               fi
-              actual="$(mysql_cmd -e "SELECT COUNT(*) FROM `$DB`.`$target_table`;")"
+              actual="$(mysql_cmd -e "SELECT COUNT(*) FROM $DB.$target_table;")"
               target_rows=$((target_rows+actual))
               if [ "$actual" = "$expected" ]; then
                 matched_tables=$((matched_tables+1))
@@ -112,9 +112,9 @@ jobs:
             echo "VAMCITY_TARGET_ROWS_IN_MATCHED_TABLES=$target_rows"
 
             echo '=== VAMCITY MIGRATION CHECKPOINTS ==='
-            mysql_cmd -e "SELECT status,COUNT(*) AS tables_count,SUM(expected_rows) AS expected_rows,SUM(imported_rows) AS imported_rows FROM `$DB`.`__vamcity_migration_state` WHERE source_database='$SOURCE' GROUP BY status ORDER BY status;" || true
+            mysql_cmd -e "SELECT status,COUNT(*) AS tables_count,SUM(expected_rows) AS expected_rows,SUM(imported_rows) AS imported_rows FROM $DB.__vamcity_migration_state WHERE source_database='$SOURCE' GROUP BY status ORDER BY status;" || true
             echo '=== VAMCITY TARGET SCHEMA COUNTS ==='
-            mysql_cmd -e "SELECT COUNT(DISTINCT TABLE_NAME) AS tables_count,COUNT(*) AS columns_count FROM information_schema.COLUMNS WHERE TABLE_SCHEMA='$DB' AND TABLE_NAME IN (SELECT source_table FROM `$DB`.`__vamcity_migration_state` WHERE source_database='$SOURCE');"
+            mysql_cmd -e "SELECT COUNT(DISTINCT TABLE_NAME) AS tables_count,COUNT(*) AS columns_count FROM information_schema.COLUMNS WHERE TABLE_SCHEMA='$DB' AND TABLE_NAME IN (SELECT source_table FROM $DB.__vamcity_migration_state WHERE source_database='$SOURCE');"
 
             unset MYSQL_PASS SA_PASS
             if [ "$source_tables" -ne 88 ] || [ "$matched_tables" -ne "$source_tables" ] || [ "$mismatched_tables" -ne 0 ]; then
