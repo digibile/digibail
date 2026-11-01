@@ -55,6 +55,31 @@ if ($loanProductDetailPath->status !== 405 || ($loanProductDetailPath->headers['
     throw new RuntimeException('The public loan product detail endpoint must be registered as GET.');
 }
 
+$myCardsMethod = $router->dispatch(new Request('POST', '/api/v1/me/cards'));
+if ($myCardsMethod->status !== 405 || ($myCardsMethod->headers['Allow'] ?? '') !== 'GET') {
+    throw new RuntimeException('Customer virtual-card list must be registered as GET.');
+}
+
+$cardRevealMethod = $router->dispatch(new Request('GET', '/api/v1/me/cards/00000000-0000-4000-8000-000000000001/reveal'));
+if ($cardRevealMethod->status !== 405 || ($cardRevealMethod->headers['Allow'] ?? '') !== 'POST') {
+    throw new RuntimeException('Customer card reveal must be registered as POST.');
+}
+
+$adminCardIssueMethod = $router->dispatch(new Request('GET', '/api/v1/admin/virtual-cards/issue'));
+if ($adminCardIssueMethod->status !== 405 || ($adminCardIssueMethod->headers['Allow'] ?? '') !== 'POST') {
+    throw new RuntimeException('Admin virtual-card issue must be registered as POST.');
+}
+
+$adminCardLimitMethod = $router->dispatch(new Request('GET', '/api/v1/admin/virtual-cards/00000000-0000-4000-8000-000000000001/limit'));
+if ($adminCardLimitMethod->status !== 405 || ($adminCardLimitMethod->headers['Allow'] ?? '') !== 'PUT') {
+    throw new RuntimeException('Admin virtual-card limit must be registered as PUT.');
+}
+
+$gatewayCardChargeMethod = $router->dispatch(new Request('GET', '/api/v1/gateway/card-charge'));
+if ($gatewayCardChargeMethod->status !== 405 || ($gatewayCardChargeMethod->headers['Allow'] ?? '') !== 'POST') {
+    throw new RuntimeException('Merchant card charge must be registered as POST.');
+}
+
 $live = $router->dispatch(new Request('GET', '/health/live'));
 
 if ($live->status !== 200) {
