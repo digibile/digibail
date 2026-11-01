@@ -20,7 +20,7 @@ final class JwtService
         }
     }
 
-    /** @param array<string, scalar|null> $claims */
+    /** @param array<string, mixed> $claims */
     public function issue(array $claims, int $ttlSeconds = 28800): string
     {
         if ($ttlSeconds < 1 || $ttlSeconds > 86400) {
