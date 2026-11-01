@@ -120,6 +120,18 @@ final class LegacyIdentityRepository
             ]);
 
             $userId = (string) $this->db->lastInsertId();
+            $coreUserId = self::uuid();
+            $identityLink = $this->db->prepare(
+                'INSERT INTO PhpIdentityLinks
+                    (LegacyUserId, CoreUserId, MappingSource, VerifiedAt, CreatedOn)
+                 VALUES (:legacy_user_id, :core_user_id, :source, UTC_TIMESTAMP(6), UTC_TIMESTAMP(6))'
+            );
+            $identityLink->execute([
+                'legacy_user_id' => $userId,
+                'core_user_id' => $coreUserId,
+                'source' => 'php_registration',
+            ]);
+
             $assign = $this->db->prepare(
                 'INSERT INTO AspNetUserRoles (UserId, RoleId)
                  VALUES (:user_id, :role_id)'
@@ -266,9 +278,21 @@ final class LegacyIdentityRepository
             'email' => $user['Email'],
             'national_code' => $user['NationalCode'],
             'is_active' => (bool) $user['IsActive'],
+            'core_user_id' => $this->coreUserIdForLegacyId((string) $user['Id']),
             'roles' => $roles,
             'source' => 'mariadb.AspNetUsers',
         ];
+    }
+
+    public function coreUserIdForLegacyId(string $legacyUserId): ?string
+    {
+        $statement = $this->db->prepare(
+            'SELECT CoreUserId FROM PhpIdentityLinks
+             WHERE LegacyUserId = :legacy_user_id AND VerifiedAt IS NOT NULL LIMIT 1'
+        );
+        $statement->execute(['legacy_user_id' => $legacyUserId]);
+        $value = $statement->fetchColumn();
+        return $value === false ? null : (string) $value;
     }
 
     /** @return array<string, mixed>|null */
@@ -360,6 +384,16 @@ final class LegacyIdentityRepository
             'id' => $userId,
             'old_hash' => $oldHash,
         ]);
+    }
+
+    private static function uuid(): string
+    {
+        $bytes = random_bytes(16);
+        $bytes[6] = chr((ord($bytes[6]) & 0x0f) | 0x40);
+        $bytes[8] = chr((ord($bytes[8]) & 0x3f) | 0x80);
+        $hex = bin2hex($bytes);
+        return substr($hex, 0, 8) . '-' . substr($hex, 8, 4) . '-' . substr($hex, 12, 4)
+            . '-' . substr($hex, 16, 4) . '-' . substr($hex, 20);
     }
 
     private static function normalizeDigits(string $value): string
