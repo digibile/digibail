@@ -304,7 +304,8 @@ final class VirtualCardController
         }
 
         $panHash = $this->crypto->hash($pan);
-        if (!$this->security->hitRateLimit('gateway:card-failure:' . $panHash, 5, 900)) {
+        $failureBucket = 'gateway:card-failure:' . $panHash;
+        if ($this->security->isRateLimited($failureBucket, 5, 900)) {
             return Response::json(['status' => 'failed', 'message' => 'به دلیل تلاش‌های ناموفق، کارت موقتاً مسدود شده است.'], 429);
         }
 
@@ -318,6 +319,7 @@ final class VirtualCardController
 
             if (!is_array($card)) {
                 $this->db->commit();
+                $this->security->hitRateLimit($failureBucket, 5, 900);
                 return Response::json(['status' => 'failed', 'message' => 'کارت یا اطلاعات آن نامعتبر است.'], 400);
             }
 
@@ -325,11 +327,20 @@ final class VirtualCardController
             $now = new \DateTimeImmutable('now', new \DateTimeZone('UTC'));
             $expiryDate = \DateTimeImmutable::createFromFormat('!Y/m', $expiry, new \DateTimeZone('UTC'));
             $isExpired = !$expiryDate || $expiryDate < $now->modify('first day of this month');
-            $cvvMatches = hash_equals($this->crypto->unprotect((string) $card['CvvEnc']), $cvv);
+            try {
+                $cvvMatches = hash_equals($this->crypto->unprotect((string) $card['CvvEnc']), $cvv);
+            } catch (Throwable) {
+                $cvvMatches = false;
+            }
 
-            if (!hash_equals($expectedExpiry, $expiry) || !$cvvMatches || $isExpired || $card['Status'] !== 'Active') {
+            if (!hash_equals($expectedExpiry, $expiry) || !$cvvMatches || $isExpired) {
                 $this->db->commit();
+                $this->security->hitRateLimit($failureBucket, 5, 900);
                 return Response::json(['status' => 'failed', 'message' => 'کارت یا اطلاعات آن نامعتبر است.'], 400);
+            }
+            if ($card['Status'] !== 'Active') {
+                $this->db->commit();
+                return Response::json(['status' => 'failed', 'message' => 'کارت فعال نیست.'], 400);
             }
 
             $duplicate = $this->db->prepare(
@@ -364,8 +375,7 @@ final class VirtualCardController
                 return Response::json(['status' => 'failed', 'message' => 'اعتبار کارت کافی نیست.'], 400);
             }
 
-            $txnId = self::uuid();
-            $this->insertTxn($card['Id'], 'Charge', $amountValue, $merchant, $orderId, '');
+            $txnId = $this->insertTxn($card['Id'], 'Charge', $amountValue, $merchant, $orderId, '');
             $this->db->commit();
 
             $remaining = (float) $card['Limit'] - ((float) $card['Spent'] + $amountValue);
@@ -525,14 +535,15 @@ final class VirtualCardController
         return is_array($row) ? self::dto($row) : [];
     }
 
-    private function insertTxn(string $cardId, string $type, float $amount, string $merchant, string $reference, string $note): void
+    private function insertTxn(string $cardId, string $type, float $amount, string $merchant, string $reference, string $note): string
     {
+        $id = self::uuid();
         $statement = $this->db->prepare(
             'INSERT INTO VirtualCardTxns (Id, CardId, Type, Amount, Merchant, Reference, Note, CreatedOn)
              VALUES (:id, :card_id, :type, :amount, :merchant, :reference, :note, UTC_TIMESTAMP(6))'
         );
         $statement->execute([
-            'id' => self::uuid(),
+            'id' => $id,
             'card_id' => $cardId,
             'type' => $type,
             'amount' => $amount,
@@ -540,6 +551,7 @@ final class VirtualCardController
             'reference' => mb_substr($reference, 0, 80, 'UTF-8'),
             'note' => mb_substr($note, 0, 200, 'UTF-8'),
         ]);
+        return $id;
     }
 
     private function adminGuard(Request $request): ?Response
