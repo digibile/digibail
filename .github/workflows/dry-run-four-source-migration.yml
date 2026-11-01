@@ -1,0 +1,43 @@
+name: Read-only dry run for four legacy SQL Server sources
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - migration/php83-full-rebuild
+    paths:
+      - .github/workflows/dry-run-four-source-migration.yml
+
+permissions:
+  contents: read
+
+jobs:
+  dry-run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: migration/php83-full-rebuild
+          fetch-depth: 1
+      - name: Copy importer to temporary server location
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          source: database/migration/migrate.php
+          target: /tmp/digebail-migrate-check/
+          strip_components: 2
+          overwrite: true
+      - name: Run metadata-only dry run
+        uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          command_timeout: 20m
+          script: |
+            set -eu
+            php -l /tmp/digebail-migrate-check/migrate.php
+            php /tmp/digebail-migrate-check/migrate.php --dry-run
+            echo FOUR_SOURCE_DRY_RUN_FINISHED_WITHOUT_TARGET_WRITES=1
