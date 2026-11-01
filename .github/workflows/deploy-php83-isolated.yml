@@ -78,6 +78,7 @@ jobs:
           ssh -i ~/.ssh/deploy_key "$DEPLOY_USER@$DEPLOY_HOST" \
             'mkdir -p /home/digibail/domains/digibail.ir/php'
           rsync -az --no-owner --no-group \
+            -e "ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes" \
             --exclude='.env' --exclude='.git/' \
             php/ "$DEPLOY_USER@$DEPLOY_HOST:/home/digibail/domains/digibail.ir/php/"
           ssh -i ~/.ssh/deploy_key "$DEPLOY_USER@$DEPLOY_HOST" \
