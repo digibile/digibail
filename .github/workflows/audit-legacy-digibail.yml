@@ -3,6 +3,8 @@ name: Audit legacy Digibail data for safe migration
 on:
   workflow_dispatch:
   push:
+    branches:
+      - migration/php83-full-rebuild
     paths:
       - .github/workflows/audit-legacy-digibail.yml
 
