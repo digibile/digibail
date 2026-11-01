@@ -25,6 +25,9 @@ CREATE TABLE IF NOT EXISTS VirtualCards (
     KEY idx_virtual_cards_tenant_status (TenantId, Status, CreatedOn),
     CONSTRAINT fk_virtual_cards_tenant
         FOREIGN KEY (TenantId) REFERENCES Tenants(Id)
+        ON DELETE RESTRICT,
+    CONSTRAINT fk_virtual_cards_identity
+        FOREIGN KEY (UserId) REFERENCES PhpIdentityLinks(CoreUserId)
         ON DELETE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
