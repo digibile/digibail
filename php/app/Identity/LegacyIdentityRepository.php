@@ -48,6 +48,47 @@ final class LegacyIdentityRepository
         return $this->shapeUser($user, $this->rolesFor((string) $user['Id']));
     }
 
+    public function resetPasswordByPhone(string $phone, string $newPassword): bool
+    {
+        $user = $this->findUser(self::normalizeDigits($phone));
+        if ($user === null || (int) $user['IsActive'] !== 1) {
+            return false;
+        }
+
+        $newHash = \\App\\Security\\PasswordVerifier::hashForNewPassword($newPassword);
+        $newStamp = bin2hex(random_bytes(16));
+
+        $this->db->beginTransaction();
+        try {
+            $statement = $this->db->prepare(
+                'UPDATE AspNetUsers
+                 SET PasswordHash = :password_hash,
+                     SecurityStamp = :security_stamp,
+                     AccessFailedCount = 0,
+                     LockoutEnd = NULL
+                 WHERE Id = :id AND IsActive = 1'
+            );
+            $statement->execute([
+                'password_hash' => $newHash,
+                'security_stamp' => $newStamp,
+                'id' => (string) $user['Id'],
+            ]);
+
+            if ($statement->rowCount() !== 1) {
+                $this->db->rollBack();
+                return false;
+            }
+
+            $this->db->commit();
+            return true;
+        } catch (\\Throwable $exception) {
+            if ($this->db->inTransaction()) {
+                $this->db->rollBack();
+            }
+            throw $exception;
+        }
+    }
+
     /** @return array<string, mixed>|null */
     public function findActiveById(string $id): ?array
     {
