@@ -53,7 +53,8 @@ final class Bootstrap
         $router->put('/api/v1/admin/tenants/{id:uuid}', static fn (Request $request): Response => $tenantAdminController()->update($request));
         $router->post('/api/v1/admin/tenants/{id:uuid}/domains', static fn (Request $request): Response => $tenantAdminController()->addDomain($request));
         $router->delete('/api/v1/admin/tenants/{id:uuid}/domains/{domainId:uuid}', static fn (Request $request): Response => $tenantAdminController()->deleteDomain($request));
-        $router->get('/api/v1/admin/loan-requests', static fn (Request $request): Response => $vamCityLoanRequestController()->list($request));\n        $router->get('/api/v1/loan-products', static fn (Request $request): Response => $loanProducts()->publicList($request));
+        $router->get('/api/v1/admin/loan-requests', static fn (Request $request): Response => $vamCityLoanRequestController()->list($request));
+        $router->get('/api/v1/loan-products', static fn (Request $request): Response => $loanProducts()->publicList($request));
         $router->get('/api/v1/loan-products/{slug}', static fn (Request $request): Response => $loanProducts()->publicOne($request));
 
         $router->get('/api/v1/admin/loan-products', static fn (Request $request): Response => $loanProducts()->adminList($request));
