@@ -1,0 +1,67 @@
+name: Archive DigiBail legacy source before PHP cutover
+
+on:
+  push:
+    branches:
+      - migration/php83-full-rebuild
+    paths:
+      - ops/archive-legacy-before-php.sh
+      - .github/workflows/archive-legacy-before-php.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: digebail-legacy-archive
+  cancel-in-progress: false
+
+jobs:
+  archive:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout migration branch
+        uses: actions/checkout@v4
+        with:
+          ref: migration/php83-full-rebuild
+
+      - name: Validate SSH deployment secrets
+        shell: bash
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          for name in DEPLOY_HOST DEPLOY_USER DEPLOY_SSH_KEY; do
+            if [[ -z "${!name}" ]]; then
+              echo "::error::Missing repository secret: $name"
+              exit 1
+            fi
+          done
+
+      - name: Transfer archive script only
+        uses: burnett01/rsync-deployments@7.0.2
+        with:
+          switches: -avz --chmod=F700
+          path: ops/archive-legacy-before-php.sh
+          remote_path: /home/digibail/domains/digebail.ir/ops/
+          remote_host: ${{ secrets.DEPLOY_HOST }}
+          remote_user: ${{ secrets.DEPLOY_USER }}
+          remote_key: ${{ secrets.DEPLOY_SSH_KEY }}
+
+      - name: Create and verify legacy source archive
+        uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          script: |
+            set -eu
+            ROOT="/home/digibail/domains/digebail.ir"
+            test -d "$ROOT"
+            test -f "$ROOT/ops/archive-legacy-before-php.sh"
+            bash "$ROOT/ops/archive-legacy-before-php.sh" "$ROOT"
+            test -d /home/digibail/backups/digebail
+            find /home/digibail/backups/digebail -maxdepth 1 -type f -name 'legacy-source-*.tar.gz' -printf '%f %s bytes\\n' | sort | tail -n 3
+            echo "LEGACY_SOURCE_ARCHIVE=VERIFIED"
