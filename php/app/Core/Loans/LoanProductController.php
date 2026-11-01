@@ -384,8 +384,8 @@ final class LoanProductController
     {
         $html = mb_substr($html, 0, 50000, 'UTF-8');
         $html = strip_tags($html, '<p><br><strong><b><em><i><ul><ol><li><a><h2><h3><blockquote>');
-        $html = preg_replace('/\s+on[a-z]+\s*=\s*("[^"]*"|\'[^\']*\'|[^\s>]+)/iu', '', $html) ?? '';
-        $html = preg_replace('/(href)\s*=\s*([\'"])\s*javascript:[\s\S]*?\2/iu', 'href="#"', $html) ?? '';
+        // Rich text is formatting only: remove every attribute from every allowed tag.
+        $html = preg_replace('/<([a-z][a-z0-9]*)\\b[^>]*>/iu', '<$1>', $html) ?? '';
         return $html;
     }
 
