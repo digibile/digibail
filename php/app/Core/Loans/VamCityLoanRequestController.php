@@ -89,7 +89,7 @@ final class VamCityLoanRequestController
                 CONCAT_WS(\' \', NULLIF(u.FirstName, \'\'), NULLIF(u.LastName, \'\')) AS applicantName,
                 COALESCE(u.Mobile, u.Phone, u.PhoneNumber) AS mobile,
                 u.NationalCode AS nationalCode,
-                CONCAT_WS(\\' \\', NULLIF(agent.FirstName, \\'\\'), NULLIF(agent.LastName, \\'\\')) AS agentName,
+                CONCAT_WS(\' \', NULLIF(agent.FirstName, \'\'), NULLIF(agent.LastName, \'\')) AS agentName,
                 r.Amount AS amount,
                 r.Installment AS installment,
                 r.InstallmentCount AS installmentCount,
