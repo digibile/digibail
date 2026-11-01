@@ -43,6 +43,16 @@ if (($parameterizedPayload['id'] ?? null) !== '42') {
     throw new RuntimeException('Parameterized routes must expose decoded route parameters.');
 }
 
+$knownSecurityPath = $router->dispatch(new Request('GET', '/api/v1/security/login'));
+if ($knownSecurityPath->status !== 405 || ($knownSecurityPath->headers['Allow'] ?? '') !== 'POST') {
+    throw new RuntimeException('The PHP login endpoint must be registered as POST.');
+}
+
+$legacySecurityPath = $router->dispatch(new Request('GET', '/api/v1/Auth/login'));
+if ($legacySecurityPath->status !== 405 || ($legacySecurityPath->headers['Allow'] ?? '') !== 'POST') {
+    throw new RuntimeException('The legacy login route must remain registered as POST.');
+}
+
 $wrongMethod = $methodRouter->dispatch(new Request('GET', '/resource'));
 if ($wrongMethod->status !== 405 || ($wrongMethod->headers['Allow'] ?? '') !== 'POST') {
     throw new RuntimeException('Known paths with unsupported methods must return HTTP 405 and Allow.');
