@@ -210,7 +210,7 @@ final class SecurityController
         }
 
         if (in_array($purpose, ['register', 'password_reset'], true)) {
-            $ticket = $this->jwt->issue([
+            $ticket = $this->jwt()->issue([
                 'purpose' => $purpose,
                 'phone' => $phone,
             ], 600);
@@ -268,13 +268,13 @@ final class SecurityController
     private function authenticatedResponse(array $user): Response
     {
         $roles = $user['roles'];
-        $role = $roles[0] ?? 'Customer';
+        $role = $this->primaryRole($roles);
         $tokenRoles = $roles;
         if (in_array('SuperAdmin', $roles, true) && !in_array('Admin', $tokenRoles, true)) {
             $tokenRoles[] = 'Admin';
         }
 
-        $token = $this->jwt->issue([
+        $token = $this->jwt()->issue([
             'sub' => $user['id'],
             'role' => $role,
             'roles' => $tokenRoles,
