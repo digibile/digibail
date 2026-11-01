@@ -20,7 +20,7 @@
     ]
   },
   "scripts": {
-    "test": "php tests/smoke.php && php tests/password_verifier.php"
+    "test": "php tests/smoke.php && php tests/password_verifier.php && php tests/jwt_service.php"
   },
   "config": {
     "sort-packages": true,
