@@ -123,7 +123,7 @@ jobs:
             if((int)$r['n']!==59 || (int)$r['expected_rows']!==203 || (int)$r['imported_rows']!==203 || (int)$r['complete_count']!==59) {
                 fwrite(STDERR,"DIGIBAIL_CHECKPOINT_TOTAL_MISMATCH\n"); exit(53);
             }
-            if($tables!==215) { fwrite(STDERR,"TARGET_TABLE_TOTAL_MISMATCH expected=215 actual=".$tables."\n"); exit(54); }
+            if($tables!==216) { fwrite(STDERR,"TARGET_TABLE_TOTAL_MISMATCH expected=216 actual=".$tables."\n"); exit(54); }
             $db->close();
             echo "FOUR_SOURCE_MARIADB_IMPORT_VERIFIED=1\n";
             PHP
