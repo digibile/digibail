@@ -3,6 +3,7 @@ declare(strict_types=1);
 use App\Core\Database\ConnectionFactory;
 use App\Core\Environment;
 $appRoot = dirname(__DIR__);
+require $appRoot . '/vendor/autoload.php';
 Environment::load($appRoot . '/.env');
 $id = (string) ($argv[1] ?? '');
 if ($id === '' || !ctype_digit($id)) { fwrite(STDERR, "DIAG_INVALID_USER_ID=1\n"); exit(2); }
