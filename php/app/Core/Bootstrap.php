@@ -29,6 +29,8 @@ final class Bootstrap
         $router->get('/api/v1/Auth/captcha', static fn (Request $request): Response => $securityController()->captcha($request));
 
         $router->post('/api/v1/security/login', static fn (Request $request): Response => $securityController()->login($request));
+        $router->post('/api/v1/security/register', static fn (Request $request): Response => $securityController()->register($request));
+        $router->post('/api/v1/Auth/register', static fn (Request $request): Response => $securityController()->register($request));
         $router->post('/api/v1/Auth/login', static fn (Request $request): Response => $securityController()->login($request));
 
         $router->post('/api/v1/security/otp/request', static fn (Request $request): Response => $securityController()->requestOtp($request));
