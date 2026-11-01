@@ -1,0 +1,38 @@
+name: Inspect VamCity migration CLI permissions (read only)
+
+on:
+  push:
+    branches:
+      - migration/php83-full-rebuild
+    paths:
+      - .github/workflows/inspect-vamcity-cli-permissions.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Inspect deployment path ownership and write access
+        uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          command_timeout: 2m
+          script: |
+            set -eu
+            echo '=== DEPLOY IDENTITY ==='
+            whoami
+            id
+            echo '=== PATH OWNERSHIP ==='
+            for p in /home/digebail /home/digebail/domains /home/digebail/domains/digebail.ir /home/digebail/domains/digebail.ir/database /home/digebail/domains/digebail.ir/database/migration /home/digebail/domains/digebail.ir/public_html; do
+              if [ -e "$p" ]; then stat -c '%A %U:%G %n' "$p"; else echo "MISSING=$p"; fi
+              if [ -d "$p" ] && [ -w "$p" ]; then echo "WRITABLE=$p"; fi
+            done
+            echo '=== EXISTING CLI FILE ==='
+            p='/home/digebail/domains/digebail.ir/database/migration/migrate.php'
+            if [ -f "$p" ]; then stat -c '%A %U:%G %s bytes %n' "$p"; sha256sum "$p"; php -l "$p"; else echo 'PRODUCTION_CLI=MISSING'; fi
+            echo 'READ_ONLY=1'
