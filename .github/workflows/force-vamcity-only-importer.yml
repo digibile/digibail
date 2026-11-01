@@ -1,0 +1,57 @@
+name: Enforce VamCity-only production migration CLI
+
+on:
+  push:
+    branches:
+      - migration/php83-full-rebuild
+    paths:
+      - .github/workflows/force-vamcity-only-importer.yml
+      - database/migration/migrate.php
+
+permissions:
+  contents: read
+
+concurrency:
+  group: digebail-vamcity-only-importer-guard
+  cancel-in-progress: false
+
+jobs:
+  install-vamcity-only-cli:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout VamCity-only migration code
+        uses: actions/checkout@v4
+        with:
+          ref: migration/php83-full-rebuild
+          fetch-depth: 1
+      - name: Replace production migration CLI with VamCity-only version
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          source: database/migration/migrate.php
+          target: /home/digebail/domains/digebail.ir/database/migration/
+          strip_components: 2
+          overwrite: true
+      - name: Verify production CLI scope without executing it
+        uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          command_timeout: 2m
+          script: |
+            set -euo pipefail
+            SCRIPT='/home/digebail/domains/digebail.ir/database/migration/migrate.php'
+            php -l "$SCRIPT"
+            if [ "$(grep -c "source'=>'" "$SCRIPT")" -ne 1 ] || ! grep -q "source'=>'vamcityc_vamcity_import_20261028'" "$SCRIPT"; then
+              echo 'PRODUCTION_IMPORTER_SCOPE_CHECK=FAILED'
+              exit 41
+            fi
+            if grep -Eq "source'=>'(Digibail|vamcityc_bluvamdb_import_20261028|vamcityc_transferDb_import_20261028)'" "$SCRIPT"; then
+              echo 'PRODUCTION_IMPORTER_HAS_OUT_OF_SCOPE_DATABASE=1'
+              exit 42
+            fi
+            echo 'PRODUCTION_IMPORTER_SCOPE=VAMCITY_ONLY'
+            echo 'DATABASE_NOT_MODIFIED=1'
