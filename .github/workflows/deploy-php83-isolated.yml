@@ -150,8 +150,11 @@ jobs:
                find '$DOMAIN_ROOT' /home/digibail -maxdepth 6 -type f \\( -name '.env' -o -name 'config.php' -o -name 'database.php' -o -name 'db.php' -o -name '.my.cnf' \\) -print 2>/dev/null | sort -u | head -n 100
                find '$DOMAIN_ROOT' /home/digibail -maxdepth 6 -type f -name '.env' -print 2>/dev/null | while IFS= read -r envfile; do
                  echo "ENVFILE=\$envfile"
-                 grep -E '^(DB_HOST|DB_PORT|DB_NAME|DB_USER|DB_PASSWORD|DB_PASSWORD_B64|DB_SOCKET)=' "\$envfile" | sed -E 's/^(DB_PASSWORD|DB_PASSWORD_B64)=.*/\1=[REDACTED]/'
+                 stat -c 'ENV_META=%a:%U:%G' "\$envfile" || true
+                 case "\$envfile" in '$DOMAIN_ROOT'/*) echo 'ENV_BELONGS_TO_TARGET_DOMAIN=1' ;; *) echo 'ENV_BELONGS_TO_TARGET_DOMAIN=0' ;; esac
+                 grep -E '^(DB_HOST|DB_PORT|DB_NAME|DB_USER|DB_PASSWORD|DB_PASSWORD_B64|DB_SOCKET)=' "\$envfile" | sed -E 's/^(DB_PASSWORD|DB_PASSWORD_B64)=.*/\1=[REDACTED]/' || true
                done
+               ls -ld '$DOMAIN_ROOT/php' '$DOMAIN_ROOT/database' 2>/dev/null || true
                echo 'DB_CONFIG_CANDIDATE_PATHS_END'
                /usr/local/php83/bin/php -v | head -n 1
                cat '$BACKUP_ROOT/database-bootstrap.log' || true
