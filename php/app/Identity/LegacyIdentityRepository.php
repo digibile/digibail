@@ -47,7 +47,7 @@ final class LegacyIdentityRepository
         string $roleName
     ): ?array {
         $phone = self::normalizeDigits(trim($phone));
-        if ($this->phoneExists($phone)) {
+        if ($this->phoneExists($phone) || $this->nationalCodeExists($nationalCode)) {
             return null;
         }
 
@@ -79,7 +79,7 @@ final class LegacyIdentityRepository
 
         $this->db->beginTransaction();
         try {
-            if ($this->phoneExists($phone)) {
+            if ($this->phoneExists($phone) || $this->nationalCodeExists($nationalCode)) {
                 $this->db->rollBack();
                 return null;
             }
@@ -137,6 +137,16 @@ final class LegacyIdentityRepository
             }
             throw $exception;
         }
+    }
+
+    private function nationalCodeExists(string $nationalCode): bool
+    {
+        $statement = $this->db->prepare(
+            'SELECT Id FROM AspNetUsers WHERE NationalCode = :national_code LIMIT 1'
+        );
+        $statement->execute(['national_code' => $nationalCode]);
+
+        return $statement->fetchColumn() !== false;
     }
 
     private function phoneExists(string $phone): bool
