@@ -309,14 +309,14 @@ jobs:
                 exit 26
               fi
               echo "--- route file: $CUST"
-              if ! grep -Fq "proxy_pass http://127.0.0.1:1361;" "$CUST" && ! grep -Fq "proxy_pass http://127.0.0.1:1362;" "$CUST" && ! grep -Fq "proxy_pass http://127.0.0.1:1642;" "$CUST"; then
+              if ! grep -Fq "proxy_pass http://127.0.0.1:1361;" "$CUST" && ! grep -Fq "proxy_pass http://127.0.0.1:1362;" "$CUST" && ! grep -Fq "proxy_pass http://127.0.0.1:1631;" "$CUST" && ! grep -Fq "proxy_pass http://127.0.0.1:1642;" "$CUST"; then
                 echo "ROUTE_NOT_MATCHED: no known application proxy found"
                 exit 26
               fi
-              if grep -Fq "proxy_pass http://127.0.0.1:1361;" "$CUST" || grep -Fq "proxy_pass http://127.0.0.1:1362;" "$CUST"; then
+              if grep -Fq "proxy_pass http://127.0.0.1:1361;" "$CUST" || grep -Fq "proxy_pass http://127.0.0.1:1362;" "$CUST" || grep -Fq "proxy_pass http://127.0.0.1:1631;" "$CUST"; then
                 BACKUP="${CUST}.bak.$(date +%Y%m%d%H%M%S)"
                 cp -p "$CUST" "$BACKUP"
-                sed -i "s#proxy_pass http://127.0.0.1:1361;#proxy_pass http://127.0.0.1:1642;#g; s#proxy_pass http://127.0.0.1:1362;#proxy_pass http://127.0.0.1:1642;#g" "$CUST"
+                sed -i "s#proxy_pass http://127.0.0.1:1361;#proxy_pass http://127.0.0.1:1642;#g; s#proxy_pass http://127.0.0.1:1362;#proxy_pass http://127.0.0.1:1642;#g; s#proxy_pass http://127.0.0.1:1631;#proxy_pass http://127.0.0.1:1642;#g" "$CUST"
                 if [ ! -x /host/usr/local/directadmin/custombuild/build ]; then
                   cp -p "$BACKUP" "$CUST"
                   echo "ERROR: DirectAdmin CustomBuild not found; previous route restored."
@@ -335,7 +335,7 @@ jobs:
                   exit 25
                 fi
                 echo "=== regenerated live domain config ==="
-                grep -nE "server_name digibail.ir|proxy_pass http://127.0.0.1:(1361|1362|1642);" /host/usr/local/directadmin/data/users/*/nginx.conf || true
+                grep -nE "server_name digibail.ir|proxy_pass http://127.0.0.1:(1361|1362|1631|1642);" /host/usr/local/directadmin/data/users/*/nginx.conf || true
                 MASTER="$(cat /host/run/nginx.pid 2>/dev/null || cat /host/var/run/nginx.pid 2>/dev/null || true)"
                 if [ -z "$MASTER" ] || [ ! -r "/host/proc/$MASTER/comm" ] || [ "$(cat "/host/proc/$MASTER/comm" 2>/dev/null || true)" != "nginx" ]; then
                   cp -p "$BACKUP" "$CUST"
@@ -358,9 +358,9 @@ jobs:
               kill -HUP "$MASTER"
               sleep 2
               echo "=== generated domain route after reload ==="
-              grep -nE "server_name digibail.ir|proxy_pass http://127.0.0.1:(1361|1362|1642);" /host/usr/local/directadmin/data/users/*/nginx.conf || true
+              grep -nE "server_name digibail.ir|proxy_pass http://127.0.0.1:(1361|1362|1631|1642);" /host/usr/local/directadmin/data/users/*/nginx.conf || true
               echo "=== active custom route ==="
-              grep -nE "proxy_pass http://127.0.0.1:(1361|1362|1642);" "$CUST" || true
+              grep -nE "proxy_pass http://127.0.0.1:(1361|1362|1631|1642);" "$CUST" || true
             '
             echo "=== current public_html index ==="
             ls -l "$ROOT/public_html/index.html" 2>/dev/null || true
