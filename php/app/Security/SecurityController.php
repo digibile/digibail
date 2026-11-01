@@ -365,6 +365,7 @@ final class SecurityController
             'role' => $role,
             'roles' => $tokenRoles,
             'phone' => (string) ($user['mobile'] ?? ''),
+            'core_uid' => $user['core_user_id'] ?? null,
         ], 28800);
 
         $secure = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? '; Secure' : '';
@@ -376,6 +377,7 @@ final class SecurityController
                 'expiresAt' => gmdate(DATE_ATOM, time() + 28800),
                 'user' => [
                     'id' => $user['id'],
+                    'coreUserId' => $user['core_user_id'] ?? null,
                     'phone' => $user['mobile'],
                     'fullName' => $user['display_name'],
                     'role' => $role,
