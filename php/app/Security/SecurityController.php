@@ -167,12 +167,12 @@ final class SecurityController
         }
 
         $code = (string) random_int(100000, 999999);
+        $this->store->createOtp($phone, $purpose, $code);
         $sender = new KavenegarSmsSender();
         if (!$sender->sendOtp($phone, $code)) {
+            $this->store->cancelLatestOtp($phone, $purpose);
             return Response::json(['message' => 'ارسال پیامک تأیید نشد؛ تنظیمات یا سرویس پیامک را بررسی کنید.'], 502);
         }
-
-        $this->store->createOtp($phone, $purpose, $code);
 
         return Response::json([
             'ok' => true,
