@@ -19,12 +19,16 @@ final class Bootstrap
         $health = new HealthController();
         $security = null;
         $tenant = null;
+        $adminLoanProducts = null;
 
         $securityController = static function () use (&$security): SecurityController {
             return $security ??= new SecurityController();
         };
         $tenantController = static function () use (&$tenant): PublicTenantController {
             return $tenant ??= new PublicTenantController();
+        };
+        $adminLoanProductsController = static function () use (&$adminLoanProducts): AdminLoanProductController {
+            return $adminLoanProducts ??= new AdminLoanProductController();
         };
 
         $router->get('/health/live', [$health, 'live']);
@@ -33,6 +37,12 @@ final class Bootstrap
         $router->get('/api/v1/tenant/config', static fn (Request $request): Response => $tenantController()->config($request));
         $router->get('/api/v1/loan-products', static fn (Request $request): Response => $tenantController()->products($request));
         $router->get('/api/v1/loan-products/{slug}', static fn (Request $request): Response => $tenantController()->product($request));
+
+        $router->get('/api/v1/admin/loan-products', static fn (Request $request): Response => $adminLoanProductsController()->list($request));
+        $router->post('/api/v1/admin/loan-products', static fn (Request $request): Response => $adminLoanProductsController()->create($request));
+        $router->put('/api/v1/admin/loan-products/{id}', static fn (Request $request): Response => $adminLoanProductsController()->update($request));
+        $router->post('/api/v1/admin/loan-products/{id}/toggle', static fn (Request $request): Response => $adminLoanProductsController()->toggle($request));
+        $router->get('/api/v1/admin/loan-products/labels', static fn (Request $request): Response => $adminLoanProductsController()->labels($request));
 
         $router->get('/api/v1/security/captcha', static fn (Request $request): Response => $securityController()->captcha($request));
         $router->get('/api/v1/Auth/captcha', static fn (Request $request): Response => $securityController()->captcha($request));
