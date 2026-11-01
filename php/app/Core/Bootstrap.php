@@ -67,7 +67,7 @@ final class Bootstrap
 
         $router->get('/api/v1/admin/virtual-cards', static fn (Request $request): Response => $virtualCards()->adminList($request));
         $router->post('/api/v1/admin/virtual-cards/issue', static fn (Request $request): Response => $virtualCards()->issue($request));
-        $router->post('/api/v1/admin/virtual-cards/{id:uuid}/{op}', static fn (Request $request): Response => $virtualCards()->adminAction($request));
+        $router->post('/api/v1/admin/virtual-cards/{id:uuid}/{op:action}', static fn (Request $request): Response => $virtualCards()->adminAction($request));
         $router->put('/api/v1/admin/virtual-cards/{id:uuid}/limit', static fn (Request $request): Response => $virtualCards()->adminLimit($request));
         $router->get('/api/v1/admin/virtual-cards/{id:uuid}/transactions', static fn (Request $request): Response => $virtualCards()->adminTransactions($request));
 
