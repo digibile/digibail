@@ -1,0 +1,63 @@
+-- Additive PHP target schema for the tenancy and loan-product modules.
+-- Existing SQL Server-derived tables are not modified.
+CREATE TABLE IF NOT EXISTS Tenants (
+    Id CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    Name VARCHAR(120) NOT NULL,
+    Slug VARCHAR(40) NOT NULL,
+    BrandJson LONGTEXT NOT NULL,
+    IsDefault TINYINT(1) NOT NULL DEFAULT 0,
+    IsActive TINYINT(1) NOT NULL DEFAULT 1,
+    CreatedOn DATETIME(6) NOT NULL,
+    PRIMARY KEY (Id),
+    UNIQUE KEY uq_tenants_slug (Slug),
+    KEY idx_tenants_default_active (IsDefault, IsActive)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS TenantDomains (
+    Id CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    TenantId CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    Host VARCHAR(253) NOT NULL,
+    IsPrimary TINYINT(1) NOT NULL DEFAULT 0,
+    CreatedOn DATETIME(6) NOT NULL,
+    PRIMARY KEY (Id),
+    UNIQUE KEY uq_tenant_domains_host (Host),
+    KEY idx_tenant_domains_tenant (TenantId),
+    CONSTRAINT fk_tenant_domains_tenant
+        FOREIGN KEY (TenantId) REFERENCES Tenants(Id)
+        ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS LoanProducts (
+    Id CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    TenantId CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    Name VARCHAR(120) NOT NULL,
+    Slug VARCHAR(40) NOT NULL,
+    Description VARCHAR(500) NOT NULL DEFAULT '',
+    Badge VARCHAR(40) NOT NULL DEFAULT '',
+    MinAmount DECIMAL(18,2) NOT NULL DEFAULT 0,
+    MaxAmount DECIMAL(18,2) NOT NULL DEFAULT 0,
+    IntervalDays INT NOT NULL DEFAULT 30,
+    TiersJson LONGTEXT NOT NULL,
+    ConditionsJson LONGTEXT NOT NULL,
+    DocumentsJson LONGTEXT NOT NULL,
+    IsActive TINYINT(1) NOT NULL DEFAULT 1,
+    SortOrder INT NOT NULL DEFAULT 0,
+    CreatedOn DATETIME(6) NOT NULL,
+    InterestMethod VARCHAR(12) NOT NULL DEFAULT 'Monthly',
+    InterestPercent DECIMAL(18,6) NOT NULL DEFAULT 0,
+    LateDailyCoef DECIMAL(18,8) NOT NULL DEFAULT 0,
+    EarlyDailyCoef DECIMAL(18,8) NOT NULL DEFAULT 0,
+    ShowInList TINYINT(1) NOT NULL DEFAULT 1,
+    SendReminders TINYINT(1) NOT NULL DEFAULT 1,
+    Title VARCHAR(160) NOT NULL DEFAULT '',
+    ImageUrl VARCHAR(400) NOT NULL DEFAULT '',
+    LabelsJson LONGTEXT NOT NULL,
+    FullDescriptionHtml LONGTEXT NOT NULL,
+    OperationalCostsJson LONGTEXT NOT NULL,
+    PRIMARY KEY (Id),
+    UNIQUE KEY uq_loan_products_tenant_slug (TenantId, Slug),
+    KEY idx_loan_products_public (TenantId, IsActive, ShowInList, SortOrder),
+    CONSTRAINT fk_loan_products_tenant
+        FOREIGN KEY (TenantId) REFERENCES Tenants(Id)
+        ON DELETE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
