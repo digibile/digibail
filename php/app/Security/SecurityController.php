@@ -226,6 +226,21 @@ final class SecurityController
         return $this->authenticatedResponse($user);
     }
 
+    public function requestPasswordReset(Request $request): Response
+    {
+        $input = array_merge($request->input, ['purpose' => 'password_reset']);
+        $resetRequest = new Request(
+            $request->method,
+            $request->path,
+            $request->headers,
+            $request->query,
+            $input,
+            $request->files
+        );
+
+        return $this->requestOtp($resetRequest);
+    }
+
     public function confirmPasswordReset(Request $request): Response
     {
         $ticket = (string) ($request->input['ticket'] ?? '');
