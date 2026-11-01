@@ -75,7 +75,7 @@ final class LegacyIdentityRepository
         $sentinel = '0001-01-01T00:00:00.0000000';
         $securityStamp = bin2hex(random_bytes(24));
         $concurrencyStamp = bin2hex(random_bytes(16));
-        $hash = \\App\\Security\\PasswordVerifier::hashForNewPassword($password);
+        $hash = \App\Security\PasswordVerifier::hashForNewPassword($password);
 
         $this->db->beginTransaction();
         try {
