@@ -1,0 +1,120 @@
+name: Deploy DigiBail PHP 8.3 (isolated)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: digebail-php83-deploy
+  cancel-in-progress: false
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout PHP migration branch
+        uses: actions/checkout@v4
+        with:
+          ref: migration/php83-full-rebuild
+          fetch-depth: 1
+
+      - name: Set up PHP 8.3
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: json, mbstring, openssl, pdo, pdo_mysql, fileinfo
+          coverage: none
+          tools: composer:v2
+
+      - name: Validate, install dependencies and test
+        working-directory: php
+        run: |
+          set -euo pipefail
+          composer validate --no-check-publish
+          composer install --no-interaction --no-progress --no-dev --prefer-dist --optimize-autoloader
+          composer test
+          find . -type f -name '*.php' -print0 | xargs -0 -n1 php -l
+
+      - name: Verify deployment credentials
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          for name in DEPLOY_HOST DEPLOY_USER DEPLOY_SSH_KEY; do
+            if [[ -z "${!name}" ]]; then
+              echo "::error::Missing repository secret: $name"
+              exit 1
+            fi
+          done
+
+      - name: Configure pinned SSH host verification
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -T 10 -t ed25519 "$DEPLOY_HOST" > ~/.ssh/known_hosts
+          ACTUAL="$(ssh-keygen -lf ~/.ssh/known_hosts -E sha256 | awk '{print $2}' | sort -u)"
+          EXPECTED='SHA256:9bIljRY2O89S4QXg9v6zYuLfk39pK8nl69BOg7vP5os'
+          if ! printf '%s\n' "$ACTUAL" | grep -Fxq "$EXPECTED"; then
+            echo "::error::SSH host fingerprint mismatch. Deployment stopped."
+            exit 1
+          fi
+
+      - name: Deploy private PHP application and public entry point
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+        run: |
+          set -euo pipefail
+          DOMAIN_ROOT='/home/digibail/domains/digebail.ir'
+          PRIVATE_APP="$DOMAIN_ROOT/php_app"
+          PUBLIC_ROOT="$DOMAIN_ROOT/public_html"
+
+          ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes "$DEPLOY_USER@$DEPLOY_HOST" \
+            "set -eu
+             test \"\$(realpath '$DOMAIN_ROOT')\" = '$DOMAIN_ROOT'
+             test -d '$PUBLIC_ROOT'
+             if find '$PUBLIC_ROOT' -mindepth 1 -maxdepth 1 -print -quit | grep -q .; then
+               echo 'BLOCKED: public_html is not empty; refusing to overwrite files.'
+               exit 20
+             fi
+             mkdir -p '$PRIVATE_APP'
+             chmod 755 '$PRIVATE_APP' '$PUBLIC_ROOT'"
+
+          rsync -az --no-owner --no-group \
+            -e "ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes" \
+            --exclude='.env' --exclude='.git/' \
+            php/ "$DEPLOY_USER@$DEPLOY_HOST:$PRIVATE_APP/"
+
+          rsync -az --no-owner --no-group \
+            -e "ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes" \
+            php/public/ "$DEPLOY_USER@$DEPLOY_HOST:$PUBLIC_ROOT/"
+
+          ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes "$DEPLOY_USER@$DEPLOY_HOST" \
+            "set -eu
+             cat > '$PUBLIC_ROOT/index.php' <<'PHP_ENTRY'
+          <?php
+          declare(strict_types=1);
+          require dirname(__DIR__) . '/php_app/public/index.php';
+          PHP_ENTRY
+             chmod 644 '$PUBLIC_ROOT/index.php'
+             test -s '$PRIVATE_APP/vendor/autoload.php'
+             php -l '$PUBLIC_ROOT/index.php'
+             php -l '$PRIVATE_APP/public/index.php'
+             echo 'PHP_FILES_TRANSFERRED=1'
+             echo 'PRIVATE_APP_PATH=$PRIVATE_APP'
+             echo 'PUBLIC_DOCUMENT_ROOT=$PUBLIC_ROOT'
+             if [ -s '$PRIVATE_APP/.env' ]; then
+               echo 'PRIVATE_ENV_PRESENT=1'
+             else
+               echo 'PRIVATE_ENV_PRESENT=0'
+               echo 'NOTICE: application secrets are not configured; database-backed endpoints are not ready.'
+             fi"
