@@ -1,0 +1,126 @@
+name: Read-only VamCity source-to-phpMyAdmin verification
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - migration/php83-full-rebuild
+    paths:
+      - .github/workflows/verify-vamcity-only.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: digebail-vamcity-only-verification
+  cancel-in-progress: false
+
+jobs:
+  verify-vamcity:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate required connection secrets
+        shell: bash
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          MYSQL_PASS: ${{ secrets.VAMCITY_MYSQL_PASSWORD }}
+        run: |
+          set -euo pipefail
+          for name in DEPLOY_HOST DEPLOY_USER DEPLOY_SSH_KEY MYSQL_PASS; do
+            if [[ -z "${!name}" ]]; then
+              echo "::error::Missing required repository secret: $name"
+              exit 1
+            fi
+          done
+
+      - name: Compare only VamCity source tables with the existing phpMyAdmin database
+        uses: appleboy/ssh-action@v1.2.2
+        env:
+          MYSQL_PASS: ${{ secrets.VAMCITY_MYSQL_PASSWORD }}
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          envs: MYSQL_PASS
+          command_timeout: 20m
+          script: |
+            set -euo pipefail
+            DB='digibail_vamcitydigibilepay'
+            DB_USER='digibail_vamcitydigibilepay'
+            SOURCE='vamcityc_vamcity_import_20261028'
+            SQLC='public_html-db-1'
+
+            if [ -z "${MYSQL_PASS:-}" ]; then echo 'VERIFY=BLOCKED_MISSING_PASSWORD'; exit 30; fi
+            if sudo -n docker info >/dev/null 2>&1; then DOCKER='sudo -n docker'; elif docker info >/dev/null 2>&1; then DOCKER='docker'; else echo 'VERIFY=BLOCKED_DOCKER'; exit 31; fi
+            $DOCKER inspect "$SQLC" >/dev/null
+
+            SQLCMD=''
+            for p in /opt/mssql-tools18/bin/sqlcmd /opt/mssql-tools/bin/sqlcmd; do
+              if $DOCKER exec "$SQLC" test -x "$p" >/dev/null 2>&1; then SQLCMD="$p"; break; fi
+            done
+            SA_PASS="$($DOCKER inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$SQLC" | sed -n -E 's/^(MSSQL_SA_PASSWORD|SA_PASSWORD)=(.*)$/\2/p' | head -1)"
+            if [ -z "$SQLCMD" ] || [ -z "$SA_PASS" ]; then echo 'VERIFY=BLOCKED_SQLSERVER_CLIENT_OR_CREDENTIAL'; exit 32; fi
+
+            mysql_cmd() {
+              mysql --protocol=TCP -h 127.0.0.1 -P 3306 -u "$DB_USER" --password="$MYSQL_PASS" --connect-timeout=8 --batch --raw --skip-column-names "$@"
+            }
+            if ! mysql_cmd -e 'SELECT 1' >/dev/null 2>&1; then echo 'VERIFY=BLOCKED_MARIADB_CONNECTION'; exit 33; fi
+            if [ "$(mysql_cmd -e "SELECT COUNT(*) FROM information_schema.SCHEMATA WHERE SCHEMA_NAME='$DB';")" != '1' ]; then echo 'VERIFY=TARGET_DATABASE_MISSING'; exit 34; fi
+
+            run_sql() {
+              $DOCKER exec -e SQLCMDPASSWORD="$SA_PASS" "$SQLC" "$SQLCMD" -S localhost -U sa -C -b -W -w 65535 -h -1 -s '|' -d "$SOURCE" "$@"
+            }
+
+            echo '=== VAMCITY SOURCE/TARGET EXACT ROW-COUNT COMPARISON ==='
+            source_tables=0
+            matched_tables=0
+            mismatched_tables=0
+            source_rows=0
+            target_rows=0
+
+            while IFS='|' read -r schema table expected; do
+              schema="$(printf '%s' "$schema" | tr -d '\r' | xargs)"
+              table="$(printf '%s' "$table" | tr -d '\r' | xargs)"
+              expected="$(printf '%s' "$expected" | tr -d '\r' | xargs)"
+              [ -n "$table" ] || continue
+              source_tables=$((source_tables+1))
+              source_rows=$((source_rows+expected))
+              if [ "$schema" = 'dbo' ]; then target_table="$table"; else target_table="${schema}__${table}"; fi
+
+              exists="$(mysql_cmd -e "SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA='$DB' AND TABLE_NAME='$target_table' AND TABLE_TYPE='BASE TABLE';")"
+              if [ "$exists" != '1' ]; then
+                echo "MISSING_TARGET_TABLE=$target_table SOURCE_ROWS=$expected"
+                mismatched_tables=$((mismatched_tables+1))
+                continue
+              fi
+              actual="$(mysql_cmd -e "SELECT COUNT(*) FROM `$DB`.`$target_table`;")"
+              target_rows=$((target_rows+actual))
+              if [ "$actual" = "$expected" ]; then
+                matched_tables=$((matched_tables+1))
+              else
+                echo "ROW_COUNT_MISMATCH=$target_table SOURCE=$expected TARGET=$actual"
+                mismatched_tables=$((mismatched_tables+1))
+              fi
+            done < <(run_sql -Q "SET NOCOUNT ON; SELECT s.name + '|' + t.name + '|' + CONVERT(varchar(30),SUM(p.rows)) FROM sys.tables t JOIN sys.schemas s ON s.schema_id=t.schema_id JOIN sys.partitions p ON p.object_id=t.object_id AND p.index_id IN (0,1) WHERE t.is_ms_shipped=0 GROUP BY s.name,t.name ORDER BY s.name,t.name;" | tr -d '\r')
+
+            echo "VAMCITY_SOURCE_TABLES=$source_tables"
+            echo "VAMCITY_MATCHED_TABLES=$matched_tables"
+            echo "VAMCITY_MISMATCHED_TABLES=$mismatched_tables"
+            echo "VAMCITY_SOURCE_ROWS=$source_rows"
+            echo "VAMCITY_TARGET_ROWS_IN_MATCHED_TABLES=$target_rows"
+
+            echo '=== VAMCITY MIGRATION CHECKPOINTS ==='
+            mysql_cmd -e "SELECT status,COUNT(*) AS tables_count,SUM(expected_rows) AS expected_rows,SUM(imported_rows) AS imported_rows FROM `$DB`.`__vamcity_migration_state` WHERE source_database='$SOURCE' GROUP BY status ORDER BY status;" || true
+            echo '=== VAMCITY TARGET SCHEMA COUNTS ==='
+            mysql_cmd -e "SELECT COUNT(DISTINCT TABLE_NAME) AS tables_count,COUNT(*) AS columns_count FROM information_schema.COLUMNS WHERE TABLE_SCHEMA='$DB' AND TABLE_NAME IN (SELECT source_table FROM `$DB`.`__vamcity_migration_state` WHERE source_database='$SOURCE');"
+
+            unset MYSQL_PASS SA_PASS
+            if [ "$source_tables" -ne 88 ] || [ "$matched_tables" -ne "$source_tables" ] || [ "$mismatched_tables" -ne 0 ]; then
+              echo 'VAMCITY_VERIFICATION=FAILED'
+              exit 40
+            fi
+            echo 'VAMCITY_VERIFICATION=PASS'
+            echo 'READ_ONLY=1'
+            echo 'NO_SCHEMA_OR_DATA_MODIFIED=1'
