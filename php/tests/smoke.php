@@ -15,7 +15,7 @@ if ($adminLoanListPath->status !== 405 || ($adminLoanListPath->headers['Allow'] 
     throw new RuntimeException('Admin loan-product list must be registered as GET.');
 }
 
-$adminLoanCreatePath = $router->dispatch(new Request('GET', '/api/v1/admin/loan-products'));
+$adminLoanCreatePath = $router->dispatch(new Request('GET', '/api/v1/admin/loan-products/seed'));
 if ($adminLoanCreatePath->status !== 405 || ($adminLoanCreatePath->headers['Allow'] ?? '') !== 'POST') {
     throw new RuntimeException('Admin loan-product create must be registered as POST.');
 }
