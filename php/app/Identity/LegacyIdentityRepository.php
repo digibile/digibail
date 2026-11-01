@@ -14,12 +14,7 @@ final class LegacyIdentityRepository
     {
     }
 
-    /**
-     * Authenticates against the imported ASP.NET Identity tables without
-     * changing user IDs, role links, or any legacy account fields.
-     *
-     * @return array<string, mixed>|null
-     */
+    /** @return array<string, mixed>|null */
     public function authenticate(string $identifier, string $password): ?array
     {
         $identifier = trim($identifier);
@@ -28,18 +23,11 @@ final class LegacyIdentityRepository
         }
 
         $user = $this->findUser($identifier);
-        if ($user === null || (int) $user['IsActive'] !== 1) {
+        if ($user === null || (int) $user['IsActive'] !== 1 || !$this->isLockoutExpired($user)) {
             return null;
         }
 
-        if (!$this->isLockoutExpired($user)) {
-            return null;
-        }
-
-        $storedHash = is_string($user['PasswordHash'] ?? null)
-            ? $user['PasswordHash']
-            : null;
-
+        $storedHash = is_string($user['PasswordHash'] ?? null) ? $user['PasswordHash'] : null;
         if (!PasswordVerifier::verify($password, $storedHash)) {
             return null;
         }
@@ -47,8 +35,6 @@ final class LegacyIdentityRepository
         if (PasswordVerifier::needsBcryptUpgrade($storedHash)) {
             $this->upgradeHash((string) $user['Id'], (string) $storedHash, $password);
         }
-
-        $roles = $this->rolesFor((string) $user['Id']);
 
         return [
             'id' => (string) $user['Id'],
@@ -60,7 +46,7 @@ final class LegacyIdentityRepository
             'email' => $user['Email'],
             'national_code' => $user['NationalCode'],
             'is_active' => (bool) $user['IsActive'],
-            'roles' => $roles,
+            'roles' => $this->rolesFor((string) $user['Id']),
             'source' => 'mariadb.AspNetUsers',
         ];
     }
@@ -81,11 +67,12 @@ final class LegacyIdentityRepository
             FROM AspNetUsers
             WHERE NormalizedUserName = :normalized_username
                OR UserName = :username
-               OR (:phone IS NOT NULL AND (Mobile = :phone OR Phone = :phone
-                   OR PhoneNumber = :phone OR Mobile = :phone98
-                   OR PhoneNumber = :phone98 OR Mobile = :phone_plus98
-                   OR PhoneNumber = :phone_plus98 OR Mobile = :phone_local
-                   OR PhoneNumber = :phone_local))
+               OR (:phone_guard IS NOT NULL AND (
+                    Mobile = :mobile_09 OR Phone = :phone_09 OR PhoneNumber = :phone_number_09
+                    OR Mobile = :mobile_98 OR PhoneNumber = :phone_number_98
+                    OR Mobile = :mobile_plus98 OR PhoneNumber = :phone_number_plus98
+                    OR Mobile = :mobile_local OR PhoneNumber = :phone_number_local
+               ))
             ORDER BY Id ASC
             LIMIT 2
             SQL;
@@ -94,10 +81,16 @@ final class LegacyIdentityRepository
         $statement->execute([
             'normalized_username' => mb_strtoupper($identifier, 'UTF-8'),
             'username' => $identifier,
-            'phone' => $phone,
-            'phone98' => $phone98,
-            'phone_plus98' => $phonePlus98,
-            'phone_local' => $phoneLocal,
+            'phone_guard' => $phone,
+            'mobile_09' => $phone,
+            'phone_09' => $phone,
+            'phone_number_09' => $phone,
+            'mobile_98' => $phone98,
+            'phone_number_98' => $phone98,
+            'mobile_plus98' => $phonePlus98,
+            'phone_number_plus98' => $phonePlus98,
+            'mobile_local' => $phoneLocal,
+            'phone_number_local' => $phoneLocal,
         ]);
 
         $matches = $statement->fetchAll();
@@ -135,7 +128,6 @@ final class LegacyIdentityRepository
             $lockoutEnd = new \DateTimeImmutable((string) $user['LockoutEnd']);
             return $lockoutEnd <= new \DateTimeImmutable('now', new \DateTimeZone('UTC'));
         } catch (Throwable) {
-            // An unparseable lockout value is treated as locked, never as unlocked.
             return false;
         }
     }
