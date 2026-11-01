@@ -134,10 +134,10 @@ jobs:
                echo 'EXISTING_STATIC_INDEX_BACKED_UP=1'
              fi
              cat > '$PUBLIC_ROOT/expert.php' <<'PHP_EXPERT'
-             <?php
-             declare(strict_types=1);
-             require dirname(__DIR__) . '/php_app/public/expert.php';
-             PHP_EXPERT
+          <?php
+          declare(strict_types=1);
+          require dirname(__DIR__) . '/php_app/public/expert.php';
+          PHP_EXPERT
              chmod 644 '$PUBLIC_ROOT/expert.php'
              cat > '$PUBLIC_ROOT/index.php' <<'PHP_ENTRY'
           <?php
@@ -166,4 +166,12 @@ jobs:
              echo 'PUBLIC_DOCUMENT_ROOT=$PUBLIC_ROOT'
              echo 'ROLLBACK_BACKUP=$BACKUP_ROOT'
              curl -k -sS -o /tmp/digebail-home-check.html -w 'LIVE_HOME_HTTP=%{http_code}\n' https://digebail.ir/ || true
+             EXPERT_HTTP="$(curl -k -sS -o /dev/null -w '%{http_code}' https://digebail.ir/expert.php)"
+             LEGACY_EXPERT_HTTP="$(curl -k -sS -o /dev/null -w '%{http_code}' https://digebail.ir/expert.html)"
+             echo "LIVE_EXPERT_UNAUTH_HTTP=$EXPERT_HTTP"
+             echo "LIVE_LEGACY_EXPERT_HTTP=$LEGACY_EXPERT_HTTP"
+             if [ "$EXPERT_HTTP" != "302" ] || [ "$LEGACY_EXPERT_HTTP" != "404" ]; then
+               echo 'ERROR: Expert workspace route protection verification failed.'
+               exit 1
+             fi
              head -c 160 /tmp/digebail-home-check.html 2>/dev/null || true"
