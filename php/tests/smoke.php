@@ -11,7 +11,7 @@ require dirname(__DIR__) . '/vendor/autoload.php';
 
 $router = Bootstrap::router();
 $adminLoanCreatePath = $router->dispatch(new Request('GET', '/api/v1/admin/loan-products/seed'));
-if ($adminLoanCreatePath->status !== 405 || ($adminLoanCreatePath->headers['Allow'] ?? '') !== 'POST, PUT') {
+if ($adminLoanCreatePath->status !== 405 || ($adminLoanCreatePath->headers['Allow'] ?? '') !== 'POST') {
     throw new RuntimeException('Admin loan-product create must be registered as POST.');
 }
 
