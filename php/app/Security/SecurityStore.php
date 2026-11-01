@@ -65,7 +65,7 @@ final class SecurityStore
                 return false;
             }
 
-            $expected = hash_hmac('sha256', 'captcha:' . $id . ':' . $answer, $this->pepper);
+            $expected = hash_hmac('sha256', 'captcha:' . $id . ':' . $answer, $this->captchaPepper);
             if (!hash_equals((string) $row['value_hash'], $expected)) {
                 $this->db->prepare(
                     'UPDATE php_security_challenges SET attempts = attempts + 1, consumed_at =
