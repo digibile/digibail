@@ -11,6 +11,7 @@ final readonly class Request
      * @param array<string, mixed> $query
      * @param array<string, mixed> $input
      * @param array<string, mixed> $files
+     * @param array<string, string> $params
      */
     public function __construct(
         public string $method,
@@ -18,7 +19,8 @@ final readonly class Request
         public array $headers = [],
         public array $query = [],
         public array $input = [],
-        public array $files = []
+        public array $files = [],
+        public array $params = []
     ) {
     }
 
