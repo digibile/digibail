@@ -11,10 +11,11 @@ final class SecurityStore
 {
     public function __construct(
         private readonly PDO $db,
-        private readonly string $pepper
+        private readonly string $rateLimitPepper,
+        private readonly string $captchaPepper
     ) {
-        if (strlen($this->pepper) < 32) {
-            throw new RuntimeException('OTP_PEPPER must contain at least 32 bytes.');
+        if (strlen($this->rateLimitPepper) < 32 || strlen($this->captchaPepper) < 32) {
+            throw new RuntimeException('OTP_PEPPER and CAPTCHA_PEPPER must each contain at least 32 bytes.');
         }
     }
 
@@ -23,7 +24,7 @@ final class SecurityStore
     {
         $id = bin2hex(random_bytes(16));
         $answer = (string) random_int(10000, 99999);
-        $hash = hash_hmac('sha256', 'captcha:' . $id . ':' . $answer, $this->pepper);
+        $hash = hash_hmac('sha256', 'captcha:' . $id . ':' . $answer, $this->captchaPepper);
 
         $statement = $this->db->prepare(
             'INSERT INTO php_security_challenges
@@ -94,7 +95,7 @@ final class SecurityStore
             throw new RuntimeException('Invalid rate limit policy.');
         }
 
-        $key = hash_hmac('sha256', $bucket, $this->pepper);
+        $key = hash_hmac('sha256', $bucket, $this->rateLimitPepper);
         $this->db->beginTransaction();
         try {
             $this->db->prepare(
