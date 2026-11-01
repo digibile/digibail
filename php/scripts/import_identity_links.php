@@ -48,7 +48,7 @@ try {
         }
 
         [$legacyId, $coreId, $mobile, $nationalCode] = array_map('trim', $record);
-        if ($legacyId === '' || !self::validUuid($coreId)) {
+        if ($legacyId === '' || !validUuid($coreId)) {
             throw new RuntimeException('Invalid legacy ID or core GUID in mapping CSV.');
         }
 
@@ -59,6 +59,10 @@ try {
         }
 
         $user = $matches[0];
+        if (preg_match('/^\\d{10}$/D', $nationalCode) !== 1) {
+            throw new RuntimeException('National code must contain exactly ten digits for legacy ID: ' . $legacyId);
+        }
+
         $candidatePhones = array_filter([
             normalizeDigits((string) $user['Mobile']),
             normalizeDigits((string) $user['Phone']),
