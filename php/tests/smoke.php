@@ -88,6 +88,17 @@ if ($legacyOtpVerifyPath->status !== 405 || ($legacyOtpVerifyPath->headers['Allo
     throw new RuntimeException('The legacy OTP verify route must remain registered as POST.');
 }
 
+
+$otpPath = $router->dispatch(new Request('GET', '/api/v1/security/otp/verify'));
+if ($otpPath->status !== 405 || ($otpPath->headers['Allow'] ?? '') !== 'POST') {
+    throw new RuntimeException('The OTP verification endpoint must be registered as POST.');
+}
+
+$resetPath = $router->dispatch(new Request('GET', '/api/v1/security/password-reset/confirm'));
+if ($resetPath->status !== 405 || ($resetPath->headers['Allow'] ?? '') !== 'POST') {
+    throw new RuntimeException('The password reset confirmation endpoint must be registered as POST.');
+}
+
 $wrongMethod = $methodRouter->dispatch(new Request('GET', '/resource'));
 if ($wrongMethod->status !== 405 || ($wrongMethod->headers['Allow'] ?? '') !== 'POST') {
     throw new RuntimeException('Known paths with unsupported methods must return HTTP 405 and Allow.');
