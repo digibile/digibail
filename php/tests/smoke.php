@@ -53,6 +53,21 @@ if ($legacySecurityPath->status !== 405 || ($legacySecurityPath->headers['Allow'
     throw new RuntimeException('The legacy login route must remain registered as POST.');
 }
 
+$captchaPath = $router->dispatch(new Request('POST', '/api/v1/security/captcha'));
+if ($captchaPath->status !== 405 || ($captchaPath->headers['Allow'] ?? '') !== 'GET') {
+    throw new RuntimeException('The CAPTCHA endpoint must be registered as GET.');
+}
+
+$mePath = $router->dispatch(new Request('POST', '/api/v1/security/me'));
+if ($mePath->status !== 405 || ($mePath->headers['Allow'] ?? '') !== 'GET') {
+    throw new RuntimeException('The current-user endpoint must be registered as GET.');
+}
+
+$legacyMePath = $router->dispatch(new Request('POST', '/api/v1/Auth/me'));
+if ($legacyMePath->status !== 405 || ($legacyMePath->headers['Allow'] ?? '') !== 'GET') {
+    throw new RuntimeException('The legacy current-user route must remain registered as GET.');
+}
+
 $wrongMethod = $methodRouter->dispatch(new Request('GET', '/resource'));
 if ($wrongMethod->status !== 405 || ($wrongMethod->headers['Allow'] ?? '') !== 'POST') {
     throw new RuntimeException('Known paths with unsupported methods must return HTTP 405 and Allow.');
