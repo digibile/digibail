@@ -247,6 +247,28 @@ final class SecurityStore
         }
     }
 
+    public function isRateLimited(string $bucket, int $maximum, int $windowSeconds): bool
+    {
+        if ($maximum < 1 || $windowSeconds < 1) {
+            throw new RuntimeException('Invalid rate limit policy.');
+        }
+
+        $key = hash_hmac('sha256', $bucket, $this->rateLimitPepper);
+        $statement = $this->db->prepare(
+            'SELECT window_started_at, attempts
+             FROM php_security_rate_limits WHERE bucket_hash = :bucket LIMIT 1'
+        );
+        $statement->execute(['bucket' => $key]);
+        $row = $statement->fetch();
+        if (!is_array($row)) return false;
+
+        $started = new \\DateTimeImmutable((string) $row['window_started_at'], new \\DateTimeZone('UTC'));
+        $now = new \\DateTimeImmutable('now', new \\DateTimeZone('UTC'));
+        $elapsed = $now->getTimestamp() - $started->getTimestamp();
+
+        return $elapsed < $windowSeconds && (int) $row['attempts'] >= $maximum;
+    }
+
     public function hitRateLimit(string $bucket, int $maximum, int $windowSeconds): bool
     {
         if ($maximum < 1 || $windowSeconds < 1) {
