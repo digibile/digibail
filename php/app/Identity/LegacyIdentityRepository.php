@@ -4,9 +4,7 @@ declare(strict_types=1);
 
 namespace App\Identity;
 
-use App\Security\PasswordVerifier;
 use PDO;
-use Throwable;
 
 final class LegacyIdentityRepository
 {
@@ -28,14 +26,38 @@ final class LegacyIdentityRepository
         }
 
         $storedHash = is_string($user['PasswordHash'] ?? null) ? $user['PasswordHash'] : null;
-        if (!PasswordVerifier::verify($password, $storedHash)) {
+        if (!\App\Security\PasswordVerifier::verify($password, $storedHash)) {
             return null;
         }
 
-        if (PasswordVerifier::needsBcryptUpgrade($storedHash)) {
+        if (\App\Security\PasswordVerifier::needsBcryptUpgrade($storedHash)) {
             $this->upgradeHash((string) $user['Id'], (string) $storedHash, $password);
         }
 
+        return $this->shapeUser($user, $this->rolesFor((string) $user['Id']));
+    }
+
+    /** @return array<string, mixed>|null */
+    public function findActiveById(string $id): ?array
+    {
+        $statement = $this->db->prepare(
+            'SELECT Id, FirstName, LastName, Mobile, Phone, PhoneNumber, UserName,
+                    Email, NationalCode, IsActive, LockoutEnd, LockoutEnabled
+             FROM AspNetUsers WHERE Id = :id LIMIT 1'
+        );
+        $statement->execute(['id' => $id]);
+        $user = $statement->fetch();
+
+        if (!is_array($user) || (int) $user['IsActive'] !== 1 || !$this->isLockoutExpired($user)) {
+            return null;
+        }
+
+        return $this->shapeUser($user, $this->rolesFor((string) $user['Id']));
+    }
+
+    /** @return array<string, mixed> */
+    private function shapeUser(array $user, array $roles): array
+    {
         return [
             'id' => (string) $user['Id'],
             'username' => $user['UserName'],
@@ -46,7 +68,7 @@ final class LegacyIdentityRepository
             'email' => $user['Email'],
             'national_code' => $user['NationalCode'],
             'is_active' => (bool) $user['IsActive'],
-            'roles' => $this->rolesFor((string) $user['Id']),
+            'roles' => $roles,
             'source' => 'mariadb.AspNetUsers',
         ];
     }
@@ -94,8 +116,6 @@ final class LegacyIdentityRepository
         ]);
 
         $matches = $statement->fetchAll();
-
-        // Ambiguous legacy identities must never authenticate as an arbitrary row.
         return count($matches) === 1 ? $matches[0] : null;
     }
 
@@ -117,7 +137,6 @@ final class LegacyIdentityRepository
         ));
     }
 
-    /** @param array<string, mixed> $user */
     private function isLockoutExpired(array $user): bool
     {
         if (!(bool) $user['LockoutEnabled'] || empty($user['LockoutEnd'])) {
@@ -127,21 +146,19 @@ final class LegacyIdentityRepository
         try {
             $lockoutEnd = new \DateTimeImmutable((string) $user['LockoutEnd']);
             return $lockoutEnd <= new \DateTimeImmutable('now', new \DateTimeZone('UTC'));
-        } catch (Throwable) {
+        } catch (\Throwable) {
             return false;
         }
     }
 
     private function upgradeHash(string $userId, string $oldHash, string $password): void
     {
-        $newHash = PasswordVerifier::hashForNewPassword($password);
         $statement = $this->db->prepare(
-            'UPDATE AspNetUsers
-             SET PasswordHash = :new_hash
+            'UPDATE AspNetUsers SET PasswordHash = :new_hash
              WHERE Id = :id AND PasswordHash = :old_hash'
         );
         $statement->execute([
-            'new_hash' => $newHash,
+            'new_hash' => \App\Security\PasswordVerifier::hashForNewPassword($password),
             'id' => $userId,
             'old_hash' => $oldHash,
         ]);
