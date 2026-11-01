@@ -67,6 +67,17 @@ if ($created->status !== 201) {
 }
 
 $methodRouter->get('/resource/{id}', static fn (Request $request): Response => Response::json(['id' => $request->params['id'] ?? null]));
+
+$uuidRouter = new Router();
+$uuidRouter->put('/resources/{id:uuid}', static fn (Request $request): Response => Response::json(['id' => $request->params['id'] ?? null]));
+$validUuid = $uuidRouter->dispatch(new Request('PUT', '/resources/00000000-0000-4000-8000-000000000001'));
+if ($validUuid->status !== 200) {
+    throw new RuntimeException('UUID-constrained routes must accept valid UUID identifiers.');
+}
+$invalidUuid = $uuidRouter->dispatch(new Request('PUT', '/resources/not-a-uuid'));
+if ($invalidUuid->status !== 404) {
+    throw new RuntimeException('UUID-constrained routes must reject non-UUID identifiers.');
+}
 $parameterized = $methodRouter->dispatch(new Request('GET', '/resource/42'));
 $parameterizedPayload = json_decode($parameterized->body, true, 512, JSON_THROW_ON_ERROR);
 if (($parameterizedPayload['id'] ?? null) !== '42') {
