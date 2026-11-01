@@ -157,6 +157,100 @@ final class VamCityLoanRequestController
         ]);
     }
 
+    public function detail(Request $request): Response
+    {
+        $user = $this->auth->user($request);
+        if ($user === null) {
+            return Response::json(['message' => 'برای مشاهده درخواست‌های وام وارد حساب شوید.'], 401);
+        }
+        if (!$this->auth->hasAnyRole($user, ['Admin', 'SuperAdmin'])) {
+            return Response::json(['message' => 'دسترسی مدیر سامانه لازم است.'], 403);
+        }
+
+        $id = strtolower(trim((string) ($request->params['id'] ?? '')));
+        if (preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/', $id) !== 1) {
+            return Response::json(['message' => 'شناسه درخواست معتبر نیست.'], 400);
+        }
+
+        $statement = $this->db->prepare(
+            'SELECT
+                r.Id AS id,
+                r.Code AS code,
+                CAST(r.UserId AS CHAR) AS userId,
+                r.CustomerId AS customerId,
+                r.LoanId AS loanId,
+                COALESCE(l.Title, \'طرح ثبت‌شده در سامانه\') AS loanName,
+                CONCAT_WS(\' \', NULLIF(u.FirstName, \'\'), NULLIF(u.LastName, \'\')) AS applicantName,
+                COALESCE(u.Mobile, u.Phone, u.PhoneNumber) AS mobile,
+                u.NationalCode AS nationalCode,
+                CONCAT_WS(\' \', NULLIF(agent.FirstName, \'\'), NULLIF(agent.LastName, \'\')) AS agentName,
+                r.Amount AS amount,
+                r.Installment AS installment,
+                r.InstallmentCount AS installmentCount,
+                r.Month AS month,
+                r.Year AS year,
+                r.MonthGap AS monthGap,
+                r.RequestDate AS requestDate,
+                r.__raw_RequestDate AS requestDateRaw,
+                r.StatusId AS statusId,
+                s.Title AS status,
+                r.AgentStatusId AS agentStatusId,
+                r.AgentId AS agentId,
+                r.Comment AS comment,
+                r.AdminDescription AS adminDescription,
+                r.AdminDescriptionPrivate AS adminDescriptionPrivate,
+                r.IsPhysicalDocsDelivered AS physicalDocumentsDelivered,
+                r.Products AS products,
+                r.SponsoreAmount AS sponsorAmount,
+                r.SponsorId AS sponsorId,
+                r.UserLoanSponsorStatus AS sponsorStatus
+             FROM UserLoanRequests r
+             LEFT JOIN AspNetUsers u ON u.Id = r.UserId
+             LEFT JOIN AspNetUsers agent ON agent.Id = r.AgentId
+             LEFT JOIN Loans l ON l.Id = r.LoanId
+             LEFT JOIN LoanRequestStatuses s ON s.Id = r.StatusId
+             WHERE r.Id = :id
+             LIMIT 1'
+        );
+        $statement->execute(['id' => $id]);
+        $record = $statement->fetch();
+        if (!is_array($record)) {
+            return Response::json(['message' => 'درخواست پیدا نشد.'], 404);
+        }
+
+        $historyStatement = $this->db->prepare(
+            'SELECT
+                h.Id AS id,
+                h.DateTime AS changedAt,
+                h.__raw_DateTime AS changedAtRaw,
+                fs.Title AS fromStatus,
+                ts.Title AS toStatus,
+                fas.Title AS fromAgentStatus,
+                tas.Title AS toAgentStatus,
+                h.UserId AS changedById,
+                CONCAT_WS(\' \', NULLIF(actor.FirstName, \'\'), NULLIF(actor.LastName, \'\')) AS changedByName
+             FROM UserLoanRequestStatusHistories h
+             LEFT JOIN LoanRequestStatuses fs ON fs.Id = h.FromStatusId
+             LEFT JOIN LoanRequestStatuses ts ON ts.Id = h.ToStatusId
+             LEFT JOIN LoanRequestStatuses fas ON fas.Id = h.FromAgentStatusId
+             LEFT JOIN LoanRequestStatuses tas ON tas.Id = h.ToAgentStatusId
+             LEFT JOIN AspNetUsers actor ON actor.Id = h.UserId
+             WHERE h.UserLoanRequestId = :id
+             ORDER BY h.DateTime DESC, h.Id DESC
+             LIMIT 100'
+        );
+        $historyStatement->execute(['id' => $id]);
+
+        return Response::json([
+            'data' => [
+                ...$record,
+                'history' => $historyStatement->fetchAll(),
+                'comments' => [],
+                'source' => 'MariaDB.UserLoanRequests',
+            ],
+        ]);
+    }
+
     private static function validDate(string $value): bool
     {
         [$year, $month, $day] = array_map('intval', explode('-', $value));
