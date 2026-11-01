@@ -2,8 +2,8 @@
 declare(strict_types=1);
 
 /**
- * Resumable VamCity data importer.
- * The schema is created from the reviewed schema-main/bluvamdb/transfer SQL files.
+ * Resumable VamCity-only data importer.
+ * Only the VamCity SQL Server database is in scope; all other legacy databases are excluded.
  * Source rows are streamed from SQL Server BCP as JSON and inserted directly into MariaDB.
  * No customer records are written to disk or committed to GitHub.
  * SQL Server source snapshots remain read-only throughout this process.
@@ -25,10 +25,7 @@ $container = 'public_html-db-1';
 $batchSize = 500;
 
 $sources = [
-    ['source'=>'Digibail','target'=>'digibail_vamcitydigibilepay','schema'=>null,'prefix'=>'digibail__'],
     ['source'=>'vamcityc_vamcity_import_20261028','target'=>'digibail_vamcitydigibilepay','schema'=>'schema-main.sql','prefix'=>''],
-    ['source'=>'vamcityc_bluvamdb_import_20261028','target'=>'digibail_vamcitydigibilepay','schema'=>'schema-bluvamdb.sql','prefix'=>'bluvamdb__'],
-    ['source'=>'vamcityc_transferDb_import_20261028','target'=>'digibail_vamcitydigibilepay','schema'=>'schema-transfer.sql','prefix'=>'OnlineMoneyTransfer__'],
 ];
 
 function logLine(string $s): void { echo '['.date('H:i:s').'] '.$s.PHP_EOL; }
