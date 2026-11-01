@@ -262,8 +262,8 @@ final class SecurityStore
         $row = $statement->fetch();
         if (!is_array($row)) return false;
 
-        $started = new \\DateTimeImmutable((string) $row['window_started_at'], new \\DateTimeZone('UTC'));
-        $now = new \\DateTimeImmutable('now', new \\DateTimeZone('UTC'));
+        $started = new \DateTimeImmutable((string) $row['window_started_at'], new \DateTimeZone('UTC'));
+        $now = new \DateTimeImmutable('now', new \DateTimeZone('UTC'));
         $elapsed = $now->getTimestamp() - $started->getTimestamp();
 
         return $elapsed < $windowSeconds && (int) $row['attempts'] >= $maximum;
