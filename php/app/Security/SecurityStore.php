@@ -89,6 +89,90 @@ final class SecurityStore
         }
     }
 
+    public function createOtp(string $phone, string $purpose, string $code): void
+    {
+        $id = bin2hex(random_bytes(16));
+        $hash = hash_hmac('sha256', 'otp:' . $phone . ':' . $purpose . ':' . $code, $this->rateLimitPepper);
+        $statement = $this->db->prepare(
+            'INSERT INTO php_security_challenges
+                (id, challenge_type, subject, value_hash, attempts, expires_at, resend_at)
+             VALUES (:id, :type, :subject, :hash, 0,
+                     DATE_ADD(UTC_TIMESTAMP(), INTERVAL 120 SECOND),
+                     DATE_ADD(UTC_TIMESTAMP(), INTERVAL 60 SECOND))'
+        );
+        $statement->execute([
+            'id' => $id,
+            'type' => 'otp:' . $purpose,
+            'subject' => $phone,
+            'hash' => $hash,
+        ]);
+    }
+
+    /** @return array{expiresIn:int,resendIn:int} */
+    public function otpStatus(string $phone, string $purpose): array
+    {
+        $statement = $this->db->prepare(
+            'SELECT
+                GREATEST(0, TIMESTAMPDIFF(SECOND, UTC_TIMESTAMP(), expires_at)) AS expires_in,
+                GREATEST(0, TIMESTAMPDIFF(SECOND, UTC_TIMESTAMP(), resend_at)) AS resend_in
+             FROM php_security_challenges
+             WHERE challenge_type = :type AND subject = :subject
+               AND consumed_at IS NULL
+             ORDER BY created_at DESC LIMIT 1'
+        );
+        $statement->execute(['type' => 'otp:' . $purpose, 'subject' => $phone]);
+        $row = $statement->fetch();
+
+        return [
+            'expiresIn' => is_array($row) ? max(0, (int) $row['expires_in']) : 0,
+            'resendIn' => is_array($row) ? max(0, (int) $row['resend_in']) : 0,
+        ];
+    }
+
+    public function verifyOtp(string $phone, string $purpose, string $code): bool
+    {
+        $this->db->beginTransaction();
+        try {
+            $statement = $this->db->prepare(
+                'SELECT id, value_hash, attempts
+                 FROM php_security_challenges
+                 WHERE challenge_type = :type AND subject = :subject
+                   AND consumed_at IS NULL AND expires_at > UTC_TIMESTAMP()
+                 ORDER BY created_at DESC LIMIT 1 FOR UPDATE'
+            );
+            $statement->execute(['type' => 'otp:' . $purpose, 'subject' => $phone]);
+            $row = $statement->fetch();
+
+            if (!is_array($row) || (int) $row['attempts'] >= 5) {
+                $this->db->commit();
+                return false;
+            }
+
+            $expected = hash_hmac('sha256', 'otp:' . $phone . ':' . $purpose . ':' . $code, $this->rateLimitPepper);
+            if (!hash_equals((string) $row['value_hash'], $expected)) {
+                $this->db->prepare(
+                    'UPDATE php_security_challenges
+                     SET attempts = attempts + 1,
+                         consumed_at = CASE WHEN attempts + 1 >= 5 THEN UTC_TIMESTAMP() ELSE consumed_at END
+                     WHERE id = :id'
+                )->execute(['id' => $row['id']]);
+                $this->db->commit();
+                return false;
+            }
+
+            $this->db->prepare(
+                'UPDATE php_security_challenges SET consumed_at = UTC_TIMESTAMP() WHERE id = :id'
+            )->execute(['id' => $row['id']]);
+            $this->db->commit();
+            return true;
+        } catch (\\Throwable $exception) {
+            if ($this->db->inTransaction()) {
+                $this->db->rollBack();
+            }
+            throw $exception;
+        }
+    }
+
     public function hitRateLimit(string $bucket, int $maximum, int $windowSeconds): bool
     {
         if ($maximum < 1 || $windowSeconds < 1) {
