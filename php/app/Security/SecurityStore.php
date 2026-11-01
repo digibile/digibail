@@ -108,6 +108,23 @@ final class SecurityStore
         ]);
     }
 
+    public function cancelLatestOtp(string $phone, string $purpose): void
+    {
+        $statement = $this->db->prepare(
+            'UPDATE php_security_challenges
+             SET consumed_at = UTC_TIMESTAMP()
+             WHERE id = (
+                SELECT id FROM (
+                    SELECT id FROM php_security_challenges
+                    WHERE challenge_type = :type AND subject = :subject
+                      AND consumed_at IS NULL
+                    ORDER BY created_at DESC LIMIT 1
+                ) latest
+             )'
+        );
+        $statement->execute(['type' => 'otp:' . $purpose, 'subject' => $phone]);
+    }
+
     /** @return array{expiresIn:int,resendIn:int} */
     public function otpStatus(string $phone, string $purpose): array
     {
