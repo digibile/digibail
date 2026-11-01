@@ -226,6 +226,80 @@ final class SecurityController
         return $this->authenticatedResponse($user);
     }
 
+    public function register(Request $request): Response
+    {
+        if (!$this->store->hitRateLimit('register:ip:' . $this->clientIp($request), 10, 3600)) {
+            return Response::json(['message' => 'تعداد ثبت‌نام از این شبکه زیاد است.'], 429);
+        }
+
+        $captchaId = (string) ($request->input['captchaId'] ?? '');
+        $captchaAnswer = self::normalizeDigits((string) ($request->input['captchaAnswer'] ?? ''));
+        if (!$this->store->consumeCaptcha($captchaId, $captchaAnswer)) {
+            return Response::json(['message' => 'کد امنیتی نامعتبر یا منقضی شده است.'], 400);
+        }
+
+        $ticket = (string) ($request->input['ticket'] ?? '');
+        $ticketClaims = $this->jwt->verify($ticket);
+        if ($ticketClaims === null || ($ticketClaims['purpose'] ?? null) !== 'register' || !isset($ticketClaims['phone'])) {
+            return Response::json(['message' => 'تأیید موبایل منقضی شده است. دوباره کد بگیرید.'], 400);
+        }
+
+        $fullName = trim((string) ($request->input['fullName'] ?? ''));
+        $nameParts = preg_split('/\\s+/u', $fullName, -1, PREG_SPLIT_NO_EMPTY) ?: [];
+        $nationalCode = self::normalizeDigits((string) ($request->input['nationalCode'] ?? ''));
+        $password = (string) ($request->input['password'] ?? '');
+        $email = trim((string) ($request->input['email'] ?? ''));
+
+        if (count($nameParts) < 2) {
+            return Response::json(['message' => 'نام و نام خانوادگی را کامل بنویسید.'], 400);
+        }
+        if (!self::validNationalCode($nationalCode)) {
+            return Response::json(['message' => 'کد ملی از نظر ساختار معتبر نیست.'], 400);
+        }
+        if (strlen($password) < 8 || strlen($password) > 128) {
+            return Response::json(['message' => 'رمز عبور باید بین ۸ تا ۱۲۸ نویسه باشد.'], 400);
+        }
+        if ($email !== '' && filter_var($email, FILTER_VALIDATE_EMAIL) === false) {
+            return Response::json(['message' => 'نشانی ایمیل معتبر نیست.'], 400);
+        }
+
+        try {
+            $user = $this->identities->registerCustomer(
+                $fullName,
+                (string) $ticketClaims['phone'],
+                $email === '' ? null : $email,
+                $nationalCode,
+                $password,
+                trim((string) (getenv('AUTH_CUSTOMER_ROLE') ?: 'Customer'))
+            );
+        } catch (Throwable $exception) {
+            error_log('Legacy customer registration failed: ' . $exception->getMessage());
+            return Response::json(['message' => 'ثبت‌نام در حال حاضر انجام نشد. تنظیمات نقش و پایگاه داده را بررسی کنید.'], 503);
+        }
+
+        if ($user === null) {
+            return Response::json(['message' => 'این شماره قبلاً ثبت شده یا ثبت‌نام تکراری است.'], 409);
+        }
+
+        return $this->authenticatedResponse($user);
+    }
+
+    private static function validNationalCode(string $value): bool
+    {
+        if (preg_match('/^\\d{10}$/D', $value) !== 1 || preg_match('/^(\\d)\\1{9}$/D', $value) === 1) {
+            return false;
+        }
+
+        $check = (int) $value[9];
+        $sum = 0;
+        for ($index = 0; $index < 9; $index++) {
+            $sum += ((int) $value[$index]) * (10 - $index);
+        }
+
+        $remainder = $sum % 11;
+        return $remainder < 2 ? $check === $remainder : $check === 11 - $remainder;
+    }
+
     public function requestPasswordReset(Request $request): Response
     {
         $input = array_merge($request->input, ['purpose' => 'password_reset']);
