@@ -10,6 +10,26 @@ use App\Core\Routing\Router;
 require dirname(__DIR__) . '/vendor/autoload.php';
 
 $router = Bootstrap::router();
+$adminLoanListPath = $router->dispatch(new Request('POST', '/api/v1/admin/loan-products'));
+if ($adminLoanListPath->status !== 405 || ($adminLoanListPath->headers['Allow'] ?? '') !== 'GET') {
+    throw new RuntimeException('Admin loan-product list must be registered as GET.');
+}
+
+$adminLoanCreatePath = $router->dispatch(new Request('GET', '/api/v1/admin/loan-products'));
+if ($adminLoanCreatePath->status !== 405 || ($adminLoanCreatePath->headers['Allow'] ?? '') !== 'POST') {
+    throw new RuntimeException('Admin loan-product create must be registered as POST.');
+}
+
+$adminLoanUpdatePath = $router->dispatch(new Request('POST', '/api/v1/admin/loan-products/00000000-0000-4000-8000-000000000001'));
+if ($adminLoanUpdatePath->status !== 405 || ($adminLoanUpdatePath->headers['Allow'] ?? '') !== 'PUT') {
+    throw new RuntimeException('Admin loan-product update must be registered as PUT.');
+}
+
+$adminLoanTogglePath = $router->dispatch(new Request('GET', '/api/v1/admin/loan-products/00000000-0000-4000-8000-000000000001/toggle'));
+if ($adminLoanTogglePath->status !== 405 || ($adminLoanTogglePath->headers['Allow'] ?? '') !== 'POST') {
+    throw new RuntimeException('Admin loan-product toggle must be registered as POST.');
+}
+
 $tenantConfigPath = $router->dispatch(new Request('POST', '/api/v1/tenant/config'));
 if ($tenantConfigPath->status !== 405 || ($tenantConfigPath->headers['Allow'] ?? '') !== 'GET') {
     throw new RuntimeException('The tenant configuration endpoint must be registered as GET.');
