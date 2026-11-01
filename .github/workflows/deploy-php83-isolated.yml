@@ -155,7 +155,11 @@ jobs:
              php -l '$PRIVATE_APP/public/index.php'
              php -l '$PRIVATE_APP/public/expert.php'
              if [ -f '$DOMAIN_ROOT/database/migration/config.php' ]; then
-               /usr/local/php83/bin/php '$PRIVATE_APP/scripts/configure_production.php'
+               /usr/local/php83/bin/php -d display_errors=1 -d display_startup_errors=1 -d log_errors=0 '$PRIVATE_APP/scripts/configure_production.php' 2>&1 || {
+                 BOOTSTRAP_EXIT=\$?
+                 echo "PHP_DATABASE_BOOTSTRAP_FAILED_EXIT=\$BOOTSTRAP_EXIT"
+                 exit "\$BOOTSTRAP_EXIT"
+               }
                chmod 600 '$PRIVATE_APP/.env'
                echo 'PHP_DATABASE_BOOTSTRAP=SUCCESS'
              else
