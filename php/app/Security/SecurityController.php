@@ -328,27 +328,13 @@ final class SecurityController
             return Response::json(['message' => 'مجوز بازیابی منقضی یا نامعتبر است.'], 400);
         }
 
-        $user = $this->identities->findActiveByPhone((string) $claims['phone']);
-        if ($user === null) {
-            return Response::json(['message' => 'بازیابی برای این حساب ممکن نیست.'], 400);
-        }
-
-        $statement = $this->db->prepare(
-            'UPDATE AspNetUsers
-             SET PasswordHash = :password_hash,
-                 SecurityStamp = :security_stamp,
-                 AccessFailedCount = 0,
-                 LockoutEnd = NULL
-             WHERE Id = :id AND IsActive = 1'
-        );
-        $statement->execute([
-            'password_hash' => PasswordVerifier::hashForNewPassword($password),
-            'security_stamp' => bin2hex(random_bytes(24)),
-            'id' => $user['id'],
-        ]);
-
-        if ($statement->rowCount() !== 1) {
-            return Response::json(['message' => 'تغییر رمز انجام نشد. دوباره تلاش کنید.'], 409);
+        try {
+            if (!$this->identities->resetPasswordByPhone((string) $claims['phone'], $password)) {
+                return Response::json(['message' => 'تغییر رمز انجام نشد. حساب فعال پیدا نشد یا اطلاعات تغییر کرده است.'], 409);
+            }
+        } catch (Throwable $exception) {
+            error_log('Password reset failed: ' . $exception->getMessage());
+            return Response::json(['message' => 'تغییر رمز موقتاً امکان‌پذیر نیست.'], 503);
         }
 
         return Response::json(['ok' => true, 'message' => 'رمز عبور با موفقیت تغییر کرد.']);
