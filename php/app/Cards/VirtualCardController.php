@@ -478,7 +478,9 @@ final class VirtualCardController
             $validMonths = max(1, min(120, (int) (getenv('CARDS_VALID_MONTHS') ?: 36)));
             $expiry = (new \DateTimeImmutable('now', new \DateTimeZone('UTC')))->modify('+' . $validMonths . ' months');
             $id = self::uuid();
-            $insert = $this->db->prepare(
+            $this->db->beginTransaction();
+            try {
+                $insert = $this->db->prepare(
                 'INSERT INTO VirtualCards (
                     Id, TenantId, LoanId, UserId, HolderName, Last4, Bin, PanHash,
                     PanEnc, CvvEnc, ExpMonth, ExpYear, `Limit`, Spent, PerTxnLimit,
@@ -489,25 +491,30 @@ final class VirtualCardController
                     :status, UTC_TIMESTAMP(6)
                  )'
             );
-            $insert->execute([
-                'id' => $id,
-                'tenant_id' => $tenantId,
-                'loan_id' => $loanId,
-                'user_id' => $userId,
-                'holder' => $holderName,
-                'last4' => substr($pan, -4),
-                'bin' => $this->crypto->binPrefix(),
-                'pan_hash' => $panHash,
-                'pan_enc' => $this->crypto->protect($pan),
-                'cvv_enc' => $this->crypto->protect($cvv),
-                'exp_month' => (int) $expiry->format('n'),
-                'exp_year' => (int) $expiry->format('Y'),
-                'card_limit' => $limit,
-                'per_txn' => $limit,
-                'status' => 'Active',
-            ]);
+                $insert->execute([
+                    'id' => $id,
+                    'tenant_id' => $tenantId,
+                    'loan_id' => $loanId,
+                    'user_id' => $userId,
+                    'holder' => $holderName,
+                    'last4' => substr($pan, -4),
+                    'bin' => $this->crypto->binPrefix(),
+                    'pan_hash' => $panHash,
+                    'pan_enc' => $this->crypto->protect($pan),
+                    'cvv_enc' => $this->crypto->protect($cvv),
+                    'exp_month' => (int) $expiry->format('n'),
+                    'exp_year' => (int) $expiry->format('Y'),
+                    'card_limit' => $limit,
+                    'per_txn' => $limit,
+                    'status' => 'Active',
+                ]);
 
-            $this->insertTxn($id, 'Issue', $limit, '', '', 'صدور خودکار برای وام');
+                $this->insertTxn($id, 'Issue', $limit, '', '', 'صدور خودکار برای وام');
+                $this->db->commit();
+            } catch (Throwable $exception) {
+                if ($this->db->inTransaction()) $this->db->rollBack();
+                throw $exception;
+            }
             $query = $this->db->prepare('SELECT * FROM VirtualCards WHERE Id = :id LIMIT 1');
             $query->execute(['id' => $id]);
             $created = $query->fetch();
