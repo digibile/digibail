@@ -379,21 +379,33 @@ function generatedDigibailSchema(mysqli $db,array $m,string $source): void {
                 $parts[]=$col;
             }
             if(!$parts) continue;
+            $indexName=shortName('digibail__'.$name);
+            $exists=$db->query("SELECT COUNT(*) n FROM information_schema.statistics WHERE table_schema=DATABASE() AND table_name=".qv($db,$target)." AND index_name=".qv($db,$indexName));
+            if($exists && (int)$exists->fetch_assoc()['n']>0) continue;
             $unique=!empty($cols[array_key_first($cols)]['is_unique']);
             $kind=$unique?'UNIQUE KEY ':'KEY ';
-            $sql='ALTER TABLE '.qi($target).' ADD '.$kind.qi(shortName('digibail__'.$name)).' ('.implode(',',$parts).')';
-            if(!$db->query($sql)) {
-                if(stripos($db->error,'Duplicate key name')!==false) continue;
-                stopNow('Generated index failed for '.$target.'.'.$name.': '.$db->error);
-            }
+            $sql='ALTER TABLE '.qi($target).' ADD '.$kind.qi($indexName).' ('.implode(',',$parts).')';
+            if(!$db->query($sql)) stopNow('Generated index failed for '.$target.'.'.$name.': '.$db->error);
         }
     }
+    $fkGroups=[];
     foreach(($m['fks']??[]) as $fk) {
         if(!empty($fk['is_disabled'])) continue;
+        $groupKey=$fk['parent_schema'].'.'.$fk['parent_table'].'.'.$fk['fk_name'];
+        if(!isset($fkGroups[$groupKey])) $fkGroups[$groupKey]=['first'=>$fk,'parent'=>[],'referenced'=>[]];
+        $ord=(int)($fk['ordinal']??1);
+        $fkGroups[$groupKey]['parent'][$ord]=(string)$fk['parent_column'];
+        $fkGroups[$groupKey]['referenced'][$ord]=(string)$fk['referenced_column'];
+    }
+    foreach($fkGroups as $group) {
+        $fk=$group['first'];
         $parent=mappedTable((string)$fk['parent_schema'],(string)$fk['parent_table'],$source);
         $referenced=mappedTable((string)$fk['referenced_schema'],(string)$fk['referenced_table'],$source);
         $name=shortName('digibail__'.(string)$fk['fk_name']);
-        $sql='ALTER TABLE '.qi($parent).' ADD CONSTRAINT '.qi($name).' FOREIGN KEY ('.qi((string)$fk['parent_column']).') REFERENCES '.qi($referenced).' ('.qi((string)$fk['referenced_column']).')';
+        $exists=$db->query("SELECT COUNT(*) n FROM information_schema.table_constraints WHERE constraint_schema=DATABASE() AND constraint_name=".qv($db,$name));
+        if($exists && (int)$exists->fetch_assoc()['n']>0) continue;
+        ksort($group['parent']); ksort($group['referenced']);
+        $sql='ALTER TABLE '.qi($parent).' ADD CONSTRAINT '.qi($name).' FOREIGN KEY ('.implode(',',array_map('qi',array_values($group['parent']))).') REFERENCES '.qi($referenced).' ('.implode(',',array_map('qi',array_values($group['referenced']))).')';
         $delete=strtoupper((string)($fk['delete_action']??'NO_ACTION'));
         $update=strtoupper((string)($fk['update_action']??'NO_ACTION'));
         if($delete==='CASCADE') $sql.=' ON DELETE CASCADE';
@@ -444,9 +456,12 @@ foreach($sources as $s){
         $present+=(int)$exists->fetch_assoc()['n'];
     }
     $expectedTableCount=count($m['tables']);
-    if($present===0){
+    if($s['schema']===null) {
+        logLine('Creating or resuming isolated Digibail schema in '.$target);
+        generatedDigibailSchema($db,$m,$source);
+    } elseif($present===0) {
         logLine('Installing isolated schema for '.$source.' into '.$target);
-        if($s['schema']===null) generatedDigibailSchema($db,$m,$source); else installSchema($db,__DIR__.'/../mysql/'.$s['schema'],$source);
+        installSchema($db,__DIR__.'/../mysql/'.$s['schema'],$source);
     } elseif($present!==$expectedTableCount) {
         stopNow('Partial schema detected for '.$source.' in '.$target.' (present='.$present.', expected='.$expectedTableCount.'); refusing to alter existing tables.');
     } elseif($source==='vamcityc_bluvamdb_import_20261028') {
