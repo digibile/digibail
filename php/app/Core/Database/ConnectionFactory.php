@@ -28,13 +28,10 @@ final class ConnectionFactory
         $charset = self::env('DB_CHARSET') ?: 'utf8mb4';
         $timeout = max(1, (int) (self::env('DB_CONNECTION_TIMEOUT') ?: '5'));
 
-        $dsn = sprintf(
-            'mysql:host=%s;port=%s;dbname=%s;charset=%s',
-            $host,
-            $port,
-            $database,
-            $charset
-        );
+        $socket = self::env('DB_SOCKET');
+        $dsn = $socket !== ''
+            ? sprintf('mysql:unix_socket=%s;dbname=%s;charset=%s', $socket, $database, $charset)
+            : sprintf('mysql:host=%s;port=%s;dbname=%s;charset=%s', $host, $port, $database, $charset);
 
         return new PDO(
             $dsn,
