@@ -335,6 +335,9 @@ function generatedDigibailSchema(mysqli $db,array $m,string $source): void {
     $columnsBy=[]; foreach(($m['columns']??[]) as $c) $columnsBy[$c['schema_name'].'.'.$c['table_name']][]=$c;
     $keysBy=[]; foreach(($m['keys']??[]) as $k) $keysBy[$k['schema_name'].'.'.$k['table_name']][]=$k;
     $indexesBy=[]; foreach(($m['indexes']??[]) as $ix) $indexesBy[$ix['schema_name'].'.'.$ix['table_name']][]=$ix;
+    $indexedColumns=[];
+    foreach(($m['keys']??[]) as $k) $indexedColumns[$k['schema_name'].'.'.$k['table_name']][(string)$k['column_name']]=true;
+    foreach(($m['indexes']??[]) as $ix) if(empty($ix['is_included_column']) && (int)($ix['key_ordinal']??0)>0) $indexedColumns[$ix['schema_name'].'.'.$ix['table_name']][(string)$ix['column_name']]=true;
     foreach($tables as $t) {
         $key=$t['schema_name'].'.'.$t['table_name'];
         $target=mappedTable($t['schema_name'],$t['table_name'],$source);
@@ -342,6 +345,7 @@ function generatedDigibailSchema(mysqli $db,array $m,string $source): void {
         foreach(($columnsBy[$key]??[]) as $c) {
             $name=(string)$c['column_name'];
             $type=mysqlTypeFromSqlServer($c);
+            if(isset($indexedColumns[$key][$name]) && preg_match('/^VARCHAR\\(\\d+\\)$/',$type)) $type.=' CHARACTER SET utf8mb3 COLLATE utf8mb3_unicode_ci';
             $nullable=!empty($c['is_nullable']);
             $identity=!empty($c['is_identity']) && !$auto && preg_match('/^(?:BIGINT|INT|SMALLINT|TINYINT)/',$type);
             if($identity) $auto=true;
