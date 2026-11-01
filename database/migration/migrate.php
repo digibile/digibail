@@ -341,14 +341,14 @@ function generatedDigibailSchema(mysqli $db,array $m,string $source): void {
     foreach($tables as $t) {
         $key=$t['schema_name'].'.'.$t['table_name'];
         $target=mappedTable($t['schema_name'],$t['table_name'],$source);
-        $defs=[]; $auto=false;
+        $defs=[]; $auto=false; $autoColumn=null;
         foreach(($columnsBy[$key]??[]) as $c) {
             $name=(string)$c['column_name'];
             $type=mysqlTypeFromSqlServer($c);
             if(isset($indexedColumns[$key][$name]) && preg_match('/^VARCHAR\\(\\d+\\)$/',$type)) $type.=' CHARACTER SET utf8mb3 COLLATE utf8mb3_unicode_ci';
             $nullable=!empty($c['is_nullable']);
             $identity=!empty($c['is_identity']) && !$auto && preg_match('/^(?:BIGINT|INT|SMALLINT|TINYINT)/',$type);
-            if($identity) $auto=true;
+            if($identity) { $auto=true; $autoColumn=$name; }
             $def=qi($name).' '.$type.($nullable?' NULL':' NOT NULL').($identity?' AUTO_INCREMENT':'');
             if(!$identity) $def.=mysqlDefaultFromSqlServer($c['default_definition']??null,$db);
             $defs[]=$def;
@@ -362,6 +362,10 @@ function generatedDigibailSchema(mysqli $db,array $m,string $source): void {
         }
         if($pk){ksort($pk);$defs[]='PRIMARY KEY ('.implode(',',array_map('qi',array_values($pk))).')';}
         foreach($unique as $name=>$cols){ksort($cols);$defs[]='UNIQUE KEY '.qi(shortName('digibail__'.$name)).' ('.implode(',',array_map('qi',array_values($cols))).')';}
+        if($autoColumn!==null && !in_array($autoColumn,array_values($pk),true)) {
+            $autoName=shortName('digibail__auto_'.$target.'_'.$autoColumn);
+            $defs[]='KEY '.qi($autoName).' ('.qi($autoColumn).')';
+        }
         $sql='CREATE TABLE IF NOT EXISTS '.qi($target).' ('.implode(",\n",$defs).') ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci';
         if(!$db->query($sql)) stopNow('Generated schema creation failed for '.$target.': '.$db->error);
     }
