@@ -1,0 +1,130 @@
+name: Back up and import original Digibail source into existing phpMyAdmin database
+
+on:
+  push:
+    branches:
+      - migration/php83-full-rebuild
+    paths:
+      - .github/workflows/import-digibail-fourth-source.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: digebail-fourth-source-production-import
+  cancel-in-progress: false
+
+jobs:
+  additive-import:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout migration code
+        uses: actions/checkout@v4
+        with:
+          ref: migration/php83-full-rebuild
+          fetch-depth: 1
+
+      - name: Copy reviewed importer to production CLI directory
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          source: database/migration/migrate.php
+          target: /home/digibail/domains/digebail.ir/database/migration/
+          strip_components: 2
+          overwrite: true
+
+      - name: Back up existing MariaDB and add only missing Digibail source tables
+        uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          command_timeout: 80m
+          script: |
+            set -eu
+            ROOT='/home/digibail/domains/digebail.ir'
+            DB='digibail_vamcitydigibilepay'
+            SCRIPT="$ROOT/database/migration/migrate.php"
+            CONFIG="$ROOT/database/migration/config.php"
+            cd "$ROOT"
+            test -s "$SCRIPT" || { echo 'BLOCKED_IMPORTER_MISSING=1'; exit 30; }
+            test -s "$CONFIG" || { echo 'BLOCKED_MYSQL_CONFIG_MISSING=1'; exit 31; }
+            php -l "$SCRIPT"
+            php -r '
+            $c=require $argv[1];
+            $m=$c["mysql"]??[];
+            if(empty($m["user"]) || empty($m["password"])) { fwrite(STDERR,"BLOCKED_MYSQL_CREDENTIALS=1\n"); exit(32); }
+            $db=new mysqli($m["host"]??"localhost",$m["user"],$m["password"],"digibail_vamcitydigibilepay",(int)($m["port"]??3306),$m["socket"]??null);
+            if($db->connect_errno) { fwrite(STDERR,"BLOCKED_TARGET_CONNECTION=1\n"); exit(33); }
+            $q=$db->query("SELECT COUNT(*) n FROM information_schema.tables WHERE table_schema=DATABASE() AND table_type=\x27BASE TABLE\x27");
+            echo "TARGET_TABLES_BEFORE=".$q->fetch_assoc()["n"]."\n";
+            $q=$db->query("SELECT COUNT(*) n FROM __vamcity_migration_state WHERE source_database=\x27Digibail\x27");
+            echo "DIGIBAIL_CHECKPOINTS_BEFORE=".$q->fetch_assoc()["n"]."\n";
+            $db->close();
+            ' "$CONFIG"
+            echo '=== DISK SPACE BEFORE BACKUP ==='
+            df -h "$ROOT"
+            mkdir -p "$ROOT/.migration-backups"
+            chmod 700 "$ROOT/.migration-backups"
+            BACKUP="$ROOT/.migration-backups/digibail-vamcitydigibilepay-before-fourth-source-$(date -u +%Y%m%dT%H%M%SZ).sql.gz"
+            CNF="/tmp/digebail-mysqldump-$$.cnf"
+            export CNF
+            php <<'PHP'
+            <?php
+            $c=require '/home/digibail/domains/digebail.ir/database/migration/config.php';
+            $m=$c['mysql'];
+            $quote=static function($v): string {
+                return '"'.str_replace(["\\",'"',"\n","\r"],["\\\\",'\\"','\\n','\\r'],(string)$v).'"';
+            };
+            $lines=['[client]','user='.$quote($m['user']),'password='.$quote($m['password']),
+                'host='.$quote($m['host']??'localhost'),'port='.(int)($m['port']??3306)];
+            if(!empty($m['socket'])) $lines[]='socket='.$quote($m['socket']);
+            if(file_put_contents(getenv('CNF'),implode("\n",$lines)."\n")===false) exit(40);
+            chmod(getenv('CNF'),0600);
+            PHP
+            trap 'rm -f "$CNF"' EXIT
+            echo '=== BACK UP EXISTING TARGET DATABASE ==='
+            mysqldump --defaults-extra-file="$CNF" --single-transaction --routines --triggers --events --hex-blob --default-character-set=utf8mb4 --databases "$DB" | gzip -1 > "$BACKUP"
+            test -s "$BACKUP"
+            gzip -t "$BACKUP"
+            chmod 600 "$BACKUP"
+            sha256sum "$BACKUP"
+            echo 'TARGET_BACKUP_VALIDATED=1'
+            echo '=== RUN RESUMABLE FOUR-SOURCE IMPORT; EXISTING THREE SOURCES WILL USE CHECKPOINTS ==='
+            php "$SCRIPT" --execute
+            echo '=== VERIFY ALL FOUR SOURCES IN THE SAME DATABASE ==='
+            php <<'PHP'
+            <?php
+            $c=require '/home/digibail/domains/digebail.ir/database/migration/config.php';
+            $m=$c['mysql'];
+            $db=new mysqli($m['host']??'localhost',$m['user'],$m['password'],'digibail_vamcitydigibilepay',(int)($m['port']??3306),$m['socket']??null);
+            if($db->connect_errno) { fwrite(STDERR,"POST_IMPORT_VERIFY_CONNECTION_FAILED\n"); exit(50); }
+            $db->set_charset('utf8mb4');
+            $q=$db->query("SELECT source_database,COUNT(*) table_count,SUM(expected_rows) expected_rows,SUM(imported_rows) imported_rows,SUM(status='complete') completed_tables FROM __vamcity_migration_state GROUP BY source_database ORDER BY source_database");
+            while($r=$q->fetch_assoc()) echo "SOURCE=".$r['source_database']." TABLES=".$r['table_count']." EXPECTED=".$r['expected_rows']." IMPORTED=".$r['imported_rows']." COMPLETE=".$r['completed_tables']."\n";
+            $q=$db->query("SELECT COUNT(*) n FROM information_schema.tables WHERE table_schema=DATABASE() AND table_type='BASE TABLE'");
+            $tables=(int)$q->fetch_assoc()['n'];
+            echo "TARGET_TABLES_AFTER=".$tables."\n";
+            $expected=['digibail__AspNetUsers'=>2,'digibail__AspNetRoles'=>6,'digibail__AspNetUserRoles'=>2,'digibail__AspNetUserClaims'=>23,'digibail__Customers'=>1,'digibail__CustomerPurchasePlan'=>1,'digibail__LoanRequestStatuses'=>10,'digibail__SmsPatterns'=>4];
+            foreach($expected as $table=>$count) {
+                $safe=preg_replace('/[^A-Za-z0-9_]/','',$table);
+                $q=$db->query("SELECT COUNT(*) n FROM ".$safe);
+                if(!$q) { fwrite(STDERR,"MISSING_VERIFICATION_TABLE=".$table."\n"); exit(51); }
+                $actual=(int)$q->fetch_assoc()['n'];
+                echo "VERIFY_".$table."=".$actual."\n";
+                if($actual!==$count) { fwrite(STDERR,"ROW_COUNT_MISMATCH=".$table." expected=".$count." actual=".$actual."\n"); exit(52); }
+            }
+            $q=$db->query("SELECT COUNT(*) n,SUM(expected_rows) expected_rows,SUM(imported_rows) imported_rows,SUM(status='complete') complete_count FROM __vamcity_migration_state WHERE source_database='Digibail'");
+            $r=$q->fetch_assoc();
+            if((int)$r['n']!==59 || (int)$r['expected_rows']!==203 || (int)$r['imported_rows']!==203 || (int)$r['complete_count']!==59) {
+                fwrite(STDERR,"DIGIBAIL_CHECKPOINT_TOTAL_MISMATCH\n"); exit(53);
+            }
+            if($tables!==215) { fwrite(STDERR,"TARGET_TABLE_TOTAL_MISMATCH expected=215 actual=".$tables."\n"); exit(54); }
+            $db->close();
+            echo "FOUR_SOURCE_MARIADB_IMPORT_VERIFIED=1\n";
+            PHP
+            echo 'IMPORT_AND_ROW_COUNT_VERIFICATION_COMPLETE=1'
