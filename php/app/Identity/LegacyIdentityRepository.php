@@ -38,6 +38,17 @@ final class LegacyIdentityRepository
     }
 
     /** @return array<string, mixed>|null */
+    public function findActiveByPhone(string $phone): ?array
+    {
+        $user = $this->findUser(self::normalizeDigits($phone));
+        if ($user === null || (int) $user['IsActive'] !== 1 || !$this->isLockoutExpired($user)) {
+            return null;
+        }
+
+        return $this->shapeUser($user, $this->rolesFor((string) $user['Id']));
+    }
+
+    /** @return array<string, mixed>|null */
     public function findActiveById(string $id): ?array
     {
         $statement = $this->db->prepare(
