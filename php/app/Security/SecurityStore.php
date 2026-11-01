@@ -165,7 +165,7 @@ final class SecurityStore
             )->execute(['id' => $row['id']]);
             $this->db->commit();
             return true;
-        } catch (\\Throwable $exception) {
+        } catch (\Throwable $exception) {
             if ($this->db->inTransaction()) {
                 $this->db->rollBack();
             }
