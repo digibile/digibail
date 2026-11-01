@@ -5,7 +5,7 @@ on:
     branches:
       - migration/php83-full-rebuild
     paths:
-      - .github/workflows/import-digibail-fourth-source.yml
+      - ops/trigger-digibail-fourth-source.txt
   workflow_dispatch:
 
 permissions:
@@ -45,7 +45,7 @@ jobs:
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           command_timeout: 80m
           script: |
-            set -eu
+            set -euo pipefail
             ROOT='/home/digibail/domains/digebail.ir'
             DB='digibail_vamcitydigibilepay'
             SCRIPT="$ROOT/database/migration/migrate.php"
