@@ -55,7 +55,7 @@ final class LegacyIdentityRepository
             return false;
         }
 
-        $newHash = \\App\\Security\\PasswordVerifier::hashForNewPassword($newPassword);
+        $newHash = \App\Security\\PasswordVerifier::hashForNewPassword($newPassword);
         $newStamp = bin2hex(random_bytes(16));
 
         $this->db->beginTransaction();
@@ -81,7 +81,7 @@ final class LegacyIdentityRepository
 
             $this->db->commit();
             return true;
-        } catch (\\Throwable $exception) {
+        } catch (\Throwable $exception) {
             if ($this->db->inTransaction()) {
                 $this->db->rollBack();
             }
