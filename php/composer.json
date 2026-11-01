@@ -9,7 +9,8 @@
     "ext-mbstring": "*",
     "ext-openssl": "*",
     "ext-pdo": "*",
-    "ext-pdo_mysql": "*"
+    "ext-pdo_mysql": "*",
+    "ext-fileinfo": "*"
   },
   "autoload": {
     "psr-4": {
@@ -20,7 +21,7 @@
     ]
   },
   "scripts": {
-    "test": "php tests/smoke.php && php tests/password_verifier.php && php tests/jwt_service.php"
+    "test": "php tests/smoke.php && php tests/password_verifier.php && php tests/jwt_service.php && php tests/loan_product_shape.php"
   },
   "config": {
     "sort-packages": true,
