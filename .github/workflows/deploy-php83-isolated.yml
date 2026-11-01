@@ -66,13 +66,29 @@ jobs:
           install -d -m 700 ~/.ssh
           printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
-          ssh-keyscan -T 10 -t ed25519 "$DEPLOY_HOST" > ~/.ssh/known_hosts
-          ACTUAL="$(ssh-keygen -lf ~/.ssh/known_hosts -E sha256 | awk '{print $2}' | sort -u)"
           EXPECTED='SHA256:9bIljRY2O89S4QXg9v6zYuLfk39pK8nl69BOg7vP5os'
+          SCAN_OK=0
+          for attempt in 1 2 3 4 5; do
+            echo "SSH_HOST_KEYSCAN_ATTEMPT=$attempt"
+            if ssh-keyscan -T 15 -t ed25519 "$DEPLOY_HOST" > ~/.ssh/known_hosts 2>~/.ssh/keyscan.log \
+              && test -s ~/.ssh/known_hosts; then
+              SCAN_OK=1
+              break
+            fi
+            cat ~/.ssh/keyscan.log || true
+            sleep 5
+          done
+          if [ "$SCAN_OK" -ne 1 ]; then
+            echo "::error::Unable to retrieve SSH host key after 5 attempts. Deployment stopped."
+            exit 1
+          fi
+          ACTUAL="$(ssh-keygen -lf ~/.ssh/known_hosts -E sha256 | awk '{print $2}' | sort -u)"
+          echo "SSH_HOST_FINGERPRINTS=$ACTUAL"
           if ! printf '%s\n' "$ACTUAL" | grep -Fxq "$EXPECTED"; then
             echo "::error::SSH host fingerprint mismatch. Deployment stopped."
             exit 1
           fi
+          echo 'SSH_HOST_KEY_VERIFICATION=SUCCESS'
 
       - name: Deploy private PHP application and public entry point
         env:
