@@ -191,7 +191,7 @@ final class LegacyIdentityRepository
             return false;
         }
 
-        $newHash = \App\Security\\PasswordVerifier::hashForNewPassword($newPassword);
+        $newHash = \App\Security\PasswordVerifier::hashForNewPassword($newPassword);
         $newStamp = bin2hex(random_bytes(16));
 
         $this->db->beginTransaction();
