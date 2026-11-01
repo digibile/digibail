@@ -199,6 +199,54 @@ final class SecurityStore
         $statement->execute(['bucket' => $key]);
     }
 
+    public function createOneTimeTicket(string $ticket, string $phone, string $purpose): void
+    {
+        $statement = $this->db->prepare(
+            'INSERT INTO php_security_challenges
+                (id, challenge_type, subject, value_hash, attempts, expires_at)
+             VALUES (:id, :type, :subject, :hash, 0,
+                     DATE_ADD(UTC_TIMESTAMP(), INTERVAL 600 SECOND))'
+        );
+        $statement->execute([
+            'id' => bin2hex(random_bytes(16)),
+            'type' => 'ticket:' . $purpose,
+            'subject' => $phone,
+            'hash' => hash_hmac('sha256', 'ticket:' . $ticket, $this->rateLimitPepper),
+        ]);
+    }
+
+    public function consumeOneTimeTicket(string $ticket, string $phone, string $purpose): bool
+    {
+        $this->db->beginTransaction();
+        try {
+            $statement = $this->db->prepare(
+                'SELECT id, value_hash FROM php_security_challenges
+                 WHERE challenge_type = :type AND subject = :subject
+                   AND consumed_at IS NULL AND expires_at > UTC_TIMESTAMP()
+                 ORDER BY created_at DESC LIMIT 1 FOR UPDATE'
+            );
+            $statement->execute(['type' => 'ticket:' . $purpose, 'subject' => $phone]);
+            $row = $statement->fetch();
+            $expected = hash_hmac('sha256', 'ticket:' . $ticket, $this->rateLimitPepper);
+
+            if (!is_array($row) || !hash_equals((string) $row['value_hash'], $expected)) {
+                $this->db->commit();
+                return false;
+            }
+
+            $this->db->prepare(
+                'UPDATE php_security_challenges SET consumed_at = UTC_TIMESTAMP() WHERE id = :id'
+            )->execute(['id' => $row['id']]);
+            $this->db->commit();
+            return true;
+        } catch (\\Throwable $exception) {
+            if ($this->db->inTransaction()) {
+                $this->db->rollBack();
+            }
+            throw $exception;
+        }
+    }
+
     public function hitRateLimit(string $bucket, int $maximum, int $windowSeconds): bool
     {
         if ($maximum < 1 || $windowSeconds < 1) {
