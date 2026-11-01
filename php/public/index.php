@@ -2,6 +2,9 @@
 
 declare(strict_types=1);
 
+use App\\Core\\Bootstrap;
+use App\\Core\\Http\\Response;
+
 /*
  * Load the private application environment file from the project root.
  * Existing process environment variables always take precedence.
