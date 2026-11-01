@@ -1,1 +1,3 @@
 One-time trigger for the backed-up additive import of the original Digibail SQL Server source into the existing MariaDB database digibail_vamcitydigibilepay. No database is created or dropped; the workflow creates only prefixed digibail__ tables and verifies all source counts.
+
+Retry trigger after adding an indexed AUTO_INCREMENT column to the generated Digibail schema. The importer is resumable and the existing database backup remains preserved.
