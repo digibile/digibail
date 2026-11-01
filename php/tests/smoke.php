@@ -78,6 +78,11 @@ if ($legacyRegisterPath->status !== 405 || ($legacyRegisterPath->headers['Allow'
     throw new RuntimeException('The legacy registration route must remain registered as POST.');
 }
 
+$ocrRegisterPath = $router->dispatch(new Request('GET', '/api/v1/security/register/ocr'));
+if ($ocrRegisterPath->status !== 405 || ($ocrRegisterPath->headers['Allow'] ?? '') !== 'POST') {
+    throw new RuntimeException('The OCR registration endpoint must remain explicitly registered as POST.');
+}
+
 $otpRequestPath = $router->dispatch(new Request('GET', '/api/v1/security/otp/request'));
 if ($otpRequestPath->status !== 405 || ($otpRequestPath->headers['Allow'] ?? '') !== 'POST') {
     throw new RuntimeException('The OTP request endpoint must be registered as POST.');
