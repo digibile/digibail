@@ -89,6 +89,11 @@ if ($legacyOtpVerifyPath->status !== 405 || ($legacyOtpVerifyPath->headers['Allo
 }
 
 
+$registerPath = $router->dispatch(new Request('GET', '/api/v1/security/register'));
+if ($registerPath->status !== 405 || ($registerPath->headers['Allow'] ?? '') !== 'POST') {
+    throw new RuntimeException('The customer registration endpoint must be registered as POST.');
+}
+
 $otpPath = $router->dispatch(new Request('GET', '/api/v1/security/otp/verify'));
 if ($otpPath->status !== 405 || ($otpPath->headers['Allow'] ?? '') !== 'POST') {
     throw new RuntimeException('The OTP verification endpoint must be registered as POST.');
