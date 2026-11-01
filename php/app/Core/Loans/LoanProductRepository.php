@@ -187,6 +187,7 @@ final class LoanProductRepository
             'isActive' => (bool) $row['IsActive'],
             'minAmount' => (float) $row['MinAmount'],
             'maxAmount' => (float) $row['MaxAmount'],
+            'intervalMonths' => self::intervalMonthsFromStored((int) $row['IntervalDays']),
             'intervalDays' => (int) $row['IntervalDays'],
             'tiers' => $decode('TiersJson', []),
             'conditions' => $decode('ConditionsJson', (object) []),
@@ -244,6 +245,20 @@ final class LoanProductRepository
         $statement = $this->db->prepare('SELECT 1 FROM LoanProducts WHERE TenantId = :tenant_id AND Id = :id LIMIT 1');
         $statement->execute(['tenant_id' => $tenantId, 'id' => $id]);
         return $statement->fetchColumn() !== false;
+    }
+
+    private static function intervalMonthsFromStored(int $value): int
+    {
+        if ($value >= 1 && $value <= 12) return $value;
+        $ranges = [
+            [28, 31, 1], [59, 62, 2], [89, 93, 3], [118, 124, 4],
+            [148, 155, 5], [178, 186, 6], [208, 217, 7], [238, 248, 8],
+            [268, 279, 9], [298, 310, 10], [328, 341, 11], [358, 372, 12],
+        ];
+        foreach ($ranges as [$minimum, $maximum, $months]) {
+            if ($value >= $minimum && $value <= $maximum) return $months;
+        }
+        return 1;
     }
 
     private static function uuid(): string
