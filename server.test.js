@@ -38,7 +38,7 @@ test("storefront CSS and JavaScript are separate existing assets", async () => {
   assert.match(html, /href=["']\/assets\/digibail-home\.css["']/);
   assert.match(html, /src=["']\/assets\/digibail-home\.js["']/);
   assert.equal(html.includes("</style>"), false);
-  assert.equal(html.includes("</script>"), false);
+  assert.equal(html.includes("<script>"), false);
   await access(new URL("./web/assets/digibail-home.css", import.meta.url));
   await access(new URL("./web/assets/digibail-home.js", import.meta.url));
 });
