@@ -46,10 +46,12 @@ final class SecurityController
         $captchaAnswer = self::normalizeDigits((string) ($request->input['captchaAnswer'] ?? ''));
 
         if (!$this->store->hitRateLimit('login:ip:' . $ip, 40, 900)) {
+            error_log('[AUTH_DIAG] password_login stage=rate_limit_ip');
             return Response::json(['message' => 'تلاش‌های ناموفق زیاد بود. کمی بعد دوباره امتحان کنید.'], 429);
         }
 
         if (!$this->store->consumeCaptcha($captchaId, $captchaAnswer)) {
+            error_log('[AUTH_DIAG] password_login stage=captcha_failed');
             return Response::json(['message' => 'کد امنیتی نامعتبر یا منقضی شده است.'], 400);
         }
 
@@ -58,6 +60,7 @@ final class SecurityController
         }
 
         if (!$this->store->hitRateLimit('login:user:' . mb_strtolower($username, 'UTF-8'), 8, 900)) {
+            error_log('[AUTH_DIAG] password_login stage=rate_limit_account');
             return Response::json(['message' => 'برای این حساب تلاش‌های زیادی شده. ۱۵ دقیقه بعد دوباره امتحان کنید.'], 429);
         }
 
@@ -69,6 +72,7 @@ final class SecurityController
         }
 
         if ($user === null) {
+            error_log('[AUTH_DIAG] password_login result=rejected_by_identity_repository');
             return Response::json(['message' => 'نام کاربری یا رمز عبور نادرست است.'], 401);
         }
 
@@ -145,6 +149,7 @@ final class SecurityController
 
         $account = $this->identities->findActiveByPhone($phone);
         if ($purpose === 'login' && $account === null) {
+            error_log('[AUTH_DIAG] otp_request result=account_not_resolved');
             return Response::json(['message' => 'حساب فعالی با این شماره پیدا نشد.'], 404);
         }
         if ($purpose === 'register' && $account !== null) {
@@ -223,9 +228,11 @@ final class SecurityController
 
         $user = $this->identities->findActiveByPhone($phone);
         if ($user === null) {
+            error_log('[AUTH_DIAG] otp_verify result=account_not_resolved_after_code_validation');
             return Response::json(['ok' => false, 'message' => 'حساب فعالی با این شماره پیدا نشد.'], 404);
         }
 
+        error_log('[AUTH_DIAG] otp_verify result=authenticated_user_resolved user_id=' . (string) $user['id']);
         return $this->authenticatedResponse($user);
     }
 
