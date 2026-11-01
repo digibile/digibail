@@ -3,26 +3,69 @@
 declare(strict_types=1);
 
 /**
- * Production bootstrap for the isolated PHP runtime.
- * Reuses the already-provisioned DirectAdmin MariaDB credentials and database.
- * Only additive CREATE TABLE IF NOT EXISTS migrations are applied.
+ * Verify the existing DigiBail MariaDB connection without running migrations.
+ * Prefer the protected DirectAdmin config when readable; otherwise reuse the
+ * already-provisioned private .env. No existing credentials or secrets are rotated.
  */
 
 $domainRoot = dirname(__DIR__, 2);
 $appRoot = dirname(__DIR__);
 $configPath = $domainRoot . '/database/migration/config.php';
 $envPath = $appRoot . '/.env';
-$migrationDirectory = $appRoot . '/database/migrations';
 $databaseName = 'digibail_vamcitydigibilepay';
 
-if (!is_file($configPath) || !is_readable($configPath)) {
-    throw new RuntimeException('Existing DirectAdmin database configuration is unavailable.');
+$existing = [];
+if (is_file($envPath) && is_readable($envPath)) {
+    foreach (file($envPath, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [] as $line) {
+        $line = trim($line);
+        if ($line === '' || str_starts_with($line, '#') || !str_contains($line, '=')) {
+            continue;
+        }
+        [$key, $value] = explode('=', $line, 2);
+        $existing[trim($key)] = trim(trim($value), "'\" ");
+    }
 }
 
-$config = require $configPath;
-$mysql = $config['mysql'] ?? null;
-if (!is_array($mysql) || empty($mysql['user']) || !array_key_exists('password', $mysql)) {
-    throw new RuntimeException('Existing DirectAdmin database credentials are incomplete.');
+$mysql = null;
+if (is_file($configPath) && is_readable($configPath)) {
+    $config = require $configPath;
+    $candidate = is_array($config) ? ($config['mysql'] ?? null) : null;
+    if (is_array($candidate)) {
+        $mysql = $candidate;
+        echo "DATABASE_CONFIG_SOURCE=directadmin\n";
+    }
+}
+
+if ($mysql === null) {
+    $encodedPassword = (string) ($existing['DB_PASSWORD_B64'] ?? '');
+    $decodedPassword = $encodedPassword !== '' ? base64_decode($encodedPassword, true) : false;
+    $password = is_string($decodedPassword)
+        ? $decodedPassword
+        : (string) ($existing['DB_PASSWORD'] ?? '');
+
+    if (
+        !is_file($envPath)
+        || !is_readable($envPath)
+        || empty($existing['DB_USER'])
+        || $password === ''
+    ) {
+        throw new RuntimeException(
+            'Database config is not readable by the deployment account and existing private .env credentials are incomplete.'
+        );
+    }
+
+    $mysql = [
+        'host' => $existing['DB_HOST'] ?? 'localhost',
+        'port' => $existing['DB_PORT'] ?? 3306,
+        'user' => $existing['DB_USER'],
+        'password' => $password,
+        'socket' => $existing['DB_SOCKET'] ?? '',
+    ];
+    echo "DATABASE_CONFIG_SOURCE=existing_private_env\n";
+}
+
+if (empty($mysql['user']) || !array_key_exists('password', $mysql)) {
+    throw new RuntimeException('Existing database credentials are incomplete.');
 }
 
 $host = (string) ($mysql['host'] ?? 'localhost');
@@ -30,6 +73,10 @@ $port = (int) ($mysql['port'] ?? 3306);
 $user = (string) $mysql['user'];
 $password = (string) $mysql['password'];
 $socket = (string) ($mysql['socket'] ?? '');
+
+if (!empty($existing['DB_NAME']) && $existing['DB_NAME'] !== $databaseName) {
+    throw new RuntimeException('Existing private environment points to an unexpected database; refusing to change it.');
+}
 
 if ($socket !== '' && file_exists($socket)) {
     $dsn = sprintf('mysql:unix_socket=%s;dbname=%s;charset=utf8mb4', $socket, $databaseName);
@@ -43,18 +90,6 @@ $pdo = new PDO($dsn, $user, $password, [
     PDO::ATTR_EMULATE_PREPARES => false,
     PDO::ATTR_TIMEOUT => 10,
 ]);
-
-$existing = [];
-if (is_file($envPath)) {
-    foreach (file($envPath, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [] as $line) {
-        $line = trim($line);
-        if ($line === '' || str_starts_with($line, '#') || !str_contains($line, '=')) {
-            continue;
-        }
-        [$key, $value] = explode('=', $line, 2);
-        $existing[trim($key)] = trim(trim($value), "'\" ");
-    }
-}
 
 $values = $existing;
 $values['APP_ENV'] = 'production';
@@ -102,33 +137,6 @@ $pdo->query('SELECT 1')->fetchColumn();
 echo "EXISTING_MARIADB_CONNECTION=OK\n";
 echo "TARGET_DATABASE={$databaseName}\n";
 
-$migrations = [
-    '20261101_php_security_support.sql',
-    '20261101_php_tenancy_loan_products.sql',
-    '20261101_php_identity_links.sql',
-    '20261101_php_virtual_cards.sql',
-];
-
-foreach ($migrations as $migration) {
-    $path = $migrationDirectory . '/' . $migration;
-    if (!is_file($path) || !is_readable($path)) {
-        throw new RuntimeException('Required additive PHP migration is missing: ' . $migration);
-    }
-    $sql = file_get_contents($path);
-    if (!is_string($sql)) {
-        throw new RuntimeException('Could not read migration: ' . $migration);
-    }
-    $sql = preg_replace('/^\s*--.*$/m', '', $sql);
-    foreach (array_filter(array_map('trim', explode(';', (string) $sql))) as $statement) {
-        $pdo->exec($statement);
-    }
-    echo "MIGRATION_APPLIED={$migration}\n";
-}
-
-$tableCount = (int) $pdo->query(
-    "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_type = 'BASE TABLE'"
-)->fetchColumn();
-
 $requiredTables = [
     'php_security_challenges',
     'php_security_rate_limits',
@@ -143,14 +151,22 @@ $requiredTables = [
 $check = $pdo->prepare(
     'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = ?'
 );
+$missing = [];
 foreach ($requiredTables as $table) {
     $check->execute([$table]);
     if ((int) $check->fetchColumn() !== 1) {
-        throw new RuntimeException('Required PHP table is missing after migration: ' . $table);
+        $missing[] = $table;
     }
 }
+if ($missing !== []) {
+    throw new RuntimeException('Required existing PHP tables are missing: ' . implode(', ', $missing));
+}
 
-echo "PHP_ENV_CREATED=1\n";
+$tableCount = (int) $pdo->query(
+    "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_type = 'BASE TABLE'"
+)->fetchColumn();
+
+echo "PHP_ENV_CREATED_OR_REUSED=1\n";
 echo "PHP_ENV_PERMISSIONS=0600\n";
 echo "PHP_REQUIRED_TABLES=" . count($requiredTables) . "/" . count($requiredTables) . "\n";
 echo "TARGET_BASE_TABLE_COUNT={$tableCount}\n";
