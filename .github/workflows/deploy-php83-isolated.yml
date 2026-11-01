@@ -143,7 +143,11 @@ jobs:
              if [ -f '$BACKUP_ROOT/database-bootstrap.status' ]; then
                printf 'DATABASE_BOOTSTRAP_STATUS='
                cat '$BACKUP_ROOT/database-bootstrap.status'
-               tail -n 30 '$BACKUP_ROOT/database-bootstrap.log' || true
+               printf 'DATABASE_BOOTSTRAP_LOG_BYTES='
+               wc -c < '$BACKUP_ROOT/database-bootstrap.log' || true
+               if [ -f '$DOMAIN_ROOT/database/migration/config.php' ]; then echo 'LEGACY_DB_CONFIG_PRESENT=1'; else echo 'LEGACY_DB_CONFIG_PRESENT=0'; fi
+               /usr/local/php83/bin/php -v | head -n 1
+               cat '$BACKUP_ROOT/database-bootstrap.log' || true
              else
                echo 'DATABASE_BOOTSTRAP_STATUS=RUNNING'
              fi
