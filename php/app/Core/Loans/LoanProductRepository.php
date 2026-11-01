@@ -130,6 +130,26 @@ final class LoanProductRepository
         }
     }
 
+    public function setImageUrl(string $tenantId, string $id, string $url): bool
+    {
+        $statement = $this->db->prepare(
+            'UPDATE LoanProducts SET ImageUrl = :url
+             WHERE Id = :id AND TenantId = :tenant_id'
+        );
+        $statement->execute(['url' => $url, 'id' => $id, 'tenant_id' => $tenantId]);
+        return $statement->rowCount() > 0 || $this->exists($tenantId, $id);
+    }
+
+    public function imageUrl(string $tenantId, string $id): ?string
+    {
+        $statement = $this->db->prepare(
+            'SELECT ImageUrl FROM LoanProducts WHERE Id = :id AND TenantId = :tenant_id LIMIT 1'
+        );
+        $statement->execute(['id' => $id, 'tenant_id' => $tenantId]);
+        $value = $statement->fetchColumn();
+        return $value === false ? null : (string) $value;
+    }
+
     /** @return list<string> */
     public function labels(string $tenantId): array
     {
@@ -154,7 +174,7 @@ final class LoanProductRepository
      */
     public static function shape(array $row): array
     {
-        $decode = static function (string $key, mixed $fallback): mixed {
+        $decode = static function (string $key, mixed $fallback) use ($row): mixed {
             $value = json_decode((string) ($row[$key] ?? ''), true);
             return json_last_error() === JSON_ERROR_NONE ? $value : $fallback;
         };
