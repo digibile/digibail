@@ -25,6 +25,7 @@ $container = 'public_html-db-1';
 $batchSize = 500;
 
 $sources = [
+    ['source'=>'Digibail','target'=>'digibail_vamcitydigibilepay','schema'=>null,'prefix'=>'digibail__'],
     ['source'=>'vamcityc_vamcity_import_20261028','target'=>'digibail_vamcitydigibilepay','schema'=>'schema-main.sql','prefix'=>''],
     ['source'=>'vamcityc_bluvamdb_import_20261028','target'=>'digibail_vamcitydigibilepay','schema'=>'schema-bluvamdb.sql','prefix'=>'bluvamdb__'],
     ['source'=>'vamcityc_transferDb_import_20261028','target'=>'digibail_vamcitydigibilepay','schema'=>'schema-transfer.sql','prefix'=>'OnlineMoneyTransfer__'],
@@ -274,6 +275,138 @@ function insertRows(mysqli $db,string $table,array $columns,array $rows): void {
     $flush();
 }
 
+
+function mysqlTypeFromSqlServer(array $c): string {
+    $t=strtolower((string)$c['data_type']);
+    $n=(int)$c['max_length'];
+    $p=max(1,(int)$c['precision']);
+    $scale=max(0,min(6,(int)$c['scale']));
+    if($t==='uniqueidentifier') return 'CHAR(36) CHARACTER SET ascii COLLATE ascii_bin';
+    if($t==='bigint') return 'BIGINT';
+    if($t==='int') return 'INT';
+    if($t==='smallint') return 'SMALLINT';
+    if($t==='tinyint') return 'TINYINT UNSIGNED';
+    if($t==='bit') return 'TINYINT(1)';
+    if($t==='decimal'||$t==='numeric') return 'DECIMAL('.min(65,$p).','.min(30,$scale).')';
+    if($t==='money') return 'DECIMAL(19,4)';
+    if($t==='smallmoney') return 'DECIMAL(10,4)';
+    if($t==='float') return 'DOUBLE';
+    if($t==='real') return 'FLOAT';
+    if($t==='datetime2') return 'DATETIME(6)';
+    if($t==='datetime') return 'DATETIME(3)';
+    if($t==='smalldatetime') return 'DATETIME';
+    if($t==='date') return 'DATE';
+    if($t==='time') return 'TIME(6)';
+    if($t==='datetimeoffset') return 'VARCHAR(48)';
+    if($t==='timestamp'||$t==='rowversion') return 'VARCHAR(32)';
+    if($t==='binary'||$t==='varbinary'||$t==='image') return 'LONGTEXT';
+    if($t==='xml'||$t==='text'||$t==='ntext'||$t==='sql_variant') return 'LONGTEXT';
+    if($t==='geography'||$t==='geometry') return 'LONGBLOB';
+    if($t==='hierarchyid') return 'VARCHAR(255)';
+    if(in_array($t,['nvarchar','nchar'],true)) {
+        if($n===-1) return 'LONGTEXT';
+        $len=max(1,intdiv($n,2));
+        return $len>16000?'TEXT':'VARCHAR('.$len.')';
+    }
+    if(in_array($t,['varchar','char'],true)) {
+        if($n===-1) return 'LONGTEXT';
+        $len=max(1,$n);
+        return $len>16000?'TEXT':'VARCHAR('.$len.')';
+    }
+    if($t==='uniqueidentifier') return 'CHAR(36) CHARACTER SET ascii COLLATE ascii_bin';
+    return 'LONGTEXT';
+}
+function mysqlDefaultFromSqlServer($raw, mysqli $db): string {
+    if($raw===null) return '';
+    $v=trim((string)$raw);
+    if($v==='') return '';
+    if(preg_match('/^(?:\\(*\\s*)?(?:getdate|sysdatetime|sysutcdatetime)\\s*\\(\\s*\\)(?:\\s*\\)*)$/i',$v)) return ' DEFAULT CURRENT_TIMESTAMP';
+    $x=$v;
+    for($i=0;$i<8 && strlen($x)>1 && $x[0]==='(' && substr($x,-1)===')';$i++) $x=trim(substr($x,1,-1));
+    $x=preg_replace('/^N\\s*/i','',$x);
+    if(preg_match('/^CONVERT\\s*\\(\\s*\\[?\\w+\\]?\\s*,\\s*(.+)\\)$/i',$x,$m)) $x=trim($m[1]);
+    if(preg_match('/^[-+]?[0-9]+(?:\\.[0-9]+)?$/',$x)) return ' DEFAULT '.$x;
+    if(preg_match('/^NULL$/i',$x)) return ' DEFAULT NULL';
+    if(strlen($x)>=2 && $x[0]==="'" && substr($x,-1)==="'") return ' DEFAULT '.qv($db,str_replace("''","'",substr($x,1,-1)));
+    return '';
+}
+function generatedDigibailSchema(mysqli $db,array $m,string $source): void {
+    $tables=$m['tables']??[];
+    $columnsBy=[]; foreach(($m['columns']??[]) as $c) $columnsBy[$c['schema_name'].'.'.$c['table_name']][]=$c;
+    $keysBy=[]; foreach(($m['keys']??[]) as $k) $keysBy[$k['schema_name'].'.'.$k['table_name']][]=$k;
+    $indexesBy=[]; foreach(($m['indexes']??[]) as $ix) $indexesBy[$ix['schema_name'].'.'.$ix['table_name']][]=$ix;
+    foreach($tables as $t) {
+        $key=$t['schema_name'].'.'.$t['table_name'];
+        $target=mappedTable($t['schema_name'],$t['table_name'],$source);
+        $defs=[]; $auto=false;
+        foreach(($columnsBy[$key]??[]) as $c) {
+            $name=(string)$c['column_name'];
+            $type=mysqlTypeFromSqlServer($c);
+            $nullable=!empty($c['is_nullable']);
+            $identity=!empty($c['is_identity']) && !$auto && preg_match('/^(?:BIGINT|INT|SMALLINT|TINYINT)/',$type);
+            if($identity) $auto=true;
+            $def=qi($name).' '.$type.($nullable?' NULL':' NOT NULL').($identity?' AUTO_INCREMENT':'');
+            if(!$identity) $def.=mysqlDefaultFromSqlServer($c['default_definition']??null,$db);
+            $defs[]=$def;
+            if(temporalRaw($c)) $defs[]=qi(shortName('__raw_'.$name)).' VARCHAR(40)'.($nullable?' NULL':' NOT NULL');
+        }
+        $pk=[]; $unique=[];
+        foreach(($keysBy[$key]??[]) as $k) {
+            $col=(string)$k['column_name'];
+            if(!empty($k['is_primary_key'])) $pk[(int)$k['key_ordinal']]=$col;
+            elseif(!empty($k['is_unique_constraint'])) $unique[(string)$k['key_name']][(int)$k['key_ordinal']]=$col;
+        }
+        if($pk){ksort($pk);$defs[]='PRIMARY KEY ('.implode(',',array_map('qi',array_values($pk))).')';}
+        foreach($unique as $name=>$cols){ksort($cols);$defs[]='UNIQUE KEY '.qi(shortName('digibail__'.$name)).' ('.implode(',',array_map('qi',array_values($cols))).')';}
+        $sql='CREATE TABLE IF NOT EXISTS '.qi($target).' ('.implode(",\n",$defs).') ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci';
+        if(!$db->query($sql)) stopNow('Generated schema creation failed for '.$target.': '.$db->error);
+    }
+    foreach($indexesBy as $key=>$items) {
+        $groups=[];
+        foreach($items as $ix) {
+            if(!empty($ix['is_primary_key']) || !empty($ix['is_unique_constraint']) || !empty($ix['is_disabled']) || !empty($ix['is_included_column'])) continue;
+            $name=(string)($ix['index_name']??'');
+            if($name==='') continue;
+            $groups[$name][(int)$ix['key_ordinal']]=$ix;
+        }
+        [$schema,$table]=explode('.',$key,2);
+        $target=mappedTable($schema,$table,$source);
+        foreach($groups as $name=>$cols) {
+            ksort($cols); $parts=[];
+            foreach($cols as $ix) {
+                $col=qi((string)$ix['column_name']);
+                if(!empty($ix['is_descending_key'])) $col.=' DESC';
+                $parts[]=$col;
+            }
+            if(!$parts) continue;
+            $unique=!empty($cols[array_key_first($cols)]['is_unique']);
+            $kind=$unique?'UNIQUE KEY ':'KEY ';
+            $sql='ALTER TABLE '.qi($target).' ADD '.$kind.qi(shortName('digibail__'.$name)).' ('.implode(',',$parts).')';
+            if(!$db->query($sql)) {
+                if(stripos($db->error,'Duplicate key name')!==false) continue;
+                stopNow('Generated index failed for '.$target.'.'.$name.': '.$db->error);
+            }
+        }
+    }
+    foreach(($m['fks']??[]) as $fk) {
+        if(!empty($fk['is_disabled'])) continue;
+        $parent=mappedTable((string)$fk['parent_schema'],(string)$fk['parent_table'],$source);
+        $referenced=mappedTable((string)$fk['referenced_schema'],(string)$fk['referenced_table'],$source);
+        $name=shortName('digibail__'.(string)$fk['fk_name']);
+        $sql='ALTER TABLE '.qi($parent).' ADD CONSTRAINT '.qi($name).' FOREIGN KEY ('.qi((string)$fk['parent_column']).') REFERENCES '.qi($referenced).' ('.qi((string)$fk['referenced_column']).')';
+        $delete=strtoupper((string)($fk['delete_action']??'NO_ACTION'));
+        $update=strtoupper((string)($fk['update_action']??'NO_ACTION'));
+        if($delete==='CASCADE') $sql.=' ON DELETE CASCADE';
+        elseif($delete==='SET_NULL') $sql.=' ON DELETE SET NULL';
+        elseif($delete==='SET_DEFAULT') $sql.=' ON DELETE RESTRICT';
+        if($update==='CASCADE') $sql.=' ON UPDATE CASCADE';
+        elseif($update==='SET_NULL') $sql.=' ON UPDATE SET NULL';
+        elseif($update==='SET_DEFAULT') $sql.=' ON UPDATE RESTRICT';
+        if(!$db->query($sql)) stopNow('Generated foreign key failed for '.$parent.'.'.$name.': '.$db->error);
+    }
+    logLine('GENERATED_DIGIBAIL_SCHEMA tables='.count($tables).' columns='.count($m['columns']??[]));
+}
+
 if(!$execute){
     logLine('DRY RUN ONLY. No MariaDB changes will be made.');
     if(!is_file($configPath)) logLine('Config not yet present. Copy config.example.php to config.php and enter target database credentials before --execute.');
@@ -313,7 +446,7 @@ foreach($sources as $s){
     $expectedTableCount=count($m['tables']);
     if($present===0){
         logLine('Installing isolated schema for '.$source.' into '.$target);
-        installSchema($db,__DIR__.'/../mysql/'.$s['schema'],$source);
+        if($s['schema']===null) generatedDigibailSchema($db,$m,$source); else installSchema($db,__DIR__.'/../mysql/'.$s['schema'],$source);
     } elseif($present!==$expectedTableCount) {
         stopNow('Partial schema detected for '.$source.' in '.$target.' (present='.$present.', expected='.$expectedTableCount.'); refusing to alter existing tables.');
     } elseif($source==='vamcityc_bluvamdb_import_20261028') {
