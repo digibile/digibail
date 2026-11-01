@@ -93,6 +93,21 @@ if ($legacyRegisterPath->status !== 405 || ($legacyRegisterPath->headers['Allow'
     throw new RuntimeException('The legacy registration route must remain registered as POST.');
 }
 
+$tenantConfigPath = $router->dispatch(new Request('POST', '/api/v1/tenant/config'));
+if ($tenantConfigPath->status !== 405 || ($tenantConfigPath->headers['Allow'] ?? '') !== 'GET') {
+    throw new RuntimeException('Public tenant configuration must remain registered as GET.');
+}
+
+$loanProductsPath = $router->dispatch(new Request('POST', '/api/v1/loan-products'));
+if ($loanProductsPath->status !== 405 || ($loanProductsPath->headers['Allow'] ?? '') !== 'GET') {
+    throw new RuntimeException('Public loan-product listing must remain registered as GET.');
+}
+
+$loanProductPath = $router->dispatch(new Request('POST', '/api/v1/loan-products/example-slug'));
+if ($loanProductPath->status !== 405 || ($loanProductPath->headers['Allow'] ?? '') !== 'GET') {
+    throw new RuntimeException('Public loan-product detail must remain registered as GET.');
+}
+
 $ocrRegisterPath = $router->dispatch(new Request('GET', '/api/v1/security/register/ocr'));
 if ($ocrRegisterPath->status !== 405 || ($ocrRegisterPath->headers['Allow'] ?? '') !== 'POST') {
     throw new RuntimeException('The OCR registration endpoint must remain explicitly registered as POST.');
