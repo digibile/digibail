@@ -73,7 +73,9 @@ final class SecurityController
         }
 
         $roles = $user['roles'];
-        $role = $roles[0] ?? 'Customer';
+        $role = $this->primaryRole($roles);
+        $this->store->resetRateLimit('login:ip:' . $ip);
+        $this->store->resetRateLimit('login:user:' . mb_strtolower($username, 'UTF-8'));
         $tokenRoles = $roles;
         // ASP.NET [Authorize(Roles="Admin")] treats SuperAdmin as an administrator too.
         if (in_array('SuperAdmin', $roles, true) && !in_array('Admin', $tokenRoles, true)) {
@@ -147,6 +149,20 @@ final class SecurityController
                 'passwordResetRequired' => false,
             ],
         ]);
+    }
+
+    /** @param list<string> $roles */
+    private function primaryRole(array $roles): string
+    {
+        foreach (['SuperAdmin', 'Admin', 'Agent', 'Marketer', 'CustomerMarketer', 'Member', 'Customer'] as $candidate) {
+            foreach ($roles as $role) {
+                if (strcasecmp($role, $candidate) === 0) {
+                    return $role;
+                }
+            }
+        }
+
+        return $roles[0] ?? 'Customer';
     }
 
     private function jwt(): JwtService
