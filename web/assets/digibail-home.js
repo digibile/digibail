@@ -1,0 +1,239 @@
+document.documentElement.dir='rtl';document.documentElement.lang='fa';
+/* ---------- config ---------- */
+const CFG={mock:false,endpoints:{login:'/api/v1/Auth/login',register:'/api/v1/Auth/register',verifyOtp:'/api/v1/Auth/verify-otp',me:'/api/v1/Auth/me',plans:'/api/v1/loan-products',betaInquiry:'/api/v1/beta/inquiry'},routes:{account:'/profile.html',admin:'/admin.html'}};
+/* ---------- helpers ---------- */
+const $=s=>document.querySelector(s);
+const numVal=(v,fallback=0)=>{if(v===null||v===undefined||v==='')return fallback;const raw=toEn(String(v)).replace(/[٬,،\s]/g,'').replace(/[^0-9.+-]/g,'');const n=Number(raw);return Number.isFinite(n)?n:fallback};
+const fa=n=>{const v=numVal(n,NaN);return Number.isFinite(v)?Math.round(v).toLocaleString('en-US'):'—'};
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const toEn=s=>String(s).replace(/[۰-۹]/g,d=>'۰۱۲۳۴۵۶۷۸۹'.indexOf(d)).replace(/[٠-٩]/g,d=>'٠١٢٣٤٥٦٧٨٩'.indexOf(d));
+const okNid=v=>{v=toEn(v);if(!/^\d{10}$/.test(v)||/^(\d)\1{9}$/.test(v))return false;let s=0;for(let i=0;i<9;i++)s+=(+v[i])*(10-i);const r=s%11,c=+v[9];return r<2?c===r:c===11-r};
+const okMobile=v=>/^09\d{9}$/.test(toEn(v));
+function toast(t){const e=$('#toast');e.textContent=t;e.hidden=false;clearTimeout(toast.t);toast.t=setTimeout(()=>e.hidden=true,2600)}
+function dateAfter(months,baseDate){const base=baseDate?new Date(baseDate):new Date();try{const fmt=new Intl.DateTimeFormat('en-u-ca-persian',{year:'numeric',month:'numeric',day:'numeric'});const parts=d=>{const o={};fmt.formatToParts(d).forEach(p=>{if(p.type==='year'||p.type==='month'||p.type==='day')o[p.type]=Number(p.value)});return o};const b=parts(base),idx=b.year*12+(b.month-1)+Number(months||0),y=Math.floor(idx/12),m=idx-y*12+1,guess=new Date(base.getTime()+Number(months||0)*30*86400000);let max=0;for(let k=-45;k<=45;k++){const d=new Date(guess.getTime()+k*86400000),p=parts(d);if(p.year===y&&p.month===m&&p.day>max)max=p.day}const target=Math.min(b.day,max||31);for(let k=-45;k<=45;k++){const d=new Date(guess.getTime()+k*86400000),p=parts(d);if(p.year===y&&p.month===m&&p.day===target)return d.toLocaleDateString('fa-IR',{year:'numeric',month:'long',day:'numeric'})}return guess.toLocaleDateString('fa-IR',{year:'numeric',month:'long',day:'numeric'})}catch(e){const d=new Date(base.getFullYear(),base.getMonth()+Number(months||0),1);const last=new Date(d.getFullYear(),d.getMonth()+1,0).getDate();d.setDate(Math.min(base.getDate(),last));return d.toLocaleDateString('fa-IR',{year:'numeric',month:'long',day:'numeric'})}}
+/* ---------- plans (production: loaded from the loan-products API) ---------- */
+let PLANS=[];
+const act=()=>PLANS.filter(p=>p.on);
+function planPicker(p){return `<div class="plan-picker"><label>طرح تسهیلات</label><details class="plan-dropdown"><summary><span class="plan-current"><span class="plan-current-name">${esc(p.name)}</span><span class="plan-current-cap">سقف ${fa(p.max*1e6)} تومان</span></span><svg class="plan-chevron" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg></summary><div class="plan-options" role="group" aria-label="فهرست طرح‌های تسهیلات">${act().map(x=>`<button type="button" class="plan-option" data-plan="${esc(x.id)}" aria-pressed="${x.id===p.id}"><span class="plan-option-name">${esc(x.name)}</span><span class="plan-option-cap">${fa(x.max*1e6)} تومان</span><span class="plan-option-meta">${x.kind==='beta'?'استعلام از بانک':x.method==='Annual'?'نرخ سالانه':x.method==='Flat'?'کارمزد ثابت':'نرخ ماهانه'} · سقف طرح</span></button>`).join('')}</div></details><p>برای دیدن بقیه طرح‌ها، فهرست را باز کنید و داخل آن پیمایش کنید.</p></div>`}
+function calc(p,a,t){
+ const amount=Math.max(0,numVal(a,0)),months=Math.max(1,Math.trunc(numVal(t&&t.m,6)));
+ const downPct=Math.min(100,Math.max(0,numVal(t&&t.down,0)));
+ const down=Math.round(amount*downPct/100/1000)*1000,fin=Math.max(0,amount-down);
+ const method=String(p&&p.method||'Monthly'),rate=Math.max(0,numVal(t&&t.fee,0)||numVal(p&&p.rate,0));
+ let monthly=fin/months,fee=0;
+ if(method==='Annual'){
+  const r=rate/1200;
+  monthly=r>0?fin*r/(1-Math.pow(1+r,-months)):fin/months;
+  fee=Math.max(0,monthly*months-fin);
+ }else if(method==='Flat'){
+  fee=fin*rate/100;
+  monthly=(fin+fee)/months;
+ }else{
+  fee=fin*rate/100*months;
+  monthly=(fin+fee)/months;
+ }
+ const total=fin+fee;
+ return{down,fin,fee,total,monthly,months,rate,method};
+}
+/* ---------- auth state ---------- */
+const LK={login:'#',me:'#',admin:'#'};
+let role='guest',user=null;
+function renderAuth(){const b=role==='guest'?[['ورود / عضویت','solid','auth']]:role==='customer'?[['حساب من','solid','me']]:[['پنل مدیریت','','admin'],['حساب من','solid','me']];
+ $('#auth').innerHTML=b.map(x=>`<button class="btn ${x[1]}" data-go="${x[2]}">${x[0]}</button>`).join('');
+ const p=b[b.length-1],mobileAuth=$('#mbAuth');if(mobileAuth){mobileAuth.textContent=p[0];mobileAuth.dataset.go=p[2]}
+ document.querySelectorAll('[data-role]').forEach(c=>c.setAttribute('aria-pressed',c.dataset.role===role))}
+document.addEventListener('click',e=>{const g=e.target.closest('[data-go]');if(!g)return;e.preventDefault();const k=g.dataset.go;
+ if(k==='auth')openAuth('login');else if(k==='reg')openAuth('reg');else if(k==='me'){CFG.mock?toast('در سایت واقعی به صفحه‌ی حساب من می‌روید'):location.href=CFG.routes.account}else if(k==='admin'){CFG.mock?toast('در سایت واقعی به پنل مدیریت می‌روید'):location.href=CFG.routes.admin}});
+/* ---------- header menu ---------- */
+const hd=$('#hd');$('#burger').onclick=()=>{const o=hd.classList.toggle('open');$('#burger').setAttribute('aria-expanded',o)};
+function plansMenu(){$('#pmPop').innerHTML=act().map(p=>`<a href="#plan-${p.id}"><span>${p.name}</span><small>${p.kind==='beta'?'استعلام از بانک':'از '+fa(Math.min(...p.tiers.map(t=>t.fee)))+'٪ در ماه'}</small></a>`).join('');$('#ftPlans').innerHTML=act().map(p=>`<a href="#plan-${p.id}">${p.name}</a>`).join('')}
+$('#pmBtn').onclick=e=>{e.stopPropagation();const o=$('#pmPop').hidden;$('#pmPop').hidden=!o;$('#pmBtn').setAttribute('aria-expanded',o);$('#coopPop').hidden=true;$('#coopBtn').setAttribute('aria-expanded','false')};
+$('#coopBtn').onclick=e=>{e.stopPropagation();const o=$('#coopPop').hidden;$('#coopPop').hidden=!o;$('#coopBtn').setAttribute('aria-expanded',o);$('#pmPop').hidden=true;$('#pmBtn').setAttribute('aria-expanded','false')};
+document.addEventListener('click',e=>{if(!e.target.closest('.pm')){ $('#pmPop').hidden=true;$('#pmBtn').setAttribute('aria-expanded','false');$('#coopPop').hidden=true;$('#coopBtn').setAttribute('aria-expanded','false') }if(e.target.closest('.nv a')){hd.classList.remove('open');$('#burger').setAttribute('aria-expanded',false)}});
+/* ---------- calculator ---------- */
+const S={plan:'p6',amt:15000000,ti:1};
+function cardHtml(){return `<div class="vcard" id="vcard"><div class="t"><span>دیجی‌بایل پی</span><span class="vchip"></span></div><div class="vnum">پس از صدور کارت</div><div class="vb"><div><small>سقف اعتبار</small><span class="vlim" id="vlim">پس از تأیید طرح</span></div><div><small>وضعیت</small><b>نمونه نمایشی</b></div></div></div>`}
+function tilt(el){if(!el||matchMedia('(prefers-reduced-motion: reduce)').matches)return;const w=el.parentElement;
+ w.onpointermove=e=>{const r=el.getBoundingClientRect(),x=(e.clientX-r.left)/r.width,y=(e.clientY-r.top)/r.height;el.style.setProperty('--ry',((x-.5)*16).toFixed(1)+'deg');el.style.setProperty('--rx',((.5-y)*12).toFixed(1)+'deg');el.style.setProperty('--mx',(x*100)+'%');el.style.setProperty('--my',(y*100)+'%')};
+ w.onpointerleave=()=>{el.style.setProperty('--ry','0deg');el.style.setProperty('--rx','0deg')}}
+function mountCalc(box,fixed){let p=PLANS.find(x=>x.id===S.plan&&x.on)||act()[0];if(fixed)p=fixed;if(!p){box.innerHTML='<div class="empty-plans"><span class="badge">در انتظار تأیید</span><h3>فعلاً طرح فعال و تأییدشده‌ای برای محاسبه وجود ندارد</h3><p>تعریف‌های منتقل‌شده در بخش مدیریت قابل بررسی‌اند. پس از تأیید شرایط واقعی و فعال‌سازی، طرح‌ها در این بخش نمایش داده می‌شوند.</p><a class="btn brand" href="/login.html">ورود به حساب</a></div>';const vl=$('#vlim');if(vl)vl.textContent='پس از تأیید طرح';return ()=>{}}S.plan=p.id;
+if(p.kind==='beta'){return mountBeta(box,p,fixed)}
+ const clamp=()=>{S.amt=Math.min(Math.max(S.amt,p.min*1e6),p.max*1e6);S.ti=Math.min(S.ti,p.tiers.length-1)};
+ box.innerHTML=`${fixed?'':planPicker(p)}
+ <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px"><h3 style="margin:0;font-size:18px">محاسبه‌گر پیشرفته وام</h3><span class="badge">محاسبه تقریبی</span></div><div class="amt"><span>مبلغ مورد نیاز (تومان)</span><output id="aOut" class="num"></output></div><input id="amtInput" type="text" inputmode="numeric" autocomplete="off" aria-label="مبلغ مورد نیاز به تومان" style="width:100%;box-sizing:border-box;margin:4px 0 10px;padding:11px 12px;border:1px solid var(--line,#dbe3ee);border-radius:12px;background:var(--surface,#fff);color:inherit;font:inherit"><input id="aRng" type="range" aria-label="مبلغ مورد نیاز"><div class="scale"><span id="aMin"></span><span id="aMax"></span></div>
+ <div class="chips" id="tch" role="group" aria-label="تعداد اقساط" style="margin-top:14px"></div>
+ <div class="big"><div><small>قسط ماهانه</small><b id="cM"></b></div><div><small>سررسید اولین قسط</small><span class="num" id="cD"></span></div></div>
+ <div class="rows"><div><span>پیش‌پرداخت</span><b class="num" id="cDown"></b></div><div><span>سود و کارمزد کل</span><b class="num" id="cFee"></b></div><div><span>مجموع پرداختی</span><b class="num" id="cT"></b></div></div>
+ <p class="note" id="calcRateNote">محاسبه بر اساس نرخ ثبت‌شده در تعریف طرح است؛ مبلغ قطعی طبق قرارداد تعیین می‌شود.</p>
+ <div class="cta2"><button class="btn solid lg" data-go="reg">عضویت و دریافت اعتبار</button>${fixed?'<button class="btn lg" id="apply">ثبت درخواست این طرح</button>':'<a class="btn lg" id="planLink">صفحه‌ی این طرح</a>'}</div>`;
+ const rng=box.querySelector('#aRng');
+ function draw(){clamp();const t=p.tiers[S.ti],c=calc(p,S.amt,t);rng.min=p.min*1e6;rng.max=p.max*1e6;rng.step=500000;rng.value=S.amt;
+  box.querySelector('#aOut').textContent=fa(S.amt)+' تومان';const amountInput=box.querySelector('#amtInput');if(amountInput&&document.activeElement!==amountInput)amountInput.value=fa(S.amt);box.querySelector('#aMin').textContent=fa(p.min)+' میلیون';box.querySelector('#aMax').textContent=fa(p.max)+' میلیون';
+  box.querySelector('#tch').innerHTML=p.tiers.map((x,i)=>`<button class="chip num" data-t="${i}" aria-pressed="${i===S.ti}">${fa(x.m)} ماهه</button>`).join('');
+  box.querySelector('#cM').textContent=fa(Math.round(c.monthly))+' تومان';box.querySelector('#cD').textContent=dateAfter(p.iv);
+  box.querySelector('#cDown').textContent=fa(c.down)+' تومان';box.querySelector('#cFee').textContent=fa(Math.round(c.fee))+' تومان';box.querySelector('#cT').textContent=fa(Math.round(c.total+c.down))+' تومان';
+  const rateNote=box.querySelector('#calcRateNote');if(rateNote){const methodName=c.method==='Annual'?'سود بانکی سالانه':c.method==='Flat'?'کارمزد یک‌جای قرارداد':'سود ماهانه';rateNote.textContent='روش محاسبه: '+methodName+' · نرخ ثبت‌شده: '+fa(c.rate)+'٪ · تعداد اقساط: '+fa(c.months)+' ماه. محاسبه تقریبی است و مبلغ قطعی طبق قرارداد تعیین می‌شود.'}
+  const pch=box.querySelector('#pch');if(pch)pch.querySelectorAll('.chip').forEach(b=>b.setAttribute('aria-pressed',b.dataset.p===p.id));
+  const pl=box.querySelector('#planLink');if(pl)pl.href='#plan-'+p.id;
+  const vl=$('#vlim');if(vl)vl.textContent=fa(S.amt)+' ت';
+  box.dispatchEvent(new CustomEvent('calc',{detail:{p,t,c}}))}
+ rng.oninput=()=>{S.amt=+rng.value;draw()};
+ const amountInput=box.querySelector('#amtInput');if(amountInput){const formatAmountInput=()=>{const entered=numVal(amountInput.value,NaN);if(Number.isFinite(entered)){S.amt=Math.min(Math.max(entered,p.min*1e6),p.max*1e6);const formatted=Math.round(S.amt).toLocaleString('en-US');if(amountInput.value!==formatted)amountInput.value=formatted;draw()}else if(amountInput.value.trim()===''){S.amt=p.min*1e6;draw()}};amountInput.addEventListener('input',formatAmountInput);amountInput.addEventListener('change',()=>{if(!Number.isFinite(numVal(amountInput.value,NaN)))amountInput.value=Math.round(S.amt).toLocaleString('en-US');formatAmountInput()})}
+ box.onclick=e=>{const planButton=e.target.closest('[data-plan]');if(planButton){const next=PLANS.find(x=>x.id===planButton.dataset.plan&&x.on);if(next){S.plan=next.id;S.amt=next.max*1e6;S.ti=0;mountCalc(box)}return}const b=e.target.closest('[data-t]');if(b){S.ti=+b.dataset.t;draw()}};
+ draw();return draw}
+
+/* ---------- طرح بتا: مبلغ و اقساط از API بانک استعلام می‌شود ---------- */
+const BETA={q:null};
+function mountBeta(box,p,fixed){
+ const chips=fixed?'':planPicker(p);
+ box.innerHTML=chips+`<h3 style="margin:14px 0 4px">استعلام تسهیلات بانک رفاه</h3><p class="note" style="margin:0 0 10px">مبلغ تسهیلات، تعداد و مبلغ اقساط را بانک تعیین می‌کند و ما فقط نتیجه را نشان می‌دهیم.</p>
+ <div class="fld"><label for="bn">کد ملی</label><input id="bn" inputmode="numeric" maxlength="10" style="width:100%;font:inherit;background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:12px;padding:11px 14px;min-height:46px"><div class="h"></div></div>
+ <label class="chk"><input type="checkbox" id="bc"> با استعلام تسهیلات از بانک رفاه و پردازش اطلاعاتم موافقم.</label>
+ <div class="cta2"><button class="btn solid lg" id="bq">استعلام تسهیلات</button><button class="btn lg" data-go="reg">عضویت</button></div><div id="bres"></div>`;
+ box.onclick=e=>{const planButton=e.target.closest('[data-plan]');if(planButton){const next=PLANS.find(x=>x.id===planButton.dataset.plan&&x.on);if(next){S.plan=next.id;S.amt=next.max*1e6;S.ti=0;mountCalc(box)}}};
+ const f=box.querySelector('#bn');f.oninput=()=>{const v=f.value;hint(f,v.length===10?(okNid(v)?'کد ملی از نظر ساختار معتبر است':'کد ملی معتبر نیست'):'',okNid(v))};
+ box.querySelector('#bq').onclick=async()=>{if(!okNid(f.value)){hint(f,'کد ملی معتبر نیست',0);return}if(!box.querySelector('#bc').checked){toast('رضایت استعلام را تأیید کنید');return}
+  if(role==='guest'){openAuth('reg','برای استعلام ابتدا عضو شوید یا وارد شوید.');return}
+  const out=box.querySelector('#bres');out.innerHTML='<p class="note">در حال استعلام…</p>';
+  try{let r;if(CFG.mock){await new Promise(x=>setTimeout(x,700));r={ref:'INQ-7701',amount:20000000,installments:Array.from({length:5},(_,i)=>({no:i+1,due:dateAfter(i+1),amount:4400000})),sample:true}}
+   else{const x=await fetch(CFG.endpoints.betaInquiry,{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+(()=>{try{return localStorage.getItem('token')}catch(e){return ''}})()},body:JSON.stringify({nationalCode:toEn(f.value),consent:true})});const j=await x.json().catch(()=>({}));if(!x.ok)throw new Error(j.message||'استعلام انجام نشد');r=j.data||j}
+   if(r.status==="pending_provider"){out.innerHTML=`<div class="notice"><strong>شناسه پیگیری: ${esc(r.ref)}</strong><p>${esc(r.message||"درخواست ثبت شد؛ هنوز به بانک ارسال نشده است.")}</p></div>`;return}
+   out.innerHTML=`<div class="big"><div><small>مبلغ تسهیلات</small><b>${fa(r.amount)} تومان</b></div><div><small>شناسه پیگیری</small><span class="num">${esc(r.ref)}</span></div></div>
+   <div class="tbl" style="margin-top:12px"><table><thead><tr><th>قسط</th><th>سررسید</th><th>مبلغ</th></tr></thead><tbody>${r.installments.map(i=>`<tr><td class="num">${fa(i.no)}</td><td>${esc(i.due)}</td><td class="num">${fa(i.amount)} تومان</td></tr>`).join('')}</tbody></table></div>
+   ${r.sample?'<p class="note">این پاسخ در پیش‌نمایش نمونه است. در سایت واقعی عدد از بانک می‌آید.</p>':''}<p class="note">ادامه‌ی مراحل: بارگذاری مدارک و امضای فرم‌ها در حساب شما.</p><button class="btn solid lg" style="width:100%" id="bgo">ادامه و تکمیل پرونده</button>`;
+   box.querySelector('#bgo').onclick=()=>toast('در سایت واقعی به صفحه‌ی تکمیل پرونده می‌روید')}catch(e){out.innerHTML=`<p class="note" style="color:var(--bad)">${esc(e.message||'خطا در ارتباط با بانک. دوباره تلاش کنید.')}</p>`}};
+ {const vl=$('#vlim');if(vl)vl.textContent='بعد از صدور'}
+ return ()=>{}}
+function renderPlanCards(items){
+ if(!items.length)return '<div class="empty-plans"><h3>طرحی برای نمایش پیدا نشد</h3><p>ممکن است هنوز طرح فعال و تأییدشده‌ای وجود نداشته باشد یا فیلتر انتخاب‌شده نتیجه‌ای نداشته باشد.</p></div>';
+ return items.map(p=>{const f=(p.tiers||[]).map(t=>Number(t.fee)||0),d=(p.tiers||[]).map(t=>Number(t.down)||0);const fees=f.length?fa(Math.min(...f))+'٪'+(Math.max(...f)>Math.min(...f)?' تا '+fa(Math.max(...f))+'٪':''):'طبق قرارداد';const downs=d.length?fa(Math.min(...d))+'٪'+(Math.max(...d)>Math.min(...d)?' تا '+fa(Math.max(...d))+'٪':''):'—';return '<a class="pc '+(p.badge==='پرطرفدار'?'hot':'')+'" href="#plan-'+encodeURIComponent(p.id)+'">'+(p.imageUrl?'<img src="'+esc(p.imageUrl)+'" alt="" style="width:100%;height:150px;object-fit:cover;border-radius:14px;margin-bottom:10px">':'')+(p.badge?'<span class="badge">'+esc(p.badge)+'</span>':'')+'<h3>'+esc(p.name||'طرح بدون عنوان')+'</h3><p class="m">'+esc(p.blurb||'برای مشاهده جزئیات طرح انتخاب کنید.')+'</p><div class="facts"><div><span>روش هزینه</span><b>'+(p.kind==='beta'?'استعلام بانکی':fees)+'</b></div><div><span>پیش‌پرداخت</span><b>'+(p.kind==='beta'?'طبق پاسخ بانک':downs)+'</b></div><div><span>حداقل مبلغ</span><b>'+fa(p.min||0)+' میلیون</b></div><div><span>فاصله اقساط</span><b>'+fa(p.iv||1)+' ماه</b></div></div><span class="btn">مشاهده شرایط طرح ←</span></a>'}).join('');
+}
+
+/* ---------- views ---------- */
+
+function initCampaigns(){
+ const track=$('#campaignTrack'),dots=[...document.querySelectorAll('#campaignDots button')];
+ if(!track||!dots.length||track.dataset.ready)return;track.dataset.ready='1';
+ const sync=()=>{const i=Math.round(track.scrollLeft/Math.max(1,track.clientWidth));dots.forEach((d,k)=>d.setAttribute('aria-current',String(k===i)))};
+ track.addEventListener('scroll',()=>requestAnimationFrame(sync),{passive:true});
+ dots.forEach((d,i)=>d.onclick=()=>track.scrollTo({left:i*track.clientWidth,behavior:'smooth'}));
+}
+function syncMobileNav(){
+ const h=location.hash.slice(1),active=h.startsWith('plan-')||h==='plans'?'plans':h==='how'?'help':'home';
+ document.querySelectorAll('[data-mobile-nav]').forEach(a=>a.setAttribute('aria-current',a.dataset.mobileNav===active?'page':'false'));
+}
+
+function home(){const A=act();
+ $('#app').innerHTML=`<section class="campaigns" aria-label="پیشنهادهای ویژه">
+ <div class="campaign-track" id="campaignTrack">
+  <a class="campaign" href="#plans"><div class="campaign-copy"><span class="campaign-kicker">✦ اعتبار و خرید اقساطی</span><h2>خرید امروز، پرداخت آسوده‌تر</h2><p>طرح‌های متنوع را ببینید و شرایط هر کدام را پیش از درخواست بررسی کنید.</p><span class="campaign-cta">مشاهده طرح‌ها ←</span></div><div class="campaign-art" aria-hidden="true"><svg viewBox="0 0 120 120" fill="none"><rect x="28" y="17" width="66" height="86" rx="13" fill="#fff" fill-opacity=".18" stroke="#fff" stroke-opacity=".75" stroke-width="2"/><rect x="37" y="30" width="48" height="9" rx="4.5" fill="#F5A400"/><rect x="37" y="48" width="20" height="20" rx="5" fill="#fff" fill-opacity=".8"/><rect x="63" y="48" width="22" height="7" rx="3.5" fill="#fff"/><rect x="63" y="60" width="16" height="6" rx="3" fill="#fff" fill-opacity=".65"/><path d="m43 81 10 9 23-25" stroke="#F5A400" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/></svg></div></a>
+  <a class="campaign" href="#how"><div class="campaign-copy"><span class="campaign-kicker">✓ مسیر روشن و مرحله‌به‌مرحله</span><h2>از ثبت‌نام تا پیگیری درخواست</h2><p>مراحل، مدارک و وضعیت پرونده را در یک مسیر مشخص دنبال کنید.</p><span class="campaign-cta">آشنایی با مراحل ←</span></div><div class="campaign-art" aria-hidden="true"><svg viewBox="0 0 120 120" fill="none"><circle cx="60" cy="60" r="38" fill="#fff" fill-opacity=".14" stroke="#fff" stroke-opacity=".8" stroke-width="2"/><path d="M42 60 54 72 79 46" stroke="#fff" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/><circle cx="88" cy="29" r="13" fill="#F5A400"/><path d="M82 29h12M88 23v12" stroke="#44210a" stroke-width="2.5" stroke-linecap="round"/></svg></div></a>
+  <a class="campaign" href="/profile.html"><div class="campaign-copy"><span class="campaign-kicker">◈ همه‌چیز در حساب شما</span><h2>درخواست‌ها و مدارک یک‌جا</h2><p>برای پیگیری پرونده، مدارک و قراردادها از حساب کاربری استفاده کنید.</p><span class="campaign-cta">ورود به حساب ←</span></div><div class="campaign-art" aria-hidden="true"><svg viewBox="0 0 120 120" fill="none"><rect x="25" y="20" width="70" height="80" rx="12" fill="#fff" fill-opacity=".17" stroke="#fff" stroke-opacity=".8" stroke-width="2"/><circle cx="60" cy="46" r="13" fill="#fff" fill-opacity=".9"/><path d="M38 79c2-13 11-19 22-19s20 6 22 19" fill="#F5A400"/><rect x="41" y="86" width="38" height="5" rx="2.5" fill="#fff" fill-opacity=".7"/></svg></div></a>
+ </div><div class="campaign-dots" id="campaignDots" aria-label="انتخاب بنر"><button aria-label="بنر اول" aria-current="true"></button><button aria-label="بنر دوم" aria-current="false"></button><button aria-label="بنر سوم" aria-current="false"></button></div>
+</section><section class="hero" id="calc"><div><h1>همین حالا بخرید، ماه‌به‌ماه پرداخت کنید</h1><p class="lead">اعتبار شما در چند دقیقه تعیین می‌شود، قرارداد را دیجیتال امضا می‌کنید و کارت اعتباری مجازی‌تان صادر می‌شود.</p>
+  <div class="calc" id="calcBox"></div></div><div class="vwrap">${cardHtml()}</div></section>
+ <section class="s" id="plans"><h2 class="t">طرح‌های اقساط فعال</h2><p class="sub">طرح‌های قابل نمایش فقط از پایگاه داده و پس از فعال‌سازی مدیر دریافت می‌شوند. برای پیدا کردن طرح از جستجو و فیلتر استفاده کنید.</p><div class="plan-tools"><input id="planSearch" type="search" placeholder="جستجوی نام یا توضیحات طرح…" aria-label="جستجوی طرح"><select id="planFilter" aria-label="فیلتر طرح"><option value="all">همه طرح‌ها</option><option value="down">با پیش‌پرداخت</option><option value="nodown">بدون پیش‌پرداخت</option><option value="bank">استعلام بانکی</option></select></div><p class="plan-count" id="planCount"></p><div class="bento" id="planGrid">${renderPlanCards(A)}</div></section>
+ <section class="s" id="how"><h2 class="t">از ثبت‌نام تا کارت مجازی</h2><p class="sub">چهار مرحله و کمتر از ۵ دقیقه.</p>
+  <div class="tl"><div><div class="n">۱</div><h3>عضویت با موبایل</h3><p>کد تأیید پیامکی می‌گیرید و حساب شما ساخته می‌شود.</p></div><div><div class="n">۲</div><h3>احراز هویت و مدارک</h3><p>عکس مدارک را بارگذاری می‌کنید و اطلاعات آن خودکار خوانده می‌شود.</p></div><div><div class="n">۳</div><h3>قرارداد دیجیتال</h3><p>قرارداد را با کد پیامکی امضا می‌کنید.</p></div><div><div class="n">۴</div><h3>کارت مجازی</h3><p>با تأیید وام، کارت مجازی با سقف وام شما صادر می‌شود و برای خرید آماده است.</p></div></div></section>
+ <section class="s" id="trust"><h2 class="t">امنیت و شفافیت</h2><p class="sub">اطلاعات شما رمزنگاری می‌شود و هیچ هزینه‌ی پنهانی وجود ندارد.</p>
+  <div class="trust"><div class="tc"><h3>رمزنگاری مدارک</h3><p>تصویر مدارک رمزنگاری‌شده نگهداری می‌شود و هر دسترسی ثبت می‌شود.</p></div><div class="tc"><h3>قرارداد با امضای پیامکی</h3><p>نسخه‌ی قرارداد و گزارش امضا در حساب شما می‌ماند.</p></div><div class="tc"><h3>کارت مجازی کنترل‌شده</h3><p>سقف کارت برابر وام شماست و هر زمان می‌توانید آن را مسدود کنید.</p></div><div class="tc"><h3>اقساط شفاف</h3><p>مبلغ و سررسید همه‌ی اقساط قبل از خرید دیده می‌شود.</p></div></div></section>
+ <section class="s" id="faq"><h2 class="t">پرسش‌های متداول</h2>
+  <details><summary>کارت مجازی چیست و کجا استفاده می‌شود؟</summary><p>بعد از تأیید وام، یک کارت مجازی با سقف وام برای شما صادر می‌شود. با آن از فروشگاه‌های طرف قرارداد از طریق درگاه دیجی‌بایل پی خرید می‌کنید.</p></details>
+  <details><summary>برای دریافت اعتبار چه مدارکی لازم است؟</summary><p>فهرست مدارک هر طرح در صفحه‌ی همان طرح آمده است. هر مدرک را با عکس بارگذاری می‌کنید.</p></details>
+  <details><summary>اگر قسطی را دیر پرداخت کنم چه می‌شود؟</summary><p>جریمه‌ی دیرکرد طبق قرارداد محاسبه می‌شود و قبل از سررسید پیامک یادآوری می‌گیرید.</p></details>
+  <details><summary>چطور فروشگاه خودم را اضافه کنم؟</summary><p>از «پذیرنده شوید» درخواست بدهید. بعد از تأیید، لینک اختصاصی و درگاه برای شما فعال می‌شود.</p></details></section>
+ <div class="band"><div><h2>آماده‌اید؟</h2><p>عضو شوید و اعتبار خود را در چند دقیقه ببینید.</p></div><button class="btn solid lg" data-go="reg">عضویت رایگان</button></div>`;
+ const box=$('#calcBox');mountCalc(box);tilt($('#vcard'));initCampaigns();syncMobileNav();const search=$('#planSearch'),filter=$('#planFilter'),grid=$('#planGrid'),count=$('#planCount');const refresh=()=>{const q=String(search?.value||'').trim().toLocaleLowerCase('fa'),mode=filter?.value||'all';const filtered=A.filter(p=>{const text=[p.name,p.blurb,p.badge].join(' ').toLocaleLowerCase('fa');if(q&&!text.includes(q))return false;if(mode==='bank'&&p.kind!=='beta')return false;if(mode==='down'&&!(p.tiers||[]).some(t=>Number(t.down)>0))return false;if(mode==='nodown'&&!(p.tiers||[]).some(t=>Number(t.down)===0))return false;return true});if(grid)grid.innerHTML=renderPlanCards(filtered);if(count)count.textContent='طرح‌های قابل نمایش: '+fa(filtered.length)+' از '+fa(A.length)};if(search)search.oninput=refresh;if(filter)filter.onchange=refresh;refresh();}
+function planPage(p){
+ $('#app').innerHTML=`<div class="crumb"><a href="#home">خانه</a> / <a href="#plans">طرح‌ها</a> / ${p.name}</div>
+ <div class="pp"><div class="stack"><div>${p.imageUrl?`<img src="${esc(p.imageUrl)}" alt="تصویر ${esc(p.name)}" style="display:block;width:100%;max-height:320px;object-fit:cover;border-radius:18px;margin-bottom:18px">`:``}<h1>${esc(p.name)}</h1><p class="lead">${esc(p.blurb)}</p></div>
+  ${p.kind==='beta'?`<div class="card2"><h3>مراحل طرح</h3><ol class="ck" style="list-style:none">${p.steps.map(s=>`<li>${s}</li>`).join('')}</ol><p class="note">مبلغ و اقساط را بانک مشخص می‌کند. پرداخت اقساط به حساب دیجی‌بایل پی است و دیجی‌بایل پی سهم لیزینگ را طبق قرارداد منتقل می‌کند.</p></div>`:``}
+  <div class="card2"><h3>شرایط ثبت‌نام</h3><ul class="ck"><li>سن ${fa(p.cond.minAge)} تا ${fa(p.cond.maxAge)} سال</li>${p.cond.minIncome?`<li>درآمد ماهانه حداقل ${fa(p.cond.minIncome)} میلیون تومان</li>`:''}${p.cond.kyc?'<li>احراز هویت تأییدشده</li>':''}${p.cond.minScore?`<li>امتیاز اعتباری حداقل ${fa(p.cond.minScore)}</li>`:''}<li>حداکثر ${fa(p.cond.maxActive)} وام فعال هم‌زمان</li></ul></div>
+  <div class="card2"><h3>مدارک لازم (با عکس)</h3><ul class="ck">${p.docs.map(d=>`<li class="${d[1]?'':'opt'}">${d[0]}${d[1]?'':' (اختیاری)'}</li>`).join('')}</ul><p class="note">اطلاعات هر مدرک از روی عکس به‌طور خودکار خوانده و در پرونده‌ی شما ثبت می‌شود.</p></div>
+  <div class="card2"><h3>کارت مجازی این طرح</h3><p style="margin:0;color:var(--muted)">بعد از تأیید وام و امضای قرارداد، کارت مجازی با سقف مبلغ وام صادر می‌شود. می‌توانید آن را از حساب من مسدود یا باز کنید.</p></div></div>
+  <div class="stack" style="position:sticky;top:84px"><div class="calc" id="calcBox"></div><div class="vwrap">${cardHtml()}</div></div></div>`;
+ const box=$('#calcBox');mountCalc(box,p);tilt($('#vcard'));
+  if($('#apply'))$('#apply').onclick=()=>{if(role==='guest'){openAuth('reg','برای ثبت درخواست ابتدا عضو شوید.');return}openApply(p)}}
+function route(){const h=location.hash.slice(1);const p=PLANS.find(x=>'plan-'+x.id===h&&x.on);
+ if(p){planPage(p);window.scrollTo(0,0);return}
+ home();if(h&&h!=='home'&&document.getElementById(h))document.getElementById(h).scrollIntoView();else window.scrollTo(0,0)}
+addEventListener('hashchange',()=>{route();syncMobileNav()});
+/* ---------- auth modal ---------- */
+function modal(html){const m=$('#modal');m.hidden=false;m.innerHTML=`<div class="ov" id="ov"><div class="md" role="dialog" aria-modal="true">${html}</div></div>`;const f=m.querySelector('input');if(f)f.focus();
+ m.querySelector('#ov').onclick=e=>{if(e.target.id==='ov')closeM()}}
+function closeM(){$('#modal').hidden=true;$('#modal').innerHTML=''}
+addEventListener('keydown',e=>{if(e.key==='Escape')closeM()});
+const REF=(()=>{try{return new URLSearchParams(location.search).get('ref')||''}catch(e){return ''}})();
+function hint(el,msg,ok){const h=el.parentElement.querySelector('.h');h.textContent=msg;h.className='h '+(msg?(ok?'ok':'bad'):'')}
+function openAuth(mode,msg){if(!CFG.mock){location.href=mode==='login'?'/login.html':'/register.html';return}modal(`<button class="close" aria-label="بستن" onclick="closeM()">×</button><h2>${mode==='login'?'ورود به حساب':'عضویت در دیجی‌بایل پی'}</h2><p class="sub" style="margin:0">${msg||(mode==='login'?'شماره موبایل و رمز عبور را وارد کنید.':'در چند ثانیه عضو شوید و اعتبار بگیرید.')}</p>
+ <div class="tabs" role="tablist"><button role="tab" aria-selected="${mode==='login'}" id="tL">ورود</button><button role="tab" aria-selected="${mode==='reg'}" id="tR">عضویت</button></div><form id="af" novalidate>
+ ${mode==='reg'?`<div class="fld"><label for="fn">نام و نام خانوادگی</label><input id="fn" autocomplete="name"><div class="h"></div></div>`:''}
+ <div class="fld"><label for="fm">شماره موبایل</label><input id="fm" inputmode="numeric" maxlength="11" placeholder="۰۹۱۲۳۴۵۶۷۸۹" autocomplete="tel"><div class="h"></div></div>
+ ${mode==='reg'?`<div class="fld"><label for="fi">کد ملی</label><input id="fi" inputmode="numeric" maxlength="10"><div class="h"></div></div>`:''}
+ <div class="fld"><label for="fp">رمز عبور</label><input id="fp" type="password" autocomplete="${mode==='login'?'current-password':'new-password'}"><div class="h"></div></div>
+ ${mode==='reg'?`<div class="fld"><label for="fr">کد معرف (اختیاری)</label><input id="fr" value="${esc(REF)}" style="direction:ltr;text-align:left"><div class="h"></div></div><label class="chk"><input type="checkbox" id="fc"> قوانین و حریم خصوصی را می‌پذیرم و با استعلام اعتبار موافقم.</label>`:''}
+ <button class="btn solid lg" style="width:100%;margin-top:16px" type="submit">${mode==='login'?'ورود':'ادامه و دریافت کد تأیید'}</button></form>`);
+ $('#tL').onclick=()=>openAuth('login');$('#tR').onclick=()=>openAuth('reg');
+ const f=$('#af');
+ f.fm.oninput=()=>{const v=f.fm.value;hint(f.fm,v&&!okMobile(v)?'شماره باید ۱۱ رقم و با ۰۹ شروع شود':'',0)};
+ if(f.fi)f.fi.oninput=()=>{const v=f.fi.value;hint(f.fi,v.length===10?(okNid(v)?'کد ملی معتبر است':'کد ملی معتبر نیست'):'',okNid(v))};
+ if(f.fp&&mode==='reg')f.fp.oninput=()=>{const v=f.fp.value;hint(f.fp,v?(v.length<8?'حداقل ۸ نویسه':'رمز مناسب است'):'',v.length>=8)};
+ f.onsubmit=async e=>{e.preventDefault();let bad=false;const need=(el,c,m)=>{if(!c){hint(el,m,0);bad=true}};
+  need(f.fm,okMobile(f.fm.value),'شماره موبایل معتبر نیست');need(f.fp,f.fp.value.length>=(mode==='reg'?8:1),mode==='reg'?'حداقل ۸ نویسه':'رمز را وارد کنید');
+  if(mode==='reg'){need(f.fn,f.fn.value.trim().split(' ').length>=2,'نام و نام خانوادگی را کامل بنویسید');need(f.fi,okNid(f.fi.value),'کد ملی معتبر نیست');if(!f.fc.checked){toast('برای ادامه، قوانین را بپذیرید');bad=true}}
+  if(bad)return;
+  const body={phoneNumber:toEn(f.fm.value),password:f.fp.value};
+  if(mode==='reg'){body.fullName=f.fn.value.trim();body.nationalCode=toEn(f.fi.value);body.referralCode=f.fr.value.trim()||null}
+  try{
+   if(CFG.mock){await new Promise(r=>setTimeout(r,500));mode==='reg'?otpStep(body):done(body.fullName||'مشتری')}
+   else{const r=await fetch(mode==='login'?CFG.endpoints.login:CFG.endpoints.register,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});const j=await r.json().catch(()=>({}));
+    if(!r.ok){toast((j&&(j.message||j.error||(j.errors&&j.errors[0])))||'خطا در ارتباط با سرور');return}
+    const tok=(j.data&&(j.data.accessToken||j.data.token))||j.accessToken||j.token;if(tok&&mode==='login'){try{localStorage.setItem('token',tok)}catch(_){}done(null)}else otpStep(body)}
+  }catch(err){toast('اتصال برقرار نشد. دوباره تلاش کنید.')}}}
+function otpStep(body){modal(`<button class="close" aria-label="بستن" onclick="closeM()">×</button><h2>کد تأیید</h2><p class="sub" style="margin:0">کد ۵ رقمی ارسال‌شده به <span class="num">${fa(body.phoneNumber)}</span> را وارد کنید.${CFG.mock?' در پیش‌نمایش هر کد ۵ رقمی پذیرفته می‌شود.':''}</p>
+ <div class="otp" id="otp">${[0,1,2,3,4].map(i=>`<input inputmode="numeric" maxlength="1" aria-label="رقم ${fa(i+1)}">`).join('')}</div><div class="h bad" id="oh" style="text-align:center"></div><button class="btn solid lg" style="width:100%" id="ov2">تأیید و ورود</button><p class="note" style="text-align:center"><span id="rs">ارسال دوباره بعد از ۶۰ ثانیه</span></p>`);
+ const ins=[...document.querySelectorAll('#otp input')];ins[0].focus();
+ ins.forEach((el,i)=>{el.oninput=()=>{el.value=toEn(el.value).replace(/\D/g,'');if(el.value&&ins[i+1])ins[i+1].focus()};el.onkeydown=e=>{if(e.key==='Backspace'&&!el.value&&ins[i-1])ins[i-1].focus()};
+  el.onpaste=e=>{const t=toEn((e.clipboardData||window.clipboardData).getData('text')).replace(/\D/g,'').slice(0,5);if(!t)return;e.preventDefault();t.split('').forEach((c,k)=>ins[k]&&(ins[k].value=c));ins[Math.min(t.length,4)].focus()}});
+ let s=60;const iv=setInterval(()=>{s--;const r=$('#rs');if(!r){clearInterval(iv);return}r.textContent=s>0?`ارسال دوباره بعد از ${fa(s)} ثانیه`:'ارسال دوباره‌ی کد';if(s<=0)clearInterval(iv)},1000);
+ $('#ov2').onclick=async()=>{const code=ins.map(i=>i.value).join('');if(code.length<5){$('#oh').textContent='کد را کامل وارد کنید';return}
+  if(CFG.mock){done(body.fullName||'مشتری');return}
+  try{const r=await fetch(CFG.endpoints.verifyOtp,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({phoneNumber:body.phoneNumber,code})});const j=await r.json().catch(()=>({}));if(!r.ok){$('#oh').textContent=(j&&j.message)||'کد نادرست است';return}
+   const tok=(j.data&&(j.data.accessToken||j.data.token))||j.accessToken||j.token;if(tok)try{localStorage.setItem('token',tok)}catch(_){}done(body.fullName)}catch(e){$('#oh').textContent='اتصال برقرار نشد'}}}
+function done(name){closeM();role='customer';user=name;renderAuth();toast(name?`خوش آمدید ${name}`:'وارد شدید')}
+function openApply(p){const t=p.tiers[S.ti],c=calc(p,S.amt,t);modal(`<button class="close" aria-label="بستن" onclick="closeM()">×</button><h2>تأیید درخواست</h2><p class="sub" style="margin:0">${p.name} · ${fa(t.m)} قسط</p>
+ <div class="rows" style="margin:14px 0"><div><span>مبلغ خرید</span><b class="num">${fa(S.amt)}</b></div><div><span>پیش‌پرداخت</span><b class="num">${fa(c.down)}</b></div><div><span>قسط ماهانه</span><b class="num">${fa(Math.round(c.monthly))}</b></div></div>
+ <p class="note">مدارک لازم: ${p.docs.filter(d=>d[1]).map(d=>d[0]).join('، ')}. بعد از ثبت، عکس مدارک را در حساب من بارگذاری می‌کنید. با تأیید وام، کارت مجازی شما صادر می‌شود.</p>
+ <div id="apMsg" class="note" role="status" style="margin-top:10px"></div><button class="btn solid lg" style="width:100%;margin-top:10px" id="ap2">ثبت واقعی درخواست</button>`);$('#ap2').onclick=async()=>{const btn=$('#ap2'),msg=$('#apMsg');btn.disabled=true;btn.textContent='در حال ثبت…';msg.textContent='';try{const token=(()=>{try{return localStorage.getItem('token')||localStorage.getItem('accessToken')||''}catch(_){return ''}})();const res=await fetch('/api/v1/me/loan-applications',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json',...(token?{Authorization:'Bearer '+token}:{})},body:JSON.stringify({loanProductId:p.id,amount:S.amt,installmentMonths:t.m,interestMethod:p.method,interestPercent:p.rate})});const j=await res.json().catch(()=>({}));if(!res.ok)throw new Error(j.message||'ثبت درخواست انجام نشد');const d=j.data||j;msg.textContent='درخواست واقعاً ثبت شد. کد پیگیری: '+(d.reference||'ثبت‌شده')+' · وضعیت: '+(d.status||'Submitted');btn.textContent='درخواست ثبت شد';btn.disabled=true;const link=document.createElement('a');link.href='/profile.html';link.className='btn';link.style.display='inline-flex';link.style.marginTop='8px';link.textContent='رفتن به پیگیری درخواست‌ها';msg.appendChild(document.createElement('br'));msg.appendChild(link)}catch(e){msg.textContent=e.message||'خطا در ثبت درخواست';btn.disabled=false;btn.textContent='تلاش دوباره'}}}
+/* ---------- boot ---------- */
+async function detectRole(){try{const r=await fetch('/api/v1/security/me',{credentials:'same-origin',cache:'no-store'});if(!r.ok)return;const j=await r.json(),d=j.data||j;const rs=[].concat(d.roles||d.role||[]).map(x=>String(x).toLowerCase());user=d.fullName||null;role=rs.some(x=>/admin|manager/.test(x))?'admin':'customer'}catch(e){}}
+
+
+
+/* Render the storefront before waiting on APIs. A slow backend must never leave the customer staring at an empty page. */
+try{plansMenu();renderAuth();route();$('#ftHost').textContent=location.hostname}catch(e){console.error('Initial storefront render failed',e)}
+(async()=>{if(!CFG.mock){const ctl=new AbortController();const timer=setTimeout(()=>ctl.abort(),7000);try{const r=await fetch(CFG.endpoints.plans,{signal:ctl.signal,cache:'no-store',credentials:'same-origin'});if(!r.ok)throw new Error('HTTP '+r.status);const j=await r.json();const L=j.data||j;if(!Array.isArray(L))throw new Error('پاسخ فهرست طرح‌ها معتبر نیست');PLANS=L.map(normPlan).filter(Boolean);plansMenu();route()}catch(e){PLANS=[];plansMenu();route();console.error('Public loan plans API unavailable:',e.message)}finally{clearTimeout(timer)}}
+ await detectRole();renderAuth();})();
+function normPlan(x){
+ if(!x||x.isActive===false||x.is_active===false)return null;
+ let rawTiers=x.tiers;if(typeof rawTiers==='string'){try{rawTiers=JSON.parse(rawTiers)}catch(_){rawTiers=[]}}
+ const methodRaw=String(x.interestMethod||x.interest_method||'Monthly');
+ const method=/^annual$/i.test(methodRaw)?'Annual':/^flat$/i.test(methodRaw)?'Flat':'Monthly';
+ const rootRate=Math.max(0,numVal(x.interestPercent??x.interest_percent,0));
+ let tiers=Array.isArray(rawTiers)?rawTiers.map(t=>{if(t===null||t===undefined)return null;const obj=typeof t==='object'?t:{months:t};const m=numVal(obj.months??obj.m??obj.installments??obj.installmentCount??obj.termMonths,0);const rawFee=obj.feePercent??obj.fee??obj.monthlyRatePercent??obj.ratePercent;const fee=rawFee===null||rawFee===undefined?0:Math.max(0,numVal(rawFee,0));return m>0?{m:Math.max(1,Math.trunc(m)),fee,down:Math.min(100,Math.max(0,numVal(obj.downPaymentPercent??obj.down??obj.downPayment,0)))}:null}).filter(Boolean):[];
+ if(!tiers.length){const months=Math.max(1,Math.trunc(numVal(x.months??x.installments??x.intervalMonths??x.intervalDays,6)));tiers=[{m:months,fee:0,down:Math.min(100,Math.max(0,numVal(x.downPaymentPercent??x.downPayment,0)))}]}
+ const minAmount=numVal(x.minAmount??x.min_amount,1000000),maxAmount=numVal(x.maxAmount??x.max_amount,20000000),conditions=x.conditions&&typeof x.conditions==='object'?x.conditions:{};
+ const docs=Array.isArray(x.documents)?x.documents.map(d=>[typeof d==='string'?d:(d.name||d.title||'مدرک'),d&&d.required===false?0:1]):[];
+ return{id:String(x.id||x.slug||x.code||''),name:String(x.name||x.title||'طرح تسهیلات'),blurb:String(x.description||''),imageUrl:x.imageUrl||x.image_url||'',badge:x.badge||'',min:Math.max(0,minAmount/1e6),max:Math.max(minAmount/1e6,maxAmount/1e6),iv:Math.max(1,numVal(x.intervalMonths??x.intervalDays,1)),tiers,method,rate:rootRate,cond:{minAge:numVal(conditions.minAge,18),maxAge:numVal(conditions.maxAge,70),minIncome:numVal(conditions.minIncome,0),kyc:conditions.kyc===undefined?1:conditions.kyc,minScore:numVal(conditions.minScore,0),maxActive:numVal(conditions.maxActive,3)},docs,on:1,kind:conditions.kind||x.kind||'',steps:Array.isArray(x.steps)?x.steps:[]}}
+
+/* ---------- برند مستأجر (از دامنه‌ی فعلی) ---------- */
+(function(){const DEF='دیجی‌بایل پی';let cur=DEF;
+ function sw(root){const w=document.createTreeWalker(root,NodeFilter.SHOW_TEXT);let n;while((n=w.nextNode())){if(cur!==DEF&&n.nodeValue.indexOf(DEF)>-1)n.nodeValue=n.nodeValue.split(DEF).join(cur)}}
+ function apply(b){if(!b||!b.name)return;cur=b.name;const br=b.brand||{};document.title=document.title.split(DEF).join(cur);
+  const s=document.documentElement.style;if(br.primary)s.setProperty('--brand',br.primary);if(br.accent)s.setProperty('--accent',br.accent);
+  document.querySelectorAll('.logo i').forEach(i=>{if(br.logoUrl){i.innerHTML='<img alt="" src="'+String(br.logoUrl).replace(/"/g,'')+'" style="width:100%;height:100%;object-fit:contain;border-radius:inherit">'}else i.textContent=br.logoText||cur.charAt(0)});
+  sw(document.body);
+  new MutationObserver(m=>{m.forEach(x=>x.addedNodes.forEach(a=>{if(a.nodeType===3){if(a.nodeValue.indexOf(DEF)>-1&&cur!==DEF)a.nodeValue=a.nodeValue.split(DEF).join(cur)}else if(a.nodeType===1)sw(a)}))}).observe(document.body,{childList:true,subtree:true})}
+ window.applyTenantBrand=async function(){try{const r=await fetch('/api/v1/tenant/config');if(r.ok){const j=await r.json();apply(j.data||j)}}catch(e){}}})();
+
+applyTenantBrand();
