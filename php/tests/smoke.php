@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 use App\Core\Bootstrap;
 use App\Core\Http\Request;
+use App\Core\Http\Response;
+use App\Core\Routing\Router;
 
 require dirname(__DIR__) . '/vendor/autoload.php';
 
@@ -26,8 +28,8 @@ if ($missing->status !== 404) {
     throw new RuntimeException('Unknown routes must return HTTP 404.');
 }
 
-$methodRouter = new \\App\\Core\\Routing\\Router();
-$methodRouter->post('/resource', static fn (Request $request): \\App\\Core\\Http\\Response => \\App\\Core\\Http\\Response::json(['created' => true], 201));
+$methodRouter = new Router();
+$methodRouter->post('/resource', static fn (Request $request): Response => Response::json(['created' => true], 201));
 $created = $methodRouter->dispatch(new Request('POST', '/resource'));
 
 if ($created->status !== 201) {
