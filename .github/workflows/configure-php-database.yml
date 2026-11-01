@@ -1,0 +1,36 @@
+name: Configure DigiBail PHP with existing MariaDB
+
+on:
+  push:
+    branches:
+      - migration/php83-full-rebuild
+    paths:
+      - '.github/workflows/configure-php-database.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: digibail-php-db-bootstrap
+  cancel-in-progress: false
+
+jobs:
+  configure:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Connect PHP to the existing populated phpMyAdmin database
+        uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          command_timeout: 10m
+          script: |
+            set -eu
+            APP="/home/digibail/domains/digebail.ir/php_app"
+            test -s "$APP/scripts/configure_production.php"
+            test -d "$APP/database/migrations"
+            /usr/local/php83/bin/php "$APP/scripts/configure_production.php"
+            chmod 600 "$APP/.env"
+            echo "PHP_DATABASE_CONFIGURATION_FINISHED=1"
