@@ -36,12 +36,12 @@ final class Bootstrap
 
         $router->get('/api/v1/admin/loan-products', static fn (Request $request): Response => $loanProducts()->adminList($request));
         $router->post('/api/v1/admin/loan-products', static fn (Request $request): Response => $loanProducts()->create($request));
-        $router->put('/api/v1/admin/loan-products/{id}', static fn (Request $request): Response => $loanProducts()->update($request));
-        $router->post('/api/v1/admin/loan-products/{id}/toggle', static fn (Request $request): Response => $loanProducts()->toggle($request));
+        $router->put('/api/v1/admin/loan-products/{id:uuid}', static fn (Request $request): Response => $loanProducts()->update($request));
+        $router->post('/api/v1/admin/loan-products/{id:uuid}/toggle', static fn (Request $request): Response => $loanProducts()->toggle($request));
         $router->post('/api/v1/admin/loan-products/seed', static fn (Request $request): Response => $loanProducts()->seed($request));
         $router->get('/api/v1/admin/loan-products/labels', static fn (Request $request): Response => $loanProducts()->labels($request));
-        $router->post('/api/v1/admin/loan-products/{id}/image', static fn (Request $request): Response => $loanProducts()->uploadImage($request));
-        $router->delete('/api/v1/admin/loan-products/{id}/image', static fn (Request $request): Response => $loanProducts()->deleteImage($request));
+        $router->post('/api/v1/admin/loan-products/{id:uuid}/image', static fn (Request $request): Response => $loanProducts()->uploadImage($request));
+        $router->delete('/api/v1/admin/loan-products/{id:uuid}/image', static fn (Request $request): Response => $loanProducts()->deleteImage($request));
 
         $router->get('/api/v1/security/captcha', static fn (Request $request): Response => $securityController()->captcha($request));
         $router->get('/api/v1/Auth/captcha', static fn (Request $request): Response => $securityController()->captcha($request));
