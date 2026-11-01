@@ -17,6 +17,7 @@ This directory is the isolated PHP implementation track. The existing Node.js, N
 - PDO MariaDB connection factory.
 - ASP.NET Identity v3 password-hash verification for PRF values SHA-1, SHA-256 and SHA-512, plus bcrypt verification.
 - New bcrypt cost-12 hash generation for controlled hash upgrade after successful legacy login.
+- HS256 JWT issue/verification compatible with the current Node token contract (issuer `digibail`, `sub`, `role`, `phone`, 8-hour lifetime), with signature and expiry validation.
 - Initial read-only account lookup against the existing `AspNetUsers` and `AspNetUserRoles` / `AspNetRoles` tables, including inactive-account and lockout checks. Ambiguous identity matches fail closed.
 - Password compatibility test vector and PHP 8.3/8.4/8.5 CI.
 
