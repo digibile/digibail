@@ -233,7 +233,7 @@ final class LoanProductController
             return Response::json(['message' => 'فقط فایل تصویری معتبر JPG، PNG یا WEBP پذیرفته می‌شود.'], 400);
         }
 
-        $directory = dirname(__DIR__, 4) . '/public/uploads/plans';
+        $directory = dirname(__DIR__, 3) . '/public/uploads/plans';
         if (!is_dir($directory) && !mkdir($directory, 0750, true) && !is_dir($directory)) {
             return Response::json(['message' => 'مسیر ذخیره تصویر آماده نیست.'], 500);
         }
@@ -266,7 +266,7 @@ final class LoanProductController
         $old = $this->products->imageUrl($tenant['id'], $id);
         if ($old === null) return Response::json(['message' => 'طرح پیدا نشد.'], 404);
         $this->products->setImageUrl($tenant['id'], $id, '');
-        $this->removeImage($old, dirname(__DIR__, 4) . '/public/uploads/plans');
+        $this->removeImage($old, dirname(__DIR__, 3) . '/public/uploads/plans');
         return new Response(204, '', ['Cache-Control' => 'no-store']);
     }
 
