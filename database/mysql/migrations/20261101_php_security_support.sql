@@ -6,6 +6,7 @@ CREATE TABLE IF NOT EXISTS php_security_challenges (
     value_hash CHAR(64) NOT NULL,
     attempts INT UNSIGNED NOT NULL DEFAULT 0,
     expires_at DATETIME NOT NULL,
+    resend_at DATETIME NULL,
     consumed_at DATETIME NULL,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (id),
