@@ -36,6 +36,13 @@ if ($created->status !== 201) {
     throw new RuntimeException('POST routes must dispatch correctly.');
 }
 
+$methodRouter->get('/resource/{id}', static fn (Request $request): Response => Response::json(['id' => $request->params['id'] ?? null]));
+$parameterized = $methodRouter->dispatch(new Request('GET', '/resource/42'));
+$parameterizedPayload = json_decode($parameterized->body, true, 512, JSON_THROW_ON_ERROR);
+if (($parameterizedPayload['id'] ?? null) !== '42') {
+    throw new RuntimeException('Parameterized routes must expose decoded route parameters.');
+}
+
 $wrongMethod = $methodRouter->dispatch(new Request('GET', '/resource'));
 if ($wrongMethod->status !== 405 || ($wrongMethod->headers['Allow'] ?? '') !== 'POST') {
     throw new RuntimeException('Known paths with unsupported methods must return HTTP 405 and Allow.');
