@@ -33,10 +33,14 @@ final class ConnectionFactory
             ? sprintf('mysql:unix_socket=%s;dbname=%s;charset=%s', $socket, $database, $charset)
             : sprintf('mysql:host=%s;port=%s;dbname=%s;charset=%s', $host, $port, $database, $charset);
 
+        $encodedPassword = self::env('DB_PASSWORD_B64');
+        $decodedPassword = $encodedPassword !== '' ? base64_decode($encodedPassword, true) : false;
+        $password = is_string($decodedPassword) ? $decodedPassword : self::env('DB_PASSWORD');
+
         return new PDO(
             $dsn,
             self::env('DB_USER'),
-            self::env('DB_PASSWORD'),
+            $password,
             [
                 PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
                 PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
