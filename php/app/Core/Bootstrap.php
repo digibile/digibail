@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Core;
 
+use App\Cards\VirtualCardController;
 use App\Core\Health\HealthController;
 use App\Core\Http\Request;
 use App\Core\Http\Response;
@@ -20,6 +21,7 @@ final class Bootstrap
         $security = null;
         $tenant = null;
         $tenantAdmin = null;
+        $cards = null;
 
         $securityController = static function () use (&$security): SecurityController {
             return $security ??= new SecurityController();
@@ -29,6 +31,9 @@ final class Bootstrap
         };
         $tenantAdminController = static function () use (&$tenantAdmin): TenantAdminController {
             return $tenantAdmin ??= new TenantAdminController();
+        };
+        $virtualCards = static function () use (&$cards): VirtualCardController {
+            return $cards ??= new VirtualCardController();
         };
 
         $router->get('/health/live', [$health, 'live']);
@@ -52,6 +57,20 @@ final class Bootstrap
         $router->get('/api/v1/admin/loan-products/labels', static fn (Request $request): Response => $loanProducts()->labels($request));
         $router->post('/api/v1/admin/loan-products/{id:uuid}/image', static fn (Request $request): Response => $loanProducts()->uploadImage($request));
         $router->delete('/api/v1/admin/loan-products/{id:uuid}/image', static fn (Request $request): Response => $loanProducts()->deleteImage($request));
+
+        $router->get('/api/v1/me/cards', static fn (Request $request): Response => $virtualCards()->mine($request));
+        $router->post('/api/v1/me/cards/{id:uuid}/reveal', static fn (Request $request): Response => $virtualCards()->reveal($request));
+        $router->post('/api/v1/me/cards/{id:uuid}/freeze', static fn (Request $request): Response => $virtualCards()->freeze($request));
+        $router->post('/api/v1/me/cards/{id:uuid}/unfreeze', static fn (Request $request): Response => $virtualCards()->unfreeze($request));
+        $router->get('/api/v1/me/cards/{id:uuid}/transactions', static fn (Request $request): Response => $virtualCards()->customerTransactions($request));
+
+        $router->get('/api/v1/admin/virtual-cards', static fn (Request $request): Response => $virtualCards()->adminList($request));
+        $router->post('/api/v1/admin/virtual-cards/issue', static fn (Request $request): Response => $virtualCards()->issue($request));
+        $router->post('/api/v1/admin/virtual-cards/{id:uuid}/{op}', static fn (Request $request): Response => $virtualCards()->adminAction($request));
+        $router->put('/api/v1/admin/virtual-cards/{id:uuid}/limit', static fn (Request $request): Response => $virtualCards()->adminLimit($request));
+        $router->get('/api/v1/admin/virtual-cards/{id:uuid}/transactions', static fn (Request $request): Response => $virtualCards()->adminTransactions($request));
+
+        $router->post('/api/v1/gateway/card-charge', static fn (Request $request): Response => $virtualCards()->charge($request));
 
         $router->get('/api/v1/security/captcha', static fn (Request $request): Response => $securityController()->captcha($request));
         $router->get('/api/v1/Auth/captcha', static fn (Request $request): Response => $securityController()->captcha($request));
