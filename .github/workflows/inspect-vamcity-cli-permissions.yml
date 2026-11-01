@@ -28,11 +28,11 @@ jobs:
             whoami
             id
             echo '=== PATH OWNERSHIP ==='
-            for p in /home/digebail /home/digebail/domains /home/digebail/domains/digebail.ir /home/digebail/domains/digebail.ir/database /home/digebail/domains/digebail.ir/database/migration /home/digebail/domains/digebail.ir/public_html; do
+            for p in "$HOME" "$HOME/domains" "$HOME/domains/digebail.ir" "$HOME/domains/digebail.ir/database" "$HOME/domains/digebail.ir/database/migration" "$HOME/domains/digebail.ir/public_html"; do
               if [ -e "$p" ]; then stat -c '%A %U:%G %n' "$p"; else echo "MISSING=$p"; fi
               if [ -d "$p" ] && [ -w "$p" ]; then echo "WRITABLE=$p"; fi
             done
             echo '=== EXISTING CLI FILE ==='
-            p='/home/digebail/domains/digebail.ir/database/migration/migrate.php'
+            p="$HOME/domains/digebail.ir/database/migration/migrate.php"
             if [ -f "$p" ]; then stat -c '%A %U:%G %s bytes %n' "$p"; sha256sum "$p"; php -l "$p"; else echo 'PRODUCTION_CLI=MISSING'; fi
             echo 'READ_ONLY=1'
