@@ -21,8 +21,9 @@ final class SecurityController
     public function __construct()
     {
         $this->db = ConnectionFactory::create();
-        $pepper = (string) getenv('OTP_PEPPER');
-        $this->store = new SecurityStore($this->db, $pepper);
+        $rateLimitPepper = (string) getenv('OTP_PEPPER');
+        $captchaPepper = (string) getenv('CAPTCHA_PEPPER');
+        $this->store = new SecurityStore($this->db, $rateLimitPepper, $captchaPepper);
         $this->identities = new LegacyIdentityRepository($this->db);
         $this->jwt = new JwtService((string) getenv('JWT_SECRET'), 'digibail');
     }
