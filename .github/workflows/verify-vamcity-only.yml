@@ -126,6 +126,12 @@ jobs:
             echo "VAMCITY_TARGET_COLUMNS=$target_columns"
             echo "VAMCITY_TARGET_PRIMARY_KEYS=$target_pks"
             echo "VAMCITY_TARGET_FOREIGN_KEYS=$target_fks"
+            source_temporal="$(run_sql -h -1 -Q "SET NOCOUNT ON; SELECT COUNT(*) FROM sys.tables t JOIN sys.columns c ON c.object_id=t.object_id WHERE t.is_ms_shipped=0 AND (LOWER(TYPE_NAME(c.user_type_id)) IN ('datetime2','datetime','date') OR (LOWER(TYPE_NAME(c.user_type_id))='time' AND c.scale>6));" | tr -d '\r' | xargs)"
+            target_raw="$(mysql_cmd -e "SELECT COUNT(*) FROM information_schema.COLUMNS c JOIN $DB.__vamcity_migration_state s ON c.TABLE_NAME=CASE WHEN s.source_schema='dbo' THEN s.source_table ELSE CONCAT(s.source_schema,'__',s.source_table) END WHERE c.TABLE_SCHEMA='$DB' AND s.source_database='$SOURCE' AND LEFT(c.COLUMN_NAME,6)='__raw_';")"
+            target_raw_nullable="$(mysql_cmd -e "SELECT COUNT(*) FROM information_schema.COLUMNS c JOIN $DB.__vamcity_migration_state s ON c.TABLE_NAME=CASE WHEN s.source_schema='dbo' THEN s.source_table ELSE CONCAT(s.source_schema,'__',s.source_table) END WHERE c.TABLE_SCHEMA='$DB' AND s.source_database='$SOURCE' AND LEFT(c.COLUMN_NAME,6)='__raw_' AND c.IS_NULLABLE='YES';")"
+            echo "VAMCITY_SOURCE_TEMPORAL_COLUMNS=$source_temporal"
+            echo "VAMCITY_TARGET_RAW_SIDECAR_COLUMNS=$target_raw"
+            echo "VAMCITY_TARGET_NULLABLE_RAW_SIDECARS=$target_raw_nullable"
             echo '=== VAMCITY MIGRATION CHECKPOINTS ==='
             mysql_cmd -e "SELECT status,COUNT(*) AS tables_count,SUM(expected_rows) AS expected_rows,SUM(imported_rows) AS imported_rows FROM $DB.__vamcity_migration_state WHERE source_database='$SOURCE' GROUP BY status ORDER BY status;" || true
             echo '=== VAMCITY TARGET SCHEMA COUNTS ==='
@@ -133,7 +139,7 @@ jobs:
 
             mapped_tables="$(mysql_cmd -e "SELECT COUNT(DISTINCT CASE WHEN source_schema='dbo' THEN source_table ELSE CONCAT(source_schema,'__',source_table) END) FROM $DB.__vamcity_migration_state WHERE source_database='$SOURCE';")"
             echo "VAMCITY_MAPPED_TARGET_TABLES=$mapped_tables"
-            if [ "$source_tables" -ne 88 ] || [ "$matched_tables" -ne "$source_tables" ] || [ "$mismatched_tables" -ne 0 ] || [ "$mapped_tables" -ne 88 ]; then
+            if [ "$source_tables" -ne 88 ] || [ "$matched_tables" -ne "$source_tables" ] || [ "$mismatched_tables" -ne 0 ] || [ "$mapped_tables" -ne 88 ] || [ "$source_columns" -ne 957 ] || [ "$target_columns" -ne $((source_columns+source_temporal)) ] || [ "$target_raw" -ne "$source_temporal" ] || [ "$target_raw_nullable" -ne "$target_raw" ] || [ "$source_pks" -ne "$target_pks" ] || [ "$source_fks" -ne "$target_fks" ]; then
               echo 'VAMCITY_VERIFICATION=FAILED'
               exit 40
             fi
