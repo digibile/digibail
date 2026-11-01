@@ -118,6 +118,12 @@ jobs:
              else
                echo 'EXISTING_INDEX_BACKED_UP=0'
              fi
+             # Keep the prior static landing page recoverable, but let PHP-FPM own the root route.
+             if [ -e '$PUBLIC_ROOT/index.html' ] || [ -L '$PUBLIC_ROOT/index.html' ]; then
+               cp -a '$PUBLIC_ROOT/index.html' '$BACKUP_ROOT/public_html/index.html'
+               mv '$PUBLIC_ROOT/index.html' '$BACKUP_ROOT/public_html/index.html.disabled'
+               echo 'EXISTING_STATIC_INDEX_BACKED_UP=1'
+             fi
              cat > '$PUBLIC_ROOT/index.php' <<'PHP_ENTRY'
           <?php
           declare(strict_types=1);
@@ -125,15 +131,13 @@ jobs:
           PHP_ENTRY
              chmod 644 '$PUBLIC_ROOT/index.php'
              test -s '$PRIVATE_APP/vendor/autoload.php'
+             test -s '$PRIVATE_APP/public/home.html'
              php -l '$PUBLIC_ROOT/index.php'
              php -l '$PRIVATE_APP/public/index.php'
+             /usr/local/php83/bin/php '$PRIVATE_APP/scripts/configure_production.php'
+             chmod 600 '$PRIVATE_APP/.env'
              echo 'PHP_FILES_TRANSFERRED=1'
+             echo 'PHP_DATABASE_BOOTSTRAP_COMPLETE=1'
              echo 'PRIVATE_APP_PATH=$PRIVATE_APP'
              echo 'PUBLIC_DOCUMENT_ROOT=$PUBLIC_ROOT'
-             echo 'ROLLBACK_BACKUP=$BACKUP_ROOT'
-             if [ -s '$PRIVATE_APP/.env' ]; then
-               echo 'PRIVATE_ENV_PRESENT=1'
-             else
-               echo 'PRIVATE_ENV_PRESENT=0'
-               echo 'NOTICE: application secrets are not configured; database-backed endpoints are not ready.'
-             fi"
+             echo 'ROLLBACK_BACKUP=$BACKUP_ROOT'"
