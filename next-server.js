@@ -3,7 +3,7 @@ import { spawn } from "node:child_process";
 import next from "next";
 
 const host = process.env.HOST || "0.0.0.0";
-const port = Number.parseInt(process.env.PORT || "1631", 10);
+const port = Number.parseInt(process.env.PORT || "1642", 10);
 const legacyPort = Number.parseInt(process.env.LEGACY_PORT || "1632", 10);
 const legacy = spawn(process.execPath, ["start.js"], {
   env: { ...process.env, PORT: String(legacyPort), HOST: "127.0.0.1" },
