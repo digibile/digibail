@@ -68,6 +68,16 @@ if ($legacyMePath->status !== 405 || ($legacyMePath->headers['Allow'] ?? '') !==
     throw new RuntimeException('The legacy current-user route must remain registered as GET.');
 }
 
+$registerPath = $router->dispatch(new Request('GET', '/api/v1/security/register'));
+if ($registerPath->status !== 405 || ($registerPath->headers['Allow'] ?? '') !== 'POST') {
+    throw new RuntimeException('The OTP-verified registration endpoint must be registered as POST.');
+}
+
+$legacyRegisterPath = $router->dispatch(new Request('GET', '/api/v1/Auth/register'));
+if ($legacyRegisterPath->status !== 405 || ($legacyRegisterPath->headers['Allow'] ?? '') !== 'POST') {
+    throw new RuntimeException('The legacy registration route must remain registered as POST.');
+}
+
 $otpRequestPath = $router->dispatch(new Request('GET', '/api/v1/security/otp/request'));
 if ($otpRequestPath->status !== 405 || ($otpRequestPath->headers['Allow'] ?? '') !== 'POST') {
     throw new RuntimeException('The OTP request endpoint must be registered as POST.');
