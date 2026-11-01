@@ -62,6 +62,6 @@ jobs:
             test -d "$ROOT"
             test -f "$ROOT/ops/archive-legacy-before-php.sh"
             bash "$ROOT/ops/archive-legacy-before-php.sh" "$ROOT"
-            test -d /home/digibail/backups/digebail
-            find /home/digibail/backups/digebail -maxdepth 1 -type f -name 'legacy-source-*.tar.gz' -printf '%f %s bytes\\n' | sort | tail -n 3
+            test -d "$ROOT/.legacy-backups"
+            find "$ROOT/.legacy-backups" -maxdepth 1 -type f -name 'legacy-source-*.tar.gz' -printf '%f %s bytes\\n' | sort | tail -n 3
             echo "LEGACY_SOURCE_ARCHIVE=VERIFIED"
