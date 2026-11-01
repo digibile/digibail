@@ -1,0 +1,35 @@
+@import url("./tokens.css");
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  direction: rtl;
+  text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  color: var(--db-color-text);
+  background: var(--db-color-background);
+  font-family: var(--db-font-family);
+  line-height: 1.6;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+[hidden] {
+  display: none !important;
+}
