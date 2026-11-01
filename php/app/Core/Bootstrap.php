@@ -11,6 +11,7 @@ use App\Core\Http\Response;
 use App\Core\Routing\Router;
 use App\Core\Tenancy\TenantAdminController;
 use App\Core\Loans\LoanProductController;
+use App\Core\Loans\VamCityLoanRequestController;
 use App\Security\SecurityController;
 
 final class Bootstrap
@@ -22,7 +23,8 @@ final class Bootstrap
         $security = null;
         $tenant = null;
         $tenantAdmin = null;
-        $cards = null;\n        $vamCityLoanRequests = null;
+        $cards = null;
+        $vamCityLoanRequests = null;
 
         $securityController = static function () use (&$security): SecurityController {
             return $security ??= new SecurityController();
