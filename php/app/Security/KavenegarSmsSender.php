@@ -29,6 +29,8 @@ final class KavenegarSmsSender
                 'receptor' => $phone,
                 'message' => $brand . ': کد تأیید شما ' . $code . ' است. این کد را در اختیار دیگران قرار ندهید.',
             ];
+            $sender = trim((string) getenv('KAVENEGAR_SENDER'));
+            if ($sender !== '') $fields['sender'] = $sender;
         }
 
         $context = stream_context_create([
