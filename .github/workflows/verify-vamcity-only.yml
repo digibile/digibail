@@ -115,10 +115,12 @@ jobs:
             echo '=== VAMCITY MIGRATION CHECKPOINTS ==='
             mysql_cmd -e "SELECT status,COUNT(*) AS tables_count,SUM(expected_rows) AS expected_rows,SUM(imported_rows) AS imported_rows FROM $DB.__vamcity_migration_state WHERE source_database='$SOURCE' GROUP BY status ORDER BY status;" || true
             echo '=== VAMCITY TARGET SCHEMA COUNTS ==='
-            mysql_cmd -e "SELECT COUNT(DISTINCT TABLE_NAME) AS tables_count,COUNT(*) AS columns_count FROM information_schema.COLUMNS WHERE TABLE_SCHEMA='$DB' AND TABLE_NAME IN (SELECT source_table FROM $DB.__vamcity_migration_state WHERE source_database='$SOURCE');"
+            mysql_cmd -e "SELECT COUNT(DISTINCT CASE WHEN source_schema='dbo' THEN source_table ELSE CONCAT(source_schema,'__',source_table) END) AS mapped_vamcity_tables FROM $DB.__vamcity_migration_state WHERE source_database='$SOURCE';"
 
             unset MYSQL_PASS SA_PASS
-            if [ "$source_tables" -ne 88 ] || [ "$matched_tables" -ne "$source_tables" ] || [ "$mismatched_tables" -ne 0 ]; then
+            mapped_tables="$(mysql_cmd -e "SELECT COUNT(DISTINCT CASE WHEN source_schema='dbo' THEN source_table ELSE CONCAT(source_schema,'__',source_table) END) FROM $DB.__vamcity_migration_state WHERE source_database='$SOURCE';")"
+            echo "VAMCITY_MAPPED_TARGET_TABLES=$mapped_tables"
+            if [ "$source_tables" -ne 88 ] || [ "$matched_tables" -ne "$source_tables" ] || [ "$mismatched_tables" -ne 0 ] || [ "$mapped_tables" -ne 88 ]; then
               echo 'VAMCITY_VERIFICATION=FAILED'
               exit 40
             fi
