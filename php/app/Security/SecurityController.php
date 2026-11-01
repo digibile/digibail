@@ -16,7 +16,7 @@ final class SecurityController
     private PDO $db;
     private SecurityStore $store;
     private LegacyIdentityRepository $identities;
-    private JwtService $jwt;
+    private ?JwtService $jwt = null;
 
     public function __construct()
     {
@@ -25,7 +25,6 @@ final class SecurityController
         $captchaPepper = (string) getenv('CAPTCHA_PEPPER');
         $this->store = new SecurityStore($this->db, $rateLimitPepper, $captchaPepper);
         $this->identities = new LegacyIdentityRepository($this->db);
-        $this->jwt = new JwtService((string) getenv('JWT_SECRET'), 'digibail');
     }
 
     public function captcha(Request $request): Response
@@ -82,7 +81,7 @@ final class SecurityController
         ];
 
         try {
-            $token = $this->jwt->issue($claims, 28800);
+            $token = $this->jwt()->issue($claims, 28800);
         } catch (Throwable $exception) {
             error_log('JWT issue failed: ' . $exception->getMessage());
             return Response::json(['message' => 'تنظیمات امنیتی ورود کامل نیست.'], 503);
@@ -120,7 +119,7 @@ final class SecurityController
             $token = $this->cookieToken($request);
         }
 
-        $claims = $this->jwt->verify($token);
+        $claims = $this->jwt()->verify($token);
         if ($claims === null || !isset($claims['sub'])) {
             return Response::json(['message' => 'وارد حساب خود شوید.'], 401);
         }
@@ -142,6 +141,11 @@ final class SecurityController
                 'passwordResetRequired' => false,
             ],
         ]);
+    }
+
+    private function jwt(): JwtService
+    {
+        return $this->jwt ??= new JwtService((string) getenv('JWT_SECRET'), 'digibail');
     }
 
     private function clientIp(Request $request): string
