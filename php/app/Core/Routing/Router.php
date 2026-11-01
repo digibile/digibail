@@ -9,7 +9,7 @@ use App\Core\Http\Response;
 
 final class Router
 {
-    /** @var array<string, array<string, callable(Request): Response>> */
+    /** @var array<string, list<array{regex: string, names: list<string>, handler: callable(Request): Response, path: string}>> */
     private array $routes = [];
 
     /** @param callable(Request): Response $handler */
@@ -45,23 +45,66 @@ final class Router
     /** @param callable(Request): Response $handler */
     private function add(string $method, string $path, callable $handler): void
     {
-        $this->routes[$method][$this->normalizePath($path)] = $handler;
+        $normalized = $this->normalizePath($path);
+        $names = [];
+        $segments = explode('/', trim($normalized, '/'));
+        $compiled = [];
+
+        foreach ($segments as $segment) {
+            if (preg_match('/^\{([A-Za-z][A-Za-z0-9_]*)\}$/D', $segment, $match) === 1) {
+                $names[] = $match[1];
+                $compiled[] = '(?P<' . $match[1] . '>[^/]+)';
+            } else {
+                $compiled[] = preg_quote($segment, '~');
+            }
+        }
+
+        $regex = $normalized === '/'
+            ? '~^/$~D'
+            : '~^/' . implode('/', $compiled) . '/?$~D';
+
+        $this->routes[$method][] = [
+            'regex' => $regex,
+            'names' => $names,
+            'handler' => $handler,
+            'path' => $normalized,
+        ];
     }
 
     public function dispatch(Request $request): Response
     {
         $method = strtoupper($request->method);
         $path = $this->normalizePath($request->path);
-        $handler = $this->routes[$method][$path] ?? null;
 
-        if ($handler !== null) {
-            return $handler($request);
+        foreach ($this->routes[$method] ?? [] as $route) {
+            $matches = [];
+            if (preg_match($route['regex'], $path, $matches) === 1) {
+                $params = [];
+                foreach ($route['names'] as $name) {
+                    $params[$name] = rawurldecode((string) ($matches[$name] ?? ''));
+                }
+
+                $matchedRequest = new Request(
+                    $request->method,
+                    $request->path,
+                    $request->headers,
+                    $request->query,
+                    $request->input,
+                    $request->files,
+                    $params
+                );
+
+                return ($route['handler'])($matchedRequest);
+            }
         }
 
         $allowed = [];
         foreach ($this->routes as $registeredMethod => $routes) {
-            if (isset($routes[$path])) {
-                $allowed[] = $registeredMethod;
+            foreach ($routes as $route) {
+                if (preg_match($route['regex'], $path) === 1) {
+                    $allowed[] = $registeredMethod;
+                    break;
+                }
             }
         }
 
