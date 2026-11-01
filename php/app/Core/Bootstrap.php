@@ -19,6 +19,7 @@ final class Bootstrap
         $health = new HealthController();
         $security = null;
         $tenant = null;
+        $tenantAdmin = null;
 
         $securityController = static function () use (&$security): SecurityController {
             return $security ??= new SecurityController();
@@ -26,11 +27,20 @@ final class Bootstrap
         $loanProducts = static function () use (&$tenant): LoanProductController {
             return $tenant ??= new LoanProductController();
         };
+        $tenantAdminController = static function () use (&$tenantAdmin): TenantAdminController {
+            return $tenantAdmin ??= new TenantAdminController();
+        };
 
         $router->get('/health/live', [$health, 'live']);
         $router->get('/health/ready', [$health, 'ready']);
 
         $router->get('/api/v1/tenant/config', static fn (Request $request): Response => $loanProducts()->tenantConfig($request));
+
+        $router->get('/api/v1/admin/tenants', static fn (Request $request): Response => $tenantAdminController()->list($request));
+        $router->post('/api/v1/admin/tenants', static fn (Request $request): Response => $tenantAdminController()->create($request));
+        $router->put('/api/v1/admin/tenants/{id:uuid}', static fn (Request $request): Response => $tenantAdminController()->update($request));
+        $router->post('/api/v1/admin/tenants/{id:uuid}/domains', static fn (Request $request): Response => $tenantAdminController()->addDomain($request));
+        $router->delete('/api/v1/admin/tenants/{id:uuid}/domains/{domainId:uuid}', static fn (Request $request): Response => $tenantAdminController()->deleteDomain($request));
         $router->get('/api/v1/loan-products', static fn (Request $request): Response => $loanProducts()->publicList($request));
         $router->get('/api/v1/loan-products/{slug}', static fn (Request $request): Response => $loanProducts()->publicOne($request));
 
