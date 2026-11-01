@@ -1,0 +1,60 @@
+name: Inspect DigiBail PHP production target
+
+on:
+  push:
+    branches:
+      - migration/php83-full-rebuild
+    paths:
+      - '.github/workflows/inspect-php-target.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: digibail-php-target-inspection
+  cancel-in-progress: false
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Inspect PHP runtime and existing MariaDB target without exposing credentials or changing data
+        uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          command_timeout: 5m
+          script: |
+            set -eu
+            ROOT="/home/digibail/domains/digebail.ir"
+            echo "=== PHP RUNTIME ==="
+            /usr/local/php83/bin/php -v | head -n 1
+            echo "PHP_FPM83=$(systemctl is-active php-fpm83 2>/dev/null || true)"
+            echo "PHP_ENV_PRESENT=$(test -s "$ROOT/php_app/.env" && echo 1 || echo 0)"
+            echo "PHP_PUBLIC_ENTRY=$(test -s "$ROOT/public_html/index.php" && echo 1 || echo 0)"
+            echo "=== MYSQL HOST SERVICES ==="
+            echo "MARIADB_SERVICE=$(systemctl is-active mariadb 2>/dev/null || true)"
+            echo "MYSQL_SERVICE=$(systemctl is-active mysql 2>/dev/null || true)"
+            echo "MYSQL_SOCKET=$(test -S /var/lib/mysql/mysql.sock && echo present || echo absent)"
+            echo "=== DATABASE CONTAINERS ==="
+            if sudo -n docker info >/dev/null 2>&1; then D='sudo -n docker'; elif docker info >/dev/null 2>&1; then D='docker'; else D=''; fi
+            if [ -n "$D" ]; then
+              $D ps --format '{{.Names}}|{{.Image}}|{{.Status}}' | grep -Ei 'maria|mysql|percona' || true
+            fi
+            echo "=== DIRECTADMIN MYSQL CONFIG METADATA ==="
+            for f in /usr/local/directadmin/conf/mysql.conf /usr/local/directadmin/conf/mysql.conf.d; do
+              if [ -f "$f" ]; then
+                echo "CONFIG_FILE_PRESENT=$f"
+                sed -n 's/^[[:space:]]*\([A-Za-z_][A-Za-z0-9_]*\)[[:space:]]*=.*/CONFIG_KEY=\1/p' "$f"
+                stat -c 'CONFIG_OWNER=%U:%G CONFIG_MODE=%a' "$f"
+              fi
+            done
+            echo "=== TARGET DATABASE PRESENCE (NO ROW DATA) ==="
+            if command -v mysql >/dev/null 2>&1 && [ -S /var/lib/mysql/mysql.sock ]; then
+              mysql --protocol=socket -NBe "SELECT SCHEMA_NAME FROM information_schema.SCHEMATA WHERE SCHEMA_NAME='digibail_vamcitydigibilepay'" 2>/dev/null || true
+            else
+              echo "HOST_MYSQL_SOCKET_UNAVAILABLE=1"
+            fi
+            echo "PHP_TARGET_INSPECTION_COMPLETE=1"
