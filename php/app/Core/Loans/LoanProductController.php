@@ -201,10 +201,21 @@ final class LoanProductController
             ],
         ];
 
-        foreach ($defaults as $default) {
-            $input = $this->cleanInput($default);
-            if ($input instanceof Response) return $input;
-            $this->products->create($tenant['id'], $input);
+        $this->db->beginTransaction();
+        try {
+            foreach ($defaults as $default) {
+                $input = $this->cleanInput($default);
+                if ($input instanceof Response) {
+                    $this->db->rollBack();
+                    return $input;
+                }
+                $this->products->create($tenant['id'], $input);
+            }
+            $this->db->commit();
+        } catch (Throwable $exception) {
+            if ($this->db->inTransaction()) $this->db->rollBack();
+            error_log('Loan product seed failed: ' . $exception->getMessage());
+            return Response::json(['message' => 'ایجاد طرح‌های پیش‌فرض انجام نشد.'], 503);
         }
 
         return Response::json(['ok' => true, 'created' => count($defaults)]);
