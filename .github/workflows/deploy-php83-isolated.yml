@@ -1,6 +1,12 @@
 name: Deploy DigiBail PHP 8.3 (isolated)
 
 on:
+  push:
+    branches:
+      - migration/php83-full-rebuild
+    paths:
+      - 'php/**'
+      - '.github/workflows/deploy-php83-isolated.yml'
   workflow_dispatch:
 
 permissions:
