@@ -123,7 +123,8 @@ final class SecurityController
     public function requestOtp(Request $request): Response
     {
         $phone = self::normalizeDigits(trim((string) ($request->input['phone'] ?? '')));
-        $purpose = ($request->input['purpose'] ?? 'login') === 'register' ? 'register' : 'login';
+        $requestedPurpose = (string) ($request->input['purpose'] ?? 'login');
+        $purpose = in_array($requestedPurpose, ['login', 'register', 'password_reset'], true) ? $requestedPurpose : 'login';
 
         if (preg_match('/^09\\d{9}$/D', $phone) !== 1) {
             return Response::json(['message' => 'شماره موبایل معتبر نیست.'], 400);
@@ -146,6 +147,14 @@ final class SecurityController
         }
         if ($purpose === 'register' && $account !== null) {
             return Response::json(['message' => 'این شماره قبلاً ثبت شده است.'], 409);
+        }
+        if ($purpose === 'password_reset' && $account === null) {
+            return Response::json([
+                'ok' => true,
+                'message' => 'اگر شماره به حساب فعال متصل باشد، کد بازیابی ارسال می‌شود.',
+                'expiresIn' => 120,
+                'resendIn' => 60,
+            ]);
         }
 
         $status = $this->store->otpStatus($phone, $purpose);
@@ -180,7 +189,8 @@ final class SecurityController
             return Response::json(['message' => 'شماره موبایل معتبر نیست.'], 400);
         }
 
-        $purpose = ($request->query['purpose'] ?? 'login') === 'register' ? 'register' : 'login';
+        $requestedPurpose = (string) ($request->query['purpose'] ?? 'login');
+        $purpose = in_array($requestedPurpose, ['login', 'register', 'password_reset'], true) ? $requestedPurpose : 'login';
         return Response::json($this->store->otpStatus($phone, $purpose));
     }
 
@@ -188,7 +198,8 @@ final class SecurityController
     {
         $phone = self::normalizeDigits(trim((string) ($request->input['phone'] ?? '')));
         $code = self::normalizeDigits(trim((string) ($request->input['code'] ?? '')));
-        $purpose = ($request->input['purpose'] ?? 'login') === 'register' ? 'register' : 'login';
+        $requestedPurpose = (string) ($request->input['purpose'] ?? 'login');
+        $purpose = in_array($requestedPurpose, ['login', 'register', 'password_reset'], true) ? $requestedPurpose : 'login';
 
         if (preg_match('/^09\\d{9}$/D', $phone) !== 1 || preg_match('/^\\d{6}$/D', $code) !== 1) {
             return Response::json(['message' => 'شماره یا کد تأیید معتبر نیست.'], 400);
@@ -198,9 +209,9 @@ final class SecurityController
             return Response::json(['ok' => false, 'message' => 'کد تأیید نادرست، منقضی یا مصرف‌شده است.'], 400);
         }
 
-        if ($purpose === 'register') {
+        if (in_array($purpose, ['register', 'password_reset'], true)) {
             $ticket = $this->jwt->issue([
-                'purpose' => 'register',
+                'purpose' => $purpose,
                 'phone' => $phone,
             ], 600);
 
@@ -213,6 +224,45 @@ final class SecurityController
         }
 
         return $this->authenticatedResponse($user);
+    }
+
+    public function confirmPasswordReset(Request $request): Response
+    {
+        $ticket = (string) ($request->input['ticket'] ?? '');
+        $password = (string) ($request->input['password'] ?? '');
+        if (strlen($password) < 10 || strlen($password) > 128) {
+            return Response::json(['message' => 'رمز جدید باید بین ۱۰ تا ۱۲۸ نویسه باشد.'], 400);
+        }
+
+        $claims = $this->jwt->verify($ticket);
+        if ($claims === null || ($claims['purpose'] ?? null) !== 'password_reset' || !isset($claims['phone'])) {
+            return Response::json(['message' => 'مجوز بازیابی منقضی یا نامعتبر است.'], 400);
+        }
+
+        $user = $this->identities->findActiveByPhone((string) $claims['phone']);
+        if ($user === null) {
+            return Response::json(['message' => 'بازیابی برای این حساب ممکن نیست.'], 400);
+        }
+
+        $statement = $this->db->prepare(
+            'UPDATE AspNetUsers
+             SET PasswordHash = :password_hash,
+                 SecurityStamp = :security_stamp,
+                 AccessFailedCount = 0,
+                 LockoutEnd = NULL
+             WHERE Id = :id AND IsActive = 1'
+        );
+        $statement->execute([
+            'password_hash' => PasswordVerifier::hashForNewPassword($password),
+            'security_stamp' => bin2hex(random_bytes(24)),
+            'id' => $user['id'],
+        ]);
+
+        if ($statement->rowCount() !== 1) {
+            return Response::json(['message' => 'تغییر رمز انجام نشد. دوباره تلاش کنید.'], 409);
+        }
+
+        return Response::json(['ok' => true, 'message' => 'رمز عبور با موفقیت تغییر کرد.']);
     }
 
     private function authenticatedResponse(array $user): Response
