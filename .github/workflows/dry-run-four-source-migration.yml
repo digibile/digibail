@@ -1,4 +1,4 @@
-name: Read-only dry run for four legacy SQL Server sources
+name: Read-only dry run for VamCity only
 
 on:
   workflow_dispatch:
@@ -7,6 +7,7 @@ on:
       - migration/php83-full-rebuild
     paths:
       - .github/workflows/dry-run-four-source-migration.yml
+      - database/migration/migrate.php
 
 permissions:
   contents: read
@@ -40,4 +41,4 @@ jobs:
             set -eu
             php -l /tmp/digebail-migrate-check/migrate.php
             php /tmp/digebail-migrate-check/migrate.php --dry-run
-            echo FOUR_SOURCE_DRY_RUN_FINISHED_WITHOUT_TARGET_WRITES=1
+            echo VAMCITY_ONLY_DRY_RUN_FINISHED_WITHOUT_TARGET_WRITES=1
