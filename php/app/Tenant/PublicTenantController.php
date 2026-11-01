@@ -30,6 +30,7 @@ final class PublicTenantController
                 'data' => [
                     'id' => $tenant['Id'],
                     'name' => $tenant['Name'],
+                    'slug' => $tenant['Slug'] ?? 'default',
                     'brand' => [
                         'logoText' => (string) ($brand['logoText'] ?? mb_substr((string) $tenant['Name'], 0, 1, 'UTF-8')),
                         'primary' => (string) ($brand['primary'] ?? '#4a2a86'),
@@ -197,7 +198,7 @@ final class PublicTenantController
             'minAmount' => (float) $row['MinAmount'],
             'maxAmount' => (float) $row['MaxAmount'],
             'intervalMonths' => $interval,
-            'intervalDays' => $interval,
+            'intervalDays' => (int) $row['IntervalDays'],
             'tiers' => $this->decodeValue($row['TiersJson']),
             'conditions' => $this->decodeValue($row['ConditionsJson']),
             'documents' => $this->decodeValue($row['DocumentsJson']),
