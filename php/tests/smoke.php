@@ -99,6 +99,11 @@ if ($resetPath->status !== 405 || ($resetPath->headers['Allow'] ?? '') !== 'POST
     throw new RuntimeException('The password reset confirmation endpoint must be registered as POST.');
 }
 
+$resetRequestPath = $router->dispatch(new Request('GET', '/api/v1/security/password-reset/request'));
+if ($resetRequestPath->status !== 405 || ($resetRequestPath->headers['Allow'] ?? '') !== 'POST') {
+    throw new RuntimeException('The password reset request endpoint must be registered as POST.');
+}
+
 $wrongMethod = $methodRouter->dispatch(new Request('GET', '/resource'));
 if ($wrongMethod->status !== 405 || ($wrongMethod->headers['Allow'] ?? '') !== 'POST') {
     throw new RuntimeException('Known paths with unsupported methods must return HTTP 405 and Allow.');
