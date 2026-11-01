@@ -64,6 +64,7 @@
 | POST | `/api/v1/admin/ai/story/audio` | در انتظار پیاده‌سازی |
 | POST | `/api/v1/admin/ai/story/image` | در انتظار پیاده‌سازی |
 | GET | `/api/v1/admin/loan-requests` | پیاده‌سازی اولیه PHP؛ خواندن صفحه‌بندی‌شده از جداول اصلی VamCity با کنترل نقش مدیر؛ عملیات تغییر وضعیت و گردش‌کار هنوز باقی است |
+| GET | `/api/v1/admin/loan-requests/{id}` | پیاده‌سازی اولیه PHP؛ جزئیات درخواست و تاریخچه وضعیت از جداول اصلی VamCity؛ یادداشت مستقل و تغییر وضعیت هنوز باقی است |
 | GET | `/api/v1/admin/summary` | در انتظار پیاده‌سازی |
 | GET | `/api/v1/admin/users` | در انتظار پیاده‌سازی |
 | GET | `/api/v1/admin/roles` | در انتظار پیاده‌سازی |
