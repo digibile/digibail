@@ -63,15 +63,15 @@ final class LegacyIdentityRepository
         ]);
         $roleRows = $roleQuery->fetchAll();
         if (count($roleRows) !== 1) {
-            throw new \\RuntimeException('Configured customer role is missing or ambiguous in AspNetRoles.');
+            throw new \RuntimeException('Configured customer role is missing or ambiguous in AspNetRoles.');
         }
 
-        $parts = preg_split('/\\s+/u', trim($fullName), 2) ?: [];
+        $parts = preg_split('/\s+/u', trim($fullName), 2) ?: [];
         $firstName = $parts[0] ?? '';
         $lastName = $parts[1] ?? '';
-        $now = new \\DateTimeImmutable('now', new \\DateTimeZone('UTC'));
+        $now = new \DateTimeImmutable('now', new \DateTimeZone('UTC'));
         $date = $now->format('Y-m-d H:i:s.u');
-        $rawDate = $now->format('Y-m-d\\TH:i:s.u\\Z');
+        $rawDate = $now->format('Y-m-d\TH:i:s.u\Z');
         $sentinel = '0001-01-01T00:00:00.0000000';
         $securityStamp = bin2hex(random_bytes(24));
         $concurrencyStamp = bin2hex(random_bytes(16));
@@ -116,7 +116,7 @@ final class LegacyIdentityRepository
                 'raw_last_login_date' => $sentinel,
                 'mobile' => $phone,
                 'national_code' => $nationalCode,
-                'phone' => $phone,
+                'phone' => substr($phone, 1),
             ]);
 
             $userId = (string) $this->db->lastInsertId();
@@ -131,7 +131,7 @@ final class LegacyIdentityRepository
 
             $this->db->commit();
             return $this->findActiveById($userId);
-        } catch (\\Throwable $exception) {
+        } catch (\Throwable $exception) {
             if ($this->db->inTransaction()) {
                 $this->db->rollBack();
             }
