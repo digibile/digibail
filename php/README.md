@@ -21,6 +21,7 @@ This directory is the isolated PHP implementation track. The existing Node.js, N
 - New bcrypt cost-12 hash generation for controlled legacy hash upgrade after successful login.
 - Primary MariaDB account lookup against `AspNetUsers` and role resolution through `AspNetUserRoles` / `AspNetRoles`. Inactive, locked and ambiguous identities fail closed.
 - Customer registration writes to the existing `AspNetUsers` table and assigns the configured customer role through `AspNetUserRoles`. It does not create a parallel user table.
+- New PHP registrations receive an explicit GUID in `PhpIdentityLinks`, bridging the legacy BIGINT Identity key to the GUID-based core domain without changing either identifier. Existing accounts are not auto-mapped.
 - HS256 JWT issue/verification compatible with the current API contract (issuer `digibail`, subject, role claims, phone and 8-hour access-token lifetime).
 - Database-backed, one-use CAPTCHA challenges, hashed OTP challenges, OTP expiry/resend/attempt limits, one-time registration/reset tickets and persistent rate-limit buckets.
 - Password login, OTP login, customer registration, password reset and current-user endpoints at canonical `/api/v1/security/*` paths, with legacy aliases under `/api/v1/Auth/*`.
@@ -40,6 +41,8 @@ This directory is the isolated PHP implementation track. The existing Node.js, N
 
 - Additive security DDL: `database/mysql/migrations/20261101_php_security_support.sql`.
 - Additive tenancy/loan-product DDL: `database/mysql/migrations/20261101_php_tenancy_loan_products.sql`.
+- Additive legacy-to-core identity bridge DDL: `database/mysql/migrations/20261101_php_identity_links.sql`.
+- Strict identity-map importer: `php/scripts/import_identity_links.php`, which requires an externally reconciled CSV and verifies phone plus national-code equality before inserting any mapping.
 - Existing SQL Server-derived identity/business tables are not modified by these migrations.
 - CI tests cover password formats, JWT signatures/expiry/role claims, HTTP routing, route parameters and PHP syntax across PHP 8.3, 8.4 and 8.5.
 
@@ -50,6 +53,7 @@ Before enabling PHP security, tenant or loan-product routes on MariaDB, apply bo
 ```sql
 database/mysql/migrations/20261101_php_security_support.sql
 database/mysql/migrations/20261101_php_tenancy_loan_products.sql
+database/mysql/migrations/20261101_php_identity_links.sql
 ```
 
 Then configure the following in the server's private environment file:
@@ -65,12 +69,14 @@ Do not put real secrets in Git. The PHP registration adapter deliberately fails 
 ## Important boundaries
 
 - Authentication currently reads the primary MariaDB identity schema only. It does not yet reconcile BlueVam or transfer-database identities, and no claim is made that these populations are duplicate-free or fully merged.
+- The legacy `AspNetUsers.Id` is BIGINT while the core C# loan/card/document entities use GUID user IDs. This is a real cross-database identity boundary, not a cast. Existing users must be linked to their original GUIDs using a reconciled export from the source PostgreSQL database. The importer refuses fuzzy matches and rolls back the entire CSV on any mismatch.
 - CI does not prove that the production database contains the required customer role, that Kavenegar credentials work, or that every existing account can authenticate. Those require isolated database integration tests and controlled acceptance checks.
 - Role links are preserved, but full claims, resource-level policies, tenant scoping and authorization parity across every old controller are not complete.
 - New account passwords use bcrypt cost 12. Before running a mixed PHP/.NET environment, verify that every still-active .NET authentication component has its BCrypt verifier dependency installed and tested.
 - Gender is initialized to the schema's neutral zero value because the registration form does not collect it. This must be confirmed against the production domain's enum semantics before production rollout.
 - The PHP `LoanProducts` table is a new additive target table. Existing PostgreSQL `loan_products` records and legacy `legacy_source_data` loan definitions have not yet been reconciled/imported into it. The old import endpoint is therefore not advertised as complete.
 - Tenant host resolution and default-tenant bootstrap are implemented; the full tenant/domain administration API and tenant migration from the existing DigitalPay database are still outstanding.
+- New customer registrations receive a new core GUID link. Existing accounts without a verified `PhpIdentityLinks` row must not use GUID-bound core services until their original GUID is reconciled and imported.
 
 ## Still outstanding
 
