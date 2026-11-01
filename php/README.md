@@ -13,7 +13,7 @@ This directory is the isolated PHP implementation track. The existing Node.js, N
 
 ## Implemented increments
 
-- HTTP bootstrap, request/response primitives, exact-path router and health/readiness routes.
+- HTTP bootstrap, request/response primitives, GET/POST/PUT/PATCH/DELETE routing, parameterized paths, JSON/form/query parsing, HTTP 404/405 handling and health/readiness routes.
 - PDO MariaDB connection factory.
 - ASP.NET Identity v3 password-hash verification for PRF values SHA-1, SHA-256 and SHA-512, plus bcrypt verification.
 - New bcrypt cost-12 hash generation for controlled hash upgrade after successful legacy login.
