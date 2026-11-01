@@ -89,6 +89,7 @@ final class SecurityController
         }
 
         $expiresAt = gmdate(DATE_ATOM, time() + 28800);
+        $secureCookie = strtolower((string) getenv('APP_ENV')) === 'production' ? '; Secure' : '';
         return new Response(
             200,
             json_encode([
@@ -106,7 +107,7 @@ final class SecurityController
             [
                 'Content-Type' => 'application/json; charset=utf-8',
                 'Cache-Control' => 'no-store',
-                'Set-Cookie' => 'db_session=' . $token . '; HttpOnly; SameSite=Lax; Path=/; Max-Age=28800',
+                'Set-Cookie' => 'db_session=' . $token . '; HttpOnly; SameSite=Lax; Path=/; Max-Age=28800' . $secureCookie,
                 'X-Content-Type-Options' => 'nosniff',
             ]
         );
