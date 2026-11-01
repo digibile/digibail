@@ -1,0 +1,85 @@
+name: Deploy DigiBail PHP 8.3 (isolated)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: digibail-php-isolated-deploy
+  cancel-in-progress: false
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout selected migration branch
+        uses: actions/checkout@v4
+        with:
+          ref: migration/php83-full-rebuild
+          fetch-depth: 1
+
+      - name: Set up PHP 8.3
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: json, mbstring, openssl, pdo, pdo_mysql, fileinfo
+          coverage: none
+          tools: composer:v2
+
+      - name: Validate Composer project
+        working-directory: php
+        run: |
+          set -euo pipefail
+          composer validate --no-check-publish
+          composer install --no-interaction --no-progress --no-dev --prefer-dist --optimize-autoloader
+          composer test
+          find . -type f -name '*.php' -print0 | xargs -0 -n1 php -l
+
+      - name: Verify deployment credentials are configured
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_FINGERPRINT: ${{ secrets.DEPLOY_FINGERPRINT }}
+        run: |
+          set -euo pipefail
+          for name in DEPLOY_HOST DEPLOY_USER DEPLOY_SSH_KEY DEPLOY_FINGERPRINT; do
+            if [[ -z "${!name}" ]]; then
+              echo "::error::Missing repository secret: $name"
+              exit 1
+            fi
+          done
+
+      - name: Configure pinned SSH host verification
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_FINGERPRINT: ${{ secrets.DEPLOY_FINGERPRINT }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "$DEPLOY_HOST" > ~/.ssh/known_hosts
+          ACTUAL="$(ssh-keygen -lf ~/.ssh/known_hosts -E sha256 | awk '{print $2}' | sort -u)"
+          EXPECTED="$(printf '%s\n' "$DEPLOY_FINGERPRINT" | tr ',' '\n' | sort -u)"
+          if ! grep -Fxq "$ACTUAL" <(printf '%s\n' "$EXPECTED") && [[ "$ACTUAL" != "$EXPECTED" ]]; then
+            echo "::error::SSH host fingerprint mismatch. Deployment stopped."
+            exit 1
+          fi
+
+      - name: Transfer only the PHP application (preserve server secrets)
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/deploy_key "$DEPLOY_USER@$DEPLOY_HOST" \
+            'mkdir -p /home/digibail/domains/digibail.ir/php'
+          rsync -az --no-owner --no-group \
+            --exclude='.env' --exclude='.git/' \
+            php/ "$DEPLOY_USER@$DEPLOY_HOST:/home/digibail/domains/digibail.ir/php/"
+          ssh -i ~/.ssh/deploy_key "$DEPLOY_USER@$DEPLOY_HOST" \
+            'test -s /home/digibail/domains/digibail.ir/php/public/index.php && test -s /home/digibail/domains/digibail.ir/php/vendor/autoload.php && echo PHP_FILES_TRANSFERRED=1'
