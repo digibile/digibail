@@ -30,6 +30,7 @@ final class Bootstrap
 
         $router->post('/api/v1/security/login', static fn (Request $request): Response => $securityController()->login($request));
         $router->post('/api/v1/security/register', static fn (Request $request): Response => $securityController()->register($request));
+        $router->post('/api/v1/security/register/ocr', static fn (Request $request): Response => Response::json(['message' => 'سرویس OCR تا زمان اتصال ارائه‌دهنده و تنظیم کلید محرمانه فعال نیست.'], 501));
         $router->post('/api/v1/Auth/register', static fn (Request $request): Response => $securityController()->register($request));
         $router->post('/api/v1/Auth/login', static fn (Request $request): Response => $securityController()->login($request));
 
