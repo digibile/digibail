@@ -173,6 +173,15 @@ final class SecurityStore
         }
     }
 
+    public function resetRateLimit(string $bucket): void
+    {
+        $key = hash_hmac('sha256', $bucket, $this->rateLimitPepper);
+        $statement = $this->db->prepare(
+            'DELETE FROM php_security_rate_limits WHERE bucket_hash = :bucket'
+        );
+        $statement->execute(['bucket' => $key]);
+    }
+
     public function hitRateLimit(string $bucket, int $maximum, int $windowSeconds): bool
     {
         if ($maximum < 1 || $windowSeconds < 1) {
