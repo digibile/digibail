@@ -12,12 +12,40 @@ final class Router
     /** @var array<string, array<string, callable(Request): Response>> */
     private array $routes = [];
 
-    /**
-     * @param callable(Request): Response $handler
-     */
+    /** @param callable(Request): Response $handler */
     public function get(string $path, callable $handler): void
     {
-        $this->routes['GET'][$this->normalizePath($path)] = $handler;
+        $this->add('GET', $path, $handler);
+    }
+
+    /** @param callable(Request): Response $handler */
+    public function post(string $path, callable $handler): void
+    {
+        $this->add('POST', $path, $handler);
+    }
+
+    /** @param callable(Request): Response $handler */
+    public function put(string $path, callable $handler): void
+    {
+        $this->add('PUT', $path, $handler);
+    }
+
+    /** @param callable(Request): Response $handler */
+    public function patch(string $path, callable $handler): void
+    {
+        $this->add('PATCH', $path, $handler);
+    }
+
+    /** @param callable(Request): Response $handler */
+    public function delete(string $path, callable $handler): void
+    {
+        $this->add('DELETE', $path, $handler);
+    }
+
+    /** @param callable(Request): Response $handler */
+    private function add(string $method, string $path, callable $handler): void
+    {
+        $this->routes[$method][$this->normalizePath($path)] = $handler;
     }
 
     public function dispatch(Request $request): Response
@@ -26,11 +54,32 @@ final class Router
         $path = $this->normalizePath($request->path);
         $handler = $this->routes[$method][$path] ?? null;
 
-        if ($handler === null) {
-            return Response::json(['error' => 'not_found'], 404);
+        if ($handler !== null) {
+            return $handler($request);
         }
 
-        return $handler($request);
+        $allowed = [];
+        foreach ($this->routes as $registeredMethod => $routes) {
+            if (isset($routes[$path])) {
+                $allowed[] = $registeredMethod;
+            }
+        }
+
+        if ($allowed !== []) {
+            sort($allowed);
+            return new Response(
+                405,
+                '{"error":"method_not_allowed"}',
+                [
+                    'Content-Type' => 'application/json; charset=utf-8',
+                    'Cache-Control' => 'no-store',
+                    'Allow' => implode(', ', $allowed),
+                    'X-Content-Type-Options' => 'nosniff',
+                ]
+            );
+        }
+
+        return Response::json(['error' => 'not_found'], 404);
     }
 
     private function normalizePath(string $path): string
