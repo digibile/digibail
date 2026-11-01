@@ -25,17 +25,17 @@ jobs:
         with:
           ref: migration/php83-full-rebuild
           fetch-depth: 1
-      - name: Install CLI in existing migration directory
+      - name: Copy CLI to private temporary transfer directory
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           source: database/migration/migrate.php
-          target: /home/digebail/domains/digebail.ir/database/migration/
+          target: /home/tmp/
           strip_components: 2
           overwrite: true
-      - name: Verify VamCity-only CLI scope without running migration
+      - name: Install in the authenticated DirectAdmin user's existing migration directory
         uses: appleboy/ssh-action@v1.2.2
         with:
           host: ${{ secrets.DEPLOY_HOST }}
@@ -44,14 +44,21 @@ jobs:
           command_timeout: 2m
           script: |
             set -euo pipefail
-            SCRIPT='/home/digebail/domains/digebail.ir/database/migration/migrate.php'
-            php -l "$SCRIPT"
-            count="$(grep -c "source'=>'" "$SCRIPT")"
+            SOURCE='/home/tmp/migrate.php'
+            TARGET="$HOME/domains/digebail.ir/database/migration/migrate.php"
+            DIR="$(dirname "$TARGET")"
+            test -s "$SOURCE"
+            test -d "$DIR"
+            test -w "$DIR"
+            install -m 0644 "$SOURCE" "$TARGET"
+            php -l "$TARGET"
+            count="$(grep -c "source'=>'" "$TARGET")"
             test "$count" -eq 1
-            grep -q "source'=>'vamcityc_vamcity_import_20261028'" "$SCRIPT"
-            if grep -Eq "source'=>'(Digibail|vamcityc_bluvamdb_import_20261028|vamcityc_transferDb_import_20261028)'" "$SCRIPT"; then
+            grep -q "source'=>'vamcityc_vamcity_import_20261028'" "$TARGET"
+            if grep -Eq "source'=>'(Digibail|vamcityc_bluvamdb_import_20261028|vamcityc_transferDb_import_20261028)'" "$TARGET"; then
               echo 'PRODUCTION_IMPORTER_HAS_OUT_OF_SCOPE_DATABASE=1'
               exit 42
             fi
+            rm -f "$SOURCE"
             echo 'PRODUCTION_IMPORTER_SCOPE=VAMCITY_ONLY'
             echo 'DATABASE_NOT_MODIFIED=1'
