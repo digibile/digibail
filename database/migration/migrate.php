@@ -209,12 +209,16 @@ function widenTextColumns(mysqli $db,string $table,array $columns): void {
 }
 
 function temporalRaw(array $c): bool {
-    return in_array($c['data_type'],['datetime2','datetime'],true)
+    return in_array($c['data_type'],['datetime2','datetime','date'],true)
       || ($c['data_type']==='time' && (int)$c['scale']>6);
 }
 function temporalValue($v,string $type) {
     if($v===null) return null;
     $s=(string)$v;
+    if($type==='date') {
+        if((int)substr($s,0,4)<1000) return null;
+        return substr($s,0,10);
+    }
     if($type==='datetime2'||$type==='datetime'){
         if((int)substr($s,0,4)<1000) return null;
         $s=str_replace('T',' ',$s);
@@ -261,6 +265,12 @@ function insertRows(mysqli $db,string $table,array $columns,array $rows): void {
             $n=$c['column_name']; $v=array_key_exists($n,$row)?$row[$n]:null;
             if(temporalRaw($c)){
                 $normal=temporalValue($v,$c['data_type']);
+                // MariaDB DATETIME/DATE cannot represent SQL Server's year-0001 sentinel.
+                // Keep the exact source value in the __raw_ sidecar and use the earliest
+                // supported placeholder only when the destination column is NOT NULL.
+                if($normal===null && empty($c['is_nullable'])) {
+                    $normal=$c['data_type']==='date'?'1000-01-01':($c['data_type']==='time'?'00:00:00':'1000-01-01 00:00:00');
+                }
                 $vals[]=qv($db,$normal);
                 $vals[]=qv($db,$v);
             } else {
@@ -352,7 +362,7 @@ function generatedDigibailSchema(mysqli $db,array $m,string $source): void {
             $def=qi($name).' '.$type.($nullable?' NULL':' NOT NULL').($identity?' AUTO_INCREMENT':'');
             if(!$identity) $def.=mysqlDefaultFromSqlServer($c['default_definition']??null,$db);
             $defs[]=$def;
-            if(temporalRaw($c)) $defs[]=qi(shortName('__raw_'.$name)).' VARCHAR(40)'.($nullable?' NULL':' NOT NULL');
+            if(temporalRaw($c)) $defs[]=qi(shortName('__raw_'.$name)).' VARCHAR(40) NULL';
         }
         $pk=[]; $unique=[];
         foreach(($keysBy[$key]??[]) as $k) {
@@ -371,6 +381,17 @@ function generatedDigibailSchema(mysqli $db,array $m,string $source): void {
         }
         $sql='CREATE TABLE IF NOT EXISTS '.qi($target).' ('.implode(",\n",$defs).') ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci';
         if(!$db->query($sql)) stopNow('Generated schema creation failed for '.$target.': '.$db->error);
+        // Resume-safe sidecar creation also repairs tables created by an earlier partial attempt.
+        foreach(($columnsBy[$key]??[]) as $c) if(temporalRaw($c)) {
+            $rawName=shortName('__raw_'.(string)$c['column_name']);
+            $check=$db->query("SELECT IS_NULLABLE FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name=".qv($db,$target)." AND column_name=".qv($db,$rawName));
+            if(!$check || !$check->num_rows) {
+                if(!$db->query('ALTER TABLE '.qi($target).' ADD COLUMN '.qi($rawName).' VARCHAR(40) NULL')) stopNow('Could not add temporal sidecar '.$target.'.'.$rawName.': '.$db->error);
+            } else {
+                $sidecar=$check->fetch_assoc();
+                if($sidecar['IS_NULLABLE']==='NO' && !$db->query('ALTER TABLE '.qi($target).' MODIFY COLUMN '.qi($rawName).' VARCHAR(40) NULL')) stopNow('Could not relax temporal sidecar '.$target.'.'.$rawName.': '.$db->error);
+            }
+        }
     }
     foreach($indexesBy as $key=>$items) {
         $groups=[];
