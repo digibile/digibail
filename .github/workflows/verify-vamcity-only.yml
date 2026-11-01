@@ -112,6 +112,20 @@ jobs:
             echo "VAMCITY_SOURCE_ROWS=$source_rows"
             echo "VAMCITY_TARGET_ROWS_IN_MATCHED_TABLES=$target_rows"
 
+            echo '=== VAMCITY SOURCE STRUCTURE COUNTS ==='
+            source_columns="$(run_sql -h -1 -Q "SET NOCOUNT ON; SELECT COUNT(*) FROM sys.tables t JOIN sys.columns c ON c.object_id=t.object_id WHERE t.is_ms_shipped=0;" | tr -d '\r' | xargs)"
+            source_pks="$(run_sql -h -1 -Q "SET NOCOUNT ON; SELECT COUNT(*) FROM sys.key_constraints WHERE type='PK' AND parent_object_id IN (SELECT object_id FROM sys.tables WHERE is_ms_shipped=0);" | tr -d '\r' | xargs)"
+            source_fks="$(run_sql -h -1 -Q "SET NOCOUNT ON; SELECT COUNT(*) FROM sys.foreign_keys WHERE is_ms_shipped=0;" | tr -d '\r' | xargs)"
+            echo "VAMCITY_SOURCE_COLUMNS=$source_columns"
+            echo "VAMCITY_SOURCE_PRIMARY_KEYS=$source_pks"
+            echo "VAMCITY_SOURCE_FOREIGN_KEYS=$source_fks"
+            echo '=== VAMCITY TARGET STRUCTURE COUNTS ==='
+            target_columns="$(mysql_cmd -e "SELECT COUNT(*) FROM information_schema.COLUMNS c JOIN $DB.__vamcity_migration_state s ON c.TABLE_NAME=CASE WHEN s.source_schema='dbo' THEN s.source_table ELSE CONCAT(s.source_schema,'__',s.source_table) END WHERE c.TABLE_SCHEMA='$DB' AND s.source_database='$SOURCE';")"
+            target_pks="$(mysql_cmd -e "SELECT COUNT(*) FROM information_schema.TABLE_CONSTRAINTS tc JOIN $DB.__vamcity_migration_state s ON tc.TABLE_NAME=CASE WHEN s.source_schema='dbo' THEN s.source_table ELSE CONCAT(s.source_schema,'__',s.source_table) END WHERE tc.TABLE_SCHEMA='$DB' AND tc.CONSTRAINT_TYPE='PRIMARY KEY' AND s.source_database='$SOURCE';")"
+            target_fks="$(mysql_cmd -e "SELECT COUNT(*) FROM information_schema.TABLE_CONSTRAINTS tc JOIN $DB.__vamcity_migration_state s ON tc.TABLE_NAME=CASE WHEN s.source_schema='dbo' THEN s.source_table ELSE CONCAT(s.source_schema,'__',s.source_table) END WHERE tc.TABLE_SCHEMA='$DB' AND tc.CONSTRAINT_TYPE='FOREIGN KEY' AND s.source_database='$SOURCE';")"
+            echo "VAMCITY_TARGET_COLUMNS=$target_columns"
+            echo "VAMCITY_TARGET_PRIMARY_KEYS=$target_pks"
+            echo "VAMCITY_TARGET_FOREIGN_KEYS=$target_fks"
             echo '=== VAMCITY MIGRATION CHECKPOINTS ==='
             mysql_cmd -e "SELECT status,COUNT(*) AS tables_count,SUM(expected_rows) AS expected_rows,SUM(imported_rows) AS imported_rows FROM $DB.__vamcity_migration_state WHERE source_database='$SOURCE' GROUP BY status ORDER BY status;" || true
             echo '=== VAMCITY TARGET SCHEMA COUNTS ==='
