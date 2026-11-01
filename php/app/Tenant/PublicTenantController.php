@@ -163,10 +163,30 @@ final class PublicTenantController
         return $rows[0];
     }
 
+    private static function intervalMonthsFromStored(int $value): int
+    {
+        if ($value >= 1 && $value <= 12) {
+            return $value;
+        }
+
+        $ranges = [
+            [28, 31, 1], [59, 62, 2], [89, 93, 3], [118, 124, 4],
+            [148, 155, 5], [178, 186, 6], [208, 217, 7], [238, 248, 8],
+            [268, 279, 9], [298, 310, 10], [328, 341, 11], [358, 372, 12],
+        ];
+        foreach ($ranges as [$minimum, $maximum, $months]) {
+            if ($value >= $minimum && $value <= $maximum) {
+                return $months;
+            }
+        }
+
+        return 1;
+    }
+
     /** @return array<string, mixed> */
     private function shapeProduct(array $row): array
     {
-        $interval = max(1, (int) $row['IntervalDays']);
+        $interval = self::intervalMonthsFromStored((int) $row['IntervalDays']);
         return [
             'id' => (string) $row['Slug'],
             'name' => (string) $row['Name'],
