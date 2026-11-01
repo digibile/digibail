@@ -1,0 +1,49 @@
+name: Locate VamCity production path (read only)
+
+on:
+  push:
+    branches:
+      - migration/php83-full-rebuild
+    paths:
+      - .github/workflows/locate-vamcity-production-path.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  locate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Locate the existing domain and migration files without writes
+        uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          command_timeout: 3m
+          script: |
+            set -eu
+            echo '=== LOGIN HOME ==='
+            pwd
+            getent passwd "$(id -u)" | cut -d: -f1,3,4,6,7
+            echo '=== HOME DIRECTORIES ==='
+            ls -ld /home/* 2>/dev/null || true
+            echo '=== DIRECTADMIN DOMAIN OWNERSHIP ==='
+            if [ -d /usr/local/directadmin/data/users ]; then
+              for f in /usr/local/directadmin/data/users/*/domains.list; do
+                [ -f "$f" ] || continue
+                if grep -Fxq 'digebail.ir' "$f"; then
+                  printf 'DOMAIN_OWNER=%s\n' "$(basename "$(dirname "$f")")"
+                  printf 'DOMAIN_ROOT=/home/%s/domains/digebail.ir\n' "$(basename "$(dirname "$f")")"
+                fi
+              done
+            else
+              echo 'DIRECTADMIN_USERS_PATH_MISSING=1'
+            fi
+            echo '=== LIMITED DOMAIN PATH SEARCH ==='
+            find /home -maxdepth 5 -type d \( -name 'digebail.ir' -o -name 'public_html' \) -print 2>/dev/null | head -80
+            echo '=== DOCKER CONTAINER MOUNT DESTINATIONS ==='
+            if sudo -n docker info >/dev/null 2>&1; then D='sudo -n docker'; else D='docker'; fi
+            $D inspect public_html-db-1 --format '{{range .Mounts}}{{println .Destination}}{{end}}' 2>/dev/null || true
+            echo 'READ_ONLY=1'
