@@ -74,9 +74,15 @@ final class SecurityController
 
         $roles = $user['roles'];
         $role = $roles[0] ?? 'Customer';
+        $tokenRoles = $roles;
+        // ASP.NET [Authorize(Roles="Admin")] treats SuperAdmin as an administrator too.
+        if (in_array('SuperAdmin', $roles, true) && !in_array('Admin', $tokenRoles, true)) {
+            $tokenRoles[] = 'Admin';
+        }
         $claims = [
             'sub' => $user['id'],
             'role' => $role,
+            'roles' => $tokenRoles,
             'phone' => (string) ($user['mobile'] ?? ''),
         ];
 
