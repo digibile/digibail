@@ -10,11 +10,12 @@ $service = new JwtService(str_repeat('k', 48));
 $token = $service->issue([
     'sub' => '1842',
     'role' => 'Customer',
+    'roles' => ['Customer', 'Admin'],
     'phone' => '09120000000',
 ]);
 
 $claims = $service->verify($token);
-if (($claims['sub'] ?? null) !== '1842' || ($claims['role'] ?? null) !== 'Customer') {
+if (($claims['sub'] ?? null) !== '1842' || ($claims['role'] ?? null) !== 'Customer' || ($claims['roles'][1] ?? null) !== 'Admin') {
     throw new RuntimeException('JWT claims must survive issue and verify.');
 }
 
