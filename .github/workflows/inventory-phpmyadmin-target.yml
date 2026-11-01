@@ -1,0 +1,93 @@
+name: Read-only inventory of existing phpMyAdmin target
+
+on:
+  push:
+    branches:
+      - migration/php83-full-rebuild
+    paths:
+      - .github/workflows/inventory-phpmyadmin-target.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: digebail-phpmyadmin-target-inventory
+  cancel-in-progress: false
+
+jobs:
+  inspect-existing-target:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate connection secrets
+        shell: bash
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          MYSQL_PASS: ${{ secrets.VAMCITY_MYSQL_PASSWORD }}
+        run: |
+          set -euo pipefail
+          for name in DEPLOY_HOST DEPLOY_USER DEPLOY_SSH_KEY MYSQL_PASS; do
+            if [[ -z "${!name}" ]]; then
+              echo "::error::Missing required repository secret: $name"
+              exit 1
+            fi
+          done
+
+      - name: Inspect existing MariaDB database without modifying it
+        uses: appleboy/ssh-action@v1.2.2
+        env:
+          MYSQL_PASS: ${{ secrets.VAMCITY_MYSQL_PASSWORD }}
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          envs: MYSQL_PASS
+          command_timeout: 10m
+          script: |
+            set -eu
+            DB='digibail_vamcitydigibilepay'
+            DB_USER='digibail_vamcitydigibilepay'
+            if [ -z "${MYSQL_PASS:-}" ]; then
+              echo 'TARGET_INSPECTION=BLOCKED_MISSING_PASSWORD'
+              exit 30
+            fi
+            if ! command -v mysql >/dev/null 2>&1; then
+              echo 'TARGET_INSPECTION=BLOCKED_MYSQL_CLIENT_MISSING'
+              exit 31
+            fi
+            mysql_cmd() {
+              mysql --protocol=TCP -h 127.0.0.1 -P 3306 -u "$DB_USER" --password="$MYSQL_PASS" --connect-timeout=8 --batch --raw --skip-column-names "$@"
+            }
+            if ! mysql_cmd -e 'SELECT 1' >/dev/null 2>&1; then
+              echo 'TARGET_INSPECTION=BLOCKED_CONNECTION'
+              exit 32
+            fi
+            echo '=== TARGET DATABASE IDENTITY ==='
+            mysql_cmd -e 'SELECT VERSION(), @@version_comment, @@character_set_server, @@collation_server;'
+            echo '=== TARGET DATABASE EXISTS ==='
+            EXISTS="$(mysql_cmd -e "SELECT COUNT(*) FROM information_schema.SCHEMATA WHERE SCHEMA_NAME='$DB';")"
+            if [ "$EXISTS" != '1' ]; then
+              echo "TARGET_DATABASE_MISSING=$DB"
+              exit 33
+            fi
+            echo "TARGET_DATABASE=$DB"
+            echo '=== TABLE INVENTORY (NO ROW VALUES) ==='
+            mysql_cmd -e "SELECT TABLE_NAME, ENGINE, TABLE_COLLATION, TABLE_ROWS, DATA_LENGTH, INDEX_LENGTH FROM information_schema.TABLES WHERE TABLE_SCHEMA='$DB' AND TABLE_TYPE='BASE TABLE' ORDER BY TABLE_NAME;"
+            echo '=== EXACT ROW COUNTS (NO ROW VALUES) ==='
+            mysql_cmd -e "SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA='$DB' AND TABLE_TYPE='BASE TABLE' ORDER BY TABLE_NAME;" | while IFS= read -r table; do
+              [ -n "$table" ] || continue
+              count="$(mysql_cmd -e "SELECT COUNT(*) FROM \`$DB\`.\`$table\`;")"
+              printf '%s\t%s\n' "$table" "$count"
+            done
+            echo '=== COLUMN DEFINITIONS ==='
+            mysql_cmd -e "SELECT TABLE_NAME, ORDINAL_POSITION, COLUMN_NAME, COLUMN_TYPE, IS_NULLABLE, COLUMN_DEFAULT, EXTRA, CHARACTER_SET_NAME, COLLATION_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA='$DB' ORDER BY TABLE_NAME, ORDINAL_POSITION;"
+            echo '=== PRIMARY / UNIQUE INDEXES ==='
+            mysql_cmd -e "SELECT TABLE_NAME, INDEX_NAME, NON_UNIQUE, SEQ_IN_INDEX, COLUMN_NAME FROM information_schema.STATISTICS WHERE TABLE_SCHEMA='$DB' AND (INDEX_NAME='PRIMARY' OR NON_UNIQUE=0) ORDER BY TABLE_NAME, INDEX_NAME, SEQ_IN_INDEX;"
+            echo '=== FOREIGN KEYS ==='
+            mysql_cmd -e "SELECT TABLE_NAME, COLUMN_NAME, CONSTRAINT_NAME, REFERENCED_TABLE_NAME, REFERENCED_COLUMN_NAME FROM information_schema.KEY_COLUMN_USAGE WHERE TABLE_SCHEMA='$DB' AND REFERENCED_TABLE_NAME IS NOT NULL ORDER BY TABLE_NAME, CONSTRAINT_NAME, ORDINAL_POSITION;"
+            echo '=== DATABASE TOTALS ==='
+            mysql_cmd -e "SELECT COUNT(*) AS table_count FROM information_schema.TABLES WHERE TABLE_SCHEMA='$DB' AND TABLE_TYPE='BASE TABLE'; SELECT COUNT(*) AS column_count FROM information_schema.COLUMNS WHERE TABLE_SCHEMA='$DB'; SELECT COUNT(*) AS foreign_key_column_count FROM information_schema.KEY_COLUMN_USAGE WHERE TABLE_SCHEMA='$DB' AND REFERENCED_TABLE_NAME IS NOT NULL;"
+            unset MYSQL_PASS
+            echo '=== READ ONLY INSPECTION COMPLETE; NO SCHEMA OR DATA MODIFIED ==='
