@@ -37,6 +37,10 @@ const server = http.createServer(async (req, res) => {
   const url = new URL(req.url || "/", "http://localhost");
 
   if (url.pathname.startsWith("/assets/")) {
+    if (req.method !== "GET" && req.method !== "HEAD") {
+      res.setHeader("Allow", "GET, HEAD");
+      return send(res, 405, "text/plain; charset=utf-8", "Method not allowed");
+    }
     const assetName = url.pathname.slice("/assets/".length);
     if (!/^[a-zA-Z0-9._-]+$/.test(assetName)) {
       return send(res, 400, "text/plain; charset=utf-8", "Bad request");
