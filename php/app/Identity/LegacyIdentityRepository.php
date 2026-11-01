@@ -38,6 +38,142 @@ final class LegacyIdentityRepository
     }
 
     /** @return array<string, mixed>|null */
+    public function registerCustomer(
+        string $fullName,
+        string $phone,
+        ?string $email,
+        string $nationalCode,
+        string $password,
+        string $roleName
+    ): ?array {
+        $phone = self::normalizeDigits(trim($phone));
+        if ($this->phoneExists($phone)) {
+            return null;
+        }
+
+        $normalizedRole = mb_strtoupper(trim($roleName), 'UTF-8');
+        $roleQuery = $this->db->prepare(
+            'SELECT Id FROM AspNetRoles
+             WHERE NormalizedName = :normalized_role OR UPPER(Name) = :role_name
+             ORDER BY Id ASC LIMIT 2'
+        );
+        $roleQuery->execute([
+            'normalized_role' => $normalizedRole,
+            'role_name' => $normalizedRole,
+        ]);
+        $roleRows = $roleQuery->fetchAll();
+        if (count($roleRows) !== 1) {
+            throw new \\RuntimeException('Configured customer role is missing or ambiguous in AspNetRoles.');
+        }
+
+        $parts = preg_split('/\\s+/u', trim($fullName), 2) ?: [];
+        $firstName = $parts[0] ?? '';
+        $lastName = $parts[1] ?? '';
+        $now = new \\DateTimeImmutable('now', new \\DateTimeZone('UTC'));
+        $date = $now->format('Y-m-d H:i:s.u');
+        $rawDate = $now->format('Y-m-d\\TH:i:s.u\\Z');
+        $sentinel = '0001-01-01T00:00:00.0000000';
+        $securityStamp = bin2hex(random_bytes(24));
+        $concurrencyStamp = bin2hex(random_bytes(16));
+        $hash = \\App\\Security\\PasswordVerifier::hashForNewPassword($password);
+
+        $this->db->beginTransaction();
+        try {
+            if ($this->phoneExists($phone)) {
+                $this->db->rollBack();
+                return null;
+            }
+
+            $insert = $this->db->prepare(
+                'INSERT INTO AspNetUsers (
+                    FirstName, LastName, Gender, IsActive, TotalSavedMoney, ViewCount,
+                    UserName, NormalizedUserName, Email, NormalizedEmail, EmailConfirmed,
+                    PasswordHash, SecurityStamp, ConcurrencyStamp, PhoneNumber,
+                    PhoneNumberConfirmed, TwoFactorEnabled, LockoutEnd, LockoutEnabled,
+                    AccessFailedCount, RegDate, __raw_RegDate, __raw_LastLoginDate,
+                    Mobile, NationalCode, Phone, MobileVerified, Otp, RegistrationCompleted
+                ) VALUES (
+                    :first_name, :last_name, 0, 1, 0, 0,
+                    :username, :normalized_username, :email, :normalized_email, 0,
+                    :password_hash, :security_stamp, :concurrency_stamp, :phone_number,
+                    1, 0, NULL, 1, 0, :reg_date, :raw_reg_date, :raw_last_login_date,
+                    :mobile, :national_code, :phone, 1, 0, 1
+                )'
+            );
+            $insert->execute([
+                'first_name' => $firstName,
+                'last_name' => $lastName,
+                'username' => $phone,
+                'normalized_username' => mb_strtoupper($phone, 'UTF-8'),
+                'email' => $email,
+                'normalized_email' => $email === null ? null : mb_strtoupper($email, 'UTF-8'),
+                'password_hash' => $hash,
+                'security_stamp' => $securityStamp,
+                'concurrency_stamp' => $concurrencyStamp,
+                'phone_number' => $phone,
+                'reg_date' => $date,
+                'raw_reg_date' => $rawDate,
+                'raw_last_login_date' => $sentinel,
+                'mobile' => $phone,
+                'national_code' => $nationalCode,
+                'phone' => $phone,
+            ]);
+
+            $userId = (string) $this->db->lastInsertId();
+            $assign = $this->db->prepare(
+                'INSERT INTO AspNetUserRoles (UserId, RoleId)
+                 VALUES (:user_id, :role_id)'
+            );
+            $assign->execute([
+                'user_id' => $userId,
+                'role_id' => (string) $roleRows[0]['Id'],
+            ]);
+
+            $this->db->commit();
+            return $this->findActiveById($userId);
+        } catch (\\Throwable $exception) {
+            if ($this->db->inTransaction()) {
+                $this->db->rollBack();
+            }
+            throw $exception;
+        }
+    }
+
+    private function phoneExists(string $phone): bool
+    {
+        $phone = self::normalizeDigits($phone);
+        $forms = [
+            '09' . substr($phone, 2),
+            '98' . substr($phone, 1),
+            '+98' . substr($phone, 1),
+            substr($phone, 1),
+        ];
+        $statement = $this->db->prepare(
+            'SELECT Id FROM AspNetUsers
+             WHERE UserName = :username
+                OR Mobile IN (:mobile_09, :mobile_98, :mobile_plus98, :mobile_local)
+                OR Phone IN (:phone_09, :phone_local)
+                OR PhoneNumber IN (:number_09, :number_98, :number_plus98, :number_local)
+             LIMIT 1'
+        );
+        $statement->execute([
+            'username' => $phone,
+            'mobile_09' => $forms[0],
+            'mobile_98' => $forms[1],
+            'mobile_plus98' => $forms[2],
+            'mobile_local' => $forms[3],
+            'phone_09' => $forms[0],
+            'phone_local' => $forms[3],
+            'number_09' => $forms[0],
+            'number_98' => $forms[1],
+            'number_plus98' => $forms[2],
+            'number_local' => $forms[3],
+        ]);
+
+        return $statement->fetch() !== false;
+    }
+
+    /** @return array<string, mixed>|null */
     public function findActiveByPhone(string $phone): ?array
     {
         $user = $this->findUser(self::normalizeDigits($phone));
