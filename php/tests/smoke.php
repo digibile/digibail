@@ -68,6 +68,26 @@ if ($legacyMePath->status !== 405 || ($legacyMePath->headers['Allow'] ?? '') !==
     throw new RuntimeException('The legacy current-user route must remain registered as GET.');
 }
 
+$otpRequestPath = $router->dispatch(new Request('GET', '/api/v1/security/otp/request'));
+if ($otpRequestPath->status !== 405 || ($otpRequestPath->headers['Allow'] ?? '') !== 'POST') {
+    throw new RuntimeException('The OTP request endpoint must be registered as POST.');
+}
+
+$otpStatusPath = $router->dispatch(new Request('POST', '/api/v1/security/otp/status'));
+if ($otpStatusPath->status !== 405 || ($otpStatusPath->headers['Allow'] ?? '') !== 'GET') {
+    throw new RuntimeException('The OTP status endpoint must be registered as GET.');
+}
+
+$otpVerifyPath = $router->dispatch(new Request('GET', '/api/v1/security/otp/verify'));
+if ($otpVerifyPath->status !== 405 || ($otpVerifyPath->headers['Allow'] ?? '') !== 'POST') {
+    throw new RuntimeException('The OTP verify endpoint must be registered as POST.');
+}
+
+$legacyOtpVerifyPath = $router->dispatch(new Request('GET', '/api/v1/Auth/verify-otp'));
+if ($legacyOtpVerifyPath->status !== 405 || ($legacyOtpVerifyPath->headers['Allow'] ?? '') !== 'POST') {
+    throw new RuntimeException('The legacy OTP verify route must remain registered as POST.');
+}
+
 $wrongMethod = $methodRouter->dispatch(new Request('GET', '/resource'));
 if ($wrongMethod->status !== 405 || ($wrongMethod->headers['Allow'] ?? '') !== 'POST') {
     throw new RuntimeException('Known paths with unsupported methods must return HTTP 405 and Allow.');
