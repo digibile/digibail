@@ -66,6 +66,20 @@ Then configure the following in the server's private environment file:
 
 Do not put real secrets in Git. The PHP registration adapter deliberately fails if the configured customer role is missing or ambiguous. These schema migrations have been committed but have not been applied to production by this code change.
 
+For existing accounts, first export an audited mapping from the source PostgreSQL identity table with this exact CSV header:
+
+```csv
+legacy_user_id,core_user_id,mobile,national_code
+```
+
+Then run the importer against the PHP target database:
+
+```sh
+php scripts/import_identity_links.php /secure/path/verified-identity-map.csv
+```
+
+The importer verifies the legacy row, normalized mobile and ten-digit national code, enforces unique GUIDs through the database constraints, and rolls back the complete import if any row fails. Do not manufacture GUIDs for existing users or map by name alone.
+
 ## Important boundaries
 
 - Authentication currently reads the primary MariaDB identity schema only. It does not yet reconcile BlueVam or transfer-database identities, and no claim is made that these populations are duplicate-free or fully merged.
