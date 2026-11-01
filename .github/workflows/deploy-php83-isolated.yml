@@ -168,9 +168,9 @@ jobs:
              curl -k -sS -o /tmp/digebail-home-check.html -w 'LIVE_HOME_HTTP=%{http_code}\n' https://digebail.ir/ || true
              EXPERT_HTTP="$(curl -k -sS -o /dev/null -w '%{http_code}' https://digebail.ir/expert.php)"
              LEGACY_EXPERT_HTTP="$(curl -k -sS -o /dev/null -w '%{http_code}' https://digebail.ir/expert.html)"
-             echo "LIVE_EXPERT_UNAUTH_HTTP=$EXPERT_HTTP"
-             echo "LIVE_LEGACY_EXPERT_HTTP=$LEGACY_EXPERT_HTTP"
-             if [ "$EXPERT_HTTP" != "302" ] || [ "$LEGACY_EXPERT_HTTP" != "404" ]; then
+             echo "LIVE_EXPERT_UNAUTH_HTTP=\$EXPERT_HTTP"
+             echo "LIVE_LEGACY_EXPERT_HTTP=\$LEGACY_EXPERT_HTTP"
+             if [ "\$EXPERT_HTTP" != "302" ] || [ "\$LEGACY_EXPERT_HTTP" != "404" ]; then
                echo 'ERROR: Expert workspace route protection verification failed.'
                exit 1
              fi
