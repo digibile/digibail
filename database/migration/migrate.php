@@ -362,7 +362,10 @@ function generatedDigibailSchema(mysqli $db,array $m,string $source): void {
         }
         if($pk){ksort($pk);$defs[]='PRIMARY KEY ('.implode(',',array_map('qi',array_values($pk))).')';}
         foreach($unique as $name=>$cols){ksort($cols);$defs[]='UNIQUE KEY '.qi(shortName('digibail__'.$name)).' ('.implode(',',array_map('qi',array_values($cols))).')';}
-        if($autoColumn!==null && !in_array($autoColumn,array_values($pk),true)) {
+        $primaryFirst=$pk?reset($pk):null;
+        if($autoColumn!==null && $primaryFirst!==$autoColumn) {
+            // InnoDB requires AUTO_INCREMENT to be the leftmost column of an index.
+            // SQL Server may place an identity column later in a composite primary key.
             $autoName=shortName('digibail__auto_'.$target.'_'.$autoColumn);
             $defs[]='KEY '.qi($autoName).' ('.qi($autoColumn).')';
         }
