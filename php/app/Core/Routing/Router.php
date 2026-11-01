@@ -57,7 +57,7 @@ final class Router
                 $pattern = match ($constraint) {
                     'uuid' => '[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89aAbB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}',
                     '' => '[^/]+',
-                    default => throw new \\InvalidArgumentException('Unsupported route parameter constraint: ' . $constraint),
+                    default => throw new \InvalidArgumentException('Unsupported route parameter constraint: ' . $constraint),
                 };
                 $compiled[] = '(?P<' . $match[1] . '>' . $pattern . ')';
             } else {
