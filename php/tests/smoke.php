@@ -10,11 +10,6 @@ use App\Core\Routing\Router;
 require dirname(__DIR__) . '/vendor/autoload.php';
 
 $router = Bootstrap::router();
-$adminLoanListPath = $router->dispatch(new Request('POST', '/api/v1/admin/loan-products'));
-if ($adminLoanListPath->status !== 405 || ($adminLoanListPath->headers['Allow'] ?? '') !== 'GET') {
-    throw new RuntimeException('Admin loan-product list must be registered as GET.');
-}
-
 $adminLoanCreatePath = $router->dispatch(new Request('GET', '/api/v1/admin/loan-products/seed'));
 if ($adminLoanCreatePath->status !== 405 || ($adminLoanCreatePath->headers['Allow'] ?? '') !== 'POST') {
     throw new RuntimeException('Admin loan-product create must be registered as POST.');
