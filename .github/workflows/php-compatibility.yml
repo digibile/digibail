@@ -1,0 +1,43 @@
+name: PHP compatibility
+
+on:
+  push:
+    branches:
+      - migration/php83-full-rebuild
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  php-compatibility:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['8.3', '8.4', '8.5']
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: mbstring, openssl, pdo, pdo_mysql
+          coverage: none
+
+      - name: Validate Composer configuration
+        working-directory: php
+        run: composer validate --strict
+
+      - name: Install dependencies
+        working-directory: php
+        run: composer install --no-interaction --prefer-dist
+
+      - name: Run smoke tests
+        working-directory: php
+        run: composer test
+
+      - name: Check PHP syntax
+        working-directory: php
+        run: find . -name '*.php' -print0 | xargs -0 -n1 php -l
