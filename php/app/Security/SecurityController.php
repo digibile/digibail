@@ -214,6 +214,7 @@ final class SecurityController
                 'purpose' => $purpose,
                 'phone' => $phone,
             ], 600);
+            $this->store->createOneTimeTicket($ticket, $phone, $purpose);
 
             return Response::json(['ticket' => $ticket]);
         }
@@ -261,6 +262,10 @@ final class SecurityController
         }
         if ($email !== '' && filter_var($email, FILTER_VALIDATE_EMAIL) === false) {
             return Response::json(['message' => 'نشانی ایمیل معتبر نیست.'], 400);
+        }
+
+        if (!$this->store->consumeOneTimeTicket($ticket, (string) $ticketClaims['phone'], 'register')) {
+            return Response::json(['message' => 'مجوز ثبت‌نام قبلاً استفاده شده یا منقضی است.'], 409);
         }
 
         try {
@@ -326,6 +331,10 @@ final class SecurityController
         $claims = $this->jwt()->verify($ticket);
         if ($claims === null || ($claims['purpose'] ?? null) !== 'password_reset' || !isset($claims['phone'])) {
             return Response::json(['message' => 'مجوز بازیابی منقضی یا نامعتبر است.'], 400);
+        }
+
+        if (!$this->store->consumeOneTimeTicket($ticket, (string) $claims['phone'], 'password_reset')) {
+            return Response::json(['message' => 'مجوز بازیابی قبلاً استفاده شده یا منقضی است.'], 409);
         }
 
         try {
