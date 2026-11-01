@@ -1,0 +1,80 @@
+name: Complete read-only inventory of legacy SQL Server databases
+
+on:
+  push:
+    branches:
+      - migration/php83-full-rebuild
+    paths:
+      - .github/workflows/inventory-legacy-sqlserver.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: digebail-legacy-sql-inventory
+  cancel-in-progress: false
+
+jobs:
+  inventory:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate SSH settings
+        shell: bash
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          for name in DEPLOY_HOST DEPLOY_USER DEPLOY_SSH_KEY; do
+            if [[ -z "${!name}" ]]; then
+              echo "::error::Missing repository secret: $name"
+              exit 1
+            fi
+          done
+
+      - name: Read-only schema inventory for every legacy SQL Server database
+        uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          command_timeout: 10m
+          script: |
+            set -eu
+            if sudo -n docker info >/dev/null 2>&1; then DOCKER="sudo -n docker"; elif docker info >/dev/null 2>&1; then DOCKER="docker"; else echo "DOCKER_ACCESS=UNAVAILABLE"; exit 20; fi
+            SQLC="public_html-db-1"
+            $DOCKER inspect "$SQLC" >/dev/null
+            SQLCMD=""
+            for p in /opt/mssql-tools18/bin/sqlcmd /opt/mssql-tools/bin/sqlcmd; do
+              if $DOCKER exec "$SQLC" test -x "$p" >/dev/null 2>&1; then SQLCMD="$p"; break; fi
+            done
+            SA_PASS="$($DOCKER inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$SQLC" | sed -n -E 's/^(MSSQL_SA_PASSWORD|SA_PASSWORD)=(.*)$/\2/p' | head -1)"
+            if [ -z "$SQLCMD" ] || [ -z "$SA_PASS" ]; then echo "SQL_SERVER_INSPECTION=BLOCKED"; exit 21; fi
+            run_sql() {
+              $DOCKER exec -e SQLCMDPASSWORD="$SA_PASS" "$SQLC" "$SQLCMD" -S localhost -U sa -C -b -W -w 65535 "$@"
+            }
+            echo "=== DATABASE CATALOG ==="
+            DBS="$(run_sql -h -1 -Q "SET NOCOUNT ON; SELECT name FROM sys.databases WHERE database_id > 4 AND state_desc='ONLINE' ORDER BY name" | tr -d '\r' | sed '/^[[:space:]]*$/d')"
+            printf '%s\n' "$DBS"
+            for DB in $DBS; do
+              echo "=== DATABASE: $DB | TABLE ROW COUNTS ==="
+              run_sql -d "$DB" -Q "SET NOCOUNT ON; SELECT s.name AS schema_name,t.name AS table_name,SUM(p.rows) AS row_count FROM sys.tables t JOIN sys.schemas s ON s.schema_id=t.schema_id JOIN sys.partitions p ON p.object_id=t.object_id AND p.index_id IN (0,1) WHERE t.is_ms_shipped=0 GROUP BY s.name,t.name ORDER BY s.name,t.name;" | tr -d '\r'
+              echo "=== DATABASE: $DB | ALL COLUMNS ==="
+              run_sql -d "$DB" -Q "SET NOCOUNT ON; SELECT s.name AS schema_name,t.name AS table_name,c.column_id,c.name AS column_name,TYPE_NAME(c.user_type_id) AS data_type,c.max_length,c.precision,c.scale,c.is_nullable,c.is_identity,dc.definition AS default_definition FROM sys.tables t JOIN sys.schemas s ON s.schema_id=t.schema_id JOIN sys.columns c ON c.object_id=t.object_id LEFT JOIN sys.default_constraints dc ON dc.parent_object_id=t.object_id AND dc.parent_column_id=c.column_id WHERE t.is_ms_shipped=0 ORDER BY s.name,t.name,c.column_id;" | tr -d '\r'
+              echo "=== DATABASE: $DB | PRIMARY AND UNIQUE KEYS ==="
+              run_sql -d "$DB" -Q "SET NOCOUNT ON; SELECT s.name AS schema_name,t.name AS table_name,i.name AS index_name,i.is_primary_key,i.is_unique,ic.key_ordinal,c.name AS column_name FROM sys.indexes i JOIN sys.tables t ON t.object_id=i.object_id JOIN sys.schemas s ON s.schema_id=t.schema_id JOIN sys.index_columns ic ON ic.object_id=i.object_id AND ic.index_id=i.index_id JOIN sys.columns c ON c.object_id=t.object_id AND c.column_id=ic.column_id WHERE t.is_ms_shipped=0 AND (i.is_primary_key=1 OR i.is_unique=1) AND ic.is_included_column=0 ORDER BY s.name,t.name,i.name,ic.key_ordinal;" | tr -d '\r'
+              echo "=== DATABASE: $DB | FOREIGN KEYS ==="
+              run_sql -d "$DB" -Q "SET NOCOUNT ON; SELECT OBJECT_SCHEMA_NAME(fk.parent_object_id)+'.'+OBJECT_NAME(fk.parent_object_id) AS source_table,pc.name AS source_column,OBJECT_SCHEMA_NAME(fk.referenced_object_id)+'.'+OBJECT_NAME(fk.referenced_object_id) AS target_table,rc.name AS target_column,fk.name AS constraint_name,fk.delete_referential_action_desc,fk.update_referential_action_desc,fk.is_disabled FROM sys.foreign_keys fk JOIN sys.foreign_key_columns fkc ON fkc.constraint_object_id=fk.object_id JOIN sys.columns pc ON pc.object_id=fkc.parent_object_id AND pc.column_id=fkc.parent_column_id JOIN sys.columns rc ON rc.object_id=fkc.referenced_object_id AND rc.column_id=fkc.referenced_column_id ORDER BY source_table,constraint_name,fkc.constraint_column_id;" | tr -d '\r'
+              echo "=== DATABASE: $DB | CHECK CONSTRAINTS ==="
+              run_sql -d "$DB" -Q "SET NOCOUNT ON; SELECT s.name AS schema_name,t.name AS table_name,cc.name AS constraint_name,cc.definition,cc.is_disabled FROM sys.check_constraints cc JOIN sys.tables t ON t.object_id=cc.parent_object_id JOIN sys.schemas s ON s.schema_id=t.schema_id ORDER BY s.name,t.name,cc.name;" | tr -d '\r'
+              echo "=== DATABASE: $DB | TOTALS ==="
+              run_sql -d "$DB" -Q "SET NOCOUNT ON; SELECT (SELECT COUNT(*) FROM sys.tables WHERE is_ms_shipped=0) AS table_count,(SELECT COUNT(*) FROM sys.columns c JOIN sys.tables t ON t.object_id=c.object_id WHERE t.is_ms_shipped=0) AS column_count,(SELECT COUNT(*) FROM sys.foreign_keys) AS foreign_key_count,(SELECT COUNT(*) FROM sys.check_constraints) AS check_constraint_count,(SELECT COUNT(*) FROM sys.indexes i JOIN sys.tables t ON t.object_id=i.object_id WHERE t.is_ms_shipped=0 AND i.is_primary_key=1) AS primary_key_count;" | tr -d '\r'
+            done
+            echo "=== LEGACY DIGIBAIL ROLE COUNTS ==="
+            run_sql -d Digibail -Q "SET NOCOUNT ON; SELECT r.Name AS role_name,COUNT(*) AS account_count FROM dbo.AspNetUserRoles ur JOIN dbo.AspNetRoles r ON r.Id=ur.RoleId GROUP BY r.Name ORDER BY r.Name;" | tr -d '\r'
+            echo "=== IDENTITY DATA QUALITY COUNTS ONLY ==="
+            run_sql -d Digibail -Q "SET NOCOUNT ON; SELECT 'AspNetUsers' AS source,COUNT(*) AS total,SUM(CASE WHEN COALESCE(NULLIF(LTRIM(RTRIM(Mobile)),''),NULLIF(LTRIM(RTRIM(PhoneNumber)),''),NULLIF(LTRIM(RTRIM(Phone)),'')) IS NULL THEN 1 ELSE 0 END) AS missing_phone,SUM(CASE WHEN PasswordHash IS NULL OR LTRIM(RTRIM(PasswordHash))='' THEN 1 ELSE 0 END) AS missing_password FROM dbo.AspNetUsers; SELECT 'Customers' AS source,COUNT(*) AS total,SUM(CASE WHEN NULLIF(LTRIM(RTRIM(Mobile)),'') IS NULL THEN 1 ELSE 0 END) AS missing_phone,SUM(CASE WHEN NULLIF(LTRIM(RTRIM(InitPassword)),'') IS NULL THEN 1 ELSE 0 END) AS missing_password FROM dbo.Customers;" | tr -d '\r'
+            unset SA_PASS
+            echo "=== READ ONLY INVENTORY COMPLETE; NO DATA MODIFIED ==="
