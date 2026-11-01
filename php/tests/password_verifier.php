@@ -2,9 +2,10 @@
 
 declare(strict_types=1);
 
+use App\Security\PasswordVerifier;
+
 require dirname(__DIR__) . '/vendor/autoload.php';
 
-use App\Security\PasswordVerifier;
 
 $password = 'Correct-Horse-42!';
 $vectors = [
