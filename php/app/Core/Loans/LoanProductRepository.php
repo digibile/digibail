@@ -27,7 +27,7 @@ final class LoanProductRepository
     {
         $statement = $this->db->prepare(
             'SELECT * FROM LoanProducts
-             WHERE TenantId = :tenant_id AND Slug = :slug AND IsActive = 1
+             WHERE TenantId = :tenant_id AND Slug = :slug AND IsActive = 1 AND ShowInList = 1
              LIMIT 1'
         );
         $statement->execute(['tenant_id' => $tenantId, 'slug' => $slug]);
