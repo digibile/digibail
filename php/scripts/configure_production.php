@@ -31,7 +31,7 @@ $user = (string) $mysql['user'];
 $password = (string) $mysql['password'];
 $socket = (string) ($mysql['socket'] ?? '');
 
-if ($socket !== '' && is_socket($socket)) {
+if ($socket !== '' && file_exists($socket)) {
     $dsn = sprintf('mysql:unix_socket=%s;dbname=%s;charset=utf8mb4', $socket, $databaseName);
 } else {
     $dsn = sprintf('mysql:host=%s;port=%d;dbname=%s;charset=utf8mb4', $host, $port, $databaseName);
