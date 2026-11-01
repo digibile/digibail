@@ -64,8 +64,7 @@ jobs:
           chmod 600 ~/.ssh/deploy_key
           ssh-keyscan -H "$DEPLOY_HOST" > ~/.ssh/known_hosts
           ACTUAL="$(ssh-keygen -lf ~/.ssh/known_hosts -E sha256 | awk '{print $2}' | sort -u)"
-          EXPECTED="$(printf '%s\n' "$DEPLOY_FINGERPRINT" | tr ',' '\n' | sort -u)"
-          if ! grep -Fxq "$ACTUAL" <(printf '%s\n' "$EXPECTED") && [[ "$ACTUAL" != "$EXPECTED" ]]; then
+          if ! printf '%s\n' "$ACTUAL" | grep -Fxq "$DEPLOY_FINGERPRINT"; then
             echo "::error::SSH host fingerprint mismatch. Deployment stopped."
             exit 1
           fi
