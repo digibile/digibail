@@ -113,7 +113,7 @@ jobs:
                 printf 'POSTGRES_USER=digibail_app\n'
                 printf 'POSTGRES_PASSWORD=%s\n' "$DB_PASS"
                 printf 'DATABASE_URL=postgresql://digibail_app:%s@db:5432/digibail_prod\n' "$DB_PASS"
-                printf 'PORT=1631\nHOST=0.0.0.0\n'
+                printf 'PORT=1642\nHOST=0.0.0.0\n'
                 printf 'JWT_SECRET=%s\nOTP_PEPPER=%s\nCAPTCHA_PEPPER=%s\n' "$JWT" "$OTP" "$CAPTCHA"
                 printf 'BRAND_NAME=دیجی‌بایل پی\n'
                 printf 'KAVENEGAR_API_KEY=\nKAVENEGAR_TEMPLATE=\n'
@@ -170,7 +170,7 @@ jobs:
             echo "=== wait for application and legacy API health ==="
             HEALTH_OK=0
             for n in $(seq 1 48); do
-              if curl -fsS --max-time 5 http://127.0.0.1:1631/healthz >/dev/null; then
+              if curl -fsS --max-time 5 http://127.0.0.1:1642/healthz >/dev/null; then
                 HEALTH_OK=1
                 echo "APP_HEALTH=healthy elapsed_seconds=$((n * 5))"
                 break
@@ -206,7 +206,7 @@ jobs:
             printf '%s\n' "$RECOVERY_PASSWORD" | $DOCKER compose exec -T app sh -c 'IFS= read -r RECOVERY_PASSWORD; export RECOVERY_PASSWORD; exec node /app/scripts/provision-recovery-admin.js'
             export RECOVERY_PASSWORD
             node --input-type=module <<'NODE'
-            const base = "http://127.0.0.1:1631";
+            const base = "http://127.0.0.1:1642";
             const password = process.env.RECOVERY_PASSWORD || "";
             const c = await fetch(base + "/api/v1/security/captcha");
             if (!c.ok) throw new Error("Captcha endpoint failed: " + c.status);
@@ -298,7 +298,7 @@ jobs:
                 grep -nE 'location /|proxy_pass|root |server_name|include.*cust_nginx' "$f" || true
               fi
             done
-            echo "=== route production domain to verified app on port 1631 ==="
+            echo "=== route production domain to verified app on port 1642 ==="
             # Docker daemon access grants root-level host administration; use a
             # short-lived privileged container for a backed-up, validated route change.
             $DOCKER run --rm --privileged --pid=host --network host -v /:/host alpine:3.20 sh -c '
@@ -309,14 +309,14 @@ jobs:
                 exit 26
               fi
               echo "--- route file: $CUST"
-              if ! grep -Fq "proxy_pass http://127.0.0.1:1361;" "$CUST" && ! grep -Fq "proxy_pass http://127.0.0.1:1362;" "$CUST" && ! grep -Fq "proxy_pass http://127.0.0.1:1631;" "$CUST"; then
+              if ! grep -Fq "proxy_pass http://127.0.0.1:1361;" "$CUST" && ! grep -Fq "proxy_pass http://127.0.0.1:1362;" "$CUST" && ! grep -Fq "proxy_pass http://127.0.0.1:1642;" "$CUST"; then
                 echo "ROUTE_NOT_MATCHED: no known application proxy found"
                 exit 26
               fi
               if grep -Fq "proxy_pass http://127.0.0.1:1361;" "$CUST" || grep -Fq "proxy_pass http://127.0.0.1:1362;" "$CUST"; then
                 BACKUP="${CUST}.bak.$(date +%Y%m%d%H%M%S)"
                 cp -p "$CUST" "$BACKUP"
-                sed -i "s#proxy_pass http://127.0.0.1:1361;#proxy_pass http://127.0.0.1:1631;#g; s#proxy_pass http://127.0.0.1:1362;#proxy_pass http://127.0.0.1:1631;#g" "$CUST"
+                sed -i "s#proxy_pass http://127.0.0.1:1361;#proxy_pass http://127.0.0.1:1642;#g; s#proxy_pass http://127.0.0.1:1362;#proxy_pass http://127.0.0.1:1642;#g" "$CUST"
                 if [ ! -x /host/usr/local/directadmin/custombuild/build ]; then
                   cp -p "$BACKUP" "$CUST"
                   echo "ERROR: DirectAdmin CustomBuild not found; previous route restored."
@@ -335,7 +335,7 @@ jobs:
                   exit 25
                 fi
                 echo "=== regenerated live domain config ==="
-                grep -nE "server_name digibail.ir|proxy_pass http://127.0.0.1:(1361|1362|1631);" /host/usr/local/directadmin/data/users/*/nginx.conf || true
+                grep -nE "server_name digibail.ir|proxy_pass http://127.0.0.1:(1361|1362|1642);" /host/usr/local/directadmin/data/users/*/nginx.conf || true
                 MASTER="$(cat /host/run/nginx.pid 2>/dev/null || cat /host/var/run/nginx.pid 2>/dev/null || true)"
                 if [ -z "$MASTER" ] || [ ! -r "/host/proc/$MASTER/comm" ] || [ "$(cat "/host/proc/$MASTER/comm" 2>/dev/null || true)" != "nginx" ]; then
                   cp -p "$BACKUP" "$CUST"
@@ -345,7 +345,7 @@ jobs:
                 kill -HUP "$MASTER"
                 echo "DOMAIN_PROXY_UPDATED=1"
               else
-                echo "DOMAIN_PROXY_ALREADY_1631=1"
+                echo "DOMAIN_PROXY_ALREADY_1642=1"
               fi
               echo "=== regenerate DirectAdmin nginx configuration ==="
               chroot /host /usr/local/directadmin/custombuild/build rewrite_confs
@@ -358,17 +358,17 @@ jobs:
               kill -HUP "$MASTER"
               sleep 2
               echo "=== generated domain route after reload ==="
-              grep -nE "server_name digibail.ir|proxy_pass http://127.0.0.1:(1361|1362|1631);" /host/usr/local/directadmin/data/users/*/nginx.conf || true
+              grep -nE "server_name digibail.ir|proxy_pass http://127.0.0.1:(1361|1362|1642);" /host/usr/local/directadmin/data/users/*/nginx.conf || true
               echo "=== active custom route ==="
-              grep -nE "proxy_pass http://127.0.0.1:(1361|1362|1631);" "$CUST" || true
+              grep -nE "proxy_pass http://127.0.0.1:(1361|1362|1642);" "$CUST" || true
             '
             echo "=== current public_html index ==="
             ls -l "$ROOT/public_html/index.html" 2>/dev/null || true
-            echo "=== verify new app directly on port 1631 ==="
-            APP_BODY="$(curl -fsS --max-time 10 http://127.0.0.1:1631/)"
+            echo "=== verify new app directly on port 1642 ==="
+            APP_BODY="$(curl -fsS --max-time 10 http://127.0.0.1:1642/)"
             printf '%s' "$APP_BODY" | head -c 300
             echo
-            if ! printf '%s' "$APP_BODY" | grep -q 'name="digibail-deploy-version" content="c92a8d54f06b1e73d9a4c2018b65f7a2d3e901bc"'; then
+            if ! printf '%s' "$APP_BODY" | grep -q 'name="digibail-deploy-version" content="digibail-production-2026-11-01"'; then
               echo "ERROR: running app does not contain the expected release marker; refusing to report success."
               exit 28
             fi
@@ -377,7 +377,7 @@ jobs:
             PUBLIC_BODY="$(curl -fsSL --max-time 20 -H 'Cache-Control: no-cache' -H 'Pragma: no-cache' "https://digibail.ir/?deploycheck=$(date +%s)")"
             printf '%s' "$PUBLIC_BODY" | head -c 500
             echo
-            if printf '%s' "$PUBLIC_BODY" | grep -q 'name="digibail-deploy-version" content="c92a8d54f06b1e73d9a4c2018b65f7a2d3e901bc"'; then
+            if printf '%s' "$PUBLIC_BODY" | grep -q 'name="digibail-deploy-version" content="digibail-production-2026-11-01"'; then
               echo "PUBLIC_DOMAIN_CONTENT_VERIFIED=EXPECTED_RELEASE"
             else
               echo "ERROR: public HTTPS domain is not serving the expected release marker; check DNS/CDN or virtual host routing."
