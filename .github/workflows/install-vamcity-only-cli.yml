@@ -6,12 +6,14 @@ on:
       - migration/php83-full-rebuild
     paths:
       - .github/workflows/install-vamcity-only-cli.yml
+      - database/migration/migrate.php
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: digebail-vamcity-only-cli-install
+  group: digebail-vamcity-only-importer-guard
   cancel-in-progress: false
 
 jobs:
@@ -23,17 +25,17 @@ jobs:
         with:
           ref: migration/php83-full-rebuild
           fetch-depth: 1
-      - name: Copy CLI to temporary location
+      - name: Install CLI in existing migration directory
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           source: database/migration/migrate.php
-          target: /tmp/
+          target: /home/digebail/domains/digebail.ir/database/migration/
           strip_components: 2
           overwrite: true
-      - name: Install and verify VamCity-only CLI without running migration
+      - name: Verify VamCity-only CLI scope without running migration
         uses: appleboy/ssh-action@v1.2.2
         with:
           host: ${{ secrets.DEPLOY_HOST }}
@@ -42,21 +44,14 @@ jobs:
           command_timeout: 2m
           script: |
             set -euo pipefail
-            SOURCE='/tmp/migrate.php'
-            TARGET='/home/digebail/domains/digebail.ir/database/migration/migrate.php'
-            test -s "$SOURCE"
-            if sudo -n true >/dev/null 2>&1; then
-              sudo -n install -D -m 0644 "$SOURCE" "$TARGET"
-            else
-              install -D -m 0644 "$SOURCE" "$TARGET"
-            fi
-            php -l "$TARGET"
-            test "$(grep -c "source'=>'" "$TARGET")" -eq 1
-            grep -q "source'=>'vamcityc_vamcity_import_20261028'" "$TARGET"
-            if grep -Eq "source'=>'(Digibail|vamcityc_bluvamdb_import_20261028|vamcityc_transferDb_import_20261028)'" "$TARGET"; then
+            SCRIPT='/home/digebail/domains/digebail.ir/database/migration/migrate.php'
+            php -l "$SCRIPT"
+            count="$(grep -c "source'=>'" "$SCRIPT")"
+            test "$count" -eq 1
+            grep -q "source'=>'vamcityc_vamcity_import_20261028'" "$SCRIPT"
+            if grep -Eq "source'=>'(Digibail|vamcityc_bluvamdb_import_20261028|vamcityc_transferDb_import_20261028)'" "$SCRIPT"; then
               echo 'PRODUCTION_IMPORTER_HAS_OUT_OF_SCOPE_DATABASE=1'
               exit 42
             fi
-            rm -f "$SOURCE"
             echo 'PRODUCTION_IMPORTER_SCOPE=VAMCITY_ONLY'
             echo 'DATABASE_NOT_MODIFIED=1'
