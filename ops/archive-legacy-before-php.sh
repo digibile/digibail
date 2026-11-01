@@ -3,7 +3,7 @@ set -Eeuo pipefail
 
 ROOT="${1:-/home/digibail/domains/digebail.ir}"
 STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
-BACKUP_DIR="/home/digibail/backups/digebail"
+BACKUP_DIR="$ROOT/.legacy-backups"
 ARCHIVE="$BACKUP_DIR/legacy-source-$STAMP.tar.gz"
 
 if [[ ! -d "$ROOT" ]]; then
