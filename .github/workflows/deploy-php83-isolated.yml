@@ -111,6 +111,8 @@ jobs:
             php/public/ "$DEPLOY_USER@$DEPLOY_HOST:$PUBLIC_ROOT/"
 
           # Ship only the additive PHP-owned schema migrations into the private app tree.
+          ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes "$DEPLOY_USER@$DEPLOY_HOST" \
+            "mkdir -p '$PRIVATE_APP/database/migrations'"
           rsync -az --no-owner --no-group \
             -e "ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes" \
             database/mysql/migrations/ "$DEPLOY_USER@$DEPLOY_HOST:$PRIVATE_APP/database/migrations/"
