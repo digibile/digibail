@@ -192,21 +192,35 @@ final class VirtualCardController
         };
         if ($status === null) return Response::json(['message' => 'عملیات کارت معتبر نیست.'], 404);
 
-        $statement = $this->db->prepare(
-            'SELECT Status FROM VirtualCards WHERE Id = :id AND TenantId = :tenant_id LIMIT 1'
-        );
-        $statement->execute(['id' => $id, 'tenant_id' => $tenant['id']]);
-        $current = $statement->fetchColumn();
-        if ($current === false) return Response::json(['message' => 'کارت پیدا نشد.'], 404);
-        if ($current === 'Closed') return Response::json(['message' => 'کارت بسته شده است.'], 400);
+        $this->db->beginTransaction();
+        try {
+            $statement = $this->db->prepare(
+                'SELECT Status FROM VirtualCards
+                 WHERE Id = :id AND TenantId = :tenant_id FOR UPDATE'
+            );
+            $statement->execute(['id' => $id, 'tenant_id' => $tenant['id']]);
+            $current = $statement->fetchColumn();
+            if ($current === false) {
+                $this->db->commit();
+                return Response::json(['message' => 'کارت پیدا نشد.'], 404);
+            }
+            if ($current === 'Closed') {
+                $this->db->commit();
+                return Response::json(['message' => 'کارت بسته شده است.'], 400);
+            }
 
-        $update = $this->db->prepare(
-            'UPDATE VirtualCards SET Status = :status WHERE Id = :id AND TenantId = :tenant_id'
-        );
-        $update->execute(['status' => $status, 'id' => $id, 'tenant_id' => $tenant['id']]);
-        $this->insertTxn($id, ucfirst($operation), 0, '', '', 'تغییر وضعیت توسط مدیر');
+            $this->db->prepare(
+                'UPDATE VirtualCards SET Status = :status WHERE Id = :id AND TenantId = :tenant_id'
+            )->execute(['status' => $status, 'id' => $id, 'tenant_id' => $tenant['id']]);
+            $this->insertTxn($id, ucfirst($operation), 0, '', '', 'تغییر وضعیت توسط مدیر');
+            $this->db->commit();
 
-        return Response::json($this->findCardDto($id));
+            return Response::json($this->findCardDto($id));
+        } catch (Throwable $exception) {
+            if ($this->db->inTransaction()) $this->db->rollBack();
+            error_log('Virtual card admin action failed: ' . $exception->getMessage());
+            return Response::json(['message' => 'عملیات کارت انجام نشد.'], 503);
+        }
     }
 
     public function adminLimit(Request $request): Response
@@ -226,16 +240,16 @@ final class VirtualCardController
         $this->db->beginTransaction();
         try {
             $query = $this->db->prepare(
-                'SELECT Spent FROM VirtualCards
+                'SELECT Spent, PerTxnLimit FROM VirtualCards
                  WHERE Id = :id AND TenantId = :tenant_id FOR UPDATE'
             );
             $query->execute(['id' => $id, 'tenant_id' => $tenant['id']]);
-            $spent = $query->fetchColumn();
-            if ($spent === false) {
+            $cardLimits = $query->fetch();
+            if (!is_array($cardLimits)) {
                 $this->db->commit();
                 return Response::json(['message' => 'کارت پیدا نشد.'], 404);
             }
-            if ((float) $limit < (float) $spent) {
+            if ((float) $limit < (float) $cardLimits['Spent']) {
                 $this->db->commit();
                 return Response::json(['message' => 'سقف جدید نمی‌تواند کمتر از مبلغ مصرف‌شده باشد.'], 400);
             }
@@ -247,7 +261,7 @@ final class VirtualCardController
             );
             $update->execute([
                 'limit' => (float) $limit,
-                'per_txn' => $perTxn === null ? (float) $limit : (float) $perTxn,
+                'per_txn' => $perTxn === null ? (float) $cardLimits['PerTxnLimit'] : (float) $perTxn,
                 'id' => $id,
                 'tenant_id' => $tenant['id'],
             ]);
