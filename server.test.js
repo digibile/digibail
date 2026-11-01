@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFile, access } from "node:fs/promises";
 import { resolveRoute } from "./server.js";
 
 test("root maps to existing Persian storefront", () => {
@@ -29,4 +30,15 @@ test("unknown and traversal paths do not map to files", () => {
 
 test("health endpoint is handled separately from static pages", () => {
   assert.equal(resolveRoute("/healthz"), null);
+});
+
+
+test("storefront CSS and JavaScript are separate existing assets", async () => {
+  const html = await readFile(new URL("./web/template-v3.html", import.meta.url), "utf8");
+  assert.match(html, /href=["']\/assets\/digibail-home\.css["']/);
+  assert.match(html, /src=["']\/assets\/digibail-home\.js["']/);
+  assert.doesNotMatch(html, /<style[\\s>]/i);
+  assert.doesNotMatch(html, /<script(?:\\s[^>]*)?>[\\s\\S]*?<\\/script>/i);
+  await access(new URL("./web/assets/digibail-home.css", import.meta.url));
+  await access(new URL("./web/assets/digibail-home.js", import.meta.url));
 });
