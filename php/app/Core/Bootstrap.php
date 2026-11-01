@@ -9,6 +9,7 @@ use App\Core\Health\HealthController;
 use App\Core\Http\Request;
 use App\Core\Http\Response;
 use App\Core\Routing\Router;
+use App\Core\Tenancy\TenantAdminController;
 use App\Core\Loans\LoanProductController;
 use App\Security\SecurityController;
 
