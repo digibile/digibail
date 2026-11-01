@@ -10,6 +10,21 @@ use App\Core\Routing\Router;
 require dirname(__DIR__) . '/vendor/autoload.php';
 
 $router = Bootstrap::router();
+$tenantConfigPath = $router->dispatch(new Request('POST', '/api/v1/tenant/config'));
+if ($tenantConfigPath->status !== 405 || ($tenantConfigPath->headers['Allow'] ?? '') !== 'GET') {
+    throw new RuntimeException('The tenant configuration endpoint must be registered as GET.');
+}
+
+$loanProductsPath = $router->dispatch(new Request('POST', '/api/v1/loan-products'));
+if ($loanProductsPath->status !== 405 || ($loanProductsPath->headers['Allow'] ?? '') !== 'GET') {
+    throw new RuntimeException('The public loan products endpoint must be registered as GET.');
+}
+
+$loanProductDetailPath = $router->dispatch(new Request('POST', '/api/v1/loan-products/sample-plan'));
+if ($loanProductDetailPath->status !== 405 || ($loanProductDetailPath->headers['Allow'] ?? '') !== 'GET') {
+    throw new RuntimeException('The public loan product detail endpoint must be registered as GET.');
+}
+
 $live = $router->dispatch(new Request('GET', '/health/live'));
 
 if ($live->status !== 200) {
