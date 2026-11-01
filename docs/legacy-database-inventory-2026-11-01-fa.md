@@ -3292,23 +3292,6 @@ schema_name table_name constraint_name definition is_disabled
 table_count column_count foreign_key_count check_constraint_count primary_key_count
 ----------- ------------ ----------------- ---------------------- -----------------
 88 957 188 0 88
-=== LEGACY DIGIBAIL ROLE COUNTS ===
-role_name account_count
---------- -------------
-Admin 1
-SuperAdmin 1
-=== IDENTITY DATA QUALITY COUNTS ONLY ===
-source total missing_phone missing_password
------- ----- ------------- ----------------
-AspNetUsers 2 2 0
-source total missing_phone missing_password
------- ----- ------------- ----------------
-Customers 1 1 1
-=== READ ONLY INVENTORY COMPLETE; NO DATA MODIFIED ===
-===============================================
-✅ Successfully executed commands to all hosts.
-===============================================
-Cleaning up orphan processes
 ```
 
 ## نقش‌های ثبت‌شده در دیتابیس اصلی
