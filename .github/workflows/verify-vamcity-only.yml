@@ -73,6 +73,7 @@ jobs:
               $DOCKER exec -e SQLCMDPASSWORD="$SA_PASS" "$SQLC" "$SQLCMD" -S localhost -U sa -C -b -W -w 65535 -h -1 -s '|' -d "$SOURCE" "$@"
             }
 
+            echo 'SCOPE=VAMCITY_ONLY'
             echo '=== VAMCITY SOURCE/TARGET EXACT ROW-COUNT COMPARISON ==='
             source_tables=0
             matched_tables=0
