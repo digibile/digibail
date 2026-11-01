@@ -51,9 +51,15 @@ final class Router
         $compiled = [];
 
         foreach ($segments as $segment) {
-            if (preg_match('/^\{([A-Za-z][A-Za-z0-9_]*)\}$/D', $segment, $match) === 1) {
+            if (preg_match('/^\\{([A-Za-z][A-Za-z0-9_]*)(?::([a-z]+))?\\}$/D', $segment, $match) === 1) {
                 $names[] = $match[1];
-                $compiled[] = '(?P<' . $match[1] . '>[^/]+)';
+                $constraint = $match[2] ?? '';
+                $pattern = match ($constraint) {
+                    'uuid' => '[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89aAbB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}',
+                    '' => '[^/]+',
+                    default => throw new \\InvalidArgumentException('Unsupported route parameter constraint: ' . $constraint),
+                };
+                $compiled[] = '(?P<' . $match[1] . '>' . $pattern . ')';
             } else {
                 $compiled[] = preg_quote($segment, '~');
             }
