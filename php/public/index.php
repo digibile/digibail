@@ -2,8 +2,8 @@
 
 declare(strict_types=1);
 
-use App\\Core\\Bootstrap;
-use App\\Core\\Http\\Response;
+use App\Core\Bootstrap;
+use App\Core\Http\Response;
 
 /*
  * Load the private application environment file from the project root.
@@ -22,7 +22,7 @@ if (is_file($environmentFile) && is_readable($environmentFile)) {
                 continue;
             }
 
-            if (!preg_match('/^([A-Za-z_][A-Za-z0-9_]*)\\s*=\\s*(.*)$/', $line, $matches)) {
+            if (!preg_match('/^([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/', $line, $matches)) {
                 continue;
             }
 
@@ -48,9 +48,6 @@ if (is_file($environmentFile) && is_readable($environmentFile)) {
         }
     }
 }
-
-use App\Core\Bootstrap;
-use App\Core\Http\Response;
 
 require dirname(__DIR__) . '/vendor/autoload.php';
 
