@@ -239,7 +239,7 @@ final class SecurityController
         }
 
         $ticket = (string) ($request->input['ticket'] ?? '');
-        $ticketClaims = $this->jwt->verify($ticket);
+        $ticketClaims = $this->jwt()->verify($ticket);
         if ($ticketClaims === null || ($ticketClaims['purpose'] ?? null) !== 'register' || !isset($ticketClaims['phone'])) {
             return Response::json(['message' => 'تأیید موبایل منقضی شده است. دوباره کد بگیرید.'], 400);
         }
@@ -256,7 +256,7 @@ final class SecurityController
         if (!self::validNationalCode($nationalCode)) {
             return Response::json(['message' => 'کد ملی از نظر ساختار معتبر نیست.'], 400);
         }
-        if (strlen($password) < 8 || strlen($password) > 128) {
+        if (strlen($password) < 10 || strlen($password) > 128) {
             return Response::json(['message' => 'رمز عبور باید بین ۸ تا ۱۲۸ نویسه باشد.'], 400);
         }
         if ($email !== '' && filter_var($email, FILTER_VALIDATE_EMAIL) === false) {
@@ -323,7 +323,7 @@ final class SecurityController
             return Response::json(['message' => 'رمز جدید باید بین ۱۰ تا ۱۲۸ نویسه باشد.'], 400);
         }
 
-        $claims = $this->jwt->verify($ticket);
+        $claims = $this->jwt()->verify($ticket);
         if ($claims === null || ($claims['purpose'] ?? null) !== 'password_reset' || !isset($claims['phone'])) {
             return Response::json(['message' => 'مجوز بازیابی منقضی یا نامعتبر است.'], 400);
         }
