@@ -1,0 +1,24 @@
+{
+  "schema": 1,
+  "version": "1.2.0",
+  "channel": "stable",
+  "type": "normal",
+  "title": "بهبودهای سامانه",
+  "notes": [
+    "شرح تغییر اول",
+    "شرح تغییر دوم"
+  ],
+  "published_at": "2026-11-01T00:00:00Z",
+  "requires": {
+    "php": ">=8.3",
+    "extensions": ["pdo_mysql", "zip", "openssl", "json"]
+  },
+  "database": {
+    "minimum_version": "1.0.0",
+    "migrations": []
+  },
+  "package": {
+    "file": "digibail-1.2.0.zip",
+    "sha256": "REPLACE_WITH_REAL_SHA256"
+  }
+}
