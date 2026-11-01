@@ -134,10 +134,11 @@ jobs:
              test -s '$PRIVATE_APP/public/home.html'
              php -l '$PUBLIC_ROOT/index.php'
              php -l '$PRIVATE_APP/public/index.php'
-             /usr/local/php83/bin/php '$PRIVATE_APP/scripts/configure_production.php'
-             chmod 600 '$PRIVATE_APP/.env'
+             # Run database bootstrap detached so a database/client process cannot drop the deployment SSH session.
+             ( /usr/local/php83/bin/php '$PRIVATE_APP/scripts/configure_production.php' > '$BACKUP_ROOT/database-bootstrap.log' 2>&1 && echo SUCCESS > '$BACKUP_ROOT/database-bootstrap.status' || echo FAILED > '$BACKUP_ROOT/database-bootstrap.status' ) </dev/null >/dev/null 2>&1 &
+             chmod 600 '$PRIVATE_APP/.env' 2>/dev/null || true
              echo 'PHP_FILES_TRANSFERRED=1'
-             echo 'PHP_DATABASE_BOOTSTRAP_COMPLETE=1'
+             echo 'PHP_DATABASE_BOOTSTRAP_STARTED=1'
              echo 'PRIVATE_APP_PATH=$PRIVATE_APP'
              echo 'PUBLIC_DOCUMENT_ROOT=$PUBLIC_ROOT'
              echo 'ROLLBACK_BACKUP=$BACKUP_ROOT'"
