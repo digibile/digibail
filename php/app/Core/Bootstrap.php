@@ -9,6 +9,7 @@ use App\Core\Http\Request;
 use App\Core\Http\Response;
 use App\Core\Routing\Router;
 use App\Security\SecurityController;
+use App\Tenant\PublicTenantController;
 
 final class Bootstrap
 {
@@ -17,13 +18,21 @@ final class Bootstrap
         $router = new Router();
         $health = new HealthController();
         $security = null;
+        $tenant = null;
 
         $securityController = static function () use (&$security): SecurityController {
             return $security ??= new SecurityController();
         };
+        $tenantController = static function () use (&$tenant): PublicTenantController {
+            return $tenant ??= new PublicTenantController();
+        };
 
         $router->get('/health/live', [$health, 'live']);
         $router->get('/health/ready', [$health, 'ready']);
+
+        $router->get('/api/v1/tenant/config', static fn (Request $request): Response => $tenantController()->config($request));
+        $router->get('/api/v1/loan-products', static fn (Request $request): Response => $tenantController()->products($request));
+        $router->get('/api/v1/loan-products/{slug}', static fn (Request $request): Response => $tenantController()->product($request));
 
         $router->get('/api/v1/security/captcha', static fn (Request $request): Response => $securityController()->captcha($request));
         $router->get('/api/v1/Auth/captcha', static fn (Request $request): Response => $securityController()->captcha($request));
