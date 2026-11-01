@@ -412,7 +412,7 @@ details{border-bottom:1px solid var(--line);padding:14px 2px}summary{cursor:poin
       <a href="/documents.html"><span>مدارک</span><small>مدیریت مدارک</small></a>
       <a href="/contracts.html"><span>قراردادها</span><small>مشاهده قراردادها</small></a>
     </div></div>
-    <a href="#how">مراحل خرید</a><a href="#trust">امنیت</a><a href="#faq">پرسش‌ها</a>
+    <a href="#stores">فروشگاه‌ها</a><a href="#plans">طرح‌ها</a><a href="#calc">محاسبه‌گر</a><a href="#partners">همکاری</a><a href="#how">مراحل خرید</a><a href="#trust">امنیت</a><a href="#faq">پرسش‌ها</a>
   </nav>
   <div class="ac deskonly" id="auth"></div>
 </div></div>
@@ -421,7 +421,7 @@ details{border-bottom:1px solid var(--line);padding:14px 2px}summary{cursor:poin
   <footer class="ft">
     <div class="ft-top">
       <div class="ft-brand"><a class="logo" href="#home"><i>د</i>دیجی‌بایل پی</a><p>پلتفرم خرید اقساطی. اعتبار، قرارداد و کارت مجازی در یک حساب.</p><div class="soc" aria-label="شبکه‌های اجتماعی"><span>پیوند شبکه‌های اجتماعی پس از ثبت نشانی رسمی فعال می‌شود.</span></div></div>
-      <div><b>طرح‌ها</b><span id="ftPlans"></span></div>
+      <div><b>خدمات</b><a href="#stores">فروشگاه‌ها</a><a href="#plans">طرح‌های اعتباری</a><a href="#calc">محاسبه‌گر اقساط</a><a href="#how">مراحل دریافت اعتبار</a></div><div><b>طرح‌ها</b><span id="ftPlans"></span></div>
       <div><b>همکاری</b><a href="/register.html?type=merchant">پذیرنده شوید</a><a href="/register.html?type=agent">نماینده شوید</a><a href="/register.html?type=organization">سازمان‌ها</a></div>
       <div><b>حساب و پشتیبانی</b><a href="/login.html">ورود / عضویت</a><a href="/profile.html">حساب کاربری و پیگیری درخواست‌ها</a><a href="/documents.html">مدارک</a><a href="/contracts.html">قراردادها</a><a href="/terms.html">قوانین و مقررات</a><a href="/privacy.html">حریم خصوصی</a></div>
       <div><b>تماس با ما</b><span class="ph">نشانی، تلفن و ایمیل از تنظیمات سایت خوانده می‌شود</span><span>ساعت کاری: شنبه تا چهارشنبه، ۹ تا ۱۸</span></div>
@@ -574,6 +574,26 @@ function home(){const A=act();
  </div><div class="campaign-dots" id="campaignDots" aria-label="انتخاب بنر"><button aria-label="بنر اول" aria-current="true"></button><button aria-label="بنر دوم" aria-current="false"></button><button aria-label="بنر سوم" aria-current="false"></button></div>
 </section><section class="hero" id="calc"><div><h1>همین حالا بخرید، ماه‌به‌ماه پرداخت کنید</h1><p class="lead">اعتبار شما در چند دقیقه تعیین می‌شود، قرارداد را دیجیتال امضا می‌کنید و کارت اعتباری مجازی‌تان صادر می‌شود.</p>
   <div class="calc" id="calcBox"></div></div><div class="vwrap">${cardHtml()}</div></section>
+
+ <section class="s" id="stores">
+  <h2 class="t">فروشگاه‌های طرف قرارداد</h2>
+  <p class="sub">از خرید کالاهای دیجیتال و لوازم خانه تا خدمات و محصولات روزمره؛ فروشگاه‌های تأییدشده پس از ثبت و تأیید پذیرندگی در این بخش نمایش داده می‌شوند.</p>
+  <div class="bento">
+   <article class="pc"><span class="m">📱</span><h3>موبایل و کالای دیجیتال</h3><p>گوشی، تبلت، لپ‌تاپ و لوازم جانبی</p><a class="btn" href="/register.html?type=merchant">ثبت فروشگاه در این دسته</a></article>
+   <article class="pc"><span class="m">🏠</span><h3>خانه و سبک زندگی</h3><p>لوازم خانگی، دکوراسیون و تجهیزات منزل</p><a class="btn" href="/register.html?type=merchant">ثبت فروشگاه در این دسته</a></article>
+   <article class="pc"><span class="m">⌚</span><h3>مد و کالاهای شخصی</h3><p>ساعت، پوشاک، اکسسوری و کالاهای شخصی</p><a class="btn" href="/register.html?type=merchant">ثبت فروشگاه در این دسته</a></article>
+   <article class="pc"><span class="m">🚗</span><h3>خودرو و موتورسیکلت</h3><p>قطعات، لوازم جانبی و خدمات مرتبط</p><a class="btn" href="/register.html?type=merchant">ثبت فروشگاه در این دسته</a></article>
+  </div>
+  <p class="note">نام فروشگاه‌ها، موجودی کالا و پیشنهادهای خرید فقط پس از اتصال فهرست واقعی پذیرندگان نمایش داده می‌شود؛ فروشگاه یا کالای ساختگی درج نشده است.</p>
+ </section>
+ <section class="s" id="partners">
+  <h2 class="t">همکاری با دیجی‌بایل پی</h2><p class="sub">برای فروشگاه‌ها، کسب‌وکارها، شبکه‌های فروش و سازمان‌ها مسیر همکاری جداگانه در نظر گرفته شده است.</p>
+  <div class="bento">
+   <article class="pc"><h3>پذیرنده شوید</h3><p>درگاه خرید اعتباری، تسویه و مدیریت سفارش برای کسب‌وکار شما.</p><a class="btn solid" href="/register.html?type=merchant">درخواست پذیرندگی</a></article>
+   <article class="pc"><h3>نماینده شوید</h3><p>همکاری در معرفی مشتریان و توسعه شبکه خدمات دیجی‌بایل پی.</p><a class="btn" href="/register.html?type=agent">درخواست نمایندگی</a></article>
+   <article class="pc"><h3>همکاری سازمانی</h3><p>ارائه راهکارهای اعتبار و خرید اقساطی برای کارکنان و اعضای سازمان‌ها.</p><a class="btn" href="/register.html?type=organization">درخواست همکاری سازمانی</a></article>
+  </div>
+ </section>
  <section class="s" id="plans"><h2 class="t">طرح‌های اقساط فعال</h2><p class="sub">طرح‌های قابل نمایش فقط از پایگاه داده و پس از فعال‌سازی مدیر دریافت می‌شوند. برای پیدا کردن طرح از جستجو و فیلتر استفاده کنید.</p><div class="plan-tools"><input id="planSearch" type="search" placeholder="جستجوی نام یا توضیحات طرح…" aria-label="جستجوی طرح"><select id="planFilter" aria-label="فیلتر طرح"><option value="all">همه طرح‌ها</option><option value="down">با پیش‌پرداخت</option><option value="nodown">بدون پیش‌پرداخت</option><option value="bank">استعلام بانکی</option></select></div><p class="plan-count" id="planCount"></p><div class="bento" id="planGrid">${renderPlanCards(A)}</div></section>
  <section class="s" id="how"><h2 class="t">از ثبت‌نام تا کارت مجازی</h2><p class="sub">چهار مرحله و کمتر از ۵ دقیقه.</p>
   <div class="tl"><div><div class="n">۱</div><h3>عضویت با موبایل</h3><p>کد تأیید پیامکی می‌گیرید و حساب شما ساخته می‌شود.</p></div><div><div class="n">۲</div><h3>احراز هویت و مدارک</h3><p>عکس مدارک را بارگذاری می‌کنید و اطلاعات آن خودکار خوانده می‌شود.</p></div><div><div class="n">۳</div><h3>قرارداد دیجیتال</h3><p>قرارداد را با کد پیامکی امضا می‌کنید.</p></div><div><div class="n">۴</div><h3>کارت مجازی</h3><p>با تأیید وام، کارت مجازی با سقف وام شما صادر می‌شود و برای خرید آماده است.</p></div></div></section>
