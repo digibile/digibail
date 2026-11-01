@@ -120,6 +120,141 @@ final class SecurityController
         );
     }
 
+    public function requestOtp(Request $request): Response
+    {
+        $phone = self::normalizeDigits(trim((string) ($request->input['phone'] ?? '')));
+        $purpose = ($request->input['purpose'] ?? 'login') === 'register' ? 'register' : 'login';
+
+        if (preg_match('/^09\\d{9}$/D', $phone) !== 1) {
+            return Response::json(['message' => 'شماره موبایل معتبر نیست.'], 400);
+        }
+
+        if (!$this->store->hitRateLimit('otp:ip:' . $this->clientIp($request), 10, 3600)
+            || !$this->store->hitRateLimit('otp:phone:' . $phone, 3, 3600)) {
+            return Response::json(['message' => 'تعداد درخواست کد زیاد است. کمی بعد دوباره تلاش کنید.'], 429);
+        }
+
+        $captchaId = (string) ($request->input['captchaId'] ?? '');
+        $captchaAnswer = self::normalizeDigits((string) ($request->input['captchaAnswer'] ?? ''));
+        if (!$this->store->consumeCaptcha($captchaId, $captchaAnswer)) {
+            return Response::json(['message' => 'کد امنیتی نامعتبر یا منقضی شده است.'], 400);
+        }
+
+        $account = $this->identities->findActiveByPhone($phone);
+        if ($purpose === 'login' && $account === null) {
+            return Response::json(['message' => 'حساب فعالی با این شماره پیدا نشد.'], 404);
+        }
+        if ($purpose === 'register' && $account !== null) {
+            return Response::json(['message' => 'این شماره قبلاً ثبت شده است.'], 409);
+        }
+
+        $status = $this->store->otpStatus($phone, $purpose);
+        if ($status['resendIn'] > 0) {
+            return Response::json([
+                'message' => 'برای ارسال مجدد کمی صبر کنید.',
+                'expiresIn' => $status['expiresIn'],
+                'resendIn' => $status['resendIn'],
+            ], 429);
+        }
+
+        $code = (string) random_int(100000, 999999);
+        $sender = new KavenegarSmsSender();
+        if (!$sender->sendOtp($phone, $code)) {
+            return Response::json(['message' => 'ارسال پیامک تأیید نشد؛ تنظیمات یا سرویس پیامک را بررسی کنید.'], 502);
+        }
+
+        $this->store->createOtp($phone, $purpose, $code);
+
+        return Response::json([
+            'ok' => true,
+            'message' => 'کد تأیید ارسال شد.',
+            'expiresIn' => 120,
+            'resendIn' => 60,
+        ]);
+    }
+
+    public function otpStatus(Request $request): Response
+    {
+        $phone = self::normalizeDigits(trim((string) ($request->query['phone'] ?? '')));
+        if (preg_match('/^09\\d{9}$/D', $phone) !== 1) {
+            return Response::json(['message' => 'شماره موبایل معتبر نیست.'], 400);
+        }
+
+        $purpose = ($request->query['purpose'] ?? 'login') === 'register' ? 'register' : 'login';
+        return Response::json($this->store->otpStatus($phone, $purpose));
+    }
+
+    public function verifyOtp(Request $request): Response
+    {
+        $phone = self::normalizeDigits(trim((string) ($request->input['phone'] ?? '')));
+        $code = self::normalizeDigits(trim((string) ($request->input['code'] ?? '')));
+        $purpose = ($request->input['purpose'] ?? 'login') === 'register' ? 'register' : 'login';
+
+        if (preg_match('/^09\\d{9}$/D', $phone) !== 1 || preg_match('/^\\d{6}$/D', $code) !== 1) {
+            return Response::json(['message' => 'شماره یا کد تأیید معتبر نیست.'], 400);
+        }
+
+        if (!$this->store->verifyOtp($phone, $purpose, $code)) {
+            return Response::json(['ok' => false, 'message' => 'کد تأیید نادرست، منقضی یا مصرف‌شده است.'], 400);
+        }
+
+        if ($purpose === 'register') {
+            $ticket = $this->jwt->issue([
+                'purpose' => 'register',
+                'phone' => $phone,
+            ], 600);
+
+            return Response::json(['ticket' => $ticket]);
+        }
+
+        $user = $this->identities->findActiveByPhone($phone);
+        if ($user === null) {
+            return Response::json(['ok' => false, 'message' => 'حساب فعالی با این شماره پیدا نشد.'], 404);
+        }
+
+        return $this->authenticatedResponse($user);
+    }
+
+    private function authenticatedResponse(array $user): Response
+    {
+        $roles = $user['roles'];
+        $role = $roles[0] ?? 'Customer';
+        $tokenRoles = $roles;
+        if (in_array('SuperAdmin', $roles, true) && !in_array('Admin', $tokenRoles, true)) {
+            $tokenRoles[] = 'Admin';
+        }
+
+        $token = $this->jwt->issue([
+            'sub' => $user['id'],
+            'role' => $role,
+            'roles' => $tokenRoles,
+            'phone' => (string) ($user['mobile'] ?? ''),
+        ], 28800);
+
+        $secure = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? '; Secure' : '';
+        return new Response(
+            200,
+            json_encode([
+                'accessToken' => $token,
+                'token' => $token,
+                'expiresAt' => gmdate(DATE_ATOM, time() + 28800),
+                'user' => [
+                    'id' => $user['id'],
+                    'phone' => $user['mobile'],
+                    'fullName' => $user['display_name'],
+                    'role' => $role,
+                    'roles' => $roles,
+                ],
+            ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR),
+            [
+                'Content-Type' => 'application/json; charset=utf-8',
+                'Cache-Control' => 'no-store',
+                'Set-Cookie' => 'db_session=' . $token . '; HttpOnly; SameSite=Lax; Path=/; Max-Age=28800' . $secure,
+                'X-Content-Type-Options' => 'nosniff',
+            ]
+        );
+    }
+
     public function me(Request $request): Response
     {
         $token = $this->bearerToken($request);
