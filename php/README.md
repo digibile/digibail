@@ -38,7 +38,7 @@ Then configure `DB_*`, `JWT_SECRET`, `OTP_PEPPER` and `CAPTCHA_PEPPER` in the se
 
 The current login adapter reads the primary `AspNetUsers` tables only. It does not yet reconcile BlueVam or transfer-database identities, and no claim is made that these are duplicate-free or fully merged.
 
-OTP request/verification and Kavenegar delivery, registration, password reset, complete claims/policy authorization, all customer/agent/loan/payment/wallet/accounting/document/contract APIs, DigitalPay modules, server-rendered page conversion, full database import reconciliation, and production deployment remain outstanding.
+Registration, complete claims/policy authorization, all customer/agent/loan/payment/wallet/accounting/document/contract APIs, DigitalPay modules, server-rendered page conversion, full database import reconciliation, and production deployment remain outstanding.
 
 These modules must be ported against the audited API parity matrix and the real MariaDB schemas. Existing source files and tables are retained. Do not remove or replace the current runtime until feature parity, source-by-source data reconciliation, rollback and production acceptance tests pass.
 
