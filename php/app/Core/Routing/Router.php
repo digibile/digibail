@@ -13,51 +13,32 @@ final class Router
     private array $routes = [];
 
     /** @param callable(Request): Response $handler */
-    public function get(string $path, callable $handler): void
-    {
-        $this->add('GET', $path, $handler);
-    }
-
+    public function get(string $path, callable $handler): void { $this->add('GET', $path, $handler); }
     /** @param callable(Request): Response $handler */
-    public function post(string $path, callable $handler): void
-    {
-        $this->add('POST', $path, $handler);
-    }
-
+    public function post(string $path, callable $handler): void { $this->add('POST', $path, $handler); }
     /** @param callable(Request): Response $handler */
-    public function put(string $path, callable $handler): void
-    {
-        $this->add('PUT', $path, $handler);
-    }
-
+    public function put(string $path, callable $handler): void { $this->add('PUT', $path, $handler); }
     /** @param callable(Request): Response $handler */
-    public function patch(string $path, callable $handler): void
-    {
-        $this->add('PATCH', $path, $handler);
-    }
-
+    public function patch(string $path, callable $handler): void { $this->add('PATCH', $path, $handler); }
     /** @param callable(Request): Response $handler */
-    public function delete(string $path, callable $handler): void
-    {
-        $this->add('DELETE', $path, $handler);
-    }
+    public function delete(string $path, callable $handler): void { $this->add('DELETE', $path, $handler); }
 
     /** @param callable(Request): Response $handler */
     private function add(string $method, string $path, callable $handler): void
     {
         $normalized = $this->normalizePath($path);
         $names = [];
-        $segments = explode('/', trim($normalized, '/'));
         $compiled = [];
 
-        foreach ($segments as $segment) {
+        foreach (explode('/', trim($normalized, '/')) as $segment) {
             if (preg_match('/^\\{([A-Za-z][A-Za-z0-9_]*)(?::([a-z]+))?\\}$/D', $segment, $match) === 1) {
                 $names[] = $match[1];
                 $constraint = $match[2] ?? '';
                 $pattern = match ($constraint) {
                     'uuid' => '[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89aAbB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}',
+                    'action' => '(?:freeze|unfreeze|close)',
                     '' => '[^/]+',
-                    default => throw new \InvalidArgumentException('Unsupported route parameter constraint: ' . $constraint),
+                    default => throw new \\InvalidArgumentException('Unsupported route parameter constraint: ' . $constraint),
                 };
                 $compiled[] = '(?P<' . $match[1] . '>' . $pattern . ')';
             } else {
@@ -65,16 +46,8 @@ final class Router
             }
         }
 
-        $regex = $normalized === '/'
-            ? '~^/$~D'
-            : '~^/' . implode('/', $compiled) . '/?$~D';
-
-        $this->routes[$method][] = [
-            'regex' => $regex,
-            'names' => $names,
-            'handler' => $handler,
-            'path' => $normalized,
-        ];
+        $regex = $normalized === '/' ? '~^/$~D' : '~^/' . implode('/', $compiled) . '/?$~D';
+        $this->routes[$method][] = ['regex' => $regex, 'names' => $names, 'handler' => $handler, 'path' => $normalized];
     }
 
     public function dispatch(Request $request): Response
@@ -86,20 +59,8 @@ final class Router
             $matches = [];
             if (preg_match($route['regex'], $path, $matches) === 1) {
                 $params = [];
-                foreach ($route['names'] as $name) {
-                    $params[$name] = rawurldecode((string) ($matches[$name] ?? ''));
-                }
-
-                $matchedRequest = new Request(
-                    $request->method,
-                    $request->path,
-                    $request->headers,
-                    $request->query,
-                    $request->input,
-                    $request->files,
-                    $params
-                );
-
+                foreach ($route['names'] as $name) $params[$name] = rawurldecode((string) ($matches[$name] ?? ''));
+                $matchedRequest = new Request($request->method, $request->path, $request->headers, $request->query, $request->input, $request->files, $params);
                 return ($route['handler'])($matchedRequest);
             }
         }
@@ -107,34 +68,25 @@ final class Router
         $allowed = [];
         foreach ($this->routes as $registeredMethod => $routes) {
             foreach ($routes as $route) {
-                if (preg_match($route['regex'], $path) === 1) {
-                    $allowed[] = $registeredMethod;
-                    break;
-                }
+                if (preg_match($route['regex'], $path) === 1) { $allowed[] = $registeredMethod; break; }
             }
         }
 
         if ($allowed !== []) {
             sort($allowed);
-            return new Response(
-                405,
-                '{"error":"method_not_allowed"}',
-                [
-                    'Content-Type' => 'application/json; charset=utf-8',
-                    'Cache-Control' => 'no-store',
-                    'Allow' => implode(', ', $allowed),
-                    'X-Content-Type-Options' => 'nosniff',
-                ]
-            );
+            return new Response(405, '{"error":"method_not_allowed"}', [
+                'Content-Type' => 'application/json; charset=utf-8',
+                'Cache-Control' => 'no-store',
+                'Allow' => implode(', ', $allowed),
+                'X-Content-Type-Options' => 'nosniff',
+            ]);
         }
-
         return Response::json(['error' => 'not_found'], 404);
     }
 
     private function normalizePath(string $path): string
     {
         $normalized = '/' . trim($path, '/');
-
         return $normalized === '/' ? '/' : $normalized;
     }
 }
