@@ -72,34 +72,46 @@ jobs:
         env:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
         run: |
           set -euo pipefail
           DOMAIN_ROOT='/home/digibail/domains/digebail.ir'
           PRIVATE_APP="$DOMAIN_ROOT/php_app"
           PUBLIC_ROOT="$DOMAIN_ROOT/public_html"
+          DEPLOY_ID="$(date -u +%Y%m%dT%H%M%SZ)-$GITHUB_RUN_ID"
+          BACKUP_ROOT="$DOMAIN_ROOT/.deploy-backups/php83-$DEPLOY_ID"
 
+          # Validate the exact DirectAdmin domain and prepare a private rollback area.
           ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes "$DEPLOY_USER@$DEPLOY_HOST" \
             "set -eu
              test \"\$(realpath '$DOMAIN_ROOT')\" = '$DOMAIN_ROOT'
              test -d '$PUBLIC_ROOT'
-             if find '$PUBLIC_ROOT' -mindepth 1 -maxdepth 1 -print -quit | grep -q .; then
-               echo 'BLOCKED: public_html is not empty; refusing to overwrite files.'
-               exit 20
-             fi
-             mkdir -p '$PRIVATE_APP'
-             chmod 755 '$PRIVATE_APP' '$PUBLIC_ROOT'"
+             mkdir -p '$PRIVATE_APP' '$BACKUP_ROOT/php_app' '$BACKUP_ROOT/public_html'
+             chmod 755 '$PRIVATE_APP' '$PUBLIC_ROOT'
+             chmod 700 '$DOMAIN_ROOT/.deploy-backups' '$BACKUP_ROOT'"
 
-          rsync -az --no-owner --no-group \
+          # Back up every existing private-app file that rsync will replace.
+          # The live .env and all unrelated server files are explicitly excluded.
+          rsync -az --no-owner --no-group --backup --backup-dir="$BACKUP_ROOT/php_app" \
             -e "ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes" \
             --exclude='.env' --exclude='.git/' \
             php/ "$DEPLOY_USER@$DEPLOY_HOST:$PRIVATE_APP/"
 
-          rsync -az --no-owner --no-group \
+          # Add new public assets only. Existing public files are never overwritten.
+          # index.php is handled separately after preserving its current version.
+          rsync -az --no-owner --no-group --ignore-existing \
             -e "ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes" \
+            --exclude='index.php' \
             php/public/ "$DEPLOY_USER@$DEPLOY_HOST:$PUBLIC_ROOT/"
 
           ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes "$DEPLOY_USER@$DEPLOY_HOST" \
             "set -eu
+             if [ -e '$PUBLIC_ROOT/index.php' ] || [ -L '$PUBLIC_ROOT/index.php' ]; then
+               cp -a '$PUBLIC_ROOT/index.php' '$BACKUP_ROOT/public_html/index.php'
+               echo 'EXISTING_INDEX_BACKED_UP=1'
+             else
+               echo 'EXISTING_INDEX_BACKED_UP=0'
+             fi
              cat > '$PUBLIC_ROOT/index.php' <<'PHP_ENTRY'
           <?php
           declare(strict_types=1);
@@ -112,6 +124,7 @@ jobs:
              echo 'PHP_FILES_TRANSFERRED=1'
              echo 'PRIVATE_APP_PATH=$PRIVATE_APP'
              echo 'PUBLIC_DOCUMENT_ROOT=$PUBLIC_ROOT'
+             echo 'ROLLBACK_BACKUP=$BACKUP_ROOT'
              if [ -s '$PRIVATE_APP/.env' ]; then
                echo 'PRIVATE_ENV_PRESENT=1'
              else
