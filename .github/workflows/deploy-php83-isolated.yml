@@ -110,13 +110,6 @@ jobs:
             --exclude='index.php' \
             php/public/ "$DEPLOY_USER@$DEPLOY_HOST:$PUBLIC_ROOT/"
 
-          # Reuse the existing, already populated DirectAdmin MariaDB database.
-          # The bootstrap writes a private .env, validates PDO connectivity, and applies only IF NOT EXISTS DDL.
-          ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes "$DEPLOY_USER@$DEPLOY_HOST" \
-            "set -eu
-             /usr/local/php83/bin/php '$PRIVATE_APP/scripts/configure_production.php'
-             chmod 600 '$PRIVATE_APP/.env'"
-
           ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes "$DEPLOY_USER@$DEPLOY_HOST" \
             "set -eu
              if [ -e '$PUBLIC_ROOT/index.php' ] || [ -L '$PUBLIC_ROOT/index.php' ]; then
