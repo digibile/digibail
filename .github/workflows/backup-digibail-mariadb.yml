@@ -23,7 +23,7 @@ jobs:
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           command_timeout: 40m
           script: |
-            set -eu
+            set -euo pipefail
             DB='digibail_vamcitydigibilepay'
             ROOT="$HOME/domains/digebail.ir"
             BACKUP_ROOT="$HOME/private_backups/digibail-mariadb"
