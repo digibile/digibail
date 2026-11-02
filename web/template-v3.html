@@ -435,6 +435,17 @@ section.s{padding-block:28px 4px}h2.t{font-family:var(--f-body);font-size:1.35re
 @media(max-width:860px){.hero-shell{grid-template-columns:1fr;gap:16px;padding:25px 18px;margin-inline:-12px;min-height:0}.hero-message{max-width:none}.hero-message h1{font-size:1.8rem}.hero-message p{font-size:.82rem}.hero-calculator{max-width:none;justify-self:stretch;padding:15px}.hero-arrows{display:none}.feature-strip{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;padding:14px 8px;margin-inline:-12px}.feature-strip>div{border:0}.feature-strip>div:last-child{grid-column:1/-1}.feature-strip small{font-size:.66rem}.ft{margin-inline:-12px}.band{margin-inline:-12px}.hd-in{min-height:58px}}
 @media(max-width:420px){.hero-message h1{font-size:1.55rem}.hero-calculator{padding:12px}.feature-strip b{font-size:.76rem}}
 
+
+.plans-showcase{padding-top:18px!important}.section-heading{display:flex;align-items:center;justify-content:space-between;gap:12px}.section-heading .sub{margin-bottom:12px}
+.plans-showcase .plan-tools,.plans-showcase .plan-count{display:none!important}
+.plans-showcase .bento{grid-template-columns:repeat(5,minmax(0,1fr));gap:10px}
+.plans-showcase .pc{padding:10px;border-radius:12px;gap:6px}
+.plans-showcase .pc img{height:92px!important;object-fit:contain!important;background:#f3f7fb;padding:4px}
+.plans-showcase .pc h3{font-size:.9rem}.plans-showcase .pc .m{font-size:.7rem}.plans-showcase .facts{font-size:.68rem;gap:4px}.plans-showcase .facts b{font-size:.72rem}
+.plans-showcase .pc .btn{font-size:.69rem;min-height:30px;padding:4px 7px}
+@media(max-width:900px){.plans-showcase .bento{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:480px){.section-heading{align-items:flex-start}.section-heading>.btn{font-size:.68rem;padding:5px 8px;min-height:34px}.plans-showcase .bento{grid-template-columns:repeat(2,minmax(0,1fr))}.plans-showcase .pc img{height:78px!important}}
+
 </style></head><body>
 
 <div class="hd" id="hd"><div class="hd-in">
@@ -622,26 +633,18 @@ function home(){const A=act();
  <div><i>♧</i><b>پشتیبانی شبانه‌روزی</b><small>در تمام مراحل</small></div>
 </section>`;
 
- <section class="s" id="stores">
-  <h2 class="t">فروشگاه‌های طرف قرارداد</h2>
-  <p class="sub">از خرید کالاهای دیجیتال و لوازم خانه تا خدمات و محصولات روزمره؛ فروشگاه‌های تأییدشده پس از ثبت و تأیید پذیرندگی در این بخش نمایش داده می‌شوند.</p>
-  <div class="bento">
-   <article class="pc"><span class="m">📱</span><h3>موبایل و کالای دیجیتال</h3><p>گوشی، تبلت، لپ‌تاپ و لوازم جانبی</p><a class="btn" href="/register.html?type=merchant">ثبت فروشگاه در این دسته</a></article>
-   <article class="pc"><span class="m">🏠</span><h3>خانه و سبک زندگی</h3><p>لوازم خانگی، دکوراسیون و تجهیزات منزل</p><a class="btn" href="/register.html?type=merchant">ثبت فروشگاه در این دسته</a></article>
-   <article class="pc"><span class="m">⌚</span><h3>مد و کالاهای شخصی</h3><p>ساعت، پوشاک، اکسسوری و کالاهای شخصی</p><a class="btn" href="/register.html?type=merchant">ثبت فروشگاه در این دسته</a></article>
-   <article class="pc"><span class="m">🚗</span><h3>خودرو و موتورسیکلت</h3><p>قطعات، لوازم جانبی و خدمات مرتبط</p><a class="btn" href="/register.html?type=merchant">ثبت فروشگاه در این دسته</a></article>
-  </div>
-  <p class="note">نام فروشگاه‌ها، موجودی کالا و پیشنهادهای خرید فقط پس از اتصال فهرست واقعی پذیرندگان نمایش داده می‌شود؛ فروشگاه یا کالای ساختگی درج نشده است.</p>
+ <section class="s plans-showcase" id="plans"><span id="stores" aria-hidden="true"></span>
+  <div class="section-heading"><div><h2 class="t">طرح‌های وام و خرید اقساطی</h2><p class="sub">طرح مناسب خود را انتخاب کنید و شرایط پرداخت را پیش از ثبت درخواست ببینید.</p></div><a class="btn" href="#plans">مشاهده همه طرح‌ها ←</a></div>
+  <div class="plan-tools"><input id="planSearch" type="search" placeholder="جستجوی نام یا توضیحات طرح…" aria-label="جستجوی طرح"><select id="planFilter" aria-label="فیلتر طرح"><option value="all">همه طرح‌ها</option><option value="down">با پیش‌پرداخت</option><option value="nodown">بدون پیش‌پرداخت</option><option value="bank">استعلام بانکی</option></select></div><p class="plan-count" id="planCount"></p><div class="bento" id="planGrid">${renderPlanCards(A)}</div>
  </section>
  <section class="s" id="partners">
-  <h2 class="t">همکاری با دیجی‌بایل پی</h2><p class="sub">برای فروشگاه‌ها، کسب‌وکارها، شبکه‌های فروش و سازمان‌ها مسیر همکاری جداگانه در نظر گرفته شده است.</p>
+  <h2 class="t">چرا دیجی‌بایل پی؟</h2><p class="sub">با ما، تجربه‌ای متفاوت از خدمات مالی، سریع، شفاف و مطمئن خواهید داشت.</p>
   <div class="bento">
    <article class="pc"><h3>پذیرنده شوید</h3><p>درگاه خرید اعتباری، تسویه و مدیریت سفارش برای کسب‌وکار شما.</p><a class="btn solid" href="/register.html?type=merchant">درخواست پذیرندگی</a></article>
    <article class="pc"><h3>نماینده شوید</h3><p>همکاری در معرفی مشتریان و توسعه شبکه خدمات دیجی‌بایل پی.</p><a class="btn" href="/register.html?type=agent">درخواست نمایندگی</a></article>
    <article class="pc"><h3>همکاری سازمانی</h3><p>ارائه راهکارهای اعتبار و خرید اقساطی برای کارکنان و اعضای سازمان‌ها.</p><a class="btn" href="/register.html?type=organization">درخواست همکاری سازمانی</a></article>
   </div>
  </section>
- <section class="s" id="plans"><h2 class="t">طرح‌های اقساط فعال</h2><p class="sub">طرح‌های قابل نمایش فقط از پایگاه داده و پس از فعال‌سازی مدیر دریافت می‌شوند. برای پیدا کردن طرح از جستجو و فیلتر استفاده کنید.</p><div class="plan-tools"><input id="planSearch" type="search" placeholder="جستجوی نام یا توضیحات طرح…" aria-label="جستجوی طرح"><select id="planFilter" aria-label="فیلتر طرح"><option value="all">همه طرح‌ها</option><option value="down">با پیش‌پرداخت</option><option value="nodown">بدون پیش‌پرداخت</option><option value="bank">استعلام بانکی</option></select></div><p class="plan-count" id="planCount"></p><div class="bento" id="planGrid">${renderPlanCards(A)}</div></section>
  <section class="s" id="how"><h2 class="t">از ثبت‌نام تا کارت مجازی</h2><p class="sub">چهار مرحله و کمتر از ۵ دقیقه.</p>
   <div class="tl"><div><div class="n">۱</div><h3>عضویت با موبایل</h3><p>کد تأیید پیامکی می‌گیرید و حساب شما ساخته می‌شود.</p></div><div><div class="n">۲</div><h3>احراز هویت و مدارک</h3><p>عکس مدارک را بارگذاری می‌کنید و اطلاعات آن خودکار خوانده می‌شود.</p></div><div><div class="n">۳</div><h3>قرارداد دیجیتال</h3><p>قرارداد را با کد پیامکی امضا می‌کنید.</p></div><div><div class="n">۴</div><h3>کارت مجازی</h3><p>با تأیید وام، کارت مجازی با سقف وام شما صادر می‌شود و برای خرید آماده است.</p></div></div></section>
  <section class="s" id="trust"><h2 class="t">امنیت و شفافیت</h2><p class="sub">اطلاعات شما رمزنگاری می‌شود و هیچ هزینه‌ی پنهانی وجود ندارد.</p>
