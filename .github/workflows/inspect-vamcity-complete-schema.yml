@@ -53,3 +53,5 @@ jobs:
               echo "=== END_DATABASE=$DB ==="
             done
             echo "VAMCITY_COMPLETE_SCHEMA_INVENTORY_EXTRACTED=1"
+
+# Read-only schema inventory retriggered for migration reconciliation.
