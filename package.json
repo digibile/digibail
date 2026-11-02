@@ -9,7 +9,8 @@
     "start:server": "node server.js",
     "migrate": "node migrate.js",
     "test": "node --test",
-    "build": "next build"
+    "build": "next build",
+    "db:audit:mariadb": "node scripts/audit-mariadb-schema.mjs"
   },
   "engines": {
     "node": ">=22"
