@@ -88,6 +88,19 @@ try {
     }))
   ]));
 
+  // Only enumerate content keys and flags. Never read or emit SiteContents.Content.
+  let siteContentKeyInventory = [];
+  if (tableNames.has("SiteContents")) {
+    const [keys] = await connection.query(
+      "SELECT `Key` AS content_key, `IsJson` AS is_json, COUNT(*) AS row_count FROM `SiteContents` GROUP BY `Key`, `IsJson` ORDER BY `Key`, `IsJson`"
+    );
+    siteContentKeyInventory = keys.map(row => ({
+      key: row.content_key,
+      isJson: Boolean(row.is_json),
+      rows: Number(row.row_count)
+    }));
+  }
+
   const report = {
     generatedAt: new Date().toISOString(),
     readOnly: true,
@@ -104,6 +117,7 @@ try {
       .map(name => ({ name, columns: (columnsByTable.get(name) || []).length })),
     applicationTablesWithoutSameName: appTables.filter(name => !tableNames.has(name)),
     candidateMapping: mapping,
+    siteContentKeyInventory,
     tables: tables.map(row => ({
       ...row,
       estimated_rows: Number(row.estimated_rows || 0),
