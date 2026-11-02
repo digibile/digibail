@@ -1,6 +1,7 @@
 name: Inspect legacy Digibail database settings
 on:
   push:
+    branches: [main]
     paths:
       - .github/workflows/inspect-legacy-database.yml
 permissions:
@@ -8,14 +9,15 @@ permissions:
 jobs:
   inspect:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - name: Inspect legacy schema and SMS configuration presence
+      - name: Inspect legacy database catalog and schema read-only
         uses: appleboy/ssh-action@v1.2.2
         with:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
-          command_timeout: 5m
+          command_timeout: 8m
           script: |
             set -eu
             if sudo -n docker info >/dev/null 2>&1; then D="sudo -n docker"; else D="docker"; fi
@@ -30,13 +32,20 @@ jobs:
             PASS="$(printf '%s\n' "$CREDS" | sed -n '3p')"
             if [ -z "$DB" ] || [ -z "$USER" ] || [ -z "$PASS" ]; then echo "LEGACY_SQL_AUTH_PARSE_FAILED=1"; exit 21; fi
             echo "LEGACY_DB_NAME=$DB"
-            echo "=== legacy tables and SMS/config columns ==="
-            Q="SET NOCOUNT ON; SELECT s.name+'.'+t.name+'.'+c.name FROM sys.tables t JOIN sys.schemas s ON s.schema_id=t.schema_id JOIN sys.columns c ON c.object_id=t.object_id WHERE t.name LIKE '%Sms%' OR t.name LIKE '%Setting%' OR t.name LIKE '%Panel%' OR t.name IN ('AspNetUsers','AspNetRoles','Customers') OR c.name LIKE '%Sms%' OR c.name LIKE '%Provider%' OR c.name LIKE '%Panel%' ORDER BY t.name,c.column_id;"
-            $D exec -e SQLCMDPASSWORD="$PASS" "$SQLC" "$SQLCMD" -S localhost -U "$USER" -C -b -h -1 -W -w 8000 -d "$DB" -Q "$Q" | head -180
-            echo "=== SMS panel enum definitions ==="
-            grep -RIn --include='*.cs' -E 'enum SmsPanel|enum SmsPatternCategory|enum SmsPatternStatus|enum AppSmsType' /home/digibail/domains/digebail.ir/public_html/recovered-source 2>/dev/null | head -30 || true
-            echo "=== old settings field presence only ==="
-            Q2="SET NOCOUNT ON; SELECT TOP 1 CASE WHEN COL_LENGTH('dbo.AppSettings','KaveNegarJson') IS NOT NULL THEN 'KaveNegarJson_COLUMN=YES' ELSE 'KaveNegarJson_COLUMN=NO' END, CASE WHEN COL_LENGTH('dbo.AppSettings','MelliPayamakJson') IS NOT NULL THEN 'MelliPayamakJson_COLUMN=YES' ELSE 'MelliPayamakJson_COLUMN=NO' END FROM sys.tables WHERE name='AppSettings';"
-            $D exec -e SQLCMDPASSWORD="$PASS" "$SQLC" "$SQLCMD" -S localhost -U "$USER" -C -b -h -1 -W -w 1000 -d "$DB" -Q "$Q2" 2>/dev/null || true
+            echo "=== accessible SQL database catalog (names and states only) ==="
+            Q0="SET NOCOUNT ON; SELECT name,state_desc FROM sys.databases ORDER BY name;"
+            $D exec -e SQLCMDPASSWORD="$PASS" "$SQLC" "$SQLCMD" -S localhost -U "$USER" -C -b -h -1 -W -s '|' -w 4000 -Q "$Q0" 2>&1 || echo "DATABASE_CATALOG_QUERY_UNAVAILABLE"
+            echo "=== complete table inventory and row counts for configured legacy database ==="
+            Q1="SET NOCOUNT ON; SELECT s.name,t.name,COALESCE(SUM(CASE WHEN p.index_id IN (0,1) THEN p.rows ELSE 0 END),0) FROM sys.tables t JOIN sys.schemas s ON s.schema_id=t.schema_id LEFT JOIN sys.partitions p ON p.object_id=t.object_id GROUP BY s.name,t.name ORDER BY s.name,t.name;"
+            $D exec -e SQLCMDPASSWORD="$PASS" "$SQLC" "$SQLCMD" -S localhost -U "$USER" -C -b -h -1 -W -s '|' -w 8000 -d "$DB" -Q "$Q1"
+            echo "=== all column metadata for configured legacy database ==="
+            Q2="SET NOCOUNT ON; SELECT s.name,t.name,c.column_id,c.name,ty.name,c.max_length,c.precision,c.scale,c.is_nullable,c.is_identity,c.is_computed FROM sys.tables t JOIN sys.schemas s ON s.schema_id=t.schema_id JOIN sys.columns c ON c.object_id=t.object_id JOIN sys.types ty ON ty.user_type_id=c.user_type_id ORDER BY s.name,t.name,c.column_id;"
+            $D exec -e SQLCMDPASSWORD="$PASS" "$SQLC" "$SQLCMD" -S localhost -U "$USER" -C -b -h -1 -W -s '|' -w 12000 -d "$DB" -Q "$Q2"
+            echo "=== keys and foreign key relationships ==="
+            Q3="SET NOCOUNT ON; SELECT 'PK_UQ',s.name,t.name,k.name,c.name,ic.key_ordinal FROM sys.key_constraints k JOIN sys.tables t ON t.object_id=k.parent_object_id JOIN sys.schemas s ON s.schema_id=t.schema_id JOIN sys.index_columns ic ON ic.object_id=t.object_id AND ic.index_id=k.unique_index_id JOIN sys.columns c ON c.object_id=t.object_id AND c.column_id=ic.column_id UNION ALL SELECT 'FK',ps.name,pt.name,fk.name,pc.name+'->'+rs.name+'.'+rt.name+'.'+rc.name,fkc.constraint_column_id FROM sys.foreign_keys fk JOIN sys.foreign_key_columns fkc ON fkc.constraint_object_id=fk.object_id JOIN sys.tables pt ON pt.object_id=fk.parent_object_id JOIN sys.schemas ps ON ps.schema_id=pt.schema_id JOIN sys.columns pc ON pc.object_id=pt.object_id AND pc.column_id=fkc.parent_column_id JOIN sys.tables rt ON rt.object_id=fk.referenced_object_id JOIN sys.schemas rs ON rs.schema_id=rt.schema_id JOIN sys.columns rc ON rc.object_id=rt.object_id AND rc.column_id=fkc.referenced_column_id ORDER BY 1,2,3,4,6;"
+            $D exec -e SQLCMDPASSWORD="$PASS" "$SQLC" "$SQLCMD" -S localhost -U "$USER" -C -b -h -1 -W -s '|' -w 12000 -d "$DB" -Q "$Q3"
+            echo "=== views procedures functions and triggers ==="
+            Q4="SET NOCOUNT ON; SELECT s.name,o.name,o.type_desc,CASE WHEN sm.definition IS NULL THEN 0 ELSE LEN(sm.definition) END FROM sys.objects o JOIN sys.schemas s ON s.schema_id=o.schema_id LEFT JOIN sys.sql_modules sm ON sm.object_id=o.object_id WHERE o.type IN ('V','P','FN','IF','TF','TR') ORDER BY s.name,o.type,o.name;"
+            $D exec -e SQLCMDPASSWORD="$PASS" "$SQLC" "$SQLCMD" -S localhost -U "$USER" -C -b -h -1 -W -s '|' -w 8000 -d "$DB" -Q "$Q4"
             unset PASS CONN CREDS
-            echo "LEGACY_DATABASE_INSPECTION_COMPLETED=1"
+            echo "LEGACY_DATABASE_READ_ONLY_INVENTORY_COMPLETED=1"
