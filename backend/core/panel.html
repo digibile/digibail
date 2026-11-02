@@ -369,16 +369,16 @@ V.audit=()=>head('گزارش فعالیت‌ها','هر تغییر مهم با �
 
 V.updates=async()=>{
  const r=await api('GET','/api/v1/admin/releases/status');
- const d=r.data||r,status=d.deployment||{},db=d.databases||{};
+ const d=r.data||r,status=d.deployment||{},db=d.databases?.mariadb||{};
  const date=v=>v?new Date(v).toLocaleString('fa-IR'):'—';
  const pill=(ok,yes,no)=>'<span class="pill '+(ok?'a':'r')+'">'+(ok?yes:no)+'</span>';
  const deployStatus=({completed:status.conclusion==='success'?'موفق':status.conclusion==='failure'?'ناموفق':status.conclusion||'پایان‌یافته',in_progress:'در حال اجرا',queued:'در صف',waiting:'در انتظار'})[status.status]||'نامشخص';
- const dbPanel=(name,x)=>'<div class="panel"><h3>'+name+'</h3><div class="kv"><span>اتصال</span><b>'+pill(x.connected,'متصل','قطع / تنظیم نشده')+'</b><span>نام پایگاه داده</span><b><code>'+esc(x.database||'—')+'</code></b><span>تعداد جدول‌ها</span><b class="n">'+esc(x.tables??'—')+'</b>'+(x.users!==undefined?'<span>کاربران قدیمی</span><b class="n">'+esc(x.users)+'</b>':'')+'</div></div>';
+ const dbPanel='<div class="panel"><h3>پایگاه داده عملیاتی MariaDB</h3><div class="kv"><span>اتصال</span><b>'+pill(db.connected,'متصل','قطع / تنظیم نشده')+'</b><span>نام پایگاه داده</span><b><code>'+esc(db.database||'—')+'</code></b><span>تعداد جدول‌ها</span><b class="n">'+esc(db.tables??'—')+'</b>'+(db.users!==undefined?'<span>کاربران قدیمی</span><b class="n">'+esc(db.users)+'</b>':'')+'</div></div>';
  const badge=d.updateAvailable?'<span class="pill p">نسخه جدید موجود است</span>':'<span class="pill a">نسخه مخزن با نسخه نصب‌شده یکسان است</span>';
- return head('مرکز نسخه‌ها و بروزرسانی','کنترل نسخه، بررسی اتصال پایگاه‌های داده و انتشار نسخه اصلی از داخل پنل')+
+ return head('مرکز نسخه‌ها و بروزرسانی','کنترل نسخه، بررسی اتصال پایگاه داده و انتشار نسخه اصلی از داخل پنل')+
  '<div class="cols"><div class="panel"><h3>نسخه نصب‌شده</h3><div class="score">'+esc(d.appVersion||'نامشخص')+'</div><p class="sub">شناسه انتشار: <code>'+esc(d.deployedShort||'نامشخص')+'</code></p><p>'+badge+'</p></div>'+
  '<div class="panel"><h3>آخرین نسخه مخزن</h3><div class="score" style="font-size:1.5rem"><code>'+esc(d.latestShort||'—')+'</code></div><p>'+esc(d.latestMessage||'پیام انتشار ثبت نشده')+'</p><p class="sub">تاریخ ثبت: '+esc(date(d.latestAt))+'</p></div></div>'+
- '<div class="cols">'+dbPanel('پایگاه داده اصلی برنامه',db.postgres||{})+dbPanel('پایگاه داده قدیمی مشتریان و پرونده‌ها',db.mariadb||{})+'</div>'+
+ '<div class="cols">'+dbPanel+'</div>'+
  '<div class="panel"><h3>وضعیت آخرین استقرار</h3><div class="kv"><span>وضعیت</span><b>'+esc(deployStatus)+'</b><span>شناسه اجرا</span><b class="n">'+esc(status.id||'—')+'</b><span>نسخه نصب‌شده</span><b class="n">'+esc(d.deployedShort||'—')+'</b></div><p><a class="btn" href="'+esc(status.url||'https://github.com/digibile/digibail/actions')+'" target="_blank" rel="noopener noreferrer">مشاهده گزارش کامل استقرار ↗</a></p></div>'+
  '<div class="panel"><h3>عملیات بروزرسانی</h3><p class="sub">نسخه فقط از شاخه اصلی دریافت می‌شود. استقرار موجود، فایل‌های محیطی و داده‌های کاربران را حفظ می‌کند و قبل از اعلام موفقیت، سلامت برنامه و اتصال داده‌ها را بررسی می‌کند.</p>'+
  (!d.deployConfigured?'<div class="notice">اتصال یک‌باره هنوز تنظیم نشده است. متغیر محرمانه GITHUB_DEPLOY_TOKEN باید با دسترسی Actions: write برای مخزن digibile/digibail در محیط امن برنامه ثبت شود.</div>':'')+
@@ -1596,7 +1596,7 @@ V.dash=view('real-dashboard',async()=>{
   api('GET','/api/v1/admin/legacy-customers').catch(()=>[]),
   api('GET','/api/v1/admin/sms/templates').catch(()=>({items:[]})),
   api('GET','/api/v1/admin/beta-inquiries').catch(()=>[]),
-  api('GET','/api/v1/admin/legacy-source-tables').catch(()=>[]),
+  api('GET','/api/v1/admin/legacy-relational-tables').catch(()=>[]),
   api('GET','/api/v1/admin/orders').catch(()=>[]),
   api('GET','/api/v1/admin/virtual-cards').catch(()=>[]),
   api('GET','/api/v1/admin/ledger/entries').catch(()=>[]),
@@ -1604,7 +1604,7 @@ V.dash=view('real-dashboard',async()=>{
  ]);
  const rows=v=>Array.isArray(v)?v:Array.isArray(v?.data)?v.data:Array.isArray(v?.items)?v.items:[];
  const users=rows(rs[0]),usersTotal=Number(rs[0]?.total)||users.length,customerCount=Number(summary.legacy_customers??rs[1]?.data?.legacy_customers??rs[1]?.legacy_customers??0),sms=rows(rs[2]),beta=rows(rs[3]),legacy=rows(rs[4]),orders=rows(rs[5]),cards=rows(rs[6]),ledger=rows(rs[7]),products=rows(rs[8]);
- const total=legacy.reduce((n,t)=>n+(Number(t.row_count)||0),0),activeProducts=products.filter(p=>p.isActive===true||p.isActive===1).length;
+ const total=legacy.reduce((n,t)=>n+(Number(t.imported_rows??t.row_count)||0),0),activeProducts=products.filter(p=>p.isActive===true||p.isActive===1).length;
  return head('داشبورد مدیریت','همه‌ی اعداد از API و پایگاه داده خوانده می‌شوند؛ برای دیدن جزئیات روی هر کارت بزنید.')+
  tiles([
   ['حساب‌های کاربری',nf(usersTotal),'مشاهده فهرست کاربران','','users'],
@@ -1627,7 +1627,7 @@ document.addEventListener('click',ok(async e=>{const d=e.target.closest('[data-d
 /* First sidebar item: inspect only real imported legacy loan/request rows. Never show mock loans as production records. */
 V.loans=view('loan-applications-live',async()=>{
  const unwrap=x=>Array.isArray(x)?x:(Array.isArray(x?.data)?x.data:[]);
- const tr=unwrap(await api('GET','/api/v1/admin/legacy-source-tables'));
+ const tr=unwrap(await api('GET','/api/v1/admin/legacy-relational-tables'));
  const related=tr.filter(t=>/loan|request|application|credit|installment|وام/i.test(String(t.source_table||'')));
  const candidates=related.filter(t=>Number(t.row_count)>0&&!/status|history|log|event/i.test(String(t.source_table||'')));
  const statusRows=related.filter(t=>/status/i.test(String(t.source_table||'')));
@@ -1646,7 +1646,7 @@ document.addEventListener('input',e=>{if(e.target.id!=='loanLegacySearch')return
 /* REAL_LEGACY_LOAN_REQUESTS_V1 */
 V.loans=view('real-loan-requests',async()=>{
  const rowsOf=x=>Array.isArray(x)?x:(Array.isArray(x?.data)?x.data:(Array.isArray(x?.rows)?x.rows:[]));
- const tables=rowsOf(await api('GET','/api/v1/admin/legacy-source-tables'));
+ const tables=rowsOf(await api('GET','/api/v1/admin/legacy-relational-tables'));
  const relatedAll=tables.filter(t=>/(loan|request|application|credit|installment|وام|درخواست)/i.test(String(t.source_table||'')));
  const related=relatedAll.filter(t=>Number(t.row_count)>0&&!/(status|history|log|event|claim|role)/i.test(String(t.source_table||'')));
  const statusTables=relatedAll.filter(t=>/status/i.test(String(t.source_table||'')));
@@ -1683,7 +1683,7 @@ V.dash=view('real-dashboard-drilldown',async function(){
   api('GET','/api/v1/admin/legacy-customers').catch(()=>[]),
   api('GET','/api/v1/admin/sms/templates').catch(()=>({items:[]})),
   api('GET','/api/v1/admin/beta-inquiries').catch(()=>[]),
-  api('GET','/api/v1/admin/legacy-source-tables').catch(()=>[]),
+  api('GET','/api/v1/admin/legacy-relational-tables').catch(()=>[]),
   api('GET','/api/v1/admin/orders').catch(()=>[]),
   api('GET','/api/v1/admin/virtual-cards').catch(()=>[]),
   api('GET','/api/v1/admin/ledger/entries').catch(()=>[]),
@@ -1691,7 +1691,7 @@ V.dash=view('real-dashboard-drilldown',async function(){
   api('GET','/api/v1/admin/summary').catch(()=>({data:{}}))
  ]);
  const users=drillRows(rs[0]),customers=drillRows(rs[1]),sms=drillRows(rs[2]),beta=drillRows(rs[3]),legacy=drillRows(rs[4]),orders=drillRows(rs[5]),cards=drillRows(rs[6]),ledger=drillRows(rs[7]),products=drillRows(rs[8]),summary=rs[9]?.data||{};
- const usersTotal=Number(summary.users)||users.length,customerCount=Number(rs[1]?.legacy_customers)||usersTotal,total=legacy.reduce((n,t)=>n+(Number(t.row_count)||0),0),active=products.filter(p=>p.isActive).length,review=products.filter(p=>p.needsReview).length;
+ const usersTotal=Number(summary.users)||users.length,customerCount=Number(rs[1]?.legacy_customers)||usersTotal,total=legacy.reduce((n,t)=>n+(Number(t.imported_rows??t.row_count)||0),0),active=products.filter(p=>p.isActive).length,review=products.filter(p=>p.needsReview).length;
  const items=[
   ['تعریف‌های کل وام',nf(products.length),'products','all','فهرست واقعی تعریف‌های ذخیره‌شده'],
   ['طرح‌های وام فعال',nf(active),'products','active','فقط طرح‌های فعال'],
