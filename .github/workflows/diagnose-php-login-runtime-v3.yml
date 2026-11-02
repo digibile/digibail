@@ -1,0 +1,47 @@
+name: Diagnose DigiBail PHP login runtime v3
+
+on:
+  push:
+    branches: [migration/php83-full-rebuild]
+    paths:
+      - .github/workflows/diagnose-php-login-runtime-v3.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Inspect PHP login runtime and error logs
+        uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          command_timeout: 3m
+          script: |
+            set -eu
+            ROOT="/home/digibail/domains/digebail.ir"
+            APP="$ROOT/php_app"
+            echo "=== PHP ERROR LOG CONFIG ==="
+            /usr/local/php83/bin/php -r 'echo "PHP_ERROR_LOG=".(ini_get("error_log") ?: "default").PHP_EOL; echo "PHP_LOG_ERRORS=".ini_get("log_errors").PHP_EOL;'
+            echo "=== AUTH LOGS ==="
+            find "$ROOT" /var/log /usr/local/directadmin/data/users -maxdepth 8 -type f -name error_log -readable -print 2>/dev/null | while IFS= read -r f; do
+              if grep -q "[AUTH_DIAG]" "$f" 2>/dev/null; then
+                echo "AUTH_LOG_SOURCE=$f"
+                grep "[AUTH_DIAG]" "$f" | tail -n 80 | sed -E 's/(user_id=)[0-9]+/\1[ID]/g'
+              fi
+            done
+            echo "=== BCRYPT RUNTIME SELF TEST ==="
+            /usr/local/php83/bin/php -r '
+              require $argv[1] . "/vendor/autoload.php";
+              $p="runtime-self-test-only";
+              $h=App\Security\PasswordVerifier::hashForNewPassword($p);
+              if (!App\Security\PasswordVerifier::verify($p,$h)) { echo "PHP_BCRYPT_SELFTEST=FAIL".PHP_EOL; exit(2); }
+              if (App\Security\PasswordVerifier::verify("not-the-password",$h)) { echo "PHP_BCRYPT_NEGATIVE_SELFTEST=FAIL".PHP_EOL; exit(3); }
+              echo "PHP_BCRYPT_SELFTEST=PASS".PHP_EOL;
+              echo "PHP_BCRYPT_NEGATIVE_SELFTEST=PASS".PHP_EOL;
+            ' "$APP"
+            echo "PHP_LOGIN_RUNTIME_DIAGNOSTIC=COMPLETED"
