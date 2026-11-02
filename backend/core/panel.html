@@ -371,6 +371,8 @@ V.updates=async()=>{
  const r=await api('GET','/api/v1/admin/releases/status');
  const d=r.data||r;
  const status=d.deployment||{};
+ const db=d.databases||{};
+ const databaseCard=(name,x)=>'<div class="panel"><h3>'+name+'</h3><p>'+(x?.connected?'<span class="pill a">متصل</span>':'<span class="pill r">اتصال ناموفق</span>')+'</p><p class="sub">نام پایگاه: '+esc(x?.database||'نامشخص')+'</p><p class="sub">تعداد جدول‌ها: '+(Number.isFinite(Number(x?.tables))?fa(x.tables):'نامشخص')+'</p></div>';
  const date=v=>v?new Date(v).toLocaleString('fa-IR'):'—';
  const badge=d.updateAvailable?'<span class="pill p">نسخه جدید موجود است</span>':'<span class="pill a">نسخه فعلی آخرین نسخه است</span>';
  const deployStatus=({completed:status.conclusion==='success'?'موفق':status.conclusion==='failure'?'ناموفق':status.conclusion||'پایان‌یافته',in_progress:'در حال اجرا',queued:'در صف',waiting:'در انتظار'})[status.status]||'نامشخص';
@@ -383,7 +385,8 @@ V.updates=async()=>{
  (!SUPER?'<p class="sub">شروع استقرار فقط برای مدیر ارشد فعال است.</p>':'')+
  '<div class="bar"><button class="btn" data-release-action="check">بررسی دوباره نسخه‌ها</button><button class="btn solid" data-release-action="deploy" '+(d.canDeploy?'':'disabled')+'>شروع بروزرسانی خودکار</button></div>'+
  '<p class="sub">نسخه جدید: <code>'+esc(d.latestShort)+'</code> · نسخه نصب‌شده: <code>'+esc(d.deployedShort)+'</code></p></div>'+
- '<div class="panel"><h3>ثبت و کنترل</h3><p class="sub">هر درخواست انتشار از داخل پنل با شناسه مدیر در پایگاه داده ثبت می‌شود. اجرای واقعی، خروجی و خطاها در گزارش GitHub Actions نگهداری می‌شوند. اگر بررسی سلامت یا اتصال پایگاه داده شکست بخورد، استقرار موفق اعلام نمی‌شود.</p></div>';
+ '<div class="cols">'+databaseCard('پایگاه عملیاتی PostgreSQL',db.postgres)+databaseCard('پایگاه اطلاعات قدیمی MariaDB',db.mariadb)+'</div>'+
+ '<div class="panel"><h3>ثبت و کنترل</h3><p class="sub">هر درخواست انتشار با شناسه مدیر در گزارش فعالیت‌ها ثبت می‌شود. برنامه هنگام شروع، migrationهای نسخه را اجرا می‌کند؛ سلامت سرویس و اتصال هر دو پایگاه داده نیز کنترل می‌شوند. اگر بررسی سلامت یا اتصال پایگاه داده شکست بخورد، استقرار موفق اعلام نمی‌شود.</p></div>';
 };
 V.settings=()=>{const t=[['tpl','قالب و محتوا'],['status','وضعیت‌ها'],['slider','اسلایدر صفحه اصلی'],['ctpl','قالب قرارداد'],['foot','تماس و فوتر'],['params','پارامترهای وام'],['gw','درگاه‌ها']];
  return head('تنظیمات')+`<div class="tabs">${t.map(x=>`<button class="tab" data-st="${x[0]}" aria-selected="${state.sTab===x[0]}">${x[1]}</button>`).join('')}</div>`+({tpl:tplPane,status:statusPane,slider:sliderPane,ctpl:ctplPane,foot:footPane,params:paramPane,gw:gwPane}[state.sTab])()};
