@@ -23,7 +23,7 @@ jobs:
         image: mariadb:10.6
         env:
           MARIADB_ROOT_PASSWORD: isolated_restore_only_password
-          MARIADB_DATABASE: restore_test
+          MARIADB_DATABASE: digibail_vamcitydigibilepay
         ports:
           - 3307:3306
         options: >-
@@ -49,7 +49,6 @@ jobs:
           chmod 600 "$HOME/.ssh/id_ed25519"
           ssh-keyscan -H "$DEPLOY_HOST" >> "$HOME/.ssh/known_hosts" 2>/dev/null
           chmod 600 "$HOME/.ssh/known_hosts"
-          BACKUP_DIR='$HOME/private_backups/digibail-mariadb'
           BACKUP_NAME='digibail_vamcitydigibilepay-20261102T110427Z.sql.gz'
           ssh -i "$HOME/.ssh/id_ed25519" -o BatchMode=yes "$DEPLOY_USER@$DEPLOY_HOST" "cd \"\$HOME/private_backups/digibail-mariadb\" && sha256sum -c '$BACKUP_NAME.sha256'"
           ssh -i "$HOME/.ssh/id_ed25519" -o BatchMode=yes "$DEPLOY_USER@$DEPLOY_HOST" "cat \"\$HOME/private_backups/digibail-mariadb/$BACKUP_NAME\"" > "$RUNNER_TEMP/digibail-production-backup.sql.gz"
@@ -67,13 +66,13 @@ jobs:
             sleep 2
           done
           mariadb-admin --host=127.0.0.1 --port=3307 --user=root --password="$DB_ROOT_PASSWORD" ping
-          gzip -dc "$RUNNER_TEMP/digibail-production-backup.sql.gz" | mariadb --host=127.0.0.1 --port=3307 --user=root --password="$DB_ROOT_PASSWORD" restore_test
-          TABLES="$(mariadb --host=127.0.0.1 --port=3307 --user=root --password="$DB_ROOT_PASSWORD" --batch --skip-column-names -e "SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA='restore_test' AND TABLE_TYPE='BASE TABLE'")"
+          gzip -dc "$RUNNER_TEMP/digibail-production-backup.sql.gz" | mariadb --host=127.0.0.1 --port=3307 --user=root --password="$DB_ROOT_PASSWORD"
+          TABLES="$(mariadb --host=127.0.0.1 --port=3307 --user=root --password="$DB_ROOT_PASSWORD" --batch --skip-column-names -e "SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA='digibail_vamcitydigibilepay' AND TABLE_TYPE='BASE TABLE'")"
           echo "RESTORED_BASE_TABLES=$TABLES"
           test "$TABLES" -eq 224
-          ROUTINES="$(mariadb --host=127.0.0.1 --port=3307 --user=root --password="$DB_ROOT_PASSWORD" --batch --skip-column-names -e "SELECT COUNT(*) FROM information_schema.ROUTINES WHERE ROUTINE_SCHEMA='restore_test'")"
-          TRIGGERS="$(mariadb --host=127.0.0.1 --port=3307 --user=root --password="$DB_ROOT_PASSWORD" --batch --skip-column-names -e "SELECT COUNT(*) FROM information_schema.TRIGGERS WHERE TRIGGER_SCHEMA='restore_test'")"
-          EVENTS="$(mariadb --host=127.0.0.1 --port=3307 --user=root --password="$DB_ROOT_PASSWORD" --batch --skip-column-names -e "SELECT COUNT(*) FROM information_schema.EVENTS WHERE EVENT_SCHEMA='restore_test'")"
+          ROUTINES="$(mariadb --host=127.0.0.1 --port=3307 --user=root --password="$DB_ROOT_PASSWORD" --batch --skip-column-names -e "SELECT COUNT(*) FROM information_schema.ROUTINES WHERE ROUTINE_SCHEMA='digibail_vamcitydigibilepay'")"
+          TRIGGERS="$(mariadb --host=127.0.0.1 --port=3307 --user=root --password="$DB_ROOT_PASSWORD" --batch --skip-column-names -e "SELECT COUNT(*) FROM information_schema.TRIGGERS WHERE TRIGGER_SCHEMA='digibail_vamcitydigibilepay'")"
+          EVENTS="$(mariadb --host=127.0.0.1 --port=3307 --user=root --password="$DB_ROOT_PASSWORD" --batch --skip-column-names -e "SELECT COUNT(*) FROM information_schema.EVENTS WHERE EVENT_SCHEMA='digibail_vamcitydigibilepay'")"
           echo "RESTORED_ROUTINES=$ROUTINES"
           echo "RESTORED_TRIGGERS=$TRIGGERS"
           echo "RESTORED_EVENTS=$EVENTS"
@@ -84,7 +83,7 @@ jobs:
           DB_ROOT_PASSWORD: isolated_restore_only_password
         run: |
           set -euo pipefail
-          mariadb-check --host=127.0.0.1 --port=3307 --user=root --password="$DB_ROOT_PASSWORD" --check restore_test
+          mariadb-check --host=127.0.0.1 --port=3307 --user=root --password="$DB_ROOT_PASSWORD" --check digibail_vamcitydigibilepay
           echo "RESTORED_TABLE_CHECK=PASS"
 
       - name: Remove temporary backup copy
