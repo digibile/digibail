@@ -498,9 +498,9 @@ body.cms-admin [data-cms-section]>.cms-edit-trigger{display:block}
   <footer class="ft" data-cms-section="footer">
     <div class="ft-main">
       <div class="ft-brand"><a class="logo" href="#home"><i>db</i><span>دیجی‌بایل پی<small>راه هوشمند تأمین مالی</small></span></a><p data-cms-field="description">راهکار هوشمند خرید اقساطی و تأمین مالی؛ شفاف، سریع و قابل پیگیری.</p><div class="soc" aria-label="شبکه‌های اجتماعی"><a href="#" aria-label="اینستاگرام">اینستاگرام</a><a href="#" aria-label="لینکدین">لینکدین</a><a href="#" aria-label="تلگرام">تلگرام</a></div></div>
-      <div><b>خدمات مشتریان</b><a href="#plans">طرح‌های اعتباری</a><a href="#calc">محاسبه‌گر اقساط</a><a href="#how">مراحل دریافت اعتبار</a><a href="/profile.html">پیگیری درخواست</a><a href="/blog.html">مجله و راهنما</a></div>
+      <div><b>خدمات مشتریان</b><a href="#plans">طرح‌های اعتباری</a><a href="#calc">محاسبه‌گر اقساط</a><a href="#how">مراحل دریافت اعتبار</a><a href="/profile.html">پیگیری درخواست</a><a href="#blog">مجله و راهنما</a></div>
       <div><b>همکاری با ما</b><a href="/register.html?type=merchant">پذیرنده شوید</a><a href="/register.html?type=agent">نماینده شوید</a><a href="/register.html?type=organization">همکاری سازمانی</a><a href="#partners">مزایای همکاری</a></div>
-      <div><b>درباره و پشتیبانی</b><a href="/about.html">درباره ما</a><a href="/contact.html">تماس با ما</a><a href="/faq.html">پرسش‌های متداول</a><a href="/terms.html">قوانین و مقررات</a><a href="/privacy.html">حریم خصوصی</a></div>
+      <div><b>درباره و پشتیبانی</b><a href="#trust">درباره ما</a><a href="#newsletter">تماس با ما</a><a href="#faq">پرسش‌های متداول</a><a href="/terms.html">قوانین و مقررات</a><a href="/privacy.html">حریم خصوصی</a></div>
       <div><b>دسترسی سریع</b><a href="/login.html">ورود / عضویت</a><a href="/documents.html">مدارک</a><a href="/contracts.html">قراردادها</a><a href="#newsletter">عضویت در خبرنامه</a><span id="ftPlans"></span></div>
     </div>
     <div class="ft-contact"><div><b>ارتباط با دیجی‌بایل پی</b><p>نشانی، تلفن و ایمیل رسمی از تنظیمات تأییدشده سایت نمایش داده می‌شود.</p></div><div class="ft-badges" aria-label="مجوزها و نمادها">
@@ -666,28 +666,28 @@ function home(){const A=act();
 </section>
 
  <section class="s plans-showcase" id="plans" data-cms-section="plans"><span id="stores" aria-hidden="true"></span>
-  <div class="section-heading"><div><h2 class="t">طرح‌های وام و خرید اقساطی</h2><p class="sub">طرح مناسب خود را انتخاب کنید و شرایط پرداخت را پیش از ثبت درخواست ببینید.</p></div><a class="btn" href="#plans">مشاهده همه طرح‌ها ←</a></div>
+  <div class="section-heading"><div><h2 class="t" data-cms-field="title">طرح‌های وام و خرید اقساطی</h2><p class="sub" data-cms-field="description">طرح مناسب خود را انتخاب کنید و شرایط پرداخت را پیش از ثبت درخواست ببینید.</p></div><a class="btn" href="#plans">مشاهده همه طرح‌ها ←</a></div>
   <div class="plan-tools"><input id="planSearch" type="search" placeholder="جستجوی نام یا توضیحات طرح…" aria-label="جستجوی طرح"><select id="planFilter" aria-label="فیلتر طرح"><option value="all">همه طرح‌ها</option><option value="down">با پیش‌پرداخت</option><option value="nodown">بدون پیش‌پرداخت</option><option value="bank">استعلام بانکی</option></select></div><p class="plan-count" id="planCount"></p><div class="bento" id="planGrid">${renderPlanCards(A)}</div>
  </section>
  <section class="s" id="partners" data-cms-section="partners">
-  <h2 class="t">چرا دیجی‌بایل پی؟</h2><p class="sub">با ما، تجربه‌ای متفاوت از خدمات مالی، سریع، شفاف و مطمئن خواهید داشت.</p>
+  <h2 class="t" data-cms-field="title">چرا دیجی‌بایل پی؟</h2><p class="sub" data-cms-field="description">با ما، تجربه‌ای متفاوت از خدمات مالی، سریع، شفاف و مطمئن خواهید داشت.</p>
   <div class="bento">
    <article class="pc"><h3>پذیرنده شوید</h3><p>درگاه خرید اعتباری، تسویه و مدیریت سفارش برای کسب‌وکار شما.</p><a class="btn solid" href="/register.html?type=merchant">درخواست پذیرندگی</a></article>
    <article class="pc"><h3>نماینده شوید</h3><p>همکاری در معرفی مشتریان و توسعه شبکه خدمات دیجی‌بایل پی.</p><a class="btn" href="/register.html?type=agent">درخواست نمایندگی</a></article>
    <article class="pc"><h3>همکاری سازمانی</h3><p>ارائه راهکارهای اعتبار و خرید اقساطی برای کارکنان و اعضای سازمان‌ها.</p><a class="btn" href="/register.html?type=organization">درخواست همکاری سازمانی</a></article>
   </div>
  </section>
- <section class="s" id="how" data-cms-section="how"><h2 class="t">از ثبت‌نام تا کارت مجازی</h2><p class="sub">چهار مرحله و کمتر از ۵ دقیقه.</p>
+ <section class="s" id="how" data-cms-section="how"><h2 class="t" data-cms-field="title">از ثبت‌نام تا کارت مجازی</h2><p class="sub" data-cms-field="description">چهار مرحله و کمتر از ۵ دقیقه.</p>
   <div class="tl"><div><div class="n">۱</div><h3>عضویت با موبایل</h3><p>کد تأیید پیامکی می‌گیرید و حساب شما ساخته می‌شود.</p></div><div><div class="n">۲</div><h3>احراز هویت و مدارک</h3><p>عکس مدارک را بارگذاری می‌کنید و اطلاعات آن خودکار خوانده می‌شود.</p></div><div><div class="n">۳</div><h3>قرارداد دیجیتال</h3><p>قرارداد را با کد پیامکی امضا می‌کنید.</p></div><div><div class="n">۴</div><h3>کارت مجازی</h3><p>با تأیید وام، کارت مجازی با سقف وام شما صادر می‌شود و برای خرید آماده است.</p></div></div></section>
- <section class="s" id="trust" data-cms-section="trust"><h2 class="t">امنیت و شفافیت</h2><p class="sub">اطلاعات شما رمزنگاری می‌شود و هیچ هزینه‌ی پنهانی وجود ندارد.</p>
+ <section class="s" id="trust" data-cms-section="trust"><h2 class="t" data-cms-field="title">امنیت و شفافیت</h2><p class="sub" data-cms-field="description">اطلاعات شما رمزنگاری می‌شود و هیچ هزینه‌ی پنهانی وجود ندارد.</p>
   <div class="trust"><div class="tc"><h3>رمزنگاری مدارک</h3><p>تصویر مدارک رمزنگاری‌شده نگهداری می‌شود و هر دسترسی ثبت می‌شود.</p></div><div class="tc"><h3>قرارداد با امضای پیامکی</h3><p>نسخه‌ی قرارداد و گزارش امضا در حساب شما می‌ماند.</p></div><div class="tc"><h3>کارت مجازی کنترل‌شده</h3><p>سقف کارت برابر وام شماست و هر زمان می‌توانید آن را مسدود کنید.</p></div><div class="tc"><h3>اقساط شفاف</h3><p>مبلغ و سررسید همه‌ی اقساط قبل از خرید دیده می‌شود.</p></div></div></section>
- <section class="s" id="faq" data-cms-section="faq"><h2 class="t">پرسش‌های متداول</h2>
+ <section class="s" id="faq" data-cms-section="faq"><h2 class="t" data-cms-field="title">پرسش‌های متداول</h2>
   <details><summary>کارت مجازی چیست و کجا استفاده می‌شود؟</summary><p>بعد از تأیید وام، یک کارت مجازی با سقف وام برای شما صادر می‌شود. با آن از فروشگاه‌های طرف قرارداد از طریق درگاه دیجی‌بایل پی خرید می‌کنید.</p></details>
   <details><summary>برای دریافت اعتبار چه مدارکی لازم است؟</summary><p>فهرست مدارک هر طرح در صفحه‌ی همان طرح آمده است. هر مدرک را با عکس بارگذاری می‌کنید.</p></details>
   <details><summary>اگر قسطی را دیر پرداخت کنم چه می‌شود؟</summary><p>جریمه‌ی دیرکرد طبق قرارداد محاسبه می‌شود و قبل از سررسید پیامک یادآوری می‌گیرید.</p></details>
   <details><summary>چطور فروشگاه خودم را اضافه کنم؟</summary><p>از «پذیرنده شوید» درخواست بدهید. بعد از تأیید، لینک اختصاصی و درگاه برای شما فعال می‌شود.</p></details></section>
  <section class="s editorial-section" id="blog" data-cms-section="blog">
-  <div class="section-heading"><div><h2 class="t" data-cms-field="title">مجله دیجی‌بایل پی</h2><p class="sub" data-cms-field="description">راهنمای خرید اعتباری، آموزش مدیریت مالی و تازه‌های خدمات دیجی‌بایل پی</p></div><a class="btn" href="/blog.html">همه مطالب ←</a></div>
+  <div class="section-heading"><div><h2 class="t" data-cms-field="title">مجله دیجی‌بایل پی</h2><p class="sub" data-cms-field="description">راهنمای خرید اعتباری، آموزش مدیریت مالی و تازه‌های خدمات دیجی‌بایل پی</p></div><a class="btn" href="#blog">همه مطالب ←</a></div>
   <div class="editorial-grid" id="blogPosts"><article class="editorial-empty">مطالب آموزشی و خبرها پس از انتشار در این بخش نمایش داده می‌شوند.</article></div>
  </section>
  <section class="newsletter-section" id="newsletter" data-cms-section="newsletter">
