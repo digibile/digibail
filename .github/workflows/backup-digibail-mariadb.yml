@@ -1,5 +1,9 @@
 name: Create protected MariaDB production backup
 on:
+  push:
+    branches: [migration/mariadb-single-database-foundation]
+    paths:
+      - '.github/workflows/backup-digibail-mariadb.yml'
   workflow_dispatch:
 
 permissions:
