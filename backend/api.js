@@ -19,24 +19,15 @@ const mariaRawPool = createPool({
   charset: "utf8mb4", connectTimeout: 8000, timezone: "Z"
 });
 const pool = createMariaCompatPool(mariaRawPool);
-let legacyMariaPool = null;
-function legacyMaria() {
-  const database = process.env.MARIADB_DATABASE || "digibail_vamcitydigibilepay";
-  const user = process.env.MARIADB_USER || "";
-  const password = process.env.MARIADB_PASSWORD || "";
-  const socketPath = process.env.MARIADB_SOCKET || "/var/run/mysqld/mysqld.sock";
-  if (!user || !password) throw Object.assign(new Error("اتصال پایگاه داده اصلی تنظیم نشده است."), { status: 503, code: "mariadb_not_configured" });
-  if (!legacyMariaPool) legacyMariaPool = createPool({ socketPath, user, password, database, waitForConnections: true, connectionLimit: 4, queueLimit: 20, charset: "utf8mb4", connectTimeout: 8000 });
-  return legacyMariaPool;
-}
-async function postgresOnlyAccounts(mariaDb, limit=100000) {
+function legacyMaria() { return mariaRawPool; }
+async function applicationAccounts(mariaDb, limit=100000) {
   // Keep every successful registration in the new identity database visible.
   // A phone match in the historical database is not proof that this distinct
   // PostgreSQL account is the same row; hiding it made new registrations vanish.
   const q=await pool.query("SELECT u.id,u.username,u.phone,u.full_name,u.email,u.national_code,u.role,u.is_active,u.created_at,COALESCE((SELECT role_code FROM user_role_overrides o WHERE o.user_id=u.id),u.role) AS effective_role FROM users u WHERE u.legacy_source IS NULL ORDER BY u.created_at DESC,u.id DESC LIMIT $1",[limit]);
   let mappedIds=new Set();
   try{const [mapped]=await mariaDb.query("SELECT PostgresUserId FROM DigibailUserIdentity");mappedIds=new Set(mapped.map(r=>String(r.PostgresUserId)));}catch(error){if(error.code!=="ER_NO_SUCH_TABLE")throw error;}
-  return q.rows.filter(r=>!mappedIds.has(String(r.id))).map(r=>({...r,role:r.effective_role,id:"pg:"+String(r.id),legacy_id:String(r.id),mobile:r.phone,email:r.email,legacy_username:r.username,customer_code:String(r.id),registered_at:r.created_at,roles:[r.effective_role],account_type:directoryAccountType(r.effective_role),source_table:"postgres.users"}));
+  return q.rows.filter(r=>!mappedIds.has(String(r.id))).map(r=>({...r,role:r.effective_role,id:"app:"+String(r.id),legacy_id:String(r.id),mobile:r.phone,email:r.email,legacy_username:r.username,customer_code:String(r.id),registered_at:r.created_at,roles:[r.effective_role],account_type:directoryAccountType(r.effective_role),source_table:"users"}));
 }
 
 function legacyRoleCode(value) {
@@ -85,7 +76,7 @@ async function unifiedUserDirectory({page=1,pageSize=50,search="",role="",status
     const primary=directoryRoleFromNames(roleNames);
     return {...r,id:"legacy:"+r.source_key+":"+String(r.legacy_id),name:r.full_name,mobile:r.phone,customer_number:r.customer_code,role:primary,roles:roles.length?roles:[primary],account_type:r.source_key==="transfer"?"حساب انتقال وجه":directoryAccountType(primary),legacy_source:r.source_table,legacy_source_table:r.source_table,source:r.source_key==="main"?"mariadb":r.source_key==="bluvam"?"bluvamdb":"transfer",source_table:r.source_table,password_reset_required:false,is_active:Boolean(Number(r.is_active)),role_editable:r.source_key!=="transfer"};
   });
-  const fresh=(await postgresOnlyAccounts(db,100000)).map(r=>({...r,name:r.full_name,mobile:r.phone,customer_number:r.customer_code,source:"postgres",role_editable:true}));
+  const fresh=(await applicationAccounts(db,100000)).map(r=>({...r,name:r.full_name,mobile:r.phone,customer_number:r.customer_code,source:"application",role_editable:true}));
   const staffRoles=["admin","superadmin","agent","marketer","customermarketer","legacy_appapiuser","legacy_sponsor"];
   const norm=v=>String(v||"").toLowerCase();
   const freshFiltered=fresh.filter(r=>{
@@ -339,7 +330,7 @@ function sessionFor(req) {
 async function adminFor(req) {
   const session = sessionFor(req);
   if (!session) return null;
-  // Read the current role from PostgreSQL so role corrections take effect without waiting for an old JWT to expire.
+  // Read the current role from MariaDB so role corrections take effect without waiting for an old JWT to expire.
   const current = await pool.query("SELECT id,role,is_active,phone,full_name,username FROM users WHERE id=$1 LIMIT 1", [Number(session.sub)]);
   const role = String(current.rows[0]?.role || "").trim().toLowerCase();
   if (!current.rowCount || !current.rows[0].is_active || !["admin", "superadmin"].includes(role)) return null;
@@ -489,9 +480,8 @@ export async function handleApi(req, res, url) {
         const [commit,runs]=await Promise.all([commitResponse.json(),runsResponse.json()]);
         const deployedSha=String(process.env.DEPLOY_COMMIT_SHA||"").trim(),latestSha=String(commit.sha||"");
         const latestRun=(runs.workflow_runs||[]).find(x=>x.path===".github/workflows/deploy-digebail-server.yml")||null;
-        let postgres={connected:false,database:null,tables:null},mariadb={connected:false,database:null,tables:null,users:null};
-        try{const q=await pool.query("SELECT current_database() AS database,(SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='public')::int AS tables");postgres={connected:true,...q.rows[0]};}catch{}
-        try{const db=legacyMaria();const [q]=await db.query("SELECT DATABASE() AS database,(SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE()) AS tables,(SELECT COUNT(*) FROM AspNetUsers) AS users");mariadb={connected:true,...q[0]};}catch(error){mariadb.error=String(error.code||"connection_error");}
+        let mariadb={connected:false,database:null,tables:null,users:null};
+        try{const db=legacyMaria();const [q]=await db.query("SELECT DATABASE() AS database,(SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE() AND table_type='BASE TABLE') AS tables,(SELECT COUNT(*) FROM users) AS users");mariadb={connected:true,...q[0]};}catch(error){mariadb.error=String(error.code||"connection_error");}
         return json(res,200,{data:{
           appVersion:String(process.env.APP_VERSION||"نسخه نامشخص"),
           deployedCommit:deployedSha,deployedShort:deployedSha?deployedSha.slice(0,8):"نامشخص",
@@ -500,7 +490,7 @@ export async function handleApi(req, res, url) {
           latestAt:commit.commit?.committer?.date||null,
           updateAvailable:Boolean(latestSha&&deployedSha&&latestSha!==deployedSha),
           deployment:{id:latestRun?.id||null,status:latestRun?.status||"unknown",conclusion:latestRun?.conclusion||null,url:latestRun?.html_url||"https://github.com/digibile/digibail/actions"},
-          databases:{postgres,mariadb},
+          databases:{mariadb},
           deployConfigured:Boolean(process.env.GITHUB_DEPLOY_TOKEN),
           canDeploy:admin.role==="superadmin"&&Boolean(process.env.GITHUB_DEPLOY_TOKEN)
         }});
