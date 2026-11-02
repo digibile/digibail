@@ -1956,7 +1956,7 @@ jobs:
                 done
                 for key in POSTGRES_DB POSTGRES_USER POSTGRES_PASSWORD DATABASE_URL JWT_SECRET OTP_PEPPER CAPTCHA_PEPPER; do
                   if ! grep -qE "^${key}=.+" .env; then
-                    VALUE_LINE="$(grep -m1 "^${key}=" "$RECOVERY_DIR/app.env" "$RECOVERY_DIR/db.env" 2>/dev/null | sed 's/^[^:]*://' || true)"
+                    VALUE_LINE="$(grep -h -m1 "^${key}=" "$RECOVERY_DIR/app.env" "$RECOVERY_DIR/db.env" 2>/dev/null | head -n 1 || true)"
                     if [ -n "$VALUE_LINE" ]; then printf '%s\n' "$VALUE_LINE" >> .env; fi
                   fi
                 done
