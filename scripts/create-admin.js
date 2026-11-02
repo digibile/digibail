@@ -1,5 +1,5 @@
 import bcrypt from "bcryptjs";
-import { Pool } from "pg";
+import { createPool } from "mysql2/promise";
 
 const required = ["ADMIN_USERNAME", "ADMIN_PHONE", "ADMIN_FULL_NAME", "ADMIN_NATIONAL_CODE", "ADMIN_PASSWORD"];
 for (const key of required) if (!process.env[key]) {
@@ -23,16 +23,33 @@ if (process.env.ADMIN_PASSWORD.length < 16) {
   console.error("ADMIN_PASSWORD must be at least 16 characters.");
   process.exit(2);
 }
-const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+
+const pool = createPool({
+  ...(process.env.MARIADB_HOST
+    ? { host: process.env.MARIADB_HOST, port: Number(process.env.MARIADB_PORT || 3306) }
+    : { socketPath: process.env.MARIADB_SOCKET || "/tmp/mysql.sock" }),
+  user: process.env.MARIADB_USER,
+  password: process.env.MARIADB_PASSWORD,
+  database: process.env.MARIADB_DATABASE || "digibail_vamcitydigibilepay",
+  waitForConnections: true,
+  connectionLimit: 1,
+  connectTimeout: 10000,
+  charset: "utf8mb4"
+});
 try {
+  const [existing] = await pool.query(
+    "SELECT id FROM users WHERE lower(username)=lower(?) OR phone=? OR national_code=? LIMIT 1",
+    [process.env.ADMIN_USERNAME, process.env.ADMIN_PHONE, process.env.ADMIN_NATIONAL_CODE]
+  );
+  if (existing.length) throw new Error("User, phone, or national code already exists.");
   const passwordHash = await bcrypt.hash(process.env.ADMIN_PASSWORD, 12);
-  await pool.query(
-    "INSERT INTO users(username,phone,full_name,national_code,password_hash,role) VALUES($1,$2,$3,$4,$5,'superadmin')",
+  const [result] = await pool.query(
+    "INSERT INTO users(username,phone,full_name,national_code,password_hash,role,is_active) VALUES(?,?,?,?,?,'superadmin',1)",
     [process.env.ADMIN_USERNAME, process.env.ADMIN_PHONE, process.env.ADMIN_FULL_NAME, process.env.ADMIN_NATIONAL_CODE, passwordHash]
   );
-  console.log("Superadmin created. The password is not printed.");
+  console.log("SUPERADMIN_CREATED=1 id=" + result.insertId + ". The password is not printed.");
 } catch (error) {
-  console.error(error.code === "23505" ? "User, phone, or national code already exists." : "Superadmin creation failed.");
+  console.error(error.code === "ER_DUP_ENTRY" ? "User, phone, or national code already exists." : "Superadmin creation failed: " + String(error.message || error).slice(0, 180));
   process.exitCode = 1;
 } finally {
   await pool.end();
