@@ -44,7 +44,7 @@ The migration SQL and runtime DDL define these application-owned tables. Their n
 | `customer_documents` | Existing authorization attachment tables and assurance tables | Not a one-to-one mapping. Determine document type, owner, binary storage and review-state semantics before implementation. |
 | `customer_contracts` | No exact equivalent confirmed | Requires a reviewed MariaDB design or an existing contract source discovered in full schema. |
 | `beta_inquiries` | `UserRefahBeta` / `AppInquirys` are candidates only | Verify provider and status semantics before mapping. |
-| `loan_products` | `Loans` | Strong domain candidate, but PostgreSQL UUID/JSON model differs from legacy fields; map columns and preserve existing loan rows. |
+| `loan_products` | `LoanProducts` (catalog) | Production has a 26-column `LoanProducts` table; `TenantId` is required. Do not map this catalog to `Loans`: live foreign keys show `UserLoanRequests` and `UserLoans` reference the separate operational `Loans` table. Map the catalog fields only after tenant/slug rules are defined. |
 | `access_roles` | `AspNetRoles` | Reuse existing roles and normalize role codes; no second role catalog. |
 | `user_role_assignments` | `AspNetUserRoles` | Reuse existing join table. |
 | `loan_requests` | `UserLoanRequests` | Strong domain candidate; PostgreSQL numeric IDs differ from MariaDB UUID primary keys. Requires explicit ID mapping and full relationship review. |
