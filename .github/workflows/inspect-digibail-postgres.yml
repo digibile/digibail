@@ -39,7 +39,7 @@ jobs:
             if [ -n "$CID" ]; then
               $D inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$CID" | grep -E '^(POSTGRES_DB|POSTGRES_USER)=' || true
               echo "=== TRY DEFAULT POSTGRES SUPERUSER READ ONLY ==="
-              $D exec -T db sh -lc 'psql -U postgres -d postgres -Atc "SELECT rolname,rolsuper,rolcanlogin FROM pg_roles ORDER BY rolname;"' || echo "POSTGRES_ROLE_INSPECTION_FAILED"
+              $D exec db sh -lc 'psql -U postgres -d postgres -Atc "SELECT rolname,rolsuper,rolcanlogin FROM pg_roles ORDER BY rolname;"' || echo "POSTGRES_ROLE_INSPECTION_FAILED"
               echo "=== TRY CONFIGURED ROLE READ ONLY ==="
               $D exec -T db sh -lc 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Atc "SELECT current_user,current_database();"' || echo "CONFIGURED_ROLE_LOGIN_FAILED"
               echo "=== DATABASE LIST READ ONLY ==="
@@ -48,6 +48,6 @@ jobs:
             echo "=== APP DATABASE URL IDENTITY ONLY ==="
             AID="$($D compose ps -q app | head -n 1)"
             if [ -n "$AID" ]; then
-              $D exec -T "$AID" node -e 'try{const u=new URL(process.env.DATABASE_URL);console.log("DATABASE_URL_USER="+decodeURIComponent(u.username));console.log("DATABASE_URL_DB="+u.pathname.slice(1));}catch(e){console.log("DATABASE_URL_PARSE_FAILED")}' || true
+              $D exec "$AID" node -e 'try{const u=new URL(process.env.DATABASE_URL);console.log("DATABASE_URL_USER="+decodeURIComponent(u.username));console.log("DATABASE_URL_DB="+u.pathname.slice(1));}catch(e){console.log("DATABASE_URL_PARSE_FAILED")}' || true
             else echo "APP_CONTAINER_NOT_FOUND"; fi
             echo "POSTGRES_DIAGNOSTICS_READ_ONLY=1"
