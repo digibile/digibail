@@ -758,14 +758,67 @@ function openApply(p){const t=p.tiers[S.ti],c=calc(p,S.amt,t);modal(`<button cla
  <p class="note">مدارک لازم: ${p.docs.filter(d=>d[1]).map(d=>d[0]).join('، ')}. بعد از ثبت، عکس مدارک را در حساب من بارگذاری می‌کنید. با تأیید وام، کارت مجازی شما صادر می‌شود.</p>
  <div id="apMsg" class="note" role="status" style="margin-top:10px"></div><button class="btn solid lg" style="width:100%;margin-top:10px" id="ap2">ثبت واقعی درخواست</button>`);$('#ap2').onclick=async()=>{const btn=$('#ap2'),msg=$('#apMsg');btn.disabled=true;btn.textContent='در حال ثبت…';msg.textContent='';try{const token=(()=>{try{return localStorage.getItem('token')||localStorage.getItem('accessToken')||''}catch(_){return ''}})();const res=await fetch('/api/v1/me/loan-applications',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json',...(token?{Authorization:'Bearer '+token}:{})},body:JSON.stringify({loanProductId:p.id,amount:S.amt,installmentMonths:t.m,interestMethod:p.method,interestPercent:p.rate})});const j=await res.json().catch(()=>({}));if(!res.ok)throw new Error(j.message||'ثبت درخواست انجام نشد');const d=j.data||j;msg.textContent='درخواست واقعاً ثبت شد. کد پیگیری: '+(d.reference||'ثبت‌شده')+' · وضعیت: '+(d.status||'Submitted');btn.textContent='درخواست ثبت شد';btn.disabled=true;const link=document.createElement('a');link.href='/profile.html';link.className='btn';link.style.display='inline-flex';link.style.marginTop='8px';link.textContent='رفتن به پیگیری درخواست‌ها';msg.appendChild(document.createElement('br'));msg.appendChild(link)}catch(e){msg.textContent=e.message||'خطا در ثبت درخواست';btn.disabled=false;btn.textContent='تلاش دوباره'}}}
 /* ---------- boot ---------- */
-async function detectRole(){try{const r=await fetch('/api/v1/security/me',{credentials:'same-origin',cache:'no-store'});if(!r.ok)return;const j=await r.json(),d=j.data||j;const rs=[].concat(d.roles||d.role||[]).map(x=>String(x).toLowerCase());user=d.fullName||null;role=rs.some(x=>/admin|manager/.test(x))?'admin':'customer'}catch(e){}}
+async 
+/* ---------- homepage CMS: server-owned content, admin-only editing ---------- */
+const CMS_API={public:'/api/v1/site-content/homepage',admin:'/api/v1/admin/site-content/homepage',newsletter:'/api/v1/newsletter/subscribe',posts:'/api/v1/blog/posts'};
+let homepageCms={};
+function cmsToken(){try{return localStorage.getItem('token')||localStorage.getItem('accessToken')||''}catch(_){return ''}}
+function cmsHeaders(json=true){return{...(json?{'Content-Type':'application/json'}:{}),...(cmsToken()?{Authorization:'Bearer '+cmsToken()}: {})}}
+function cmsApply(data){
+ if(!data||typeof data!=='object')return;
+ homepageCms=data;
+ document.querySelectorAll('[data-cms-section]').forEach(section=>{
+  const key=section.dataset.cmsSection,values=data[key];if(!values||typeof values!=='object')return;
+  section.querySelectorAll('[data-cms-field]').forEach(node=>{const field=node.dataset.cmsField;if(typeof values[field]==='string')node.textContent=values[field]});
+ });
+}
+async function cmsLoad(){
+ try{const r=await fetch(CMS_API.public,{credentials:'same-origin',cache:'no-store'});if(!r.ok)return;const j=await r.json();cmsApply(j.data||j.content||j)}catch(e){console.warn('Homepage content service unavailable',e)}
+}
+function cmsToolbar(){
+ if(role!=='admin')return;
+ document.body.classList.add('cms-admin');
+ if(!document.querySelector('.cms-toolbar')){const bar=document.createElement('div');bar.className='cms-toolbar';bar.innerHTML='<strong>مدیریت صفحه اصلی</strong><button type="button" id="cmsRefresh">بازخوانی محتوا</button>';document.body.appendChild(bar);bar.querySelector('#cmsRefresh').onclick=()=>cmsLoad()}
+ document.querySelectorAll('[data-cms-section]').forEach(section=>{
+  if(section.querySelector(':scope > .cms-edit-trigger'))return;
+  const btn=document.createElement('button');btn.type='button';btn.className='cms-edit-trigger';btn.textContent='ویرایش این بخش';btn.addEventListener('click',()=>cmsOpen(section));section.prepend(btn);
+ });
+}
+function cmsOpen(section){
+ const key=section.dataset.cmsSection,fields=[...section.querySelectorAll('[data-cms-field]')].map(n=>({key:n.dataset.cmsField,label:n.dataset.cmsField==='title'?'عنوان':n.dataset.cmsField==='description'?'توضیحات':n.dataset.cmsField==='eyebrow'?'متن بالای عنوان':n.dataset.cmsField,value:n.textContent.trim()}));
+ if(!fields.length){toast('این بخش فعلاً فیلد متنی قابل ویرایش ندارد.');return}
+ const modal=document.createElement('div');modal.className='cms-modal';modal.innerHTML='<div class="cms-dialog" role="dialog" aria-modal="true"><h2>ویرایش بخش صفحه اصلی</h2><p>تغییرات پس از ذخیره روی سایت نمایش داده می‌شوند.</p><form id="cmsForm">'+fields.map((f,i)=>'<label for="cmsField'+i+'">'+esc(f.label)+'</label><textarea id="cmsField'+i+'" name="'+esc(f.key)+'">'+esc(f.value)+'</textarea>').join('')+'<div class="cms-actions"><button class="btn solid" type="submit">ذخیره تغییرات</button><button class="btn" type="button" id="cmsCancel">انصراف</button></div><p id="cmsMsg" role="status"></p></form></div>';
+ document.body.appendChild(modal);modal.querySelector('#cmsCancel').onclick=()=>modal.remove();modal.addEventListener('click',e=>{if(e.target===modal)modal.remove()});
+ modal.querySelector('#cmsForm').onsubmit=async e=>{
+  e.preventDefault();const submit=modal.querySelector('[type=submit]'),msg=modal.querySelector('#cmsMsg');submit.disabled=true;msg.textContent='در حال ذخیره…';
+  const values={};fields.forEach((f,i)=>values[f.key]=modal.querySelector('#cmsField'+i).value.trim());
+  try{const r=await fetch(CMS_API.admin,{method:'PUT',credentials:'same-origin',headers:cmsHeaders(),body:JSON.stringify({section:key,content:values})});const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.message||'ذخیره انجام نشد؛ سرویس مدیریت محتوا در دسترس نیست.');cmsApply({[key]:values});msg.textContent='ذخیره شد.';setTimeout(()=>modal.remove(),650)}
+  catch(err){msg.textContent=err.message||'خطا در ذخیره محتوا';submit.disabled=false}
+ };
+}
+async function loadBlogPosts(){
+ const root=$('#blogPosts');if(!root)return;
+ try{const r=await fetch(CMS_API.posts+'?status=published&limit=3',{credentials:'same-origin',cache:'no-store'});if(!r.ok)return;const j=await r.json(),items=j.data||j.items||j;if(!Array.isArray(items)||!items.length)return;
+ root.replaceChildren();items.slice(0,3).forEach(post=>{const card=document.createElement('article');card.className='editorial-card';const h=document.createElement('h3');h.textContent=post.title||'مطلب جدید';const p=document.createElement('p');p.textContent=post.excerpt||post.summary||'';const a=document.createElement('a');a.textContent='ادامه مطلب ←';const slug=String(post.slug||post.id||'');a.href='/blog/'+encodeURIComponent(slug);card.append(h,p,a);root.appendChild(card)});
+ }catch(e){console.warn('Blog service unavailable',e)}
+}
+function bindNewsletter(){
+ const form=$('#newsletterForm');if(!form)return;
+ form.onsubmit=async e=>{e.preventDefault();const email=$('#newsletterEmail').value.trim(),status=$('#newsletterStatus'),button=form.querySelector('button');button.disabled=true;status.textContent='در حال ثبت…';
+ try{const r=await fetch(CMS_API.newsletter,{method:'POST',credentials:'same-origin',headers:cmsHeaders(),body:JSON.stringify({email,source:'homepage'})});const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.message||'ثبت عضویت انجام نشد');status.textContent=j.message||'عضویت شما با موفقیت ثبت شد.';form.reset()}
+ catch(err){status.textContent=err.message||'فعلاً امکان ثبت عضویت وجود ندارد.'}finally{button.disabled=false}
+ };
+}
+
+function detectRole(){try{const r=await fetch('/api/v1/security/me',{credentials:'same-origin',cache:'no-store'});if(!r.ok)return;const j=await r.json(),d=j.data||j;const rs=[].concat(d.roles||d.role||[]).map(x=>String(x).toLowerCase());user=d.fullName||null;role=rs.some(x=>/admin|manager/.test(x))?'admin':'customer'}catch(e){}}
 
 
 
 /* Render the storefront before waiting on APIs. A slow backend must never leave the customer staring at an empty page. */
 try{plansMenu();renderAuth();route();$('#ftHost').textContent=location.hostname}catch(e){console.error('Initial storefront render failed',e)}
 (async()=>{if(!CFG.mock){const ctl=new AbortController();const timer=setTimeout(()=>ctl.abort(),7000);try{const r=await fetch(CFG.endpoints.plans,{signal:ctl.signal,cache:'no-store',credentials:'same-origin'});if(!r.ok)throw new Error('HTTP '+r.status);const j=await r.json();const L=j.data||j;if(!Array.isArray(L))throw new Error('پاسخ فهرست طرح‌ها معتبر نیست');PLANS=L.map(normPlan).filter(Boolean);plansMenu();route()}catch(e){PLANS=[];plansMenu();route();console.error('Public loan plans API unavailable:',e.message)}finally{clearTimeout(timer)}}
- await detectRole();renderAuth();})();
+ await detectRole();renderAuth();cmsToolbar();})();
+ cmsLoad();loadBlogPosts();bindNewsletter();
 function normPlan(x){
  if(!x||x.isActive===false||x.is_active===false)return null;
  let rawTiers=x.tiers;if(typeof rawTiers==='string'){try{rawTiers=JSON.parse(rawTiers)}catch(_){rawTiers=[]}}
