@@ -809,7 +809,7 @@ function bindNewsletter(){
  };
 }
 
-async async function detectRole(){try{const r=await fetch('/api/v1/security/me',{credentials:'same-origin',cache:'no-store'});if(!r.ok)return;const j=await r.json(),d=j.data||j;const rs=[].concat(d.roles||d.role||[]).map(x=>String(x).toLowerCase());user=d.fullName||null;role=rs.some(x=>/admin|manager/.test(x))?'admin':'customer'}catch(e){}}
+async function detectRole(){try{const r=await fetch('/api/v1/security/me',{credentials:'same-origin',cache:'no-store'});if(!r.ok)return;const j=await r.json(),d=j.data||j;const rs=[].concat(d.roles||d.role||[]).map(x=>String(x).toLowerCase());user=d.fullName||null;role=rs.some(x=>/admin|manager/.test(x))?'admin':'customer'}catch(e){}}
 
 
 
