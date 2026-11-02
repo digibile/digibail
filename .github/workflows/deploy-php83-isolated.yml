@@ -126,7 +126,25 @@ jobs:
             --exclude='index.php' --exclude='expert.php' --exclude='admin.php' \
             php/public/ "$DEPLOY_USER@$DEPLOY_HOST:$PUBLIC_ROOT/"
 
-          # Refresh every homepage stylesheet and local illustration, while backing up replaced files.
+          # Fetch real photographic assets into the release; the live site serves them locally.
+          mkdir -p php/public/assets/images
+          curl -fL --retry 3 --retry-all-errors --connect-timeout 20 --max-time 120 \
+            'https://images.unsplash.com/photo-1681601988039-434de125ca06?auto=format&fit=crop&w=1800&q=85' \
+            -o php/public/assets/images/digital.jpg
+          curl -fL --retry 3 --retry-all-errors --connect-timeout 20 --max-time 120 \
+            'https://images.unsplash.com/photo-1668910231038-e342ad670789?auto=format&fit=crop&w=1400&q=85' \
+            -o php/public/assets/images/home.jpg
+          curl -fL --retry 3 --retry-all-errors --connect-timeout 20 --max-time 120 \
+            'https://images.unsplash.com/photo-1666238854499-35b523d6fa3f?auto=format&fit=crop&w=1200&q=85' \
+            -o php/public/assets/images/watch.jpg
+          curl -fL --retry 3 --retry-all-errors --connect-timeout 20 --max-time 120 \
+            'https://images.unsplash.com/photo-1556213313-fc5be959c4a9?auto=format&fit=crop&w=1800&q=85' \
+            -o php/public/assets/images/car.jpg
+          curl -fL --retry 3 --retry-all-errors --connect-timeout 20 --max-time 120 \
+            'https://images.unsplash.com/photo-1605709460706-48517d85c7b0?auto=format&fit=crop&w=1800&q=85' \
+            -o php/public/assets/images/motorcycle.jpg
+          file php/public/assets/images/*.jpg
+          # Refresh every homepage stylesheet and real photo, while backing up replaced files.
           ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes "$DEPLOY_USER@$DEPLOY_HOST" \
             "mkdir -p '$PUBLIC_ROOT/assets/images' '$BACKUP_ROOT/public_html/assets/images'"
           rsync -az --no-owner --no-group --backup --backup-dir="$BACKUP_ROOT/public_html/assets" \
