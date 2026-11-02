@@ -1,0 +1,92 @@
+name: Verify MariaDB backup in isolated restore
+on:
+  push:
+    branches: [migration/mariadb-single-database-foundation]
+    paths:
+      - '.github/workflows/verify-digibail-mariadb-restore.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: digibail-mariadb-isolated-restore
+  cancel-in-progress: false
+
+jobs:
+  restore-test:
+    if: github.ref == 'refs/heads/migration/mariadb-single-database-foundation'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    services:
+      mariadb:
+        image: mariadb:10.6
+        env:
+          MARIADB_ROOT_PASSWORD: isolated_restore_only_password
+          MARIADB_DATABASE: restore_test
+        ports:
+          - 3307:3306
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=12
+    steps:
+      - name: Install MariaDB client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y mariadb-client
+
+      - name: Fetch protected production backup
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$DEPLOY_SSH_KEY" > "$HOME/.ssh/id_ed25519"
+          chmod 600 "$HOME/.ssh/id_ed25519"
+          ssh-keyscan -H "$DEPLOY_HOST" >> "$HOME/.ssh/known_hosts" 2>/dev/null
+          chmod 600 "$HOME/.ssh/known_hosts"
+          BACKUP_DIR='$HOME/private_backups/digibail-mariadb'
+          BACKUP_NAME='digibail_vamcitydigibilepay-20261102T110427Z.sql.gz'
+          ssh -i "$HOME/.ssh/id_ed25519" -o BatchMode=yes "$DEPLOY_USER@$DEPLOY_HOST" "cd \"\$HOME/private_backups/digibail-mariadb\" && sha256sum -c '$BACKUP_NAME.sha256'"
+          ssh -i "$HOME/.ssh/id_ed25519" -o BatchMode=yes "$DEPLOY_USER@$DEPLOY_HOST" "cat \"\$HOME/private_backups/digibail-mariadb/$BACKUP_NAME\"" > "$RUNNER_TEMP/digibail-production-backup.sql.gz"
+          test -s "$RUNNER_TEMP/digibail-production-backup.sql.gz"
+          gzip -t "$RUNNER_TEMP/digibail-production-backup.sql.gz"
+          echo "BACKUP_TRANSFER_AND_GZIP_TEST=PASS"
+
+      - name: Restore into disposable MariaDB service
+        env:
+          DB_ROOT_PASSWORD: isolated_restore_only_password
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 30); do
+            if mariadb-admin --host=127.0.0.1 --port=3307 --user=root --password="$DB_ROOT_PASSWORD" ping >/dev/null 2>&1; then break; fi
+            sleep 2
+          done
+          mariadb-admin --host=127.0.0.1 --port=3307 --user=root --password="$DB_ROOT_PASSWORD" ping
+          gzip -dc "$RUNNER_TEMP/digibail-production-backup.sql.gz" | mariadb --host=127.0.0.1 --port=3307 --user=root --password="$DB_ROOT_PASSWORD" restore_test
+          TABLES="$(mariadb --host=127.0.0.1 --port=3307 --user=root --password="$DB_ROOT_PASSWORD" --batch --skip-column-names -e "SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA='restore_test' AND TABLE_TYPE='BASE TABLE'")"
+          echo "RESTORED_BASE_TABLES=$TABLES"
+          test "$TABLES" -eq 224
+          ROUTINES="$(mariadb --host=127.0.0.1 --port=3307 --user=root --password="$DB_ROOT_PASSWORD" --batch --skip-column-names -e "SELECT COUNT(*) FROM information_schema.ROUTINES WHERE ROUTINE_SCHEMA='restore_test'")"
+          TRIGGERS="$(mariadb --host=127.0.0.1 --port=3307 --user=root --password="$DB_ROOT_PASSWORD" --batch --skip-column-names -e "SELECT COUNT(*) FROM information_schema.TRIGGERS WHERE TRIGGER_SCHEMA='restore_test'")"
+          EVENTS="$(mariadb --host=127.0.0.1 --port=3307 --user=root --password="$DB_ROOT_PASSWORD" --batch --skip-column-names -e "SELECT COUNT(*) FROM information_schema.EVENTS WHERE EVENT_SCHEMA='restore_test'")"
+          echo "RESTORED_ROUTINES=$ROUTINES"
+          echo "RESTORED_TRIGGERS=$TRIGGERS"
+          echo "RESTORED_EVENTS=$EVENTS"
+          echo "ISOLATED_RESTORE_IMPORT=PASS"
+
+      - name: Check restored tables
+        env:
+          DB_ROOT_PASSWORD: isolated_restore_only_password
+        run: |
+          set -euo pipefail
+          mariadb-check --host=127.0.0.1 --port=3307 --user=root --password="$DB_ROOT_PASSWORD" --check restore_test
+          echo "RESTORED_TABLE_CHECK=PASS"
+
+      - name: Remove temporary backup copy
+        if: always()
+        run: rm -f "$RUNNER_TEMP/digibail-production-backup.sql.gz"
