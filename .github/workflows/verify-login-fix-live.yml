@@ -1,0 +1,53 @@
+name: Verify DigiBail login collision fix on production
+
+on:
+  push:
+    branches: [migration/php83-full-rebuild]
+    paths:
+      - .github/workflows/verify-login-fix-live.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify exact admin identity resolution without password or database changes
+        uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          command_timeout: 3m
+          script: |
+            set -eu
+            APP="/home/digibail/domains/digebail.ir/php_app"
+            /usr/local/php83/bin/php -r '
+              require $argv[1]."/vendor/autoload.php";
+              App\Core\Environment::load($argv[1]."/.env");
+              $db=App\Core\Database\ConnectionFactory::create();
+              $before=$db->prepare("SELECT AccessFailedCount FROM AspNetUsers WHERE Id=:id");
+              $before->execute(["id"=>"2897"]); $failedBefore=(int)$before->fetchColumn();
+              $repo=new App\Identity\LegacyIdentityRepository($db);
+              $method=new ReflectionMethod($repo,"findUser");
+              $method->setAccessible(true);
+              $user=$method->invoke($repo,"09127070757");
+              if (!is_array($user) || (string)$user["Id"]!=="2897") {
+                echo "EXACT_ADMIN_LOOKUP=FAIL".PHP_EOL; exit(2);
+              }
+              echo "EXACT_ADMIN_LOOKUP=PASS".PHP_EOL;
+              echo "RESOLVED_ADMIN_ID_MATCH=PASS".PHP_EOL;
+              $auth=$repo->authenticate("09127070757","DigiBail-read-only-auth-audit-invalid-sentinel");
+              if ($auth!==null) { echo "INVALID_SENTINEL_REJECTION=FAIL".PHP_EOL; exit(3); }
+              $after=$db->prepare("SELECT AccessFailedCount FROM AspNetUsers WHERE Id=:id");
+              $after->execute(["id"=>"2897"]); $failedAfter=(int)$after->fetchColumn();
+              if ($failedBefore!==$failedAfter) { echo "ACCOUNT_STATE_UNCHANGED=FAIL".PHP_EOL; exit(4); }
+              echo "INVALID_SENTINEL_REJECTION=PASS".PHP_EOL;
+              echo "ACCOUNT_STATE_UNCHANGED=PASS".PHP_EOL;
+              echo "DATABASE_MIGRATION_EXECUTED=0".PHP_EOL;
+            ' "$APP"
+            curl -k -sS -o /dev/null -w 'LOGIN_PAGE_HTTP=%{http_code}\n' https://digebail.ir/login.html
+            curl -k -sS -o /dev/null -w 'EXPERT_UNAUTH_HTTP=%{http_code}\n' https://digebail.ir/expert.php
+            echo "LIVE_LOGIN_FIX_VERIFICATION=COMPLETED"
