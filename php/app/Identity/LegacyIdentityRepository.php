@@ -319,34 +319,68 @@ final class LegacyIdentityRepository
     /** @return array<string, mixed>|null */
     private function findUser(string $identifier): ?array
     {
-        $digits = self::normalizeDigits($identifier);
-        $phone = preg_match('/^09\d{9}$/', $digits) === 1 ? $digits : null;
-        $phone98 = $phone === null ? null : '98' . substr($phone, 1);
-        $phonePlus98 = $phone === null ? null : '+98' . substr($phone, 1);
-        $phoneLocal = $phone === null ? null : substr($phone, 1);
+        // Normalize localized digits before either exact-username or phone lookup.
+        $identifier = self::normalizeDigits(trim($identifier));
+        if ($identifier === '') {
+            return null;
+        }
 
-        $sql = <<<'SQL'
+        $select = <<<'SQL'
             SELECT Id, FirstName, LastName, Mobile, Phone, PhoneNumber,
                    UserName, Email, NationalCode, PasswordHash, IsActive,
                    LockoutEnd, LockoutEnabled
             FROM AspNetUsers
-            WHERE NormalizedUserName = :normalized_username
-               OR UserName = :username
-               OR (:phone_guard IS NOT NULL AND (
-                    Mobile = :mobile_09 OR Phone = :phone_09 OR PhoneNumber = :phone_number_09
-                    OR Mobile = :mobile_98 OR PhoneNumber = :phone_number_98
-                    OR Mobile = :mobile_plus98 OR PhoneNumber = :phone_number_plus98
-                    OR Mobile = :mobile_local OR PhoneNumber = :phone_number_local
-               ))
-            ORDER BY Id ASC
-            LIMIT 2
             SQL;
 
-        $statement = $this->db->prepare($sql);
-        $statement->execute([
+        // Exact identity always wins. Do not combine username and phone aliases:
+        // legacy databases can legitimately contain repeated phone values across
+        // imported customer rows, which must not make a unique username ambiguous.
+        $exact = $this->db->prepare(
+            $select . '
+             WHERE NormalizedUserName = :normalized_username
+                OR UserName = :username
+             ORDER BY Id ASC
+             LIMIT 2'
+        );
+        $exact->execute([
             'normalized_username' => mb_strtoupper($identifier, 'UTF-8'),
             'username' => $identifier,
-            'phone_guard' => $phone,
+        ]);
+        $exactMatches = $exact->fetchAll();
+
+        if (count($exactMatches) === 1) {
+            return $exactMatches[0];
+        }
+        if (count($exactMatches) > 1) {
+            error_log('[AUTH_DIAG] identity_query exact_username_match_count=' . count($exactMatches));
+            return null;
+        }
+
+        // Only fall back to legacy phone aliases when no exact username exists.
+        $phone = preg_match('/^09\\d{9}$/D', $identifier) === 1 ? $identifier : null;
+        if ($phone === null) {
+            error_log('[AUTH_DIAG] identity_query result=exact_username_not_found');
+            return null;
+        }
+
+        $phone98 = '98' . substr($phone, 1);
+        $phonePlus98 = '+' . $phone98;
+        $phoneLocal = substr($phone, 1);
+        $aliases = $this->db->prepare(
+            $select . '
+             WHERE Mobile = :mobile_09
+                OR Phone = :phone_09
+                OR PhoneNumber = :phone_number_09
+                OR Mobile = :mobile_98
+                OR PhoneNumber = :phone_number_98
+                OR Mobile = :mobile_plus98
+                OR PhoneNumber = :phone_number_plus98
+                OR Mobile = :mobile_local
+                OR PhoneNumber = :phone_number_local
+             ORDER BY Id ASC
+             LIMIT 2'
+        );
+        $aliases->execute([
             'mobile_09' => $phone,
             'phone_09' => $phone,
             'phone_number_09' => $phone,
@@ -358,9 +392,9 @@ final class LegacyIdentityRepository
             'phone_number_local' => $phoneLocal,
         ]);
 
-        $matches = $statement->fetchAll();
+        $matches = $aliases->fetchAll();
         if (count($matches) !== 1) {
-            error_log('[AUTH_DIAG] identity_query match_count=' . count($matches));
+            error_log('[AUTH_DIAG] identity_query phone_alias_match_count=' . count($matches));
             return null;
         }
 
