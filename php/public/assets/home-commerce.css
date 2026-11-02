@@ -1,0 +1,50 @@
+.plans-section{padding:78px 0;background:#fff}
+.plans-layout{display:grid;grid-template-columns:260px 1fr;gap:38px;align-items:center}
+.plans-intro h2,.calculator-copy h2,.faq-intro h2{font-size:29px;line-height:1.65;margin:8px 0 10px;color:#15334f}
+.plans-intro h2 strong,.calculator-copy h2 strong,.faq-intro h2 strong{color:#1677ed}
+.plans-intro p,.calculator-copy p,.faq-intro p{font-size:12px;color:#7c8c9b;line-height:2.2;margin:0 0 22px}
+.outline-link{display:inline-flex;align-items:center;gap:22px;padding:10px 15px;border:1px solid #cfe2f4;border-radius:8px;color:#1677ed;font-size:10px;font-weight:bold}
+.outline-link b{font-size:16px}
+.plan-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:15px}
+.plan-card{border:1px solid #e8edf2;border-radius:12px;overflow:hidden;background:#fff;transition:transform .25s,box-shadow .25s}
+.plan-card:hover{transform:translateY(-5px);box-shadow:0 15px 35px #183b5a12}
+.plan-image{height:155px;position:relative;overflow:hidden;background:#edf2f6}
+.plan-image img{width:100%;height:100%;object-fit:cover;transition:transform .5s}
+.plan-card:hover .plan-image img{transform:scale(1.06)}
+.plan-image span{position:absolute;top:12px;right:12px;padding:5px 10px;border-radius:5px;background:#fff;color:#1b5e91;font-size:9px}
+.plan-body{padding:15px}
+.plan-body h3{font-size:12px;color:#173853;margin:0 0 6px}
+.plan-body p{font-size:9px;color:#8998a6;min-height:35px;margin:0 0 10px}
+.plan-body>a{display:flex;justify-content:space-between;align-items:center;border-top:1px solid #eef1f4;padding-top:10px;color:#1677ed;font-size:10px;font-weight:bold}
+.plan-body>a b{font-size:16px}
+.calculator-section{padding:70px 0;background:#f4f8fc;position:relative;overflow:hidden}
+.calculator-section:before{content:"";position:absolute;width:420px;height:420px;border-radius:50%;background:#e5f1fc;right:-220px;top:-200px}
+.calculator-layout{position:relative;display:grid;grid-template-columns:1fr 440px;gap:80px;align-items:center}
+.calculator-copy{max-width:460px}
+.calculator-copy h2{font-size:34px}
+.calculator-copy>small{font-size:9px;color:#98a5b1}
+.calc-card{padding:27px 29px;border:1px solid #e5edf4;border-radius:15px;background:#fff;box-shadow:0 15px 45px #153c5c0d}
+.calc-title{display:flex;justify-content:space-between;align-items:center;margin-bottom:22px}
+.calc-title span{font-size:15px;font-weight:bold;color:#183b58}
+.calc-title small{font-size:9px;color:#1680dc;background:#edf6ff;padding:5px 9px;border-radius:20px}
+.calc-card label{display:block;font-size:10px;color:#788a9a;margin-bottom:7px}
+.calc-amount{display:flex;align-items:baseline;gap:8px;margin-bottom:7px}
+.calc-amount b{font-size:23px;color:#163c5d;direction:ltr}
+.calc-amount span{font-size:10px;color:#8595a4}
+input[type=range]{width:100%;accent-color:#1677ed;cursor:pointer}
+.calc-fields{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:21px}
+.calc-field{padding:12px;border-radius:9px;background:#f7f9fb;border:1px solid #edf1f5}
+.calc-field>b{display:block;font-size:11px;color:#244c6e;margin-bottom:8px}
+.calc-field select{width:100%;border:1px solid #e3eaf0;border-radius:6px;padding:7px;background:#fff;color:#244c6e;font-size:11px}
+.calc-summary{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:18px 0}
+.calc-summary>div{padding:11px;border-radius:8px;background:#f2f7fc}
+.calc-summary small{display:block;font-size:9px;color:#8796a5;margin-bottom:5px}
+.calc-summary b{font-size:11px;color:#1677ed}
+.calc-action{display:flex;align-items:center;justify-content:space-between;padding:12px 15px;background:#1677ed;color:#fff;border-radius:8px;font-size:11px;font-weight:bold}
+.calc-action b{font-size:17px}
+@media(max-width:1050px){.plans-layout{grid-template-columns:210px 1fr;gap:24px}.calculator-layout{gap:40px}}
+@media(max-width:760px){.plans-layout{grid-template-columns:1fr;gap:23px}.plans-intro h2{font-size:25px}.plans-intro h2 br{display:none}
+.plan-cards{gap:9px}.plan-image{height:110px}.plan-body{padding:10px}.plan-body h3{font-size:10px}.plan-body p{font-size:8px;min-height:38px}.plan-body>a{font-size:9px}
+.calculator-section{padding:48px 0}.calculator-layout{grid-template-columns:1fr;gap:22px}.calculator-copy h2{font-size:27px}.calculator-copy h2 br{display:none}
+.calc-card{padding:19px}.calc-amount b{font-size:20px}}
+@media(max-width:390px){.plan-cards{grid-template-columns:1fr}.plan-card{display:grid;grid-template-columns:112px 1fr}.plan-image{height:100%;min-height:120px}.calc-fields,.calc-summary{gap:8px}}
