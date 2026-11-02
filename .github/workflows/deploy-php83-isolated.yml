@@ -203,15 +203,15 @@ jobs:
              curl -k -sS -o /tmp/digebail-home-check.html -w 'LIVE_HOME_HTTP=%{http_code}\n' https://digebail.ir/ || true
              EXPERT_HTTP="$(curl -k -sS -o /dev/null -w '%{http_code}' https://digebail.ir/expert.php)"
              ADMIN_HTTP="$(curl -k -sS -D /tmp/digebail-admin-headers.txt -o /tmp/digebail-admin-body.txt -w '%{http_code}' https://digebail.ir/admin.php)"
-             if [ "$ADMIN_HTTP" = "500" ]; then
+             if [ "\$ADMIN_HTTP" = "500" ]; then
                echo 'ADMIN_ERROR_RESPONSE_BEGIN'
                head -c 1600 /tmp/digebail-admin-body.txt 2>/dev/null || true
                echo
                echo 'ADMIN_ERROR_RESPONSE_END'
-               for LOG_FILE in "$DOMAIN_ROOT/logs/error.log" "$DOMAIN_ROOT/logs/php_error.log" "$PUBLIC_ROOT/error_log" "$HOME/domains/digebail.ir/logs/error.log" "$HOME/domains/digebail.ir/logs/php_error.log"; do
-                 if [ -f "$LOG_FILE" ]; then
-                   echo "ADMIN_PHP_LOG_FILE=$LOG_FILE"
-                   tail -n 35 "$LOG_FILE" | sed -E 's/(password|token|secret|authorization)([=: ]+)[^ ]+/\\1\\2[REDACTED]/Ig'
+               for LOG_FILE in "\$DOMAIN_ROOT/logs/error.log" "\$DOMAIN_ROOT/logs/php_error.log" "\$PUBLIC_ROOT/error_log" "\$HOME/domains/digebail.ir/logs/error.log" "\$HOME/domains/digebail.ir/logs/php_error.log"; do
+                 if [ -f "\$LOG_FILE" ]; then
+                   echo "ADMIN_PHP_LOG_FILE=\$LOG_FILE"
+                   tail -n 35 "\$LOG_FILE" | sed -E 's/(password|token|secret|authorization)([=: ]+)[^ ]+/\\1\\2[REDACTED]/Ig'
                  fi
                done
              fi
