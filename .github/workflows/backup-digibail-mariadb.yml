@@ -1,0 +1,128 @@
+name: Create protected MariaDB production backup
+on:
+  push:
+    branches: [migration/mariadb-single-database-foundation]
+    paths:
+      - '.github/workflows/backup-digibail-mariadb.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: digibail-mariadb-production-backup
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    if: github.ref == 'refs/heads/migration/mariadb-single-database-foundation'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Create consistent backup outside web root
+        uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          command_timeout: 40m
+          script: |
+            set -euo pipefail
+            DB='digibail_vamcitydigibilepay'
+            ROOT="$HOME/domains/digebail.ir"
+            BACKUP_ROOT="$HOME/private_backups/digibail-mariadb"
+            test -d "$ROOT"
+            umask 077
+            mkdir -p "$BACKUP_ROOT"
+            chmod 700 "$HOME/private_backups" "$BACKUP_ROOT"
+            CNF="$(mktemp "$HOME/.digibail-backup-client.XXXXXX")"
+            DUMP_TMP=''
+            cleanup() {
+              rm -f "$CNF"
+              if [ -n "$DUMP_TMP" ]; then rm -f "$DUMP_TMP"; fi
+            }
+            trap cleanup EXIT HUP INT TERM
+            export ROOT DB CNF
+            python3 - <<'PY'
+            from pathlib import Path
+            from urllib.parse import urlparse, unquote
+            import os, base64
+            root=Path(os.environ["ROOT"])
+            target=os.environ["DB"]
+            selected=None
+            for path in (root/"php_app/.env", root/".env"):
+                if not path.is_file() or not os.access(path, os.R_OK):
+                    continue
+                d={}
+                for raw in path.read_text(errors="ignore").splitlines():
+                    line=raw.strip()
+                    if not line or line.startswith("#") or "=" not in line: continue
+                    k,v=line.split("=",1)
+                    d[k.strip()]=v.strip().strip('"').strip("'")
+                url=d.get("DATABASE_URL") or d.get("MYSQL_URL")
+                if url:
+                    try:
+                        u=urlparse(url)
+                        d.setdefault("DB_HOST",u.hostname or "localhost")
+                        d.setdefault("DB_PORT",str(u.port or 3306))
+                        d.setdefault("DB_DATABASE",u.path.lstrip("/"))
+                        d.setdefault("DB_USERNAME",unquote(u.username or ""))
+                        d.setdefault("DB_PASSWORD",unquote(u.password or ""))
+                    except Exception: pass
+                db=next((d.get(k,"") for k in ("MARIADB_DATABASE","MYSQL_DATABASE","DB_DATABASE","DB_NAME") if d.get(k)),"")
+                if db==target:
+                    selected=(path,d)
+                    break
+            if not selected: raise SystemExit("NO_READABLE_APP_CONFIG_MATCHES_TARGET_DATABASE")
+            path,d=selected
+            def pick(*keys): return next((d[k] for k in keys if d.get(k)),"")
+            user=pick("MARIADB_USER","MYSQL_USER","DB_USERNAME","DB_USER","DATABASE_USER")
+            password=pick("MARIADB_PASSWORD","MYSQL_PASSWORD","DB_PASSWORD","DB_PASS","DATABASE_PASSWORD")
+            if not password and d.get("DB_PASSWORD_B64"):
+                try: password=base64.b64decode(d["DB_PASSWORD_B64"]).decode()
+                except Exception: pass
+            host=pick("MARIADB_HOST","MYSQL_HOST","DB_HOST","DATABASE_HOST") or "localhost"
+            port=pick("MARIADB_PORT","MYSQL_PORT","DB_PORT","DATABASE_PORT") or "3306"
+            socket=pick("MARIADB_SOCKET","MYSQL_SOCKET","DB_SOCKET")
+            if not user or not password: raise SystemExit("MATCHED_CONFIG_MISSING_DATABASE_CREDENTIALS")
+            def safe(s):
+                if any(c in s for c in "\r\n\x00"): raise SystemExit("INVALID_DATABASE_CONFIG_VALUE")
+                return s
+            lines=["[client]","user="+safe(user),"password="+safe(password),"host="+safe(host),"port="+safe(port),"default-character-set=utf8mb4"]
+            if socket: lines.append("socket="+safe(socket))
+            Path(os.environ["CNF"]).write_text("\n".join(lines)+"\n")
+            Path(os.environ["CNF"]).chmod(0o600)
+            print("BACKUP_CONFIG_MATCHED=1; credentials hidden")
+            PY
+            echo "=== Verify target database and backup prerequisites ==="
+            mysql --defaults-extra-file="$CNF" --batch --skip-column-names -e "SELECT VERSION(), SCHEMA_NAME FROM information_schema.SCHEMATA WHERE SCHEMA_NAME='$DB'"
+            DB_BYTES="$(mysql --defaults-extra-file="$CNF" --batch --skip-column-names -e "SELECT COALESCE(SUM(DATA_LENGTH+INDEX_LENGTH),0) FROM information_schema.TABLES WHERE TABLE_SCHEMA='$DB'")"
+            NON_INNODB="$(mysql --defaults-extra-file="$CNF" --batch --skip-column-names -e "SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA='$DB' AND TABLE_TYPE='BASE TABLE' AND COALESCE(ENGINE,'') <> 'InnoDB'")"
+            TABLES="$(mysql --defaults-extra-file="$CNF" --batch --skip-column-names -e "SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA='$DB' AND TABLE_TYPE='BASE TABLE'")"
+            [ "$TABLES" -gt 0 ]
+            if [ "$NON_INNODB" -ne 0 ]; then echo "BACKUP_ABORTED_NON_INNODB_TABLES=$NON_INNODB"; exit 31; fi
+            FREE_BYTES="$(df -PB1 "$BACKUP_ROOT" | awk 'NR==2 {print $4}')"
+            REQUIRED_BYTES=$((DB_BYTES + DB_BYTES / 2 + 1073741824))
+            echo "BASE_TABLES=$TABLES"
+            echo "ESTIMATED_DATABASE_BYTES=$DB_BYTES"
+            echo "AVAILABLE_BACKUP_BYTES=$FREE_BYTES"
+            if [ "$FREE_BYTES" -lt "$REQUIRED_BYTES" ]; then echo "BACKUP_ABORTED_INSUFFICIENT_DISK_SPACE=1"; exit 32; fi
+            STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
+            DUMP_TMP="$BACKUP_ROOT/.$DB-$STAMP.sql.gz.partial"
+            FINAL="$BACKUP_ROOT/$DB-$STAMP.sql.gz"
+            echo "=== Dump and compress; data is not printed to logs ==="
+            mysqldump --defaults-extra-file="$CNF" --single-transaction --quick --skip-lock-tables --routines --triggers --events --hex-blob --default-character-set=utf8mb4 --no-tablespaces "$DB" | gzip -1 > "$DUMP_TMP"
+            test -s "$DUMP_TMP"
+            gzip -t "$DUMP_TMP"
+            mv "$DUMP_TMP" "$FINAL"
+            DUMP_TMP=''
+            chmod 600 "$FINAL"
+            sha256sum "$FINAL" > "$FINAL.sha256"
+            chmod 600 "$FINAL.sha256"
+            printf 'BACKUP_FILE=%s\n' "$FINAL"
+            printf 'BACKUP_BYTES=%s\n' "$(stat -c %s "$FINAL")"
+            printf 'BACKUP_SHA256=%s\n' "$(cut -d' ' -f1 "$FINAL.sha256")"
+            printf 'BACKUP_GZIP_TEST=PASS\n'
+            printf 'BACKUP_OUTSIDE_WEB_ROOT=YES\n'
+            find "$BACKUP_ROOT" -maxdepth 1 -type f -name "digibail_vamcitydigibilepay-*.sql.gz" -printf '%T@ %p\n' | sort -nr | awk 'NR>3 {$1=""; sub(/^ /,""); print}' | while IFS= read -r old; do rm -f -- "$old" "$old.sha256"; done
+            echo "BACKUP_COMPLETE=1"

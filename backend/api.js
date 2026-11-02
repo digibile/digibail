@@ -3,18 +3,17 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { Pool } from "pg";
 import { handleSiteContent } from "./site-content.js";
-import { createPool } from "mysql2/promise";
+import { createMariaDbPool } from "./db/mariadb.js";
 import { syncUserToMariaDB } from "./mariadb-user-sync.js";
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL, max: 10, connectionTimeoutMillis: 5000 });
 let legacyMariaPool = null;
 function legacyMaria() {
-  const database = process.env.MARIADB_DATABASE || "digibail_vamcitydigibilepay";
-  const user = process.env.MARIADB_USER || "";
-  const password = process.env.MARIADB_PASSWORD || "";
-  const socketPath = process.env.MARIADB_SOCKET || "/var/run/mysqld/mysqld.sock";
-  if (!user || !password) throw Object.assign(new Error("اتصال پایگاه داده اصلی تنظیم نشده است."), { status: 503, code: "mariadb_not_configured" });
-  if (!legacyMariaPool) legacyMariaPool = createPool({ socketPath, user, password, database, waitForConnections: true, connectionLimit: 4, queueLimit: 20, charset: "utf8mb4", connectTimeout: 8000 });
+  if (!legacyMariaPool) legacyMariaPool = createMariaDbPool(process.env, {
+    socketPath: process.env.MARIADB_SOCKET || "/var/run/mysqld/mysqld.sock",
+    connectionLimit: 4,
+    queueLimit: 20
+  });
   return legacyMariaPool;
 }
 async function postgresOnlyAccounts(mariaDb, limit=100000) {
