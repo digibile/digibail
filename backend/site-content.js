@@ -62,7 +62,7 @@ export async function handleSiteContent(req,res,url,admin) {
       const clean={};
       for(const [k,v] of Object.entries(b.content)) { if(!fields.has(k)) return send(res,400,{message:"فیلد ارسالی مجاز نیست."}); const t=cleanText(v,1200); if(t===null) return send(res,400,{message:"متن باید حداکثر ۱۲۰۰ نویسه باشد."}); clean[k]=t; }
       if(!Object.keys(clean).length) return send(res,400,{message:"محتوایی برای ذخیره ارسال نشده است."});
-      await pool.query("INSERT INTO homepage_content(section_key,content,updated_by,updated_at) VALUES(?,CAST(? AS JSON),?,NOW(6)) ON DUPLICATE KEY UPDATE content=JSON_MERGE_PATCH(homepage_content.content,VALUES(content)),updated_by=VALUES(updated_by),updated_at=NOW(6)",[section,JSON.stringify(clean),Number(admin.sub)]);
+      await pool.query("INSERT INTO homepage_content(section_key,content,updated_by,updated_at) VALUES(?,?,?,NOW(6)) ON DUPLICATE KEY UPDATE content=JSON_MERGE_PATCH(homepage_content.content,VALUES(content)),updated_by=VALUES(updated_by),updated_at=NOW(6)",[section,JSON.stringify(clean),Number(admin.sub)]);
       const [rows]=await pool.query("SELECT section_key,content,updated_at FROM homepage_content WHERE section_key=? LIMIT 1",[section]);
       const saved=rows[0]; if(typeof saved.content==="string") saved.content=JSON.parse(saved.content);
       await audit(admin,"homepage.content.updated",{section,fields:Object.keys(clean)});
@@ -80,7 +80,7 @@ export async function handleSiteContent(req,res,url,admin) {
       const [rows]=await pool.query("SELECT id,slug,title,excerpt,status,published_at AS publishedAt FROM blog_posts WHERE id=? LIMIT 1",[result.insertId]);
       await audit(admin,"blog.post.created",{postId:result.insertId,status}); return send(res,201,{data:rows[0]});
     }
-    const idMatch=route.match(new RegExp("^/api/v1/admin/blog/posts/(\\\\d+)$"));
+    const idMatch=route.match(new RegExp("^/api/v1/admin/blog/posts/(\\d+)$"));
     if(idMatch&&req.method==="PUT") {
       const id=Number(idMatch[1]),b=await readBody(req),title=cleanText(b.title,180),excerpt=cleanText(b.excerpt||"",500),body=cleanText(b.body||"",100000),status=["draft","published","archived"].includes(b.status)?b.status:"draft";
       if(!title||title.length<3||!excerpt||body===null) return send(res,400,{message:"عنوان یا متن مطلب معتبر نیست."});
