@@ -1,0 +1,98 @@
+name: Align Digibail PostgreSQL connection with existing data
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/inspect-repair-digibail-postgres.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  repair:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Verify existing database and align connection variables only
+        uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          command_timeout: 6m
+          script: |
+            set -euo pipefail
+            ROOT="/home/digibail/domains/digebail.ir"
+            cd "$ROOT"
+            if sudo -n docker info >/dev/null 2>&1; then D="sudo -n docker"; elif docker info >/dev/null 2>&1; then D="docker"; else echo "DOCKER_UNAVAILABLE"; exit 40; fi
+            CID="$($D compose ps -q db | head -n 1)"
+            [ -n "$CID" ] || { echo "POSTGRES_CONTAINER_MISSING"; exit 41; }
+            $D exec "$CID" sh -lc 'psql -U digibail_app -d digibail_prod -v ON_ERROR_STOP=1 -Atc "SELECT 1"' >/dev/null
+            TABLES="$($D exec "$CID" sh -lc 'psql -U digibail_app -d digibail_prod -Atc "SELECT COUNT(*) FROM pg_tables;"' | tr -d '\r')"
+            USERS="$($D exec "$CID" sh -lc 'psql -U digibail_app -d digibail_prod -Atc "SELECT COUNT(*) FROM users;"' | tr -d '\r')"
+            echo "EXISTING_DATABASE_TABLES=$TABLES"
+            echo "EXISTING_POSTGRES_USERS=$USERS"
+            if [ "${TABLES:-0}" -lt 100 ] || [ "${USERS:-0}" -lt 1 ]; then
+              echo "SAFETY_STOP: existing production schema/data not confirmed."
+              exit 42
+            fi
+
+            [ -f .env ] || { echo "ENV_FILE_MISSING"; exit 43; }
+            DB_PASS="$(sed -n 's/^POSTGRES_PASSWORD=//p' .env | head -n 1)"
+            [ -n "$DB_PASS" ] || { echo "POSTGRES_PASSWORD_MISSING"; exit 44; }
+            if ! $D exec -e PGPASSWORD="$DB_PASS" "$CID" sh -lc 'psql -h 127.0.0.1 -U digibail_app -d digibail_prod -Atc "SELECT 1"' >/dev/null 2>&1; then
+              echo "SAFETY_STOP: current password does not authenticate the existing database role; no changes made."
+              exit 45
+            fi
+
+            BACKUP=".env.pre-postgres-alignment.$(date +%Y%m%d%H%M%S)"
+            cp -p .env "$BACKUP"
+            chmod 600 "$BACKUP"
+            grep -vE '^(POSTGRES_DB|POSTGRES_USER|DATABASE_URL)=' .env > .env.db-align.tmp || true
+            {
+              printf 'POSTGRES_DB=digibail_prod\n'
+              printf 'POSTGRES_USER=digibail_app\n'
+              printf 'DATABASE_URL=postgresql://digibail_app:%s@db:5432/digibail_prod\n' "$DB_PASS"
+            } >> .env.db-align.tmp
+            mv .env.db-align.tmp .env
+            chmod 600 .env
+            unset DB_PASS
+
+            $D compose config -q
+            $D compose up -d --no-build
+            HEALTH_OK=0
+            for n in $(seq 1 48); do
+              if curl -fsS --max-time 5 http://127.0.0.1:1631/healthz >/dev/null; then
+                HEALTH_OK=1
+                echo "APP_HEALTH=healthy"
+                break
+              fi
+              sleep 5
+            done
+            if [ "$HEALTH_OK" -ne 1 ]; then
+              $D compose ps
+              $D compose logs --tail=100 db app || true
+              echo "APP_HEALTH_FAILED_AFTER_ENV_ALIGNMENT"
+              exit 46
+            fi
+            echo "POSTGRES_ENV_ALIGNED_WITH_EXISTING_VOLUME=1"
+            echo "DATABASE_DATA_UNCHANGED=1"
+            echo "ENV_BACKUP=$BACKUP"
+
+      - name: Run full deployment checks and public routing verification
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          curl --fail-with-body --silent --show-error \
+            -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            https://api.github.com/repos/digibile/digibail/actions/workflows/deploy-digebail-server.yml/dispatches \
+            -d '{"ref":"main"}'
+          echo "FULL_DEPLOYMENT_VALIDATION_DISPATCHED=1"
