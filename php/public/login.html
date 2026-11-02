@@ -92,7 +92,7 @@ function done(j){
  const payload=j&&j.data&&typeof j.data==='object'?j.data:j;
  const roles=Array.isArray(payload.user&&payload.user.roles)?payload.user.roles:[];
  const isAdmin=roles.some(role=>['admin','superadmin'].includes(String(role).toLowerCase()));
- location.href=isAdmin?API.after:'/';
+ location.href='/';
 }
 /* OTP: timers use the monotonic clock plus server-reported remaining seconds, so changing the browser clock or refreshing cannot bypass them */
 let tmr=null,phone='';
