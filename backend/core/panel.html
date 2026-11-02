@@ -1909,7 +1909,7 @@ document.addEventListener('click',ok(async function(e){
  if(action==='check'){b.disabled=true;try{render();toast('وضعیت نسخه‌ها تازه‌سازی شد.')}finally{b.disabled=false}return}
  if(action==='deploy'){
   if(!SUPER)throw new Error('شروع بروزرسانی فقط برای مدیر ارشد مجاز است.');
-  if(!confirm('نسخه اصلی سامانه روی سرور منتشر شود؟ ابتدا پشتیبان‌گیری و کنترل سلامت اجرا می‌شود.'))return;
+  if(!confirm('نسخه اصلی سامانه روی سرور منتشر شود؟ ابتدا تنظیمات، اتصال پایگاه داده و سلامت برنامه بررسی می‌شود.'))return;
   b.disabled=true;const old=b.textContent;b.textContent='در حال ثبت درخواست...';
   try{const r=await api('POST','/api/v1/admin/releases/deploy',{});toast(r.data?.message||r.message||'درخواست بروزرسانی ثبت شد.');render()}
   finally{b.disabled=false;b.textContent=old}
