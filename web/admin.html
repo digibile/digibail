@@ -50,14 +50,14 @@ const esc=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&
 function notify(s){const n=$("#notice");n.textContent=s;n.classList.remove("hidden");}
 async function api(path,body){const r=await fetch(path,{method:body?"POST":"GET",credentials:"same-origin",headers:body?{"Content-Type":"application/json"}:{},body:body?JSON.stringify(body):undefined});const j=await r.json().catch(()=>({}));if(r.status===401||r.status===403){location.href="/login.html?next=%2Fadmin";throw new Error("برای ورود به مدیریت، وارد حساب مدیر شوید.");}if(!r.ok)throw new Error(j.message||"خطا در دریافت اطلاعات");return j.data??j;}
 const fmt=d=>d?new Date(d).toLocaleDateString("fa-IR"):"-";
-let legacyOffset=0, legacyRows=[];let customerPage=1,customerTotal=0,customerLoading=false;
+let legacyOffset=0, legacyRows=[];let customerPage=1,customerTotal=0,customerLoading=false;let legacyTablesLoaded=false,legacyTablesLoading=false;
 async function load(){
+void loadCustomers();
 try{
-const [sum,users,templateResult,logs,purchasePlans,loanStatuses,documents,contracts,betaInquiries,legacyTables]=await Promise.all([api("/api/v1/admin/summary"),api("/api/v1/admin/users"),api("/api/v1/admin/sms/templates"),api("/api/v1/admin/sms/logs"),api("/api/v1/admin/legacy-source-data?table=CustomerPurchasePlan"),api("/api/v1/admin/legacy-source-data?table=LoanRequestStatuses"),api("/api/v1/admin/documents"),api("/api/v1/admin/contracts"),api("/api/v1/admin/beta-inquiries"),api("/api/v1/admin/legacy-source-tables")]);
+const [sum,users,templateResult,logs,purchasePlans,loanStatuses,documents,contracts,betaInquiries]=await Promise.all([api("/api/v1/admin/summary"),api("/api/v1/admin/users"),api("/api/v1/admin/sms/templates"),api("/api/v1/admin/sms/logs"),api("/api/v1/admin/legacy-source-data?table=CustomerPurchasePlan"),api("/api/v1/admin/legacy-source-data?table=LoanRequestStatuses"),api("/api/v1/admin/documents"),api("/api/v1/admin/contracts"),api("/api/v1/admin/beta-inquiries")]);
 const templates=templateResult.items||[];
 $("#stats").innerHTML=[["همه حساب‌ها",sum.users],["مدیران",sum.admins],["مشتریان قدیمی",sum.legacy_customers],["الگوهای پیامک",sum.sms_templates],["گزارش ارسال",sum.sms_logs]].map(x=>'<div class="stat"><small>'+esc(x[0])+'</small><strong>'+esc(x[1])+'</strong></div>').join("");
 $("#usersRows").innerHTML=users.map(u=>'<tr><td>'+esc(u.full_name)+'</td><td>'+esc(u.username||"-")+'</td><td>'+esc(u.phone||"ثبت نشده")+'</td><td><span class="pill">'+esc(u.role)+'</span></td><td>'+ (u.is_active?"فعال":"غیرفعال")+'</td><td>'+fmt(u.created_at)+'</td></tr>').join("")||'<tr><td colspan="6">حسابی ثبت نشده است.</td></tr>';
-await loadCustomers();
 $("#smsConfig").textContent=templateResult.configured?"کلید سرویس پیامک تنظیم شده است.":"کلید کاوه‌نگار هنوز در تنظیمات محرمانه سرور ثبت نشده؛ الگوها منتقل شده‌اند اما ارسال فعال نیست.";
 $("#templateRows").innerHTML=templates.map(t=>'<form class="template" data-id="'+t.id+'"><strong>الگوی قدیمی #'+esc(t.id)+'</strong><label>عنوان</label><input name="title" maxlength="200" value="'+esc(t.title)+'" required><label>متن الگو</label><textarea name="body" maxlength="4000" required>'+esc(t.body)+'</textarea><label>وضعیت عددی</label><input name="status" type="number" value="'+esc(t.status)+'"><label>کد الگوی سرویس‌دهنده</label><input name="patternBaseCode" value="'+esc(t.pattern_base_code||"")+'"><p><button class="btn primary" type="submit">ذخیره الگو</button></p></form>').join("")||"<p>الگویی منتقل نشده است.</p>";
 $("#logRows").innerHTML=logs.map(l=>'<tr><td>'+fmt(l.created_at)+'</td><td>'+esc(l.recipient_masked||"-")+'</td><td>'+esc(l.status)+'</td><td>'+esc(l.provider_message_id||"-")+'</td><td>'+esc(l.error_code||"-")+'</td></tr>').join("")||'<tr><td colspan="5">گزارشی ثبت نشده است.</td></tr>';
@@ -66,10 +66,6 @@ $("#loanStatusRows").innerHTML=loanStatuses.map(x=>'<div class="template"><small
 $("#documentRows").innerHTML=documents.map(d=>'<form class="template" data-document-id="'+esc(d.id)+'"><strong>'+esc(d.kind)+' · کاربر #'+esc(d.user_id)+'</strong><p class="muted">فایل: '+esc(d.file_name)+' · '+fmt(d.created_on)+'</p><p>وضعیت فعلی: '+esc(d.status)+'</p><label>وضعیت جدید</label><select name="status"><option value="Pending" '+(d.status==="Pending"?"selected":"")+'>در انتظار</option><option value="Verified" '+(d.status==="Verified"?"selected":"")+'>تأیید</option><option value="Rejected" '+(d.status==="Rejected"?"selected":"")+'>رد</option></select><label>یادداشت بررسی</label><textarea name="note">'+esc(d.review_note||"")+'</textarea><button class="btn primary" type="submit">ثبت بررسی</button></form>').join("")||'<p class="muted">مدرکی برای بررسی ثبت نشده است.</p>';
 $("#contractRows").innerHTML=contracts.map(x=>'<tr><td>#'+esc(x.user_id)+'</td><td>'+esc(x.title)+'</td><td>'+esc(x.number)+'</td><td>'+esc(x.status)+'</td><td>'+fmt(x.created_on)+'</td></tr>').join("")||'<tr><td colspan="5">قراردادی صادر نشده است.</td></tr>';
 $("#betaRows").innerHTML=betaInquiries.map(x=>'<tr><td>'+esc(x.reference)+'</td><td>#'+esc(x.user_id)+'</td><td>'+esc(x.national_code)+'</td><td>'+esc(x.status)+'</td><td>'+esc(x.status_note)+'</td><td>'+fmt(x.created_at)+'</td></tr>').join("")||'<tr><td colspan="6">درخواستی ثبت نشده است.</td></tr>';
- const legacySelect=$("#legacyTableSelect"), selectedLegacy=legacySelect.value;
- legacySelect.innerHTML=legacyTables.map(t=>'<option value="'+esc(t.source_table)+'" data-count="'+esc(t.row_count)+'">'+esc(t.source_table)+' · '+esc(t.row_count)+' رکورد</option>').join("");
- if(legacyTables.some(t=>t.source_table===selectedLegacy))legacySelect.value=selectedLegacy;
- await loadLegacyTable(false);
 }catch(e){notify(e.message);}
 }
 
@@ -94,6 +90,19 @@ $("#customerPageSize").addEventListener("change",()=>{customerPage=1;loadCustome
 $("#customerClear").addEventListener("click",()=>{$("#customerQ").value="";$("#customerPageSize").value="50";customerPage=1;loadCustomers()});
 $("#customerPrev").addEventListener("click",()=>{if(customerPage>1){customerPage--;loadCustomers()}});
 $("#customerNext").addEventListener("click",()=>{customerPage++;loadCustomers()});
+async function loadLegacyTables(){
+ if(legacyTablesLoaded||legacyTablesLoading)return;
+ legacyTablesLoading=true;
+ try{
+  const legacyTables=await api("/api/v1/admin/legacy-source-tables");
+  const legacySelect=$("#legacyTableSelect"), selectedLegacy=legacySelect.value;
+  legacySelect.innerHTML=legacyTables.map(t=>'<option value="'+esc(t.source_table)+'" data-count="'+esc(t.row_count)+'">'+esc(t.source_table)+' · '+esc(t.row_count)+' رکورد</option>').join("");
+  if(legacyTables.some(t=>t.source_table===selectedLegacy))legacySelect.value=selectedLegacy;
+  legacyTablesLoaded=true;
+  await loadLegacyTable(false);
+ }catch(e){notify(e.message);}
+ finally{legacyTablesLoading=false;}
+}
 async function loadLegacyTable(append=false){
  const table=$("#legacyTableSelect").value;
  if(!table)return;
@@ -112,7 +121,7 @@ async function loadLegacyTable(append=false){
 $("#legacyTableSelect").addEventListener("change",()=>loadLegacyTable(false));
 $("#legacyNext").addEventListener("click",()=>loadLegacyTable(true));
 
-$(".tabs button").forEach(b=>b.addEventListener("click",()=>{$$(".tabs button").forEach(x=>x.classList.toggle("active",x===b));["users","customers","templates","logs","legacyplans","legacyall","documents","contracts","beta","test","modules"].forEach(id=>$("#"+id).classList.toggle("hidden",id!==b.dataset.tab));}));
+$(".tabs button").forEach(b=>b.addEventListener("click",()=>{$(".tabs button").forEach(x=>x.classList.toggle("active",x===b));["users","customers","templates","logs","legacyplans","legacyall","documents","contracts","beta","test","modules"].forEach(id=>$("#"+id).classList.toggle("hidden",id!==b.dataset.tab));if(b.dataset.tab==="legacyall")loadLegacyTables();}));
 $("#openLoanDefinition").addEventListener("click",()=>{window.location.href="/loan-definition.html"});
 $("#openLoanRequests").addEventListener("click",()=>{window.location.href="/loan-requests.html"});
 $("#templateRows").addEventListener("submit",async e=>{if(!e.target.matches("form[data-id]"))return;e.preventDefault();const f=e.target;try{await api("/api/v1/admin/sms/templates/update",{id:Number(f.dataset.id),title:f.title.value,body:f.body.value,status:Number(f.status.value),patternBaseCode:f.patternBaseCode.value});notify("الگوی پیامک ذخیره شد.");}catch(x){notify(x.message);}});
