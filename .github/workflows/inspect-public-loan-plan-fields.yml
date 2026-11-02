@@ -1,0 +1,29 @@
+name: Read-only public loan plan fields
+
+on:
+  push:
+    branches:
+      - feature/php83-public-seo-ssr-20261102
+    paths:
+      - '.github/workflows/inspect-public-loan-plan-fields.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Read public plan fields only
+        uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          command_timeout: 5m
+          script: |
+            set -eu
+            cd /home/digibail/domains/digebail.ir/php_app
+            /usr/local/php83/bin/php -r 'require "vendor/autoload.php"; App\Core\Environment::load(__DIR__ . "/.env"); $db=App\Core\Database\ConnectionFactory::create(); $rows=$db->query("SELECT Code, Title, PlanTitle, PlanShortDescription, MaxAmount, MaxMonthGap, ProfitPercent, LoanProfitType, AllowedInstallments, CostsJson, IncludePlan, Disable FROM Loans WHERE IncludePlan = 1 AND Disable = 0 ORDER BY Code")->fetchAll(PDO::FETCH_ASSOC); echo "PUBLIC_PLAN_DATA=" . json_encode($rows, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . PHP_EOL;'
+            echo "PUBLIC_PLAN_FIELD_AUDIT=COMPLETE"
