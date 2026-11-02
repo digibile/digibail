@@ -92,6 +92,11 @@ jobs:
           cat /tmp/health.json
           grep -q '"database":"ok"' /tmp/health.json
           curl --fail --silent http://127.0.0.1:1631/ | grep -q '<html'
+          curl --fail --silent http://127.0.0.1:1631/plans | grep -q 'طرح‌های خرید اقساطی'
+          curl --fail --silent http://127.0.0.1:1631/faq.html | grep -q 'سؤالات متداول'
+          curl --fail --silent http://127.0.0.1:1631/contact.html | grep -q 'ارتباط با دیجی‌بایل'
+          curl --fail --silent http://127.0.0.1:1631/robots.txt | grep -q 'sitemap.xml'
+          curl --fail --silent http://127.0.0.1:1631/sitemap.xml | grep -q '/plans'
           curl --fail --silent http://127.0.0.1:1631/login.html | grep -q '<html'
           curl --fail --silent http://127.0.0.1:1631/api/v1/tenant/config | grep -q 'دیجی‌بایل'
           curl --fail --silent http://127.0.0.1:1631/api/v1/security/captcha | grep -q '"id"'
