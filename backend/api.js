@@ -1,12 +1,24 @@
 import crypto from "node:crypto";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
-import { Pool } from "pg";
+import { createMariaCompatPool } from "./mariadb-compat.js";
 import { handleSiteContent } from "./site-content.js";
 import { createPool } from "mysql2/promise";
 import { syncUserToMariaDB } from "./mariadb-user-sync.js";
 
-const pool = new Pool({ connectionString: process.env.DATABASE_URL, max: 10, connectionTimeoutMillis: 5000 });
+const mariaDatabase = process.env.MARIADB_DATABASE || "digibail_vamcitydigibilepay";
+const mariaUser = process.env.MARIADB_USER || "";
+const mariaPassword = process.env.MARIADB_PASSWORD || "";
+if (!mariaUser || !mariaPassword) throw new Error("MariaDB credentials are required.");
+const mariaConnection = process.env.MARIADB_HOST
+  ? { host: process.env.MARIADB_HOST, port: Number(process.env.MARIADB_PORT || 3306) }
+  : { socketPath: process.env.MARIADB_SOCKET || "/tmp/mysql.sock" };
+const mariaRawPool = createPool({
+  ...mariaConnection, user: mariaUser, password: mariaPassword, database: mariaDatabase,
+  waitForConnections: true, connectionLimit: 10, queueLimit: 50,
+  charset: "utf8mb4", connectTimeout: 8000, timezone: "Z"
+});
+const pool = createMariaCompatPool(mariaRawPool);
 let legacyMariaPool = null;
 function legacyMaria() {
   const database = process.env.MARIADB_DATABASE || "digibail_vamcitydigibilepay";
