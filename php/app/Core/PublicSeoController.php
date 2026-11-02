@@ -104,6 +104,7 @@ final class PublicSeoController
         $conditions = self::values($plan['conditions'] ?? []);
         $documents = self::values($plan['documents'] ?? []);
         $costs = self::values($plan['operationalCosts'] ?? []);
+        $fullDescription = trim((string) ($plan['fullDescriptionHtml'] ?? ''));
         $tiers = is_array($plan['tiers'] ?? null) ? $plan['tiers'] : [];
         $interval = max(1, (int) ($plan['intervalMonths'] ?? 1));
         $detail = '<main class="public-wrap"><section class="detail-hero"><div><a class="back-link" href="/plans">← همه طرح‌ها</a><span class="eyebrow">طرح منتشرشده در دیجی‌بایل</span>'
@@ -112,6 +113,7 @@ final class PublicSeoController
             . '</div>' . ($image !== '' ? '<div class="detail-image"><img src="' . self::e($image) . '" alt="' . $title . '"></div>' : '') . '</section>'
             . '<section class="detail-layout"><article class="info-panel"><h2>شرایط و مدارک طرح</h2><h3>شرایط</h3>' . self::listOrEmpty($conditions, 'شرایط تکمیلی برای نمایش عمومی ثبت نشده است.')
             . '<h3>مدارک موردنیاز</h3>' . self::listOrEmpty($documents, 'فهرست مدارک جداگانه‌ای ثبت نشده است.')
+            . ($fullDescription !== '' ? '<h3>توضیحات تکمیلی طرح</h3><div class="plan-rich-content">' . $fullDescription . '</div>' : '')
             . '<h3>هزینه‌های عملیاتی</h3>' . self::listOrEmpty($costs, 'هزینه عملیاتی جداگانه‌ای در اطلاعات عمومی ثبت نشده است؛ این موضوع به معنی رایگان بودن خدمات نیست.')
             . '<p class="disclaimer">اطلاعات این صفحه از طرح منتشرشده در سامانه دریافت می‌شود. شرایط نهایی تابع بررسی ارائه‌دهنده و قرارداد رسمی است.</p></article>'
             . '<aside class="calculator" id="calculator"><span class="eyebrow">اطلاعات بازپرداخت ثبت‌شده</span><h2>برآورد اقساط</h2>'
