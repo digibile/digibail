@@ -94,3 +94,16 @@
 
 ## معیار تکمیل
 مهاجرت زمانی کامل است که هیچ اتصال runtime یا job عملیاتی به PostgreSQL باقی نمانده باشد، تمام endpointهای فعال با MariaDB کار کنند، CI فقط با MariaDB تست اصلی را پاس کند، تمام ۲۲۴ جدول اولیه حفظ شده باشند و گزارش تطبیق داده/عملکرد ارائه شود.
+
+## جدول‌های اختصاصی برنامه فعلی که باید تعیین تکلیف شوند
+
+در کد PostgreSQL فعلی، این جدول‌ها در schema اولیه یا migrationهای runtime تعریف شده‌اند؛ وجود نام آن‌ها در کد به معنی وجود قطعی همه آن‌ها در دیتابیس ۱۹ جدولی فعلی نیست و باید با `information_schema` تطبیق داده شود.
+
+- هویت و امنیت: `users`, `access_roles`, `user_role_assignments`, `user_role_overrides`, `captcha_challenges`, `otp_challenges`
+- ثبت رویداد و پیامک: `audit_logs`, `sms_provider_settings`, `sms_templates`, `sms_logs`
+- داده‌های واردشده و مشتری: `legacy_customers`, `legacy_source_data`, `customer_documents`, `customer_contracts`
+- وام و درخواست: `loan_products`, `loan_requests`, `loan_request_comments`, `loan_request_status_history`, `customer_loan_applications`, `beta_inquiries`
+- ابزار محتوای سایت: `homepage_content`, `newsletter_subscribers`, `blog_posts`
+- ابزار هوش مصنوعی: `ai_story_assets`
+
+برخی از این قابلیت‌ها ممکن است در حال حاضر از جدول‌های MariaDB موجود تغذیه شوند و برخی دیگر فقط در PostgreSQL باشند. برای هر مورد باید منبع حقیقت تعیین شود؛ ایجاد نسخه دوم از `AspNetUsers`، درخواست وام یا پرداخت ممنوع است.
