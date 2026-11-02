@@ -446,6 +446,34 @@ section.s{padding-block:28px 4px}h2.t{font-family:var(--f-body);font-size:1.35re
 @media(max-width:900px){.plans-showcase .bento{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:480px){.section-heading{align-items:flex-start}.section-heading>.btn{font-size:.68rem;padding:5px 8px;min-height:34px}.plans-showcase .bento{grid-template-columns:repeat(2,minmax(0,1fr))}.plans-showcase .pc img{height:78px!important}}
 
+
+/* CMS editing, editorial, newsletter and expanded professional footer */
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+.editorial-section{padding-block:28px 34px!important}.editorial-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+.editorial-card,.editorial-empty{background:#fff;border:1px solid var(--line);border-radius:15px;padding:18px;min-height:145px;box-shadow:0 5px 18px #173b6208}
+.editorial-card h3{font-size:1rem;margin:0 0 8px;color:var(--fg)}.editorial-card p{font-size:.82rem;color:var(--muted);margin:0 0 12px}.editorial-card a{color:var(--brand);font-weight:800}
+.newsletter-section{display:grid;grid-template-columns:1fr minmax(300px,.9fr);gap:24px;align-items:center;margin:10px 0 30px;padding:26px 30px;border-radius:20px;background:linear-gradient(110deg,#073566,#0878ef);color:#fff;box-shadow:0 14px 35px #0b4d8b20}
+.newsletter-kicker{font-size:.78rem;color:#bcecff}.newsletter-section h2{margin:3px 0;font-size:1.4rem;color:#fff}.newsletter-section p{margin:0;color:#e1f2ff;font-size:.85rem}
+.newsletter-section form{display:grid;grid-template-columns:1fr auto;gap:8px}.newsletter-section input{min-width:0;border:1px solid #ffffff66;border-radius:12px;padding:12px;background:#fff;color:#15375e;font:inherit}.newsletter-section button{background:#fff;color:#07529b;border-color:#fff}.newsletter-section small{grid-column:1/-1;color:#fff;min-height:1.2em}
+.ft{margin-top:44px;padding:42px 0 18px;background:linear-gradient(180deg,#092c54,#061e3b);color:#c7d9ed;border:0}
+.ft-main{display:grid;grid-template-columns:1.5fr repeat(4,minmax(0,1fr));gap:28px;padding-bottom:30px}
+.ft b{color:#fff;font-size:.9rem;margin-bottom:13px}.ft a,.ft span{color:#c7d9ed}.ft a:hover{color:#fff}.ft .logo{color:#fff}.ft .logo small{color:#aac3df}.ft-brand p{max-width:320px;line-height:2;color:#c7d9ed}
+.ft .soc a{display:inline-flex;border-color:#ffffff40;padding:5px 11px;font-size:.75rem}.ft-contact{display:grid;grid-template-columns:minmax(180px,.7fr) 1.3fr;gap:20px;align-items:center;border-top:1px solid #ffffff25;padding:24px 0}
+.ft-contact p{font-size:.8rem;color:#b6cbe2}.ft-badges{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:0}
+.badge-box{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;min-height:100px;background:#fff;border:1px dashed #a9c4e1;color:#163e69;border-radius:14px;text-align:center;padding:12px}
+.badge-box .license-placeholder{font-weight:900;color:#164d85}.badge-box small{font-size:.65rem;color:#627b98}
+.ft-bot{border-color:#ffffff25;color:#a9c0d9;margin-top:10px}.ft-bot span{color:#a9c0d9}
+.cms-toolbar{position:fixed;z-index:1000;inset-inline-start:16px;bottom:18px;display:flex;gap:8px;align-items:center;padding:9px 12px;background:#082c55;color:#fff;border:1px solid #4a9ce8;border-radius:14px;box-shadow:0 8px 30px #001b3c55}
+.cms-toolbar button,.cms-edit-trigger{border:0;border-radius:9px;background:#0878ef;color:#fff;padding:8px 12px;font:inherit;font-size:.8rem;font-weight:800;cursor:pointer}
+.cms-edit-trigger{display:none;position:absolute;z-index:4;top:12px;inset-inline-end:12px;box-shadow:0 4px 15px #001a3d44}
+body.cms-admin [data-cms-section]{position:relative;outline:1px dashed #1384ef66;outline-offset:3px}
+body.cms-admin [data-cms-section]>.cms-edit-trigger{display:block}
+.cms-modal{position:fixed;z-index:1100;inset:0;background:#071d36a8;display:grid;place-items:center;padding:16px}
+.cms-dialog{width:min(640px,100%);max-height:85vh;overflow:auto;background:#fff;color:#16395f;border-radius:18px;padding:22px;box-shadow:0 20px 60px #001a3d66}
+.cms-dialog h2{margin:0 0 6px}.cms-dialog label{display:block;font-weight:800;font-size:.82rem;margin:12px 0 5px}.cms-dialog input,.cms-dialog textarea{width:100%;box-sizing:border-box;border:1px solid #d5e3f1;border-radius:10px;padding:10px;font:inherit;color:#12375e}.cms-dialog textarea{min-height:90px;resize:vertical}.cms-dialog .cms-actions{display:flex;gap:8px;justify-content:flex-start;margin-top:16px}
+@media(max-width:900px){.ft-main{grid-template-columns:repeat(2,minmax(0,1fr));gap:20px}.ft-brand{grid-column:1/-1}.ft-contact{grid-template-columns:1fr}.editorial-grid{grid-template-columns:1fr 1fr}}
+@media(max-width:600px){.newsletter-section{grid-template-columns:1fr;padding:20px 16px}.newsletter-section form{grid-template-columns:1fr}.ft-main{grid-template-columns:1fr 1fr;gap:18px}.ft-badges{grid-template-columns:1fr}.editorial-grid{grid-template-columns:1fr}.cms-toolbar{inset-inline:10px;bottom:calc(84px + env(safe-area-inset-bottom,0px));justify-content:space-between}}
+
 </style></head><body>
 
 <div class="hd" id="hd"><div class="hd-in">
@@ -467,16 +495,20 @@ section.s{padding-block:28px 4px}h2.t{font-family:var(--f-body);font-size:1.35re
 </div></div>
 <div class="wrap">
     <main id="app"></main>
-  <footer class="ft">
-    <div class="ft-top">
-      <div class="ft-brand"><a class="logo" href="#home"><i>db</i><span>دیجی‌بایل پی<small>راه هوشمند تأمین مالی</small></span></a><p>پلتفرم خرید اقساطی. اعتبار، قرارداد و کارت مجازی در یک حساب.</p><div class="soc" aria-label="شبکه‌های اجتماعی"><span>پیوند شبکه‌های اجتماعی پس از ثبت نشانی رسمی فعال می‌شود.</span></div></div>
-      <div><b>خدمات</b><a href="#stores">فروشگاه‌ها</a><a href="#plans">طرح‌های اعتباری</a><a href="#calc">محاسبه‌گر اقساط</a><a href="#how">مراحل دریافت اعتبار</a></div><div><b>طرح‌ها</b><span id="ftPlans"></span></div>
-      <div><b>همکاری</b><a href="/register.html?type=merchant">پذیرنده شوید</a><a href="/register.html?type=agent">نماینده شوید</a><a href="/register.html?type=organization">سازمان‌ها</a></div>
-      <div><b>حساب و پشتیبانی</b><a href="/login.html">ورود / عضویت</a><a href="/profile.html">حساب کاربری و پیگیری درخواست‌ها</a><a href="/documents.html">مدارک</a><a href="/contracts.html">قراردادها</a><a href="/terms.html">قوانین و مقررات</a><a href="/privacy.html">حریم خصوصی</a></div>
-      <div><b>تماس با ما</b><span class="ph">نشانی، تلفن و ایمیل از تنظیمات سایت خوانده می‌شود</span><span>ساعت کاری: شنبه تا چهارشنبه، ۹ تا ۱۸</span></div>
+  <footer class="ft" data-cms-section="footer">
+    <div class="ft-main">
+      <div class="ft-brand"><a class="logo" href="#home"><i>db</i><span>دیجی‌بایل پی<small>راه هوشمند تأمین مالی</small></span></a><p data-cms-field="description">راهکار هوشمند خرید اقساطی و تأمین مالی؛ شفاف، سریع و قابل پیگیری.</p><div class="soc" aria-label="شبکه‌های اجتماعی"><a href="#" aria-label="اینستاگرام">اینستاگرام</a><a href="#" aria-label="لینکدین">لینکدین</a><a href="#" aria-label="تلگرام">تلگرام</a></div></div>
+      <div><b>خدمات مشتریان</b><a href="#plans">طرح‌های اعتباری</a><a href="#calc">محاسبه‌گر اقساط</a><a href="#how">مراحل دریافت اعتبار</a><a href="/profile.html">پیگیری درخواست</a><a href="/blog.html">مجله و راهنما</a></div>
+      <div><b>همکاری با ما</b><a href="/register.html?type=merchant">پذیرنده شوید</a><a href="/register.html?type=agent">نماینده شوید</a><a href="/register.html?type=organization">همکاری سازمانی</a><a href="#partners">مزایای همکاری</a></div>
+      <div><b>درباره و پشتیبانی</b><a href="/about.html">درباره ما</a><a href="/contact.html">تماس با ما</a><a href="/faq.html">پرسش‌های متداول</a><a href="/terms.html">قوانین و مقررات</a><a href="/privacy.html">حریم خصوصی</a></div>
+      <div><b>دسترسی سریع</b><a href="/login.html">ورود / عضویت</a><a href="/documents.html">مدارک</a><a href="/contracts.html">قراردادها</a><a href="#newsletter">عضویت در خبرنامه</a><span id="ftPlans"></span></div>
     </div>
-    <div class="ft-badges"><div class="badge-box">محل نماد اعتماد الکترونیکی</div><div class="badge-box">محل نماد ساماندهی</div></div>
-    <div class="ft-bot"><span>تمامی حقوق برای دیجی‌بایل پی محفوظ است.</span><span id="ftHost"></span></div>
+    <div class="ft-contact"><div><b>ارتباط با دیجی‌بایل پی</b><p>نشانی، تلفن و ایمیل رسمی از تنظیمات تأییدشده سایت نمایش داده می‌شود.</p></div><div class="ft-badges" aria-label="مجوزها و نمادها">
+      <div class="badge-box"><span class="license-placeholder">جایگاه نماد اعتماد الکترونیکی</span><small>تصویر و پیوند رسمی پس از تأیید مدیر سایت درج شود</small></div>
+      <div class="badge-box"><span class="license-placeholder">جایگاه نماد ساماندهی</span><small>تصویر و پیوند رسمی پس از تأیید مدیر سایت درج شود</small></div>
+      <div class="badge-box"><span class="license-placeholder">سایر مجوزها</span><small>فقط مجوزهای معتبر و قابل استعلام</small></div>
+    </div></div>
+    <div class="ft-bot"><span>تمامی حقوق برای دیجی‌بایل پی محفوظ است.</span><span id="ftHost"></span><span>نسخه و اطلاعات حقوقی مطابق مجوزهای رسمی</span></div>
   </footer>
 </div>
 <nav class="mbar" aria-label="میانبرهای موبایل">
@@ -615,17 +647,17 @@ function syncMobileNav(){
 }
 
 function home(){const A=act();
- $('#app').innerHTML=`<section class="hero-shell" id="calc">
+ $('#app').innerHTML=`<section class="hero-shell" id="calc" data-cms-section="hero">
  <div class="hero-message">
-  <div class="hero-kicker">با دیجی‌بایل پی، رویای خود را واقعیت تبدیل کنید</div>
-  <h1>خرید آسان، <em>اقساطی</em> مطمئن</h1>
-  <p>با بهترین طرح‌های خرید اقساطی؛ از موبایل و لوازم خانگی تا خودرو و تجهیزات دیجیتال. همه‌چیز برای یک خرید هوشمندانه در دیجی‌بایل پی فراهم است.</p>
+  <div class="hero-kicker" data-cms-field="eyebrow">با دیجی‌بایل پی، رویای خود را واقعیت تبدیل کنید</div>
+  <h1 data-cms-field="title">خرید آسان، <em>اقساطی</em> مطمئن</h1>
+  <p data-cms-field="description">با بهترین طرح‌های خرید اقساطی؛ از موبایل و لوازم خانگی تا خودرو و تجهیزات دیجیتال. همه‌چیز برای یک خرید هوشمندانه در دیجی‌بایل پی فراهم است.</p>
   <a class="btn hero-cta" href="#plans">مشاهده طرح‌ها <span aria-hidden="true">←</span></a>
  </div>
  <div class="calc hero-calculator" id="calcBox"></div>
  <div class="hero-arrows" aria-hidden="true"><span>‹</span><span>›</span></div>
 </section>
-<section class="feature-strip" aria-label="مزایای دیجی‌بایل پی">
+<section class="feature-strip" aria-label="مزایای دیجی‌بایل پی" data-cms-section="features">
  <div><i>♧</i><b>پرداخت آسان</b><small>اقساط منعطف بدون نیاز ضامن</small></div>
  <div><i>ϟ</i><b>سریع و مطمئن</b><small>بررسی و ثبت درخواست وام</small></div>
  <div><i>✓</i><b>بدون ضامن</b><small>در طرح‌های منتخب با شرایط ویژه</small></div>
@@ -633,11 +665,11 @@ function home(){const A=act();
  <div><i>♧</i><b>پشتیبانی شبانه‌روزی</b><small>در تمام مراحل</small></div>
 </section>
 
- <section class="s plans-showcase" id="plans"><span id="stores" aria-hidden="true"></span>
+ <section class="s plans-showcase" id="plans" data-cms-section="plans"><span id="stores" aria-hidden="true"></span>
   <div class="section-heading"><div><h2 class="t">طرح‌های وام و خرید اقساطی</h2><p class="sub">طرح مناسب خود را انتخاب کنید و شرایط پرداخت را پیش از ثبت درخواست ببینید.</p></div><a class="btn" href="#plans">مشاهده همه طرح‌ها ←</a></div>
   <div class="plan-tools"><input id="planSearch" type="search" placeholder="جستجوی نام یا توضیحات طرح…" aria-label="جستجوی طرح"><select id="planFilter" aria-label="فیلتر طرح"><option value="all">همه طرح‌ها</option><option value="down">با پیش‌پرداخت</option><option value="nodown">بدون پیش‌پرداخت</option><option value="bank">استعلام بانکی</option></select></div><p class="plan-count" id="planCount"></p><div class="bento" id="planGrid">${renderPlanCards(A)}</div>
  </section>
- <section class="s" id="partners">
+ <section class="s" id="partners" data-cms-section="partners">
   <h2 class="t">چرا دیجی‌بایل پی؟</h2><p class="sub">با ما، تجربه‌ای متفاوت از خدمات مالی، سریع، شفاف و مطمئن خواهید داشت.</p>
   <div class="bento">
    <article class="pc"><h3>پذیرنده شوید</h3><p>درگاه خرید اعتباری، تسویه و مدیریت سفارش برای کسب‌وکار شما.</p><a class="btn solid" href="/register.html?type=merchant">درخواست پذیرندگی</a></article>
@@ -645,16 +677,24 @@ function home(){const A=act();
    <article class="pc"><h3>همکاری سازمانی</h3><p>ارائه راهکارهای اعتبار و خرید اقساطی برای کارکنان و اعضای سازمان‌ها.</p><a class="btn" href="/register.html?type=organization">درخواست همکاری سازمانی</a></article>
   </div>
  </section>
- <section class="s" id="how"><h2 class="t">از ثبت‌نام تا کارت مجازی</h2><p class="sub">چهار مرحله و کمتر از ۵ دقیقه.</p>
+ <section class="s" id="how" data-cms-section="how"><h2 class="t">از ثبت‌نام تا کارت مجازی</h2><p class="sub">چهار مرحله و کمتر از ۵ دقیقه.</p>
   <div class="tl"><div><div class="n">۱</div><h3>عضویت با موبایل</h3><p>کد تأیید پیامکی می‌گیرید و حساب شما ساخته می‌شود.</p></div><div><div class="n">۲</div><h3>احراز هویت و مدارک</h3><p>عکس مدارک را بارگذاری می‌کنید و اطلاعات آن خودکار خوانده می‌شود.</p></div><div><div class="n">۳</div><h3>قرارداد دیجیتال</h3><p>قرارداد را با کد پیامکی امضا می‌کنید.</p></div><div><div class="n">۴</div><h3>کارت مجازی</h3><p>با تأیید وام، کارت مجازی با سقف وام شما صادر می‌شود و برای خرید آماده است.</p></div></div></section>
- <section class="s" id="trust"><h2 class="t">امنیت و شفافیت</h2><p class="sub">اطلاعات شما رمزنگاری می‌شود و هیچ هزینه‌ی پنهانی وجود ندارد.</p>
+ <section class="s" id="trust" data-cms-section="trust"><h2 class="t">امنیت و شفافیت</h2><p class="sub">اطلاعات شما رمزنگاری می‌شود و هیچ هزینه‌ی پنهانی وجود ندارد.</p>
   <div class="trust"><div class="tc"><h3>رمزنگاری مدارک</h3><p>تصویر مدارک رمزنگاری‌شده نگهداری می‌شود و هر دسترسی ثبت می‌شود.</p></div><div class="tc"><h3>قرارداد با امضای پیامکی</h3><p>نسخه‌ی قرارداد و گزارش امضا در حساب شما می‌ماند.</p></div><div class="tc"><h3>کارت مجازی کنترل‌شده</h3><p>سقف کارت برابر وام شماست و هر زمان می‌توانید آن را مسدود کنید.</p></div><div class="tc"><h3>اقساط شفاف</h3><p>مبلغ و سررسید همه‌ی اقساط قبل از خرید دیده می‌شود.</p></div></div></section>
- <section class="s" id="faq"><h2 class="t">پرسش‌های متداول</h2>
+ <section class="s" id="faq" data-cms-section="faq"><h2 class="t">پرسش‌های متداول</h2>
   <details><summary>کارت مجازی چیست و کجا استفاده می‌شود؟</summary><p>بعد از تأیید وام، یک کارت مجازی با سقف وام برای شما صادر می‌شود. با آن از فروشگاه‌های طرف قرارداد از طریق درگاه دیجی‌بایل پی خرید می‌کنید.</p></details>
   <details><summary>برای دریافت اعتبار چه مدارکی لازم است؟</summary><p>فهرست مدارک هر طرح در صفحه‌ی همان طرح آمده است. هر مدرک را با عکس بارگذاری می‌کنید.</p></details>
   <details><summary>اگر قسطی را دیر پرداخت کنم چه می‌شود؟</summary><p>جریمه‌ی دیرکرد طبق قرارداد محاسبه می‌شود و قبل از سررسید پیامک یادآوری می‌گیرید.</p></details>
   <details><summary>چطور فروشگاه خودم را اضافه کنم؟</summary><p>از «پذیرنده شوید» درخواست بدهید. بعد از تأیید، لینک اختصاصی و درگاه برای شما فعال می‌شود.</p></details></section>
- <div class="band"><div><h2>آماده‌اید؟</h2><p>عضو شوید و اعتبار خود را در چند دقیقه ببینید.</p></div><button class="btn solid lg" data-go="reg">عضویت رایگان</button></div>`;
+ <section class="s editorial-section" id="blog" data-cms-section="blog">
+  <div class="section-heading"><div><h2 class="t" data-cms-field="title">مجله دیجی‌بایل پی</h2><p class="sub" data-cms-field="description">راهنمای خرید اعتباری، آموزش مدیریت مالی و تازه‌های خدمات دیجی‌بایل پی</p></div><a class="btn" href="/blog.html">همه مطالب ←</a></div>
+  <div class="editorial-grid" id="blogPosts"><article class="editorial-empty">مطالب آموزشی و خبرها پس از انتشار در این بخش نمایش داده می‌شوند.</article></div>
+ </section>
+ <section class="newsletter-section" id="newsletter" data-cms-section="newsletter">
+  <div><span class="newsletter-kicker">خبرنامه دیجی‌بایل پی</span><h2 data-cms-field="title">تازه‌ها را از دست ندهید</h2><p data-cms-field="description">خبرهای طرح‌های جدید، آموزش‌ها و پیشنهادهای معتبر را در ایمیل خود دریافت کنید.</p></div>
+  <form id="newsletterForm"><label class="sr-only" for="newsletterEmail">ایمیل شما</label><input id="newsletterEmail" type="email" required maxlength="190" placeholder="نشانی ایمیل شما"><button class="btn solid" type="submit">عضویت در خبرنامه</button><small id="newsletterStatus" role="status"></small></form>
+ </section>
+ <div class="band" data-cms-section="cta"><div><h2 data-cms-field="title">آماده‌اید؟</h2><p data-cms-field="description">عضو شوید و اعتبار خود را در چند دقیقه ببینید.</p></div><button class="btn solid lg" data-go="reg">عضویت رایگان</button></div>`;
  const box=$('#calcBox');mountCalc(box);tilt($('#vcard'));initCampaigns();syncMobileNav();const search=$('#planSearch'),filter=$('#planFilter'),grid=$('#planGrid'),count=$('#planCount');const refresh=()=>{const q=String(search?.value||'').trim().toLocaleLowerCase('fa'),mode=filter?.value||'all';const filtered=A.filter(p=>{const text=[p.name,p.blurb,p.badge].join(' ').toLocaleLowerCase('fa');if(q&&!text.includes(q))return false;if(mode==='bank'&&p.kind!=='beta')return false;if(mode==='down'&&!(p.tiers||[]).some(t=>Number(t.down)>0))return false;if(mode==='nodown'&&!(p.tiers||[]).some(t=>Number(t.down)===0))return false;return true});if(grid)grid.innerHTML=renderPlanCards(filtered);if(count)count.textContent='طرح‌های قابل نمایش: '+fa(filtered.length)+' از '+fa(A.length)};if(search)search.oninput=refresh;if(filter)filter.onchange=refresh;refresh();}
 function planPage(p){
  $('#app').innerHTML=`<div class="crumb"><a href="#home">خانه</a> / <a href="#plans">طرح‌ها</a> / ${p.name}</div>
