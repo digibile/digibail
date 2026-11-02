@@ -2,10 +2,11 @@ import type { Metadata } from "next";
 
 type Plan = { id?: string; name?: string; title?: string; description?: string; minAmount?: number; maxAmount?: number };
 const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || "https://digebail.ir").replace(/\/$/, "");
+const apiBase = (process.env.LEGACY_API_BASE_URL || `http://127.0.0.1:${process.env.LEGACY_PORT || "1632"}`).replace(/\/$/, "");
 
 async function getPlan(slug: string): Promise<Plan | null> {
   try {
-    const response = await fetch(`${siteUrl}/api/v1/loan-products/${encodeURIComponent(slug)}`, {
+    const response = await fetch(`${apiBase}/api/v1/loan-products/${encodeURIComponent(slug)}`, {
       next: { revalidate: 300 }
     });
     if (!response.ok) return null;
