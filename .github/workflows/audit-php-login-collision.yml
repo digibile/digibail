@@ -1,0 +1,67 @@
+name: Inspect DigiBail identity lookup collision
+
+on:
+  push:
+    branches: [migration/php83-full-rebuild]
+    paths:
+      - .github/workflows/audit-php-login-collision.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Read-only inspect of colliding identity matches
+        uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          command_timeout: 3m
+          script: |
+            set -eu
+            APP="/home/digibail/domains/digebail.ir/php_app"
+            /usr/local/php83/bin/php -r '
+              require $argv[1]."/vendor/autoload.php";
+              App\Core\Environment::load($argv[1]."/.env");
+              $db=App\Core\Database\ConnectionFactory::create();
+              $q=$db->prepare("SELECT UserName, NormalizedUserName FROM AspNetUsers WHERE Id=:id");
+              $q->execute(["id"=>"2897"]); $u=$q->fetch(PDO::FETCH_ASSOC);
+              if (!$u) { echo "TARGET_ACCOUNT_MISSING=1".PHP_EOL; exit(2); }
+              $phone=(string)$u["UserName"];
+              $p98="98".substr($phone,1); $pplus="+".$p98; $local=substr($phone,1);
+              $sql="SELECT Id,
+                (UserName=:un) exact_username,
+                (NormalizedUserName=:nu) normalized_username,
+                (Mobile=:m09) mobile_09,
+                (Phone=:p09) phone_09,
+                (PhoneNumber=:n09) number_09,
+                (Mobile=:m98) mobile_98,
+                (PhoneNumber=:n98) number_98,
+                (Mobile=:mp) mobile_plus98,
+                (PhoneNumber=:np) number_plus98,
+                (Mobile=:ml) mobile_local,
+                (PhoneNumber=:nl) number_local
+                FROM AspNetUsers
+                WHERE NormalizedUserName=:nu2 OR UserName=:un2
+                   OR Mobile IN (:a,:b,:c,:d)
+                   OR Phone IN (:e,:f)
+                   OR PhoneNumber IN (:g,:h,:i,:j)
+                ORDER BY Id LIMIT 5";
+              $s=$db->prepare($sql);
+              $s->execute(["un"=>$phone,"nu"=>$u["NormalizedUserName"],"m09"=>$phone,"p09"=>$phone,"n09"=>$phone,
+                "m98"=>$p98,"n98"=>$p98,"mp"=>$pplus,"np"=>$pplus,"ml"=>$local,"nl"=>$local,
+                "nu2"=>mb_strtoupper($phone,"UTF-8"),"un2"=>$phone,
+                "a"=>$phone,"b"=>$p98,"c"=>$pplus,"d"=>$local,"e"=>$phone,"f"=>$local,
+                "g"=>$phone,"h"=>$p98,"i"=>$pplus,"j"=>$local]);
+              foreach($s->fetchAll(PDO::FETCH_ASSOC) as $r) {
+                echo "MATCH_ROW_ID=".$r["Id"].PHP_EOL;
+                foreach(["exact_username","normalized_username","mobile_09","phone_09","number_09","mobile_98","number_98","mobile_plus98","number_plus98","mobile_local","number_local"] as $k) {
+                  echo "MATCH_".$k."=".(int)$r[$k].PHP_EOL;
+                }
+              }
+              echo "COLLISION_INSPECTION_READ_ONLY=1".PHP_EOL;
+            ' "$APP"
