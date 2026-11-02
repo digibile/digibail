@@ -132,8 +132,8 @@ async function copyPublicTable(pg,mysql,table) {
 
   const sourceCount=await countPg(pg,"public",table);
   const before=await countMy(mysql,table);
-  if(before>sourceCount) {
-    throw new Error("Destination table has unexpected extra records: "+table+" source="+sourceCount+" destination_before="+before);
+  if(before!==0) {
+    throw new Error("Destination table is not empty; refusing to overwrite or merge existing application records: "+table+" source="+sourceCount+" destination_before="+before);
   }
   const names=cols.map(c=>qpg(c.column_name)).join(",");
   const order=pks.length?pks.map(qpg).join(","):"ctid";
@@ -150,12 +150,8 @@ async function copyPublicTable(pg,mysql,table) {
       for(const col of cols) values.push(mysqlValue(row[col.column_name],col.data_type));
     }
     const tuple="("+colNames.map(()=>"?").join(",")+")";
-    const updates=colNames.filter(n=>n!=="id");
-    const duplicate=updates.length
-      ?" ON DUPLICATE KEY UPDATE "+updates.map(n=>qmy(n)+"=VALUES("+qmy(n)+")").join(",")
-      :" ON DUPLICATE KEY UPDATE "+qmy(colNames[0])+"=VALUES("+qmy(colNames[0])+")";
     const sql="INSERT INTO "+qmy(table)+" ("+colNames.map(qmy).join(",")+") VALUES "+
-      batch.rows.map(()=>tuple).join(",")+duplicate;
+      batch.rows.map(()=>tuple).join(",");
     await mysql.query(sql,values);
     offset+=batch.rows.length;
     console.log("PUBLIC_COPY_PROGRESS="+table+" "+offset+"/"+sourceCount);
@@ -193,8 +189,8 @@ async function copyLegacyTable(pg,mysql,table) {
   await storeLegacyColumns(pg,mysql,table,columns,pks);
   const where="WHERE source_schema=? AND source_table=?";
   const before=await countMy(mysql,"digibail_legacy_relational_rows",where,["legacy_digibail",table]);
-  if(before>sourceCount) {
-    throw new Error("Legacy relational destination has unexpected extra records: "+table+" source="+sourceCount+" destination_before="+before);
+  if(before!==0) {
+    throw new Error("Legacy relational destination already contains records; refusing to overwrite historical payloads: "+table+" source="+sourceCount+" destination_before="+before);
   }
   const colNames=columns.map(c=>c.column_name);
   const order=pks.length?pks.map(qpg).join(","):"ctid";
@@ -216,8 +212,7 @@ async function copyLegacyTable(pg,mysql,table) {
     }
     await mysql.query(
       "INSERT INTO digibail_legacy_relational_rows(source_schema,source_table,legacy_id,payload) VALUES "+
-      tuples.map(()=>"(?,?,?,?)").join(",")+
-      " ON DUPLICATE KEY UPDATE payload=VALUES(payload)",
+      tuples.map(()=>"(?,?,?,?)").join(","),
       tuples.flat()
     );
     offset+=result.rows.length;
