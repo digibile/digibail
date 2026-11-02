@@ -109,7 +109,7 @@ final class PublicSeoController
         $tiers = is_array($plan['tiers'] ?? null) ? $plan['tiers'] : [];
         $interval = max(1, (int) ($plan['intervalMonths'] ?? 1));
         $detail = '<main class="public-wrap"><section class="detail-hero"><div><a class="back-link" href="/plans">← همه طرح‌ها</a><span class="eyebrow">طرح منتشرشده در دیجی‌بایل</span>'
-            . '<h1>' . $title . '</h1><p>' . $description . '</p><div class="plan-values detail-values"><div><small>حداقل مبلغ</small><b>' . self::money($plan['minAmount'] ?? 0) . '</b></div>'
+            . '<h1>' . $title . '</h1><p>' . $description . '</p><div class="plan-values detail-values">'
             . '<div><small>سقف طرح</small><b>' . self::money($plan['maxAmount'] ?? 0) . '</b></div><div><small>نرخ پایه ثبت‌شده</small><b>' . self::fa((string) ($plan['interestPercent'] ?? 0)) . '٪</b></div></div>'
             . '</div>' . ($image !== '' ? '<div class="detail-image"><img src="' . self::e($image) . '" alt="' . $title . '"></div>' : '') . '</section>'
             . '<section class="detail-layout"><article class="info-panel"><h2>شرایط و مدارک طرح</h2><h3>شرایط</h3>' . self::listOrEmpty($conditions, 'شرایط تکمیلی برای نمایش عمومی ثبت نشده است.')
@@ -117,12 +117,9 @@ final class PublicSeoController
             . ($fullDescription !== '' ? '<h3>توضیحات تکمیلی طرح</h3><div class="plan-rich-content">' . $fullDescription . '</div>' : '')
             . '<h3>هزینه‌های عملیاتی</h3>' . self::listOrEmpty($costs, 'هزینه عملیاتی جداگانه‌ای در اطلاعات عمومی ثبت نشده است؛ این موضوع به معنی رایگان بودن خدمات نیست.')
             . '<p class="disclaimer">اطلاعات این صفحه از طرح منتشرشده در سامانه دریافت می‌شود. شرایط نهایی تابع بررسی ارائه‌دهنده و قرارداد رسمی است.</p></article>'
-            . '<aside class="calculator" id="calculator"><span class="eyebrow">اطلاعات بازپرداخت ثبت‌شده</span><h2>برآورد اقساط</h2>'
-            . '<label>مبلغ موردنیاز (تومان)<input id="amount" type="number" min="' . (int) $plan['minAmount'] . '" max="' . (int) $plan['maxAmount'] . '" value="' . (int) $plan['minAmount'] . '" step="100000"></label>'
-            . '<label>مدت بازپرداخت<select id="term">' . self::tierOptions($tiers, $interval, (float) ($plan['interestPercent'] ?? 0)) . '</select></label>'
-            . '<div class="calc-result"><small>قسط ماهانه برآوردی</small><strong id="monthly">پس از تطبیق روش محاسبه</strong><span id="term-label"></span></div>'
-            . '<div class="calc-row"><span>پیش‌پرداخت</span><b id="down">-</b></div><div class="calc-row"><span>سود یا کارمزد</span><b id="fee">-</b></div><div class="calc-row total"><span>مجموع بازپرداخت</span><b id="total">-</b></div>'
-            . '<p class="disclaimer">برای جلوگیری از نمایش قسط نادرست، محاسبه‌گر خودکار تا زمان تطبیق نوع سود با فرمول اصلی این طرح فعال نیست.</p><a class="action" href="/login.html">ورود و ثبت درخواست ←</a></aside></section></main>';
+            . '<aside class="calculator" id="calculator"><span class="eyebrow">اطلاعات بازپرداخت ثبت‌شده</span><h2>مدت‌ها و نرخ طرح</h2>'
+            . '<p class="disclaimer">مدت‌های مجاز و نرخ ثبت‌شده از اطلاعات اصلی طرح دریافت می‌شود. محاسبه خودکار قسط تا زمان تطبیق فرمول مالی اصلی نمایش داده نمی‌شود.</p>'
+            . '<a class="action" href="/login.html">ورود و ثبت درخواست ←</a></aside></section></main>';
 
         $calcData = [
             'min' => (float) $plan['minAmount'], 'max' => (float) $plan['maxAmount'],
