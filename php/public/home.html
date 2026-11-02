@@ -6,11 +6,11 @@
 <meta name="theme-color" content="#071d36">
 <meta name="description" content="دیجی‌بایل؛ انتخاب هوشمندانه کالا و طرح‌های خرید اقساطی">
 <title>دیجی‌بایل | خرید هوشمند، پرداخت آسان</title>
-<link rel="stylesheet" href="/assets/home-reference.css?v=20261102-photo1">
-<link rel="stylesheet" href="/assets/home-hero.css?v=20261102-photo1">
-<link rel="stylesheet" href="/assets/home-catalog.css?v=20261102-photo1">
-<link rel="stylesheet" href="/assets/home-commerce.css?v=20261102-photo1">
-<link rel="stylesheet" href="/assets/home-footer.css?v=20261102-photo1">
+<link rel="stylesheet" href="/assets/home-reference.css?v=20261102-active1">
+<link rel="stylesheet" href="/assets/home-hero.css?v=20261102-active1">
+<link rel="stylesheet" href="/assets/home-catalog.css?v=20261102-active1">
+<link rel="stylesheet" href="/assets/home-commerce.css?v=20261102-active1">
+<link rel="stylesheet" href="/assets/home-footer.css?v=20261102-active1">
 </head>
 <body>
 <header class="site-header">
@@ -92,10 +92,8 @@
 <section class="plans-section" id="plans">
  <div class="wrap plans-layout">
   <div class="plans-intro"><span class="section-eyebrow">مسیر خرید متناسب با شما</span><h2>طرح‌های خرید<br><strong>اقساطی دیجی‌بایل</strong></h2><p>شرایط هر طرح را جداگانه ببینید، جزئیات هزینه‌ها را بررسی کنید و بعد تصمیم بگیرید.</p><a class="outline-link" href="/login.html">ورود و مشاهده طرح‌ها <b>←</b></a></div>
-  <div class="plan-cards">
-   <article class="plan-card"><div class="plan-image"><img src="/assets/images/digital.jpg" alt="گوشی و کالای دیجیتال" loading="lazy"><span>فناوری</span></div><div class="plan-body"><h3>موبایل و کالای دیجیتال</h3><p>گوشی، تبلت، لپ‌تاپ و تجهیزات جانبی</p><a href="/login.html">مشاهده شرایط <b>←</b></a></div></article>
-   <article class="plan-card"><div class="plan-image"><img src="/assets/images/home.jpg" alt="لوازم خانگی" loading="lazy"><span>خانه</span></div><div class="plan-body"><h3>لوازم خانه و آشپزخانه</h3><p>انتخاب لوازم موردنیاز برای خانه</p><a href="/login.html">مشاهده شرایط <b>←</b></a></div></article>
-   <article class="plan-card"><div class="plan-image"><img src="/assets/images/car.jpg" alt="خودرو" loading="lazy"><span>خودرو</span></div><div class="plan-body"><h3>خودرو و موتورسیکلت</h3><p>بررسی طرح‌های مرتبط با وسایل نقلیه</p><a href="/login.html">مشاهده شرایط <b>←</b></a></div></article>
+  <div class="plan-cards active-plan-grid" id="activePlanCards" aria-live="polite">
+   <div class="plans-state">در حال دریافت طرح‌های فعال…</div>
   </div>
  </div>
 </section>
@@ -169,6 +167,66 @@
  const toggle=document.getElementById('hamb'),nav=document.getElementById('navlinks');
  toggle.addEventListener('click',()=>nav.classList.toggle('open'));
  nav.querySelectorAll('a').forEach(a=>a.addEventListener('click',()=>nav.classList.remove('open')));
+ const planHost=document.getElementById('activePlanCards');
+ const money=value=>new Intl.NumberFormat('fa-IR',{maximumFractionDigits:0}).format(Number(value)||0);
+ const safeText=value=>String(value??'').trim();
+ const planImage=plan=>{
+  if(safeText(plan.imageUrl))return safeText(plan.imageUrl);
+  const key=(safeText(plan.name)+' '+safeText(plan.title)+' '+(Array.isArray(plan.labels)?plan.labels.join(' '):'')).toLowerCase();
+  if(/خودرو|ماشین|موتور|وسیله نقلیه/.test(key))return '/assets/images/car.jpg';
+  if(/خانه|لوازم خانگی|آشپزخانه/.test(key))return '/assets/images/home.jpg';
+  if(/ساعت|پوشیدنی/.test(key))return '/assets/images/watch.jpg';
+  return '/assets/images/digital.jpg';
+ };
+ const makePlanCard=plan=>{
+  const card=document.createElement('article');card.className='plan-card active-plan-card';
+  const media=document.createElement('div');media.className='plan-image';
+  const img=document.createElement('img');img.src=planImage(plan);img.alt=safeText(plan.title||plan.name)||'تصویر طرح';img.loading='lazy';
+  img.onerror=()=>{img.onerror=null;img.src='/assets/images/digital.jpg';};
+  const badge=document.createElement('span');badge.textContent=safeText(plan.badge)||'طرح فعال';
+  media.append(img,badge);
+  const body=document.createElement('div');body.className='plan-body';
+  const title=document.createElement('h3');title.textContent=safeText(plan.title||plan.name)||'طرح خرید';
+  const desc=document.createElement('p');desc.textContent=safeText(plan.description)||'برای مشاهده شرایط و جزئیات این طرح وارد حساب کاربری شوید.';
+  const facts=document.createElement('div');facts.className='active-plan-facts';
+  const min=Number(plan.minAmount)||0,max=Number(plan.maxAmount)||0;
+  if(min>0||max>0){
+   const amount=document.createElement('span');
+   amount.textContent=(min>0?money(min):'')+(min>0&&max>0?' تا ':'')+(max>0?money(max):'')+' تومان';
+   facts.append(amount);
+  }
+  const tiers=Array.isArray(plan.tiers)?plan.tiers:[];
+  const months=[...new Set(tiers.map(t=>Number(t.months)).filter(n=>Number.isFinite(n)&&n>0))].sort((a,b)=>a-b);
+  if(months.length){
+   const term=document.createElement('span');term.textContent=months.map(n=>money(n)).join('، ')+' ماهه';facts.append(term);
+  }
+  const fees=[...new Set(tiers.map(t=>Number(t.feePercent)).filter(n=>Number.isFinite(n)&&n>0))];
+  if(fees.length){
+   const fee=document.createElement('span');fee.textContent='کارمزد اعلامی: '+fees.map(n=>money(n)+'٪').join('، ');facts.append(fee);
+  }
+  const link=document.createElement('a');link.href='/login.html';link.textContent='مشاهده شرایط و ثبت درخواست';
+  const arrow=document.createElement('b');arrow.textContent='←';link.append(arrow);
+  body.append(title,desc);if(facts.childElementCount)body.append(facts);body.append(link);
+  card.append(media,body);return card;
+ };
+ fetch('/api/v1/loan-products',{credentials:'same-origin',headers:{'Accept':'application/json','Cache-Control':'no-cache'}})
+  .then(response=>{if(!response.ok)throw new Error('plans_http_'+response.status);return response.json();})
+  .then(plans=>{
+   if(!Array.isArray(plans))throw new Error('invalid_plans_payload');
+   planHost.replaceChildren();
+   if(!plans.length){
+    const empty=document.createElement('div');empty.className='plans-state plans-empty';
+    empty.textContent='در حال حاضر طرح فعالِ قابل نمایش وجود ندارد. طرح‌های جدید پس از تأیید و فعال‌سازی در همین بخش نمایش داده می‌شوند.';
+    planHost.append(empty);return;
+   }
+   plans.forEach(plan=>planHost.append(makePlanCard(plan)));
+  })
+  .catch(()=>{
+   planHost.replaceChildren();
+   const error=document.createElement('div');error.className='plans-state plans-error';
+   error.textContent='دریافت طرح‌های فعال در حال حاضر ممکن نیست. لطفاً کمی بعد دوباره مراجعه کنید.';
+   planHost.append(error);
+  });
  const login=document.getElementById('accountLink'),admin=document.getElementById('adminPanelLink');
  fetch('/api/v1/security/me',{credentials:'same-origin',headers:{'Accept':'application/json','Cache-Control':'no-cache'}})
  .then(r=>r.ok?r.json():null).then(payload=>{if(!payload)return;const user=payload.data||payload;const roles=Array.isArray(user.roles)?user.roles:[];login.textContent=String(user.fullName||user.username||user.phone||'حساب کاربری');if(roles.some(x=>['admin','superadmin'].includes(String(x).toLowerCase())))admin.hidden=false;}).catch(()=>{});
