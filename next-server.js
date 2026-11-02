@@ -29,6 +29,8 @@ const server = http.createServer((req, res) => {
     pathname === "/" ||
     pathname === "/plans" ||
     pathname.startsWith("/plans/") ||
+    pathname === "/faq.html" ||
+    pathname === "/contact.html" ||
     pathname === "/robots.txt" ||
     pathname === "/sitemap.xml" ||
     pathname.startsWith("/_next/") ||
