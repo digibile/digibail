@@ -99,28 +99,54 @@ jobs:
             if $DOCKER volume ls --format '{{.Name}}' | grep -E '(^|[-_])digibail_pgdata$' >/dev/null; then DB_EXISTS=1; fi
             if $DOCKER ps -a --format '{{.Names}}' | grep -E 'digibail.*db|db.*digibail' >/dev/null; then DB_EXISTS=1; fi
             if [ ! -f .env ] || ! grep -qE '^POSTGRES_DB=.+$' .env || ! grep -qE '^POSTGRES_USER=.+$' .env || ! grep -qE '^POSTGRES_PASSWORD=.+$' .env || ! grep -qE '^DATABASE_URL=.+$' .env || ! grep -qE '^JWT_SECRET=.+$' .env || ! grep -qE '^OTP_PEPPER=.+$' .env || ! grep -qE '^CAPTCHA_PEPPER=.+$' .env; then
-              if [ "$DB_EXISTS" -eq 1 ]; then
-                echo "BLOCKED: database volume/container exists but production environment is incomplete; preserving data."
-                exit 21
-              fi
               umask 077
-              DB_PASS="$(openssl rand -hex 32)"
-              JWT="$(openssl rand -hex 48)"
-              OTP="$(openssl rand -hex 32)"
-              CAPTCHA="$(openssl rand -hex 32)"
-              {
-                printf 'POSTGRES_DB=digibail_prod\n'
-                printf 'POSTGRES_USER=digibail_app\n'
-                printf 'POSTGRES_PASSWORD=%s\n' "$DB_PASS"
-                printf 'DATABASE_URL=postgresql://digibail_app:%s@db:5432/digibail_prod\n' "$DB_PASS"
-                printf 'PORT=1631\nHOST=0.0.0.0\n'
-                printf 'JWT_SECRET=%s\nOTP_PEPPER=%s\nCAPTCHA_PEPPER=%s\n' "$JWT" "$OTP" "$CAPTCHA"
-                printf 'BRAND_NAME=دیجی‌بایل پی\n'
-                printf 'KAVENEGAR_API_KEY=\nKAVENEGAR_TEMPLATE=\n'
-              } > .env
-              chmod 600 .env
-              unset DB_PASS JWT OTP CAPTCHA
-              echo "SECURE_ENV_CREATED=1 (secret values hidden)"
+              touch .env
+              if [ "$DB_EXISTS" -eq 1 ]; then
+                echo "Existing database detected; recovering only missing keys from its existing containers."
+                RECOVERY_DIR="$(mktemp -d)"
+                trap 'rm -rf "$RECOVERY_DIR"' EXIT
+                : > "$RECOVERY_DIR/app.env"
+                : > "$RECOVERY_DIR/db.env"
+                for cid in $($DOCKER ps -aq); do
+                  $DOCKER inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$cid" 2>/dev/null > "$RECOVERY_DIR/current.env" || true
+                  if grep -q '^DATABASE_URL=' "$RECOVERY_DIR/current.env"; then cp "$RECOVERY_DIR/current.env" "$RECOVERY_DIR/app.env"; fi
+                  if grep -q '^POSTGRES_DB=' "$RECOVERY_DIR/current.env"; then cp "$RECOVERY_DIR/current.env" "$RECOVERY_DIR/db.env"; fi
+                done
+                for key in POSTGRES_DB POSTGRES_USER POSTGRES_PASSWORD DATABASE_URL JWT_SECRET OTP_PEPPER CAPTCHA_PEPPER; do
+                  if ! grep -qE "^${key}=.+" .env; then
+                    VALUE_LINE="$(grep -h -m1 "^${key}=" "$RECOVERY_DIR/app.env" "$RECOVERY_DIR/db.env" 2>/dev/null | head -n 1 || true)"
+                    if [ -n "$VALUE_LINE" ]; then printf '%s\n' "$VALUE_LINE" >> .env; fi
+                  fi
+                done
+                chmod 600 .env
+                MISSING=""
+                for key in POSTGRES_DB POSTGRES_USER POSTGRES_PASSWORD DATABASE_URL JWT_SECRET OTP_PEPPER CAPTCHA_PEPPER; do
+                  if ! grep -qE "^${key}=.+" .env; then MISSING="$MISSING $key"; fi
+                done
+                if [ -n "$MISSING" ]; then
+                  echo "BLOCKED: could not recover required keys:$MISSING; existing data and running services remain untouched."
+                  exit 21
+                fi
+                echo "EXISTING_ENV_RECOVERED=1 (values hidden)"
+              else
+                DB_PASS="$(openssl rand -hex 32)"
+                JWT="$(openssl rand -hex 48)"
+                OTP="$(openssl rand -hex 32)"
+                CAPTCHA="$(openssl rand -hex 32)"
+                {
+                  printf 'POSTGRES_DB=digibail_prod\n'
+                  printf 'POSTGRES_USER=digibail_app\n'
+                  printf 'POSTGRES_PASSWORD=%s\n' "$DB_PASS"
+                  printf 'DATABASE_URL=postgresql://digibail_app:%s@db:5432/digibail_prod\n' "$DB_PASS"
+                  printf 'PORT=1631\nHOST=0.0.0.0\n'
+                  printf 'JWT_SECRET=%s\nOTP_PEPPER=%s\nCAPTCHA_PEPPER=%s\n' "$JWT" "$OTP" "$CAPTCHA"
+                  printf 'BRAND_NAME=دیجی‌بایل پی\n'
+                  printf 'KAVENEGAR_API_KEY=\nKAVENEGAR_TEMPLATE=\n'
+                } > .env
+                chmod 600 .env
+                unset DB_PASS JWT OTP CAPTCHA
+                echo "SECURE_ENV_CREATED=1 (secret values hidden)"
+              fi
             fi
             if [ -z "${MYSQL_PASS:-}" ]; then
               echo "BLOCKED: VAMCITY_MYSQL_PASSWORD is required for the live admin data connection."
