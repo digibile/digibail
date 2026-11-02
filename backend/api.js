@@ -132,7 +132,7 @@ export async function migrate() {
   const path = await import("node:path");
   const root = path.dirname(fileURLToPath(import.meta.url));
   const schema = await readFile(path.join(root, "db", "002_mariadb_app.sql"), "utf8");
-  const statements = schema.split(/;\\s*(?:\\r?\\n|$)/).map(x => x.trim()).filter(Boolean);
+  const statements = schema.split(/;\s*(?:\r?\n|$)/).map(x => x.trim()).filter(Boolean);
   console.log("DB_MIGRATION_START=mariadb-schema statements=" + statements.length);
   for (let i = 0; i < statements.length; i++) {
     try {
