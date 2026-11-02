@@ -30,14 +30,14 @@ jobs:
             SQLCMD="$($D exec "$SQLC" sh -lc 'command -v /opt/mssql-tools18/bin/sqlcmd || command -v /opt/mssql-tools/bin/sqlcmd || command -v sqlcmd' 2>/dev/null | head -n 1)"
             PASS="$($D exec "$SQLC" printenv MSSQL_SA_PASSWORD 2>/dev/null || true)"
             [ -n "$PASS" ] || PASS="$($D exec "$SQLC" printenv SA_PASSWORD 2>/dev/null || true)"
-            echo "SQL_CONTAINER_PRESENT=$($D inspect "$SQLC" >/dev/null 2>&1 && echo 1 || echo 0)"
-echo "SQLCMD_PRESENT=$([ -n "$SQLCMD" ] && echo 1 || echo 0)"
-echo "SQLCMD_PATH=${SQLCMD:-missing}"
-echo "SA_PASSWORD_PRESENT=$([ -n "$PASS" ] && echo 1 || echo 0)"
-echo "SQLSERVER_CONTAINERS_BEGIN"
-$D ps --format "{{.Names}}|{{.Image}}|{{.Status}}" | grep -Ei "sql|mssql|database|db-" || true
-echo "SQLSERVER_CONTAINERS_END"
-[ -n "$SQLCMD" ] && [ -n "$PASS" ] || { echo "SQL_ACCESS_UNAVAILABLE"; exit 41; }
+                        echo "SQL_CONTAINER_PRESENT=$($D inspect "$SQLC" >/dev/null 2>&1 && echo 1 || echo 0)"
+            echo "SQLCMD_PRESENT=$([ -n "$SQLCMD" ] && echo 1 || echo 0)"
+            echo "SQLCMD_PATH=${SQLCMD:-missing}"
+            echo "SA_PASSWORD_PRESENT=$([ -n "$PASS" ] && echo 1 || echo 0)"
+            echo "SQLSERVER_CONTAINERS_BEGIN"
+            $D ps --format "{{.Names}}|{{.Image}}|{{.Status}}" | grep -Ei "sql|mssql|database|db-" || true
+            echo "SQLSERVER_CONTAINERS_END"
+            [ -n "$SQLCMD" ] && [ -n "$PASS" ] || { echo "SQL_ACCESS_UNAVAILABLE"; exit 41; }
             TMP="$(mktemp -d /tmp/vamcity-schema.XXXXXX)"
             chmod 700 "$TMP"
             trap 'rm -rf "$TMP"; unset PASS' EXIT
