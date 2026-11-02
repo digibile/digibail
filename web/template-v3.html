@@ -397,10 +397,48 @@ details{border-bottom:1px solid var(--line);padding:14px 2px}summary{cursor:poin
 }
 @media(max-width:390px){.mbar{inset-inline:8px!important;padding:4px!important;gap:2px!important}.mbar a{min-height:41px!important;font-size:.57rem!important}.mbar a svg{width:16px!important;height:16px!important}.mbar a[data-mobile-nav="account"]{font-size:.54rem!important}.cta2 .btn,.cta2 .btn.lg{font-size:.69rem!important;padding-inline:5px!important}}
 
+
+/* DigiBail Pay reference homepage: clean blue fintech storefront */
+:root{--bg:#f5f9fd;--surface:#fff;--surface2:#eaf3fc;--line:#d9e7f5;--fg:#102d55;--muted:#5d7594;--brand:#0878ef;--brand2:#073b78;--accent:#08b8d2;--accent-ink:#fff;--accent-text:#0878ef;--ok:#079b83;--bad:#c43a52;color-scheme:light}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){color-scheme:light}}
+:root[data-theme="dark"]{color-scheme:light;--bg:#f5f9fd;--surface:#fff;--surface2:#eaf3fc;--line:#d9e7f5;--fg:#102d55;--muted:#5d7594;--brand:#0878ef;--brand2:#073b78;--accent:#08b8d2;--accent-ink:#fff;--accent-text:#0878ef}
+body{background:var(--bg);color:var(--fg);font-family:var(--f-body);line-height:1.7}
+.hd{background:#fff;border-bottom:1px solid #e5eef8;box-shadow:0 3px 14px #12345a0a}
+.hd-in{min-height:68px;max-width:1440px}
+.logo{font-family:var(--f-body);font-size:1.16rem;font-weight:900;color:#123c70;gap:9px;line-height:1.25}
+.logo i{width:38px;height:38px;border-radius:11px;background:linear-gradient(145deg,#09b7d4,#0878ef);color:#fff;font:900 1rem Arial,sans-serif;font-style:normal;letter-spacing:-2px}
+.logo span{display:grid}.logo small{font-size:.58rem;font-weight:500;color:#66809e}
+.nv{justify-content:center;gap:2px}.nv a,.nv button.l{font-size:.82rem;color:#365477;padding:8px 10px}
+.btn{border-radius:12px}.btn.solid,.btn.brand{background:var(--brand);border-color:var(--brand);color:#fff}
+.hero-shell{position:relative;isolation:isolate;display:grid;grid-template-columns:minmax(0,1.12fr) minmax(320px,.88fr);gap:28px;align-items:center;min-height:310px;margin:0 calc(-1 * clamp(12px,2vw,32px));padding:28px clamp(22px,5vw,72px);overflow:visible;color:#fff;background:linear-gradient(105deg,#092b55 0%,#0a4c8d 52%,#0878ef 100%);box-shadow:0 12px 28px #0c4d8b20}
+.hero-shell:before{content:"";position:absolute;z-index:-1;inset:0;background:radial-gradient(ellipse at 12% 80%,#43b6e8a0 0,transparent 35%),linear-gradient(90deg,#05264caa,#05264c20 65%,#05264c55);opacity:.95}
+.hero-message{max-width:610px;padding:8px 0}.hero-kicker{font-size:.84rem;color:#d7edff;margin-bottom:8px}
+.hero-message h1{font-family:var(--f-body);font-size:clamp(2rem,4vw,3.1rem);font-weight:900;line-height:1.45;margin:0 0 8px;color:#fff}
+.hero-message h1 em{font-style:normal;color:#25c8ef}.hero-message p{max-width:54ch;color:#e0efff;font-size:.95rem;margin:0 0 18px}
+.hero-cta{background:#0878ef;color:#fff;border:1px solid #40a6ff;min-width:160px;border-radius:999px}
+.hero-calculator{position:relative;z-index:2;width:100%;max-width:470px;justify-self:end;border-radius:18px;padding:18px 20px;background:#fff;color:#16375f;box-shadow:0 18px 48px #001f493d;border:1px solid #d9e8f8}
+.hero-calculator .amt output{font-size:1.3rem;color:#0b4c91}.hero-calculator .big{background:#eaf4ff;color:#0c3b70;border:1px solid #d8e9fa}.hero-calculator .big b{color:#0878ef}.hero-calculator .chip[aria-pressed=true]{background:#0878ef;border-color:#0878ef}.hero-calculator input[type=range]{accent-color:#0878ef}.hero-calculator .btn.solid{width:100%;background:#0878ef;color:#fff}
+.hero-arrows{position:absolute;inset-inline:12px;top:45%;display:flex;justify-content:space-between;pointer-events:none;color:#fff;font-size:2rem}.hero-arrows span{width:30px;height:38px;border-radius:8px;background:#062c5966;display:grid;place-items:center}
+.feature-strip{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:0;margin:0 -10px 20px;padding:18px 0;background:#fff;border-bottom:1px solid var(--line);box-shadow:0 5px 16px #173b6208}
+.feature-strip>div{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:2px;padding:0 10px;border-inline-start:1px solid #e2edf8}
+.feature-strip>div:last-child{border:0}.feature-strip i{font-style:normal;font-size:1.2rem;color:#0878ef;background:#e8f3ff;border-radius:11px;width:36px;height:36px;display:grid;place-items:center;margin-bottom:3px}.feature-strip b{font-size:.84rem}.feature-strip small{font-size:.7rem;color:var(--muted)}
+section.s{padding-block:28px 4px}h2.t{font-family:var(--f-body);font-size:1.35rem;font-weight:900;color:#153d6c}.sub{font-size:.84rem}
+.bento{grid-template-columns:repeat(auto-fit,minmax(205px,1fr));gap:12px}
+.pc{border-radius:13px;padding:14px;border-color:#dce8f4;box-shadow:0 3px 10px #1c47700a;gap:7px}.pc h3{font-family:var(--f-body);font-size:1rem;font-weight:900}.pc .m{font-size:.78rem}.pc .btn{font-size:.76rem;min-height:34px;padding:6px 10px}
+.pc.hot{background:#fff;color:var(--fg);border-color:#dce8f4}.pc.hot .m,.pc.hot .facts span{color:var(--muted)}
+.badge{background:#0878ef;color:#fff}.facts{font-size:.75rem}.facts b{font-size:.82rem;color:#153e70}
+.tl{background:#fff;border-radius:14px;border:1px solid var(--line)}.tl>div{padding:16px}.tl .n{color:#0878ef}
+.band{border-radius:0;margin-inline:calc(-1 * clamp(12px,2vw,32px));padding-inline:clamp(20px,5vw,70px);background:linear-gradient(105deg,#062c5b,#0878ef)}
+.ft{background:#fff;margin-inline:calc(-1 * clamp(12px,2vw,32px));padding-inline:clamp(20px,4vw,56px);border-top:1px solid var(--line)}
+.ft-badges{display:none}.ft-bot{color:#6a809b}
+.mbar{border-color:#dce8f4}
+@media(max-width:860px){.hero-shell{grid-template-columns:1fr;gap:16px;padding:25px 18px;margin-inline:-12px;min-height:0}.hero-message{max-width:none}.hero-message h1{font-size:1.8rem}.hero-message p{font-size:.82rem}.hero-calculator{max-width:none;justify-self:stretch;padding:15px}.hero-arrows{display:none}.feature-strip{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;padding:14px 8px;margin-inline:-12px}.feature-strip>div{border:0}.feature-strip>div:last-child{grid-column:1/-1}.feature-strip small{font-size:.66rem}.ft{margin-inline:-12px}.band{margin-inline:-12px}.hd-in{min-height:58px}}
+@media(max-width:420px){.hero-message h1{font-size:1.55rem}.hero-calculator{padding:12px}.feature-strip b{font-size:.76rem}}
+
 </style></head><body>
 
 <div class="hd" id="hd"><div class="hd-in">
-  <a class="logo" href="#home"><i>د</i>دیجی‌بایل پی</a>
+  <a class="logo" href="#home"><i>db</i><span>دیجی‌بایل پی<small>راه هوشمند تأمین مالی</small></span></a>
   <button class="btn burger" id="burger" aria-expanded="false" aria-controls="nv">منو</button>
   <nav class="nv" id="nv" aria-label="منوی اصلی">
     <div class="pm"><button class="l" id="pmBtn" aria-expanded="false" aria-haspopup="true">طرح‌های اقساط ▾</button><div class="pm-pop" id="pmPop" hidden></div></div>
@@ -420,7 +458,7 @@ details{border-bottom:1px solid var(--line);padding:14px 2px}summary{cursor:poin
     <main id="app"></main>
   <footer class="ft">
     <div class="ft-top">
-      <div class="ft-brand"><a class="logo" href="#home"><i>د</i>دیجی‌بایل پی</a><p>پلتفرم خرید اقساطی. اعتبار، قرارداد و کارت مجازی در یک حساب.</p><div class="soc" aria-label="شبکه‌های اجتماعی"><span>پیوند شبکه‌های اجتماعی پس از ثبت نشانی رسمی فعال می‌شود.</span></div></div>
+      <div class="ft-brand"><a class="logo" href="#home"><i>db</i><span>دیجی‌بایل پی<small>راه هوشمند تأمین مالی</small></span></a><p>پلتفرم خرید اقساطی. اعتبار، قرارداد و کارت مجازی در یک حساب.</p><div class="soc" aria-label="شبکه‌های اجتماعی"><span>پیوند شبکه‌های اجتماعی پس از ثبت نشانی رسمی فعال می‌شود.</span></div></div>
       <div><b>خدمات</b><a href="#stores">فروشگاه‌ها</a><a href="#plans">طرح‌های اعتباری</a><a href="#calc">محاسبه‌گر اقساط</a><a href="#how">مراحل دریافت اعتبار</a></div><div><b>طرح‌ها</b><span id="ftPlans"></span></div>
       <div><b>همکاری</b><a href="/register.html?type=merchant">پذیرنده شوید</a><a href="/register.html?type=agent">نماینده شوید</a><a href="/register.html?type=organization">سازمان‌ها</a></div>
       <div><b>حساب و پشتیبانی</b><a href="/login.html">ورود / عضویت</a><a href="/profile.html">حساب کاربری و پیگیری درخواست‌ها</a><a href="/documents.html">مدارک</a><a href="/contracts.html">قراردادها</a><a href="/terms.html">قوانین و مقررات</a><a href="/privacy.html">حریم خصوصی</a></div>
@@ -566,14 +604,23 @@ function syncMobileNav(){
 }
 
 function home(){const A=act();
- $('#app').innerHTML=`<section class="campaigns" aria-label="پیشنهادهای ویژه">
- <div class="campaign-track" id="campaignTrack">
-  <a class="campaign" href="#plans"><div class="campaign-copy"><span class="campaign-kicker">✦ اعتبار و خرید اقساطی</span><h2>خرید امروز، پرداخت آسوده‌تر</h2><p>طرح‌های متنوع را ببینید و شرایط هر کدام را پیش از درخواست بررسی کنید.</p><span class="campaign-cta">مشاهده طرح‌ها ←</span></div><div class="campaign-art" aria-hidden="true"><svg viewBox="0 0 120 120" fill="none"><rect x="28" y="17" width="66" height="86" rx="13" fill="#fff" fill-opacity=".18" stroke="#fff" stroke-opacity=".75" stroke-width="2"/><rect x="37" y="30" width="48" height="9" rx="4.5" fill="#F5A400"/><rect x="37" y="48" width="20" height="20" rx="5" fill="#fff" fill-opacity=".8"/><rect x="63" y="48" width="22" height="7" rx="3.5" fill="#fff"/><rect x="63" y="60" width="16" height="6" rx="3" fill="#fff" fill-opacity=".65"/><path d="m43 81 10 9 23-25" stroke="#F5A400" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/></svg></div></a>
-  <a class="campaign" href="#how"><div class="campaign-copy"><span class="campaign-kicker">✓ مسیر روشن و مرحله‌به‌مرحله</span><h2>از ثبت‌نام تا پیگیری درخواست</h2><p>مراحل، مدارک و وضعیت پرونده را در یک مسیر مشخص دنبال کنید.</p><span class="campaign-cta">آشنایی با مراحل ←</span></div><div class="campaign-art" aria-hidden="true"><svg viewBox="0 0 120 120" fill="none"><circle cx="60" cy="60" r="38" fill="#fff" fill-opacity=".14" stroke="#fff" stroke-opacity=".8" stroke-width="2"/><path d="M42 60 54 72 79 46" stroke="#fff" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/><circle cx="88" cy="29" r="13" fill="#F5A400"/><path d="M82 29h12M88 23v12" stroke="#44210a" stroke-width="2.5" stroke-linecap="round"/></svg></div></a>
-  <a class="campaign" href="/profile.html"><div class="campaign-copy"><span class="campaign-kicker">◈ همه‌چیز در حساب شما</span><h2>درخواست‌ها و مدارک یک‌جا</h2><p>برای پیگیری پرونده، مدارک و قراردادها از حساب کاربری استفاده کنید.</p><span class="campaign-cta">ورود به حساب ←</span></div><div class="campaign-art" aria-hidden="true"><svg viewBox="0 0 120 120" fill="none"><rect x="25" y="20" width="70" height="80" rx="12" fill="#fff" fill-opacity=".17" stroke="#fff" stroke-opacity=".8" stroke-width="2"/><circle cx="60" cy="46" r="13" fill="#fff" fill-opacity=".9"/><path d="M38 79c2-13 11-19 22-19s20 6 22 19" fill="#F5A400"/><rect x="41" y="86" width="38" height="5" rx="2.5" fill="#fff" fill-opacity=".7"/></svg></div></a>
- </div><div class="campaign-dots" id="campaignDots" aria-label="انتخاب بنر"><button aria-label="بنر اول" aria-current="true"></button><button aria-label="بنر دوم" aria-current="false"></button><button aria-label="بنر سوم" aria-current="false"></button></div>
-</section><section class="hero" id="calc"><div><h1>همین حالا بخرید، ماه‌به‌ماه پرداخت کنید</h1><p class="lead">اعتبار شما در چند دقیقه تعیین می‌شود، قرارداد را دیجیتال امضا می‌کنید و کارت اعتباری مجازی‌تان صادر می‌شود.</p>
-  <div class="calc" id="calcBox"></div></div><div class="vwrap">${cardHtml()}</div></section>
+ $('#app').innerHTML=`<section class="hero-shell" id="calc">
+ <div class="hero-message">
+  <div class="hero-kicker">با دیجی‌بایل پی، رویای خود را واقعیت تبدیل کنید</div>
+  <h1>خرید آسان، <em>اقساطی</em> مطمئن</h1>
+  <p>با بهترین طرح‌های خرید اقساطی؛ از موبایل و لوازم خانگی تا خودرو و تجهیزات دیجیتال. همه‌چیز برای یک خرید هوشمندانه در دیجی‌بایل پی فراهم است.</p>
+  <a class="btn hero-cta" href="#plans">مشاهده طرح‌ها <span aria-hidden="true">←</span></a>
+ </div>
+ <div class="calc hero-calculator" id="calcBox"></div>
+ <div class="hero-arrows" aria-hidden="true"><span>‹</span><span>›</span></div>
+</section>
+<section class="feature-strip" aria-label="مزایای دیجی‌بایل پی">
+ <div><i>♧</i><b>پرداخت آسان</b><small>اقساط منعطف بدون نیاز ضامن</small></div>
+ <div><i>ϟ</i><b>سریع و مطمئن</b><small>بررسی و ثبت درخواست وام</small></div>
+ <div><i>✓</i><b>بدون ضامن</b><small>در طرح‌های منتخب با شرایط ویژه</small></div>
+ <div><i>▦</i><b>پوشش گسترده</b><small>انواع کالاها و خدمات</small></div>
+ <div><i>♧</i><b>پشتیبانی شبانه‌روزی</b><small>در تمام مراحل</small></div>
+</section>`;
 
  <section class="s" id="stores">
   <h2 class="t">فروشگاه‌های طرف قرارداد</h2>
