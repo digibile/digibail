@@ -116,3 +116,16 @@ This document is an engineering migration record, not a claim that the site has 
 ## Explicitly unsafe operations avoided
 
 No production SQL was executed. No data was copied, rewritten, or deleted. No existing table was altered. No deployment was triggered. This branch currently contains migration documentation only.
+
+
+## SQL snapshot coverage and backup gate (2026-11-02)
+
+The checked-in SQL snapshots were counted by unique CREATE TABLE names:
+- `schema-main.sql`: 88 unique tables.
+- `schema-bluvamdb.sql`: 56 unique tables.
+- `schema-transfer.sql`: 12 unique tables.
+- `schema.sql`: 156 CREATE statements but only 101 unique table names.
+
+The main and bluvamdb snapshots overlap on 55 names. The consolidated `schema.sql` contains all 88 main names, one additional `Assurance` table, and 12 `OnlineMoneyTransfer__*` tables; repeated definitions account for the difference between 156 statements and 101 unique names. The union of the three source snapshots is 101 unique names, while the live production inventory reported 224 tables. Therefore these checked-in snapshots do not fully describe production; 123 live table names are not represented in their combined unique-name set. `database/02-schema-new-modules.sql` is SQL Server DDL and is not a MariaDB migration.
+
+A manual workflow `.github/workflows/backup-digibail-mariadb.yml` was added on this migration branch. It stores a compressed dump outside the web root, checks available disk and table engines, uses a single-transaction dump with routines/triggers/events/hex blobs, verifies gzip and SHA-256, and does not publish customer data as an Actions artifact. The workflow has **not** yet been run. No verified backup or isolated restore is claimed. Backup and restore verification remain hard gates before any schema write or production cutover.
