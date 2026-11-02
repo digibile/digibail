@@ -47,5 +47,5 @@ jobs:
                 echo "PLAN_SOURCE=" . $table . " " . json_encode($row, JSON_UNESCAPED_UNICODE) . PHP_EOL;
             }
             ';
-            /usr/local/php83/bin/php -r 'require "vendor/autoload.php"; App\\Core\\Environment::load(__DIR__ . "/.env"); $db=App\\Core\\Database\\ConnectionFactory::create(); $rows=$db->query("SELECT IncludePlan, Disable, LoanProfitType, COUNT(*) AS total FROM Loans GROUP BY IncludePlan, Disable, LoanProfitType ORDER BY IncludePlan DESC, Disable ASC, LoanProfitType")->fetchAll(PDO::FETCH_ASSOC); echo "LOANS_FLAG_DISTRIBUTION=" . json_encode($rows) . PHP_EOL;'
+            /usr/local/php83/bin/php -r 'require "vendor/autoload.php"; App\Core\\Environment::load(__DIR__ . "/.env"); $db=App\Core\\Database\\ConnectionFactory::create(); $rows=$db->query("SELECT IncludePlan, Disable, LoanProfitType, COUNT(*) AS total FROM Loans GROUP BY IncludePlan, Disable, LoanProfitType ORDER BY IncludePlan DESC, Disable ASC, LoanProfitType")->fetchAll(PDO::FETCH_ASSOC); echo "LOANS_FLAG_DISTRIBUTION=" . json_encode($rows) . PHP_EOL;'
             echo "READ_ONLY_PLAN_INVENTORY=COMPLETE"
