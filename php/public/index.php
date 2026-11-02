@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Core\Bootstrap;
+use App\Core\PublicSeoController;
 use App\Core\Http\Response;
 
 $requestedPath = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
@@ -18,6 +19,12 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET' && rtrim($requestedPath, '/'
 
 require dirname(__DIR__) . '/vendor/autoload.php';
 \App\Core\Environment::load(dirname(__DIR__) . '/.env');
+
+$seoResponse = PublicSeoController::dispatch($requestedPath, (string) ($_SERVER['REQUEST_METHOD'] ?? 'GET'));
+if ($seoResponse !== null) {
+    $seoResponse->send();
+    exit;
+}
 
 
 
