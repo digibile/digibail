@@ -138,3 +138,16 @@ Workflow دستی `.github/workflows/backup-digibail-mariadb.yml` به شاخه 
 - هیچ backup یا داده مشتری را به GitHub Artifact یا log منتقل نمی‌کند.
 
 **وضعیت اجرا:** workflow فقط به مخزن اضافه شده و هنوز روی سرور اجرا نشده است؛ backup تأییدشده یا restore آزمایشی ثبت نشده. تا زمان اجرای موفق backup و restore به دیتابیس ایزوله، هیچ cutover یا تغییر schema مجاز نیست.
+
+
+## گام اجرایی بعدی: pool مشترک و تست واقعی MariaDB در CI (2026-11-02)
+
+- ماژول `backend/db/mariadb.js` اضافه شد تا ساخت pool MariaDB در یک نقطه انجام شود؛ در نبود نام کاربری یا گذرواژه، با خطای 503 مشخص متوقف می‌شود و fallback به PostgreSQL ندارد.
+- اتصال legacy MariaDB در `backend/api.js` از این factory مشترک استفاده می‌کند. این تغییر فقط اتصال legacy را متمرکز می‌کند و به معنی حذف PostgreSQL از API نیست.
+- سرویس MariaDB 10.11 به CI اضافه شد و تست `tests/mariadb-pool.test.js` با یک جدول TEMPORARY، round-trip واقعی SELECT/INSERT را انجام می‌دهد. جدول موقت فقط در connection تست وجود دارد و دیتابیس اصلی یا schema پایدار را تغییر نمی‌دهد.
+- سرویس PostgreSQL در CI فعلاً حفظ شده، چون API و health check هنوز به آن وابسته‌اند. CI اکنون دو موتور را برای تست بخش‌های متفاوت بالا می‌آورد؛ این وضعیت فقط مرحله گذار است و هدف نهایی همچنان MariaDB واحد است.
+- نتیجه نهایی CI روی commit جدید باید قبل از ادامه refactor ثبت شود.
+
+### محدودیت باقی‌مانده
+
+`backend/api.js` همچنان import و استفاده مستقیم از `pg.Pool` دارد و `backend/site-content.js` نیز PostgreSQL-only است. بنابراین حذف سرویس PostgreSQL، تغییر `docker-compose.yml` یا deploy production در این مرحله ناامن است.
