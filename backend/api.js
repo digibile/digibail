@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { Pool } from "pg";
+import { handleSiteContent } from "./site-content.js";
 import { createPool } from "mysql2/promise";
 import { syncUserToMariaDB } from "./mariadb-user-sync.js";
 
@@ -432,6 +433,10 @@ export async function handleApi(req, res, url) {
   const route = url.pathname;
   const intervalMonthsFromStored = (value) => { const n=Number(value)||0; if(n>=1&&n<=12)return Math.trunc(n); const ranges=[[28,31,1],[59,62,2],[89,93,3],[118,124,4],[148,155,5],[178,186,6],[208,217,7],[238,248,8],[268,279,9],[298,310,10],[328,341,11],[358,372,12]]; const hit=ranges.find(([lo,hi])=>n>=lo&&n<=hi); return hit?hit[2]:1; };
   try {
+    if (route === "/api/v1/site-content/homepage" || route === "/api/v1/newsletter/subscribe" || route.startsWith("/api/v1/blog/posts") || route.startsWith("/api/v1/admin/site-content/") || route.startsWith("/api/v1/admin/blog/")) {
+      const admin = route.startsWith("/api/v1/admin/") ? await adminFor(req) : null;
+      return await handleSiteContent(req,res,url,admin);
+    }
     if (req.method === "GET" && route === "/api/v1/security/me") {
       const session = sessionFor(req);
       if (!session) return json(res, 401, { message: "وارد حساب خود شوید." });
