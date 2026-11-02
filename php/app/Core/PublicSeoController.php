@@ -64,7 +64,7 @@ final class PublicSeoController
                 . ($image !== '' ? '<img src="' . self::e($image) . '" alt="' . $title . '" loading="lazy">' : '<span>دیجی‌بایل</span>')
                 . '</a><div class="plan-card-body"><span class="eyebrow">طرح ' . self::fa((string) ($index + 1)) . '</span>'
                 . '<h2><a href="/plans/' . $slug . '">' . $title . '</a></h2><p>' . $description . '</p>'
-                . '<div class="plan-values"><div><small>مبلغ از</small><b>' . self::money($plan['minAmount'] ?? 0) . '</b></div>'
+                . '<div class="plan-values">' . (((float) ($plan['minAmount'] ?? 0) > 0) ? '<div><small>مبلغ از</small><b>' . self::money($plan['minAmount']) . '</b></div>' : '')
                 . '<div><small>سقف طرح</small><b>' . self::money($plan['maxAmount'] ?? 0) . '</b></div></div>'
                 . '<a class="action" href="/plans/' . $slug . '">مشاهده شرایط و جزئیات <span>←</span></a></div></article>';
         }
@@ -114,12 +114,12 @@ final class PublicSeoController
             . '<h3>مدارک موردنیاز</h3>' . self::listOrEmpty($documents, 'فهرست مدارک جداگانه‌ای ثبت نشده است.')
             . '<h3>هزینه‌های عملیاتی</h3>' . self::listOrEmpty($costs, 'هزینه عملیاتی جداگانه‌ای در اطلاعات عمومی ثبت نشده است؛ این موضوع به معنی رایگان بودن خدمات نیست.')
             . '<p class="disclaimer">اطلاعات این صفحه از طرح منتشرشده در سامانه دریافت می‌شود. شرایط نهایی تابع بررسی ارائه‌دهنده و قرارداد رسمی است.</p></article>'
-            . '<aside class="calculator" id="calculator"><span class="eyebrow">محاسبه‌گر اختصاصی طرح</span><h2>برآورد اقساط</h2>'
+            . '<aside class="calculator" id="calculator"><span class="eyebrow">اطلاعات بازپرداخت ثبت‌شده</span><h2>برآورد اقساط</h2>'
             . '<label>مبلغ موردنیاز (تومان)<input id="amount" type="number" min="' . (int) $plan['minAmount'] . '" max="' . (int) $plan['maxAmount'] . '" value="' . (int) $plan['minAmount'] . '" step="100000"></label>'
             . '<label>مدت بازپرداخت<select id="term">' . self::tierOptions($tiers, $interval, (float) ($plan['interestPercent'] ?? 0)) . '</select></label>'
-            . '<div class="calc-result"><small>قسط ماهانه برآوردی</small><strong id="monthly">محاسبه می‌شود</strong><span id="term-label"></span></div>'
+            . '<div class="calc-result"><small>قسط ماهانه برآوردی</small><strong id="monthly">پس از تطبیق روش محاسبه</strong><span id="term-label"></span></div>'
             . '<div class="calc-row"><span>پیش‌پرداخت</span><b id="down">-</b></div><div class="calc-row"><span>سود یا کارمزد</span><b id="fee">-</b></div><div class="calc-row total"><span>مجموع بازپرداخت</span><b id="total">-</b></div>'
-            . '<p class="disclaimer">این محاسبه صرفاً برآورد اولیه است و پیشنهاد قطعی یا تعهد اعتباردهنده محسوب نمی‌شود.</p><a class="action" href="/login.html">ورود و ثبت درخواست ←</a></aside></section></main>';
+            . '<p class="disclaimer">برای جلوگیری از نمایش قسط نادرست، محاسبه‌گر خودکار تا زمان تطبیق نوع سود با فرمول اصلی این طرح فعال نیست.</p><a class="action" href="/login.html">ورود و ثبت درخواست ←</a></aside></section></main>';
 
         $calcData = [
             'min' => (float) $plan['minAmount'], 'max' => (float) $plan['maxAmount'],
