@@ -107,3 +107,34 @@
 - ابزار هوش مصنوعی: `ai_story_assets`
 
 برخی از این قابلیت‌ها ممکن است در حال حاضر از جدول‌های MariaDB موجود تغذیه شوند و برخی دیگر فقط در PostgreSQL باشند. برای هر مورد باید منبع حقیقت تعیین شود؛ ایجاد نسخه دوم از `AspNetUsers`، درخواست وام یا پرداخت ممنوع است.
+
+
+## ممیزی snapshotهای SQL داخل مخزن (2026-11-02)
+
+فایل‌های schema موجود با شمارش دستورهای `CREATE TABLE` بررسی شدند؛ این‌ها snapshotهای تبدیل‌شده‌اند و جای inventory زنده production را نمی‌گیرند:
+
+| فایل | تعداد دستور CREATE TABLE | نام یکتای جدول |
+|---|---:|---:|
+| `database/mysql/schema-main.sql` | ۸۸ | ۸۸ |
+| `database/mysql/schema-bluvamdb.sql` | ۵۶ | ۵۶ |
+| `database/mysql/schema-transfer.sql` | ۱۲ | ۱۲ |
+| `database/mysql/schema.sql` | ۱۵۶ | ۱۰۱ |
+
+نتیجه مقایسه:
+- `schema.sql` شامل تمام ۸۸ نام جدول `schema-main.sql` است، به‌علاوه جدول `Assurance` و ۱۲ جدول پیشونددار `OnlineMoneyTransfer__*`؛ تکرار تعریف‌ها در فایل تجمیعی باعث شده ۱۵۶ دستور، فقط ۱۰۱ نام یکتا داشته باشد.
+- `schema-main.sql` و `schema-bluvamdb.sql` در ۵۵ نام جدول مشترک‌اند؛ بنابراین نباید تعداد فایل‌ها یا دستورهای CREATE را با تعداد جدول‌های مستقل جمع زد.
+- اجتماع نام‌های یکتای سه snapshot اصلی، bluvamdb و transfer برابر ۱۰۱ است؛ در حالی که ممیزی زنده production تعداد ۲۲۴ جدول گزارش کرده است. پس این snapshotها پوشش کامل دیتابیس زنده نیستند و ۱۲۳ جدول زنده در این مجموعه snapshotها به‌صورت نام یکتا پوشش داده نشده‌اند.
+- `database/02-schema-new-modules.sql` اسکریپت SQL Server است، نه schema قابل اجرای MariaDB؛ اجرای آن روی دیتابیس production ممنوع است.
+- برای نگاشت نهایی باید از inventory زنده شامل تمام ۲۲۴ جدول و ستون‌ها استفاده کرد. هیچ نامی صرفاً به دلیل نبودن در snapshot نباید ساخته، حذف یا ادغام شود.
+
+## وضعیت پشتیبان‌گیری
+
+Workflow دستی `.github/workflows/backup-digibail-mariadb.yml` به شاخه مهاجرت افزوده شده است. این workflow:
+- فقط با اجرای دستی از همین شاخه قابل اجراست.
+- credential را از فایل تنظیمات موجود روی سرور می‌خواند و مقدار آن را چاپ نمی‌کند.
+- فایل فشرده را بیرون از web root در `$HOME/private_backups/digibail-mariadb` ذخیره می‌کند.
+- قبل از dump، وجود دیتابیس، موتور جدول‌ها و فضای آزاد را بررسی می‌کند؛ اگر جدول غیر InnoDB یا فضای ناکافی باشد، متوقف می‌شود.
+- از `mysqldump --single-transaction --routines --triggers --events --hex-blob` استفاده می‌کند، gzip را تست و SHA-256 ثبت می‌کند و فقط سه backup آخر را نگه می‌دارد.
+- هیچ backup یا داده مشتری را به GitHub Artifact یا log منتقل نمی‌کند.
+
+**وضعیت اجرا:** workflow فقط به مخزن اضافه شده و هنوز روی سرور اجرا نشده است؛ backup تأییدشده یا restore آزمایشی ثبت نشده. تا زمان اجرای موفق backup و restore به دیتابیس ایزوله، هیچ cutover یا تغییر schema مجاز نیست.
