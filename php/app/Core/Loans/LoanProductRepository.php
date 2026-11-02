@@ -13,26 +13,100 @@ final class LoanProductRepository
     /** @return list<array<string,mixed>> */
     public function publicList(string $tenantId): array
     {
-        $statement = $this->db->prepare(
-            'SELECT * FROM LoanProducts
-             WHERE TenantId = :tenant_id AND IsActive = 1 AND ShowInList = 1
-             ORDER BY SortOrder ASC, CreatedOn DESC'
+        // The live migrated catalogue is the legacy Loans table. LoanProducts is
+        // an empty additive table and must not hide the 112 imported loan records.
+        $statement = $this->db->query(
+            'SELECT Id, Code, Title, PlanTitle, PlanShortDescription, PlanHtml,
+                    MaxAmount, MaxMonthGap, AllowedInstallments, CostsJson,
+                    ProfitPercent, LoanProfitType
+             FROM Loans
+             WHERE IncludePlan = 1 AND Disable = 0
+             ORDER BY Code ASC'
         );
-        $statement->execute(['tenant_id' => $tenantId]);
-        return array_map([self::class, 'shape'], $statement->fetchAll());
+        return array_map([self::class, 'shapeLegacy'], $statement->fetchAll());
     }
 
     /** @return array<string,mixed>|null */
     public function publicOne(string $tenantId, string $slug): ?array
     {
         $statement = $this->db->prepare(
-            'SELECT * FROM LoanProducts
-             WHERE TenantId = :tenant_id AND Slug = :slug AND IsActive = 1 AND ShowInList = 1
+            'SELECT Id, Code, Title, PlanTitle, PlanShortDescription, PlanHtml,
+                    MaxAmount, MaxMonthGap, AllowedInstallments, CostsJson,
+                    ProfitPercent, LoanProfitType
+             FROM Loans
+             WHERE IncludePlan = 1 AND Disable = 0
+               AND (Id = :id_slug OR CAST(Code AS CHAR) = :code_slug)
              LIMIT 1'
         );
-        $statement->execute(['tenant_id' => $tenantId, 'slug' => $slug]);
+        $statement->execute(['id_slug' => $slug, 'code_slug' => $slug]);
         $row = $statement->fetch();
-        return is_array($row) ? self::shape($row) : null;
+        return is_array($row) ? self::shapeLegacy($row) : null;
+    }
+
+    /** @param array<string,mixed> $row
+     *  @return array<string,mixed>
+     */
+    public static function shapeLegacy(array $row): array
+    {
+        $decode = static function (mixed $value, mixed $fallback = []) : mixed {
+            if (!is_string($value) || trim($value) === '') return $fallback;
+            $decoded = json_decode($value, true);
+            return json_last_error() === JSON_ERROR_NONE ? $decoded : $fallback;
+        };
+
+        $installments = $decode($row['AllowedInstallments'] ?? '', []);
+        $tiers = [];
+        $months = [];
+        if (is_array($installments)) {
+            foreach ($installments as $item) {
+                $value = is_array($item)
+                    ? (int) ($item['value'] ?? $item['months'] ?? $item['installments'] ?? 0)
+                    : (int) $item;
+                if ($value < 1 || $value > 120) continue;
+                $months[] = $value;
+                $tiers[] = [
+                    'months' => $value,
+                    'feePercent' => (float) ($row['ProfitPercent'] ?? 0),
+                    'downPaymentPercent' => 0,
+                    'maxAmount' => is_array($item) ? (float) ($item['max'] ?? 0) : 0,
+                ];
+            }
+        }
+
+        $title = trim((string) ($row['PlanTitle'] ?? ''));
+        if ($title === '') $title = trim((string) ($row['Title'] ?? ''));
+        $description = trim((string) ($row['PlanShortDescription'] ?? ''));
+        if ($description === '') $description = $title;
+        $html = (string) ($row['PlanHtml'] ?? '');
+        $html = strip_tags($html, '<p><br><strong><b><em><i><ul><ol><li><a><h2><h3><blockquote>');
+        $html = preg_replace('/<([a-z][a-z0-9]*)\\b[^>]*>/iu', '<$1>', $html) ?? '';
+
+        return [
+            'id' => (string) $row['Id'],
+            'name' => trim((string) ($row['Title'] ?? $title)),
+            'title' => $title,
+            'description' => $description,
+            'badge' => '',
+            'isActive' => true,
+            'minAmount' => 0,
+            'maxAmount' => (float) ($row['MaxAmount'] ?? 0),
+            'intervalMonths' => $months === [] ? max(1, (int) ($row['MaxMonthGap'] ?? 1)) : max($months),
+            'intervalDays' => 0,
+            'tiers' => $tiers,
+            'conditions' => (object) [],
+            'documents' => [],
+            'imageUrl' => '',
+            'fullDescriptionHtml' => $html,
+            'labels' => [],
+            'operationalCosts' => $decode($row['CostsJson'] ?? '', []),
+            // LoanProfitType is preserved explicitly. Do not assume its formula.
+            'interestMethod' => 'legacy-type-' . (int) ($row['LoanProfitType'] ?? 0),
+            'interestPercent' => (float) ($row['ProfitPercent'] ?? 0),
+            'lateDailyCoef' => 0,
+            'earlyDailyCoef' => 0,
+            'showInList' => true,
+            'sendReminders' => false,
+        ];
     }
 
     /** @return list<array<string,mixed>> */
