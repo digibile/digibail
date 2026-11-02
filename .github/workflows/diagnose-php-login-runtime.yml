@@ -1,0 +1,62 @@
+name: Diagnose DigiBail PHP login runtime
+
+on:
+  push:
+    branches: [migration/php83-full-rebuild]
+    paths:
+      - .github/workflows/diagnose-php-login-runtime.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Inspect live PHP login diagnostics without exposing credentials
+        uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          command_timeout: 3m
+          script: |
+            set -eu
+            ROOT="/home/digibail/domains/digebail.ir"
+            APP="$ROOT/php_app"
+            echo "=== LIVE AUTH DIAGNOSTICS ==="
+            FOUND=0
+            for f in \
+              "$ROOT/logs/error.log" \
+              "$ROOT/logs/php-fpm.log" \
+              "$ROOT/public_html/error_log" \
+              "$APP/error_log" \
+              "/var/log/httpd/domains/digebail.ir.error.log" \
+              "/var/log/nginx/domains/digebail.ir.error.log" \
+              "/var/log/php-fpm/error.log" \
+              "/var/log/php83-fpm.log"; do
+              if [ -f "$f" ] && grep -q "\[AUTH_DIAG\]" "$f" 2>/dev/null; then
+                FOUND=1
+                echo "AUTH_LOG_SOURCE=$f"
+                grep "\[AUTH_DIAG\]" "$f" | tail -n 80 | sed -E 's/(user_id=)[0-9]+/\1[ID]/g'
+              fi
+            done
+            if [ "$FOUND" -eq 0 ]; then
+              echo "AUTH_DIAG_LOGS_NOT_FOUND_IN_STANDARD_PATHS=1"
+              find "$ROOT" /var/log -maxdepth 5 -type f \
+                \( -name 'error.log' -o -name 'error_log' -o -name '*php*fpm*.log' \) \
+                -readable 2>/dev/null | head -n 80
+            fi
+            echo "=== LIVE PHP IDENTITY CODE ==="
+            test -s "$APP/vendor/autoload.php"
+            /usr/local/php83/bin/php -r '
+              require $argv[1] . "/vendor/autoload.php";
+              $p="runtime-self-test-only";
+              $h=App\\Security\\PasswordVerifier::hashForNewPassword($p);
+              if (!App\\Security\\PasswordVerifier::verify($p,$h)) { echo "PHP_BCRYPT_SELFTEST=FAIL\n"; exit(2); }
+              if (App\\Security\\PasswordVerifier::verify("not-the-password",$h)) { echo "PHP_BCRYPT_NEGATIVE_SELFTEST=FAIL\n"; exit(3); }
+              echo "PHP_BCRYPT_SELFTEST=PASS\n";
+              echo "PHP_BCRYPT_NEGATIVE_SELFTEST=PASS\n";
+            ' "$APP"
+            echo "PHP_LOGIN_RUNTIME_DIAGNOSTIC=COMPLETED"
