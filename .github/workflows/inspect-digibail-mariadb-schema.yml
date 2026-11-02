@@ -16,7 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
-      - name: Read app DB credentials privately and export schema only
+      - name: Read matching app DB credentials privately and export schema only
         uses: appleboy/ssh-action@v1.2.2
         with:
           host: ${{ secrets.DEPLOY_HOST }}
@@ -28,63 +28,68 @@ jobs:
             DB='digibail_vamcitydigibilepay'
             echo "=== SSH ACCOUNT ==="
             id
-            echo "=== CONFIG FILES ==="
-            for f in "$HOME/domains/digebail.ir/php_app/.env" "$HOME/domains/digebail.ir/.env" "$HOME/domains/digebail.ir/database/migration/config.php"; do
-              if [ -r "$f" ]; then echo "READABLE=$f"; else echo "NOT_READABLE=$f"; fi
-            done
-
             python3 - <<'PY'
             from pathlib import Path
             from urllib.parse import urlparse, unquote
-            import os, re
+            import os, base64
             home = Path.home()
             files = [
                 home / "domains/digebail.ir/php_app/.env",
                 home / "domains/digebail.ir/.env",
             ]
-            data = {}
+            target = "digibail_vamcitydigibilepay"
+            chosen = None
             for path in files:
                 if not path.is_file() or not os.access(path, os.R_OK):
                     continue
+                d = {}
                 for raw in path.read_text(errors="ignore").splitlines():
                     line = raw.strip()
                     if not line or line.startswith("#") or "=" not in line:
                         continue
                     k, v = line.split("=", 1)
-                    k = k.strip()
-                    v = v.strip().strip('"').strip("'")
-                    if k and v:
-                        data[k] = v
-            url = data.get("DATABASE_URL") or data.get("MYSQL_URL")
-            if url:
-                u = urlparse(url)
-                data.setdefault("DB_HOST", u.hostname or "localhost")
-                data.setdefault("DB_PORT", str(u.port or 3306))
-                data.setdefault("DB_DATABASE", u.path.lstrip("/"))
-                data.setdefault("DB_USERNAME", unquote(u.username or ""))
-                data.setdefault("DB_PASSWORD", unquote(u.password or ""))
+                    d[k.strip()] = v.strip().strip('"').strip("'")
+                url = d.get("DATABASE_URL") or d.get("MYSQL_URL")
+                if url:
+                    try:
+                        u = urlparse(url)
+                        d.setdefault("DB_HOST", u.hostname or "localhost")
+                        d.setdefault("DB_PORT", str(u.port or 3306))
+                        d.setdefault("DB_DATABASE", u.path.lstrip("/"))
+                        d.setdefault("DB_USERNAME", unquote(u.username or ""))
+                        d.setdefault("DB_PASSWORD", unquote(u.password or ""))
+                    except Exception:
+                        pass
+                db = next((d.get(k, "") for k in ("MARIADB_DATABASE","MYSQL_DATABASE","DB_DATABASE","DB_NAME") if d.get(k)), "")
+                print("CONFIG_FILE=" + path.name + " CONFIGURED_DATABASE=" + db)
+                if db == target:
+                    chosen = (path.name, d)
+                    break
+            if not chosen:
+                raise SystemExit("NO_CONFIG_FILE_MATCHES_TARGET_DATABASE")
+            name, d = chosen
             def pick(*keys):
-                for key in keys:
-                    if data.get(key):
-                        return data[key]
+                for k in keys:
+                    if d.get(k):
+                        return d[k]
                 return ""
-            user = pick("DB_USERNAME", "DB_USER", "MYSQL_USER", "DATABASE_USER")
-            password = pick("DB_PASSWORD", "DB_PASS", "MYSQL_PASSWORD", "DATABASE_PASSWORD")
-            host = pick("DB_HOST", "MYSQL_HOST", "DATABASE_HOST") or "localhost"
-            port = pick("DB_PORT", "MYSQL_PORT", "DATABASE_PORT") or "3306"
-            db = pick("DB_DATABASE", "DB_NAME", "MYSQL_DATABASE", "DATABASE_NAME")
-            print("ENV_KEYS_FOUND=" + ",".join(sorted(k for k in data if any(t in k for t in ("DB_", "MYSQL_", "DATABASE_")))))
+            user = pick("MARIADB_USER","MYSQL_USER","DB_USERNAME","DB_USER","DATABASE_USER")
+            password = pick("MARIADB_PASSWORD","MYSQL_PASSWORD","DB_PASSWORD","DB_PASS","DATABASE_PASSWORD")
+            if not password and d.get("DB_PASSWORD_B64"):
+                try: password = base64.b64decode(d["DB_PASSWORD_B64"]).decode()
+                except Exception: pass
+            host = pick("MARIADB_HOST","MYSQL_HOST","DB_HOST","DATABASE_HOST") or "localhost"
+            port = pick("MARIADB_PORT","MYSQL_PORT","DB_PORT","DATABASE_PORT") or "3306"
+            print("MATCHING_CONFIG=" + name)
             print("DB_USER_FOUND=" + str(bool(user)))
             print("DB_PASSWORD_FOUND=" + str(bool(password)))
             print("DB_HOST=" + host)
-            print("DB_NAME_FROM_CONFIG=" + db)
             if not user or not password:
-                raise SystemExit("APP_MYSQL_CREDENTIALS_NOT_FOUND")
+                raise SystemExit("MATCHED_CONFIG_HAS_NO_DB_CREDENTIALS")
             cnf = Path("/tmp/digibail-mysql-inspect.cnf")
             cnf.write_text("[client]\nuser=" + user.replace("\n","") + "\npassword=" + password.replace("\n","") + "\nhost=" + host + "\nport=" + port + "\n")
             cnf.chmod(0o600)
             PY
-
             MYSQL_CNF='/tmp/digibail-mysql-inspect.cnf'
             echo "=== MYSQL AUTH TEST ==="
             mysql --defaults-extra-file="$MYSQL_CNF" -NBe "SELECT USER(), CURRENT_USER(), VERSION()"
@@ -92,8 +97,6 @@ jobs:
             EXISTS="$(mysql --defaults-extra-file="$MYSQL_CNF" -NBe "SELECT SCHEMA_NAME FROM information_schema.SCHEMATA WHERE SCHEMA_NAME='$DB'")"
             if [ "$EXISTS" != "$DB" ]; then
               echo "DATABASE_NOT_FOUND=$DB"
-              echo "DATABASES_VISIBLE_TO_APP_USER:"
-              mysql --defaults-extra-file="$MYSQL_CNF" -NBe "SELECT SCHEMA_NAME FROM information_schema.SCHEMATA ORDER BY SCHEMA_NAME"
               exit 32
             fi
             echo "DATABASE_FOUND=$DB"
