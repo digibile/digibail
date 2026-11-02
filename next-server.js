@@ -22,9 +22,20 @@ const handleNext = app.getRequestHandler();
 await app.prepare();
 const server = http.createServer((req, res) => {
   const pathname = new URL(req.url || "/", "http://localhost").pathname;
-  if (pathname === "/" || pathname.startsWith("/_next/") || pathname === "/favicon.ico") {
-    return handleNext(req, res);
-  }
+  // App Router owns the homepage, public plan catalog/detail pages and SEO
+  // metadata routes. Legacy HTML and API endpoints remain on the existing
+  // backend so authentication and database behavior are not forked.
+  const isNextRoute =
+    pathname === "/" ||
+    pathname === "/plans" ||
+    pathname.startsWith("/plans/") ||
+    pathname === "/robots.txt" ||
+    pathname === "/sitemap.xml" ||
+    pathname.startsWith("/_next/") ||
+    pathname === "/favicon.ico";
+
+  if (isNextRoute) return handleNext(req, res);
+
   const proxy = http.request({
     hostname: "127.0.0.1",
     port: legacyPort,
