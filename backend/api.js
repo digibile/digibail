@@ -461,6 +461,47 @@ export async function handleApi(req, res, url) {
     if (route.startsWith("/api/v1/admin/")) {
       const admin = await adminFor(req);
       if (!admin) return json(res, 403, { message: "دسترسی مدیر لازم است." });
+      if (req.method === "GET" && route === "/api/v1/admin/releases/status") {
+        const headers={"Accept":"application/vnd.github+json","X-GitHub-Api-Version":"2022-11-28"};
+        const [commitResponse,runsResponse]=await Promise.all([
+          fetch("https://api.github.com/repos/digibile/digibail/commits/main",{headers,signal:AbortSignal.timeout(12000)}),
+          fetch("https://api.github.com/repos/digibile/digibail/actions/runs?branch=main&per_page=8",{headers,signal:AbortSignal.timeout(12000)})
+        ]);
+        if(!commitResponse.ok||!runsResponse.ok)return json(res,502,{message:"وضعیت نسخه از GitHub دریافت نشد؛ اتصال سرور را بررسی کنید."});
+        const [commit,runs]=await Promise.all([commitResponse.json(),runsResponse.json()]);
+        const deployedSha=String(process.env.DEPLOY_COMMIT_SHA||"").trim(),latestSha=String(commit.sha||"");
+        const latestRun=(runs.workflow_runs||[]).find(x=>x.path===".github/workflows/deploy-digebail-server.yml")||null;
+        let postgres={connected:false,database:null,tables:null},mariadb={connected:false,database:null,tables:null,users:null};
+        try{const q=await pool.query("SELECT current_database() AS database,(SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='public')::int AS tables");postgres={connected:true,...q.rows[0]};}catch{}
+        try{const db=legacyMaria();const [q]=await db.query("SELECT DATABASE() AS database,(SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE()) AS tables,(SELECT COUNT(*) FROM AspNetUsers) AS users");mariadb={connected:true,...q[0]};}catch(error){mariadb.error=String(error.code||"connection_error");}
+        return json(res,200,{data:{
+          appVersion:String(process.env.APP_VERSION||"نسخه نامشخص"),
+          deployedCommit:deployedSha,deployedShort:deployedSha?deployedSha.slice(0,8):"نامشخص",
+          latestCommit:latestSha,latestShort:latestSha.slice(0,8),
+          latestMessage:String(commit.commit?.message||"").split("\n")[0].slice(0,180),
+          latestAt:commit.commit?.committer?.date||null,
+          updateAvailable:Boolean(latestSha&&deployedSha&&latestSha!==deployedSha),
+          deployment:{id:latestRun?.id||null,status:latestRun?.status||"unknown",conclusion:latestRun?.conclusion||null,url:latestRun?.html_url||"https://github.com/digibile/digibail/actions"},
+          databases:{postgres,mariadb},
+          deployConfigured:Boolean(process.env.GITHUB_DEPLOY_TOKEN),
+          canDeploy:admin.role==="superadmin"&&Boolean(process.env.GITHUB_DEPLOY_TOKEN)
+        }});
+      }
+      if (req.method === "POST" && route === "/api/v1/admin/releases/deploy") {
+        if(admin.role!=="superadmin")return json(res,403,{message:"شروع بروزرسانی فقط برای مدیر ارشد مجاز است."});
+        const token=String(process.env.GITHUB_DEPLOY_TOKEN||"").trim();
+        if(!token)return json(res,503,{message:"کلید امن بروزرسانی هنوز تنظیم نشده است. یک‌بار GITHUB_DEPLOY_TOKEN را در تنظیمات محرمانه برنامه ثبت کنید."});
+        const headers={"Accept":"application/vnd.github+json","Authorization":"Bearer "+token,"X-GitHub-Api-Version":"2022-11-28","Content-Type":"application/json"};
+        const runsResponse=await fetch("https://api.github.com/repos/digibile/digibail/actions/runs?branch=main&per_page=10",{headers,signal:AbortSignal.timeout(12000)});
+        if(!runsResponse.ok)return json(res,502,{message:"وضعیت استقرارهای قبلی خوانده نشد؛ بروزرسانی جدید شروع نشد."});
+        const runs=await runsResponse.json();
+        const running=(runs.workflow_runs||[]).find(x=>x.path===".github/workflows/deploy-digebail-server.yml"&&["queued","in_progress","waiting","requested"].includes(x.status));
+        if(running)return json(res,409,{message:"یک بروزرسانی در حال اجراست.",deploymentUrl:running.html_url});
+        const response=await fetch("https://api.github.com/repos/digibile/digibail/actions/workflows/deploy-digebail-server.yml/dispatches",{method:"POST",headers,body:JSON.stringify({ref:"main"}),signal:AbortSignal.timeout(15000)});
+        if(!response.ok)return json(res,502,{message:"GitHub شروع بروزرسانی را نپذیرفت؛ مجوز Actions روی کلید اتصال را بررسی کنید."});
+        await audit(req,"admin.release.dispatch",Number(admin.sub),{source:"admin-panel",commit:String(process.env.DEPLOY_COMMIT_SHA||"").slice(0,64)});
+        return json(res,202,{data:{accepted:true,message:"درخواست بروزرسانی ثبت شد. نتیجه استقرار پس از پایان مراحل در همین بخش قابل مشاهده است.",statusUrl:"https://github.com/digibile/digibail/actions"}});
+      }
       if (req.method === "POST" && route === "/api/v1/admin/ai/story") {
         const input = await body(req);
         const provider = ["openai", "gemini", "anthropic"].includes(String(input.provider || "").toLowerCase()) ? String(input.provider).toLowerCase() : "openai";

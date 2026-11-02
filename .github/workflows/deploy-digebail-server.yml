@@ -60,11 +60,13 @@ jobs:
         uses: appleboy/ssh-action@v1.2.2
         env:
           MYSQL_PASS: ${{ secrets.VAMCITY_MYSQL_PASSWORD }}
+          GITHUB_DEPLOY_TOKEN: ${{ secrets.GITHUB_DEPLOY_TOKEN }}
+          SOURCE_COMMIT: ${{ github.sha }}
         with:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
-          envs: MYSQL_PASS
+          envs: MYSQL_PASS,GITHUB_DEPLOY_TOKEN,SOURCE_COMMIT
           script: |
             set -eu
             ROOT="/home/digibail/domains/digebail.ir"
@@ -170,6 +172,18 @@ jobs:
               printf 'MARIADB_SOCKET_GID=%s\n' "$(stat -c '%g' /var/lib/mysql/mysql.sock)"
             } >> .env.mariadb.tmp
             mv .env.mariadb.tmp .env
+            chmod 600 .env
+            # The admin release center uses a fine-grained token only to dispatch this
+            # existing deployment workflow. Never print or expose the token to the browser.
+            grep -vE '^(DEPLOY_COMMIT_SHA|APP_VERSION|GITHUB_DEPLOY_TOKEN)=' .env > .env.release.tmp || true
+            {
+              printf 'DEPLOY_COMMIT_SHA=%s\n' "$SOURCE_COMMIT"
+              printf 'APP_VERSION=1.2.0\n'
+              if [ -n "${GITHUB_DEPLOY_TOKEN:-}" ]; then
+                printf 'GITHUB_DEPLOY_TOKEN=%s\n' "$GITHUB_DEPLOY_TOKEN"
+              fi
+            } >> .env.release.tmp
+            mv .env.release.tmp .env
             chmod 600 .env
             for key in POSTGRES_DB POSTGRES_USER POSTGRES_PASSWORD DATABASE_URL JWT_SECRET OTP_PEPPER CAPTCHA_PEPPER; do
               if ! grep -qE "^${key}=.+" .env; then
