@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>مجله دیجی‌بایل پی</title>
+<style>
+:root{font-family:Tahoma,Arial,sans-serif;color:#17385c;background:#f4f8fc}*{box-sizing:border-box}body{margin:0}.top{background:#082d56;color:#fff;padding:18px max(20px,calc((100% - 1100px)/2));display:flex;justify-content:space-between;align-items:center}.top a{color:#fff;text-decoration:none}.wrap{max-width:1100px;margin:32px auto;padding:0 18px}.back{color:#0876e8;text-decoration:none;font-weight:700}.card{background:#fff;border:1px solid #dce8f4;border-radius:18px;padding:clamp(20px,4vw,42px);margin-top:18px;box-shadow:0 12px 35px #153c6410}.meta{color:#71869c;font-size:13px}.title{font-size:clamp(25px,4vw,38px);line-height:1.7;margin:8px 0 14px}.excerpt{font-size:18px;line-height:2;color:#526d88}.body{font-size:16px;line-height:2.2;white-space:pre-wrap;color:#294967}.empty{padding:50px 20px;text-align:center;color:#71869c}.cover{max-width:100%;max-height:420px;object-fit:cover;border-radius:14px}.footer{text-align:center;color:#7890a8;padding:28px}
+</style>
+</head>
+<body><header class="top"><a href="/">دیجی‌بایل پی</a><a href="/">صفحه اصلی</a></header>
+<main class="wrap"><a class="back" href="/#blog">← بازگشت به مجله</a><article class="card" id="article"><div class="empty">در حال دریافت مطلب…</div></article></main>
+<footer class="footer">تمامی حقوق برای دیجی‌بایل پی محفوظ است.</footer>
+<script>
+(async()=>{
+ const root=document.getElementById('article'),slug=new URLSearchParams(location.search).get('slug');
+ if(!slug){root.innerHTML='<div class="empty">نشانی مطلب مشخص نشده است.</div>';return}
+ try{
+  const response=await fetch('/api/v1/blog/posts/'+encodeURIComponent(slug),{cache:'no-store'});
+  const payload=await response.json();if(!response.ok)throw new Error(payload.message||'مطلب پیدا نشد');
+  const post=payload.data||payload;
+  const title=document.createElement('h1');title.className='title';title.textContent=post.title||'مجله دیجی‌بایل پی';
+  const meta=document.createElement('div');meta.className='meta';meta.textContent=post.publishedAt?new Date(post.publishedAt).toLocaleDateString('fa-IR'):'';
+  const excerpt=document.createElement('p');excerpt.className='excerpt';excerpt.textContent=post.excerpt||'';
+  const body=document.createElement('div');body.className='body';body.textContent=post.body||'';
+  root.replaceChildren(meta,title,excerpt,body);
+  if(post.coverImage&&/^https:\/\//i.test(post.coverImage)){const img=document.createElement('img');img.className='cover';img.src=post.coverImage;img.alt=post.title||'';root.insertBefore(img,excerpt)}
+ }catch(error){root.innerHTML='<div class="empty"></div>';root.querySelector('.empty').textContent=error.message||'خطا در دریافت مطلب'}
+})();
+</script></body></html>
