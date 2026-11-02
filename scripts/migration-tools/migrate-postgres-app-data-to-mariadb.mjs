@@ -30,7 +30,8 @@ const applicationTables = [
   "legacy_customers","sms_templates","sms_logs","legacy_source_data",
   "customer_documents","customer_contracts","beta_inquiries","loan_products",
   "loan_requests","loan_request_comments","loan_request_status_history",
-  "ai_story_assets","customer_loan_applications"
+  "ai_story_assets","customer_loan_applications",
+  "homepage_content","newsletter_subscribers","blog_posts"
 ];
 
 function qpg(value) {
