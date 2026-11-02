@@ -23,10 +23,10 @@ function legacyMaria() { return mariaRawPool; }
 async function applicationAccounts(mariaDb, limit=100000) {
   // Keep every successful registration in the new identity database visible.
   // A phone match in the historical database is not proof that this distinct
-  // PostgreSQL account is the same row; hiding it made new registrations vanish.
+  // application account is the same row; hiding it made new registrations vanish.
   const q=await pool.query("SELECT u.id,u.username,u.phone,u.full_name,u.email,u.national_code,u.role,u.is_active,u.created_at,COALESCE((SELECT role_code FROM user_role_overrides o WHERE o.user_id=u.id),u.role) AS effective_role FROM users u WHERE u.legacy_source IS NULL ORDER BY u.created_at DESC,u.id DESC LIMIT $1",[limit]);
   let mappedIds=new Set();
-  try{const [mapped]=await mariaDb.query("SELECT PostgresUserId FROM DigibailUserIdentity");mappedIds=new Set(mapped.map(r=>String(r.PostgresUserId)));}catch(error){if(error.code!=="ER_NO_SUCH_TABLE")throw error;}
+  try{const [mapped]=await mariaDb.query("SELECT AppUserId FROM DigibailAppUserIdentity");mappedIds=new Set(mapped.map(r=>String(r.AppUserId)));}catch(error){if(error.code!=="ER_NO_SUCH_TABLE")throw error;}
   return q.rows.filter(r=>!mappedIds.has(String(r.id))).map(r=>({...r,role:r.effective_role,id:"app:"+String(r.id),legacy_id:String(r.id),mobile:r.phone,email:r.email,legacy_username:r.username,customer_code:String(r.id),registered_at:r.created_at,roles:[r.effective_role],account_type:directoryAccountType(r.effective_role),source_table:"users"}));
 }
 
@@ -100,7 +100,7 @@ async function unifiedUserDirectory({page=1,pageSize=50,search="",role="",status
   const freshAdmins=fresh.filter(r=>["admin","superadmin"].includes(r.effective_role));
   const freshAgents=fresh.filter(r=>r.effective_role==="agent");
   const freshMarketers=fresh.filter(r=>["marketer","customermarketer"].includes(r.effective_role));
-  return {rows:merged.slice((page-1)*pageSize,page*pageSize),total:(Number(mCountRows[0][0]?.total)||0)+freshFiltered.length,overallTotal:(Number(mStats.total)||0)+fresh.length,activeTotal:(Number(mStats.active)||0)+fresh.filter(r=>r.is_active).length,inactiveTotal:(Number(mStats.inactive)||0)+fresh.filter(r=>!r.is_active).length,todayTotal:(Number(mStats.today)||0)+freshToday,latestRegistration,customerTotal:(Number(mStats.customer_total)||0)+fresh.filter(freshCustomer).length,customerTodayTotal:(Number(mStats.customer_today)||0)+freshCustomerToday,agentTotal:(Number(mStats.agent_total)||0)+freshAgents.length,activeAgentTotal:(Number(mStats.active_agent_total)||0)+freshAgents.filter(r=>r.is_active).length,adminTotal:(Number(mStats.admin_total)||0)+freshAdmins.length,marketerTotal:(Number(mStats.marketer_total)||0)+freshMarketers.length,transferTotal:Number(mStats.transfer_total)||0,sourceCounts:{main:Number(mStats.main_total)||0,bluvam:Number(mStats.bluvam_total)||0,transfer:Number(mStats.transfer_total)||0,postgres:fresh.length},sourceTable:"MariaDB.AspNetUsers+MariaDB.bluvamdb__AspNetUsers+MariaDB.OnlineMoneyTransfer__AspNetUsers+PostgreSQL.users",timezone:"Asia/Tehran"};
+  return {rows:merged.slice((page-1)*pageSize,page*pageSize),total:(Number(mCountRows[0][0]?.total)||0)+freshFiltered.length,overallTotal:(Number(mStats.total)||0)+fresh.length,activeTotal:(Number(mStats.active)||0)+fresh.filter(r=>r.is_active).length,inactiveTotal:(Number(mStats.inactive)||0)+fresh.filter(r=>!r.is_active).length,todayTotal:(Number(mStats.today)||0)+freshToday,latestRegistration,customerTotal:(Number(mStats.customer_total)||0)+fresh.filter(freshCustomer).length,customerTodayTotal:(Number(mStats.customer_today)||0)+freshCustomerToday,agentTotal:(Number(mStats.agent_total)||0)+freshAgents.length,activeAgentTotal:(Number(mStats.active_agent_total)||0)+freshAgents.filter(r=>r.is_active).length,adminTotal:(Number(mStats.admin_total)||0)+freshAdmins.length,marketerTotal:(Number(mStats.marketer_total)||0)+freshMarketers.length,transferTotal:Number(mStats.transfer_total)||0,sourceCounts:{main:Number(mStats.main_total)||0,bluvam:Number(mStats.bluvam_total)||0,transfer:Number(mStats.transfer_total)||0,application:fresh.length},sourceTable:"MariaDB.AspNetUsers+MariaDB.bluvamdb__AspNetUsers+MariaDB.OnlineMoneyTransfer__AspNetUsers+MariaDB.users",timezone:"Asia/Tehran"};
 }
 
 function directoryRoleFromNames(value) {
@@ -909,7 +909,7 @@ export async function handleApi(req, res, url) {
             if((currentRoles.includes("superadmin")||role==="superadmin")&&admin.role!=="superadmin"){await conn.rollback();return json(res,403,{message:"مدیریت حساب مدیر ارشد فقط برای مدیر ارشد مجاز است."});}
             if(sourceKey==="main"&&(active===false||(role!==null&&role!==directoryRoleFromNames(currentRoleNames)))){
               try{
-                const [actorMap]=await conn.query("SELECT MariaDbUserId FROM DigibailUserIdentity WHERE PostgresUserId=? LIMIT 1",[actorId]);
+                const [actorMap]=await conn.query("SELECT MariaDbUserId FROM DigibailAppUserIdentity WHERE AppUserId=? LIMIT 1",[actorId]);
                 if(actorMap.length&&String(actorMap[0].MariaDbUserId)===String(legacyId)){await conn.rollback();return json(res,400,{message:"امکان تغییر نقش یا غیرفعال‌کردن حساب مدیر واردشده وجود ندارد."});}
               }catch{}
             }
@@ -940,18 +940,18 @@ export async function handleApi(req, res, url) {
           }catch(error){await conn.rollback().catch(()=>{});throw error;}finally{conn.release();}
           if(sourceKey==="main"){
             try{
-              const [mappingRows]=await db.query("SELECT PostgresUserId FROM DigibailUserIdentity WHERE MariaDbUserId=? LIMIT 1",[legacyId]);
+              const [mappingRows]=await db.query("SELECT AppUserId FROM DigibailAppUserIdentity WHERE MariaDbUserId=? LIMIT 1",[legacyId]);
               if(mappingRows.length){
-                const pgId=Number(mappingRows[0].PostgresUserId);
-                await pool.query("UPDATE users SET full_name=COALESCE($1,full_name),phone=CASE WHEN $2::boolean THEN $3 ELSE phone END,email=CASE WHEN $4::boolean THEN $5 ELSE email END,role=COALESCE($6,role),is_active=COALESCE($7,is_active),updated_at=NOW() WHERE id=$8",[fullName,input.phone!==undefined,phone,input.email!==undefined,email,role,active,pgId]);
-                if(role!==null)await pool.query("INSERT INTO user_role_overrides(user_id,role_code,updated_by,updated_at) VALUES($1,$2,$3,NOW()) ON CONFLICT(user_id) DO UPDATE SET role_code=EXCLUDED.role_code,updated_by=EXCLUDED.updated_by,updated_at=NOW()",[pgId,role,actorId]);
+                const appUserId=Number(mappingRows[0].AppUserId);
+                await pool.query("UPDATE users SET full_name=COALESCE($1,full_name),phone=CASE WHEN $2::boolean THEN $3 ELSE phone END,email=CASE WHEN $4::boolean THEN $5 ELSE email END,role=COALESCE($6,role),is_active=COALESCE($7,is_active),updated_at=NOW() WHERE id=$8",[fullName,input.phone!==undefined,phone,input.email!==undefined,email,role,active,appUserId]);
+                if(role!==null)await pool.query("INSERT INTO user_role_overrides(user_id,role_code,updated_by,updated_at) VALUES($1,$2,$3,NOW()) ON CONFLICT(user_id) DO UPDATE SET role_code=EXCLUDED.role_code,updated_by=EXCLUDED.updated_by,updated_at=NOW()",[appUserId,role,actorId]);
               }
-            }catch(syncError){console.error("POSTGRES_MAPPED_USER_UPDATE_FAILED="+String(syncError.code||syncError.name||"unknown"));}
+            }catch(syncError){console.error("APP_USER_MAPPING_UPDATE_FAILED="+String(syncError.code||syncError.name||"unknown"));}
           }
           await audit(req,"admin.user.updated",actorId,{targetUserId:rawId,source:"mariadb."+config.users,changed:{fullName:fullName!==null,phone:input.phone!==undefined,email:input.email!==undefined,role:role!==null,isActive:active!==null}});
           return json(res,200,{data:updated,message:"اطلاعات حساب به‌روزرسانی شد."});
         }
-        const id=Number(rawId.startsWith("pg:")?rawId.slice(3):rawId);
+        const id=Number(rawId.startsWith("app:")?rawId.slice(4):rawId);
         if(!Number.isSafeInteger(id)||id<1)return json(res,400,{message:"شناسه حساب معتبر نیست."});
         const current=await pool.query("SELECT id,role,is_active FROM users WHERE id=$1",[id]);
         if(!current.rowCount)return json(res,404,{message:"حساب کاربری پیدا نشد."});
@@ -969,7 +969,7 @@ export async function handleApi(req, res, url) {
           const mirror=await pool.query("SELECT id,username,phone,full_name,national_code,email,is_active,COALESCE((SELECT role_code FROM user_role_overrides o WHERE o.user_id=users.id),role) AS effective_role,to_char(created_at AT TIME ZONE 'Asia/Tehran','YYYY-MM-DD HH24:MI:SS.US') AS created_at_tehran FROM users WHERE id=$1",[id]);
           if(mirror.rowCount)await syncUserToMariaDB(legacyMaria(),mirror.rows[0]);
         }catch(mirrorError){console.error("MARIADB_ADMIN_USER_MIRROR_FAILED="+String(mirrorError.code||mirrorError.name||"unknown"));}
-        await audit(req,"admin.user.updated",actorId,{targetUserId:id,source:"postgres.users",changed:{fullName:fullName!==null,phone:input.phone!==undefined,email:input.email!==undefined,role:role!==null,isActive:active!==null}});
+        await audit(req,"admin.user.updated",actorId,{targetUserId:id,source:"application.users",changed:{fullName:fullName!==null,phone:input.phone!==undefined,email:input.email!==undefined,role:role!==null,isActive:active!==null}});
         return json(res,200,{data:updated,message:"اطلاعات حساب به‌روزرسانی شد."});
       }
       if (req.method === "GET" && route === "/api/v1/admin/legacy-customers") {
