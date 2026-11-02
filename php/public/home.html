@@ -1,102 +1,57 @@
 <!doctype html>
 <html lang="fa" dir="rtl">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="theme-color" content="#101d36">
-<meta name="description" content="دیجی‌بایل؛ مسیر ساده و شفاف برای خدمات اعتباری، خرید اقساطی و مدیریت درخواست‌های مالی">
-<title>دیجی‌بایل | اعتبار، خرید و خدمات مالی</title>
-<link rel="stylesheet" href="/assets/home-v2.css?v=20261102">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#082b50">
+<meta name="description" content="دیجی‌بایل؛ طرح‌های وام و خرید اقساطی، محاسبه اقساط و ثبت درخواست">
+<title>دیجی‌بایل | طرح‌های وام و خرید اقساطی</title>
+<link rel="stylesheet" href="/assets/home-reference.css?v=20261102">
 </head>
 <body>
-<header class="db-header">
-  <div class="db-container db-nav">
-    <a class="db-brand" href="/" aria-label="صفحه اصلی دیجی‌بایل"><span class="db-brand-mark">د</span><span><b>دیجی‌بایل</b><small>راهی روشن برای انتخاب مالی</small></span></a>
-    <nav class="db-links" aria-label="منوی اصلی">
-      <a href="#services">خدمات</a><a href="#how">نحوه استفاده</a><a href="#benefits">مزیت‌ها</a><a href="#about">درباره دیجی‌بایل</a>
-    </nav>
-    <div class="db-nav-actions" id="accountArea">
-      <a class="db-login" href="/login.html" id="accountLink">ورود به حساب</a>
-      <a class="db-admin" href="/admin.php" id="adminPanelLink" hidden>مدیریت سامانه</a>
-    </div>
-    <button class="db-menu-toggle" id="menuToggle" aria-label="باز کردن منو" aria-expanded="false"><span></span><span></span><span></span></button>
-  </div>
-  <nav class="db-mobile-menu" id="mobileMenu" aria-label="منوی موبایل"><a href="#services">خدمات</a><a href="#how">نحوه استفاده</a><a href="#benefits">مزیت‌ها</a><a href="#about">درباره ما</a><a href="/login.html">ورود به حساب</a></nav>
-</header>
+<header class="topbar"><div class="wrap nav">
+<button class="hamb" id="hamb" aria-label="باز کردن منو">☰</button>
+<a class="brand" href="/" aria-label="دیجی‌بایل"><span class="brand-symbol">db</span><span><b>دیجی‌بایل</b><small>بانک دیجیتال اقساطی</small></span></a>
+<nav class="navlinks" id="navlinks"><a class="active" href="/">صفحه اصلی</a><a href="#plans">طرح‌های وام</a><a href="#plans">درخواست وام</a><a href="#features">مشارکت</a><a href="#plans">پذیرندگان</a><a href="#steps">سوالات متداول</a><a href="#footer">درباره ما</a></nav>
+<div class="navtools"><a class="login" href="/login.html" id="accountLink">ورود / ثبت‌نام</a><button class="search" aria-label="جستجو">⌕</button><a href="/admin.php" id="adminPanelLink" hidden>مدیریت</a></div>
+</div></header>
 <main>
-<section class="db-hero">
-  <div class="db-hero-glow db-glow-one"></div><div class="db-hero-glow db-glow-two"></div>
-  <div class="db-container db-hero-grid">
-    <div class="db-hero-copy">
-      <div class="db-kicker"><span class="db-kicker-dot"></span> انتخاب آگاهانه، تجربه مالی ساده‌تر</div>
-      <h1>برای تصمیم‌های مالی،<br><em>مسیر روشن‌تری</em> انتخاب کنید.</h1>
-      <p class="db-hero-lead">از آشنایی با خدمات اعتباری تا ثبت و پیگیری درخواست‌ها؛ دیجی‌بایل تجربه‌ای یکپارچه، شفاف و قابل‌پیگیری در اختیار شما قرار می‌دهد.</p>
-      <div class="db-hero-actions"><a class="db-button db-button-primary" href="/login.html">ورود و شروع <span aria-hidden="true">←</span></a><a class="db-text-link" href="#services">مشاهده خدمات <span aria-hidden="true">⌄</span></a></div>
-      <div class="db-trust-line"><span class="db-trust-icon">✓</span><span>دسترسی متمرکز</span><i></i><span>پیگیری شفاف</span><i></i><span>حفظ امنیت اطلاعات</span></div>
-    </div>
-    <div class="db-hero-art" aria-label="نمایی مفهومی از مرکز خدمات دیجی‌بایل">
-      <div class="db-orbit db-orbit-a"></div><div class="db-orbit db-orbit-b"></div>
-      <div class="db-float db-float-top"><span class="db-float-icon">↗</span><span><b>همه‌چیز در یک مسیر</b><small>از ثبت تا پیگیری درخواست</small></span></div>
-      <div class="db-dashboard-card">
-        <div class="db-dash-head"><div><small>مرکز خدمات</small><strong>پنل یکپارچه دیجی‌بایل</strong></div><span class="db-live"><i></i> دسترسی آنلاین</span></div>
-        <div class="db-dash-highlight"><div><span>خدمات قابل دسترس</span><b>اعتبار و خرید اقساطی</b><small>بر اساس شرایط و خدمات فعال</small></div><div class="db-round-icon">◇</div></div>
-        <div class="db-dash-row"><span class="db-mini-icon blue">▤</span><span><b>درخواست‌های من</b><small>ثبت و مشاهده وضعیت</small></span><strong>۰۱</strong></div>
-        <div class="db-dash-row"><span class="db-mini-icon mint">◈</span><span><b>خدمات اعتباری</b><small>بررسی گزینه‌های در دسترس</small></span><strong>۰۲</strong></div>
-        <div class="db-dash-row"><span class="db-mini-icon gold">◎</span><span><b>حساب کاربری</b><small>اطلاعات و دسترسی‌ها</small></span><strong>۰۳</strong></div>
-        <div class="db-dash-foot"><span>تجربه‌ای ساده و قابل پیگیری</span><span class="db-foot-mark">D</span></div>
-      </div>
-      <div class="db-float db-float-bottom"><span class="db-check-mark">✓</span><span><b>شفافیت در هر مرحله</b><small>وضعیت درخواست همراه شماست</small></span></div>
-      <div class="db-hero-spark db-spark-one"></div><div class="db-hero-spark db-spark-two"></div>
-    </div>
-  </div>
-  <div class="db-container db-hero-bottom"><span>خدمات مالی در یک تجربه منسجم</span><span class="db-scroll-line"></span><a href="#services">بیشتر بشناسید ↓</a></div>
-</section>
-<section class="db-services db-section" id="services">
-  <div class="db-container">
-    <div class="db-section-head"><div><span class="db-eyebrow">خدمات دیجی‌بایل</span><h2>آنچه برای مدیریت مالی نیاز دارید</h2></div><p>خدمات و ابزارهای موردنیاز، در فضایی منظم و قابل فهم کنار هم قرار گرفته‌اند.</p></div>
-    <div class="db-service-grid">
-      <article class="db-service-card db-service-featured"><span class="db-card-icon">◈</span><span class="db-card-index">01</span><h3>خدمات اعتباری</h3><p>آشنایی با طرح‌ها و گزینه‌های اعتباری و مشاهده شرایط استفاده از خدمات فعال.</p><a href="/login.html">مشاهده خدمات <b>←</b></a></article>
-      <article class="db-service-card"><span class="db-card-icon icon-mint">▧</span><span class="db-card-index">02</span><h3>خرید و پرداخت اقساطی</h3><p>دسترسی به مسیرهای خرید و پرداخت متناسب با طرح‌ها و شرایط ارائه‌شده.</p><a href="/login.html">ورود به حساب <b>←</b></a></article>
-      <article class="db-service-card"><span class="db-card-icon icon-gold">◎</span><span class="db-card-index">03</span><h3>ثبت و پیگیری درخواست</h3><p>ثبت درخواست و دنبال‌کردن مراحل بررسی و نتیجه از یک مسیر مشخص.</p><a href="/login.html">پیگیری درخواست <b>←</b></a></article>
-      <article class="db-service-card"><span class="db-card-icon icon-purple">♙</span><span class="db-card-index">04</span><h3>حساب کاربری</h3><p>مدیریت اطلاعات حساب و دسترسی به خدمات متناسب با نقش کاربری.</p><a href="/login.html">ورود امن <b>←</b></a></article>
-      <article class="db-service-card"><span class="db-card-icon icon-cyan">⌂</span><span class="db-card-index">05</span><h3>خدمات پذیرندگان</h3><p>مسیر ارتباط و دسترسی پذیرندگان به امکانات و اطلاعات مرتبط با همکاری.</p><a href="/login.html">ورود پذیرندگان <b>←</b></a></article>
-      <article class="db-service-card"><span class="db-card-icon icon-rose">▤</span><span class="db-card-index">06</span><h3>مدیریت و گزارش‌ها</h3><p>دسترسی مدیریتی و مشاهده اطلاعات بر اساس سطح مجوز هر کاربر.</p><a href="/login.html">ورود مدیران <b>←</b></a></article>
-    </div>
-  </div>
-</section>
-<section class="db-process db-section" id="how"><div class="db-container db-process-grid">
-  <div class="db-process-copy"><span class="db-eyebrow">شروع آسان</span><h2>از ورود تا پیگیری،<br>در چند گام روشن</h2><p>مسیر استفاده ساده طراحی شده تا بدانید از کجا شروع کنید و در هر مرحله چه کاری انجام دهید.</p><a class="db-button db-button-dark" href="/login.html">ورود به دیجی‌بایل <span>←</span></a></div>
-  <div class="db-steps">
-    <div class="db-step"><span class="db-step-number">۱</span><div><h3>ورود به حساب کاربری</h3><p>از مسیر امن وارد حساب خود شوید یا حساب کاربری‌تان را ایجاد کنید.</p></div><span class="db-step-arrow">↙</span></div>
-    <div class="db-step"><span class="db-step-number">۲</span><div><h3>انتخاب خدمت موردنظر</h3><p>خدمات و گزینه‌های قابل دسترس را متناسب با شرایط خود بررسی کنید.</p></div><span class="db-step-arrow">↙</span></div>
-    <div class="db-step"><span class="db-step-number">۳</span><div><h3>ثبت و پیگیری</h3><p>درخواست خود را ثبت کنید و وضعیت آن را از حساب کاربری دنبال کنید.</p></div><span class="db-step-arrow">✓</span></div>
-  </div>
+<section class="hero"><div class="wrap hero-inner">
+<div class="hero-copy"><div class="eyebrow">با دیجی‌بایل، رویای خود را به واقعیت تبدیل کنید</div><h1>خرید آسان، <strong>اقساطی مطمئن</strong><br>با بهترین طرح‌های خرید اقساطی</h1><p>از موبایل و لوازم خانگی تا خودرو و تجهیزات دیجیتال؛ همه چیز برای یک خرید هوشمندانه در دیجی‌بایل فراهم است.</p><a class="primary" href="#plans">مشاهده طرح‌ها ←</a></div>
+<div class="calc" aria-label="ماشین حساب اقساط"><div class="calc-tabs"><span>محاسبه اقساط</span><span>درخواست وام</span></div>
+<label for="purchase">مبلغ خرید</label><div class="amount"><span id="purchaseText">۳۰,۰۰۰,۰۰۰</span><small>تومان</small></div><input id="purchase" type="range" min="5000000" max="200000000" step="1000000" value="30000000">
+<div class="calc-row"><div class="calc-cell"><label for="down">پیش‌پرداخت</label><b id="downText">۶,۰۰۰,۰۰۰ تومان</b><input id="down" type="range" min="0" max="80" step="5" value="20"></div><div class="calc-cell"><label for="months">تعداد اقساط</label><select id="months" style="width:100%;border:0;background:transparent;color:#1a4c7b;font-size:11px;font-weight:bold"><option value="6">۶ ماه</option><option value="12" selected>۱۲ ماه</option><option value="18">۱۸ ماه</option><option value="24">۲۴ ماه</option></select></div></div>
+<div class="calc-result"><div><small>مبلغ هر قسط (برآورد ساده)</small><b id="monthly">۲,۰۰۰,۰۰۰ تومان</b></div><div><small>مانده پس از پیش‌پرداخت</small><b id="remaining">۲۴,۰۰۰,۰۰۰ تومان</b></div></div>
+<a class="calc-submit" href="/login.html">▣ ثبت درخواست وام</a><div style="font-size:8px;color:#91a0ae;text-align:center;margin-top:6px">محاسبه نمونه بدون احتساب کارمزد و شرایط اختصاصی هر طرح</div>
+</div><div class="hero-dots"><i></i><i></i><i></i></div>
 </div></section>
-<section class="db-benefits db-section" id="benefits"><div class="db-container">
-  <div class="db-benefit-top"><span class="db-eyebrow">تجربه بهتر</span><h2>سادگی در استفاده،<br><em>دقت در جزئیات</em></h2><p>دیجی‌بایل برای دسترسی روشن‌تر به خدمات و پیگیری منظم‌تر درخواست‌ها طراحی شده است.</p></div>
-  <div class="db-benefit-grid">
-    <div class="db-benefit"><span>01</span><div class="db-benefit-icon">⌘</div><h3>دسترسی یکپارچه</h3><p>خدمات مرتبط در یک فضای منظم و با مسیرهای مشخص ارائه می‌شوند.</p></div>
-    <div class="db-benefit"><span>02</span><div class="db-benefit-icon">◷</div><h3>پیگیری مرحله‌ای</h3><p>وضعیت درخواست‌ها را بدون سردرگمی از حساب کاربری دنبال کنید.</p></div>
-    <div class="db-benefit"><span>03</span><div class="db-benefit-icon">♧</div><h3>دسترسی متناسب با نقش</h3><p>هر کاربر متناسب با سطح دسترسی خود امکانات مربوط را مشاهده می‌کند.</p></div>
-    <div class="db-benefit"><span>04</span><div class="db-benefit-icon">⬡</div><h3>توجه به امنیت</h3><p>مسیرهای ورود و دسترسی با درنظرگرفتن حفاظت از اطلاعات طراحی شده‌اند.</p></div>
-  </div>
+<section class="features" id="features"><div class="wrap feature-row">
+<div class="feature"><span class="feature-icon">◉</span><span><b>پرداخت آسان</b><small>اقساط متناسب با توان شما</small></span></div>
+<div class="feature"><span class="feature-icon">⚡</span><span><b>سریع و مطمئن</b><small>بررسی و پیگیری درخواست</small></span></div>
+<div class="feature"><span class="feature-icon">♙</span><span><b>بدون ضامن</b><small>در طرح‌های منتخب</small></span></div>
+<div class="feature"><span class="feature-icon">▦</span><span><b>پوشش گسترده</b><small>انواع کالا و خدمات</small></span></div>
+<div class="feature"><span class="feature-icon">☏</span><span><b>پشتیبانی حرفه‌ای</b><small>در تمام مراحل</small></span></div>
 </div></section>
-<section class="db-cta" id="about"><div class="db-container db-cta-inner"><div><span class="db-eyebrow db-eyebrow-light">همراه شما در مسیر مالی</span><h2>شروع یک تجربه ساده‌تر،<br>از همین‌جا</h2><p>برای مشاهده خدمات و پیگیری درخواست‌ها وارد حساب کاربری خود شوید.</p></div><a class="db-button db-button-white" href="/login.html">ورود به حساب کاربری <span>←</span></a><div class="db-cta-orb"></div></div></section>
+<section class="section" id="plans"><div class="wrap"><div class="section-head"><div><h2>طرح‌های وام و خرید اقساطی</h2><p>با توجه به نیاز خود، بهترین طرح را انتخاب کنید.</p></div><a class="more" href="/login.html">مشاهده همه طرح‌ها ←</a></div>
+<div class="products">
+<article class="product"><div class="product-img" style="background-image:url('https://images.unsplash.com/photo-1600210492486-724fe5c67fb0?auto=format&fit=crop&w=500&q=80')"><span class="tag">کالای خانگی</span></div><h3>طرح لوازم خانگی</h3><p>خرید لوازم منزل با شرایط مناسب</p><div class="price"><span>مبلغ طرح</span><b>تا ۱۵۰ میلیون تومان</b></div><a href="/login.html">مشاهده جزئیات ←</a></article>
+<article class="product"><div class="product-img" style="background-image:url('https://images.unsplash.com/photo-1511706235224-4c6b1e7a7c2e?auto=format&fit=crop&w=500&q=80')"><span class="tag">موبایل</span></div><h3>طرح موبایل و تبلت</h3><p>خرید محصولات دیجیتال</p><div class="price"><span>مبلغ طرح</span><b>تا ۸۰ میلیون تومان</b></div><a href="/login.html">مشاهده جزئیات ←</a></article>
+<article class="product"><div class="product-img" style="background-image:url('https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=500&q=80')"><span class="tag">ساعت هوشمند</span></div><h3>طرح ساعت هوشمند</h3><p>دنیای فناوری روی مچ دست شما</p><div class="price"><span>مبلغ طرح</span><b>تا ۲۵ میلیون تومان</b></div><a href="/login.html">مشاهده جزئیات ←</a></article>
+<article class="product"><div class="product-img" style="background-image:url('https://images.unsplash.com/photo-1503376780353-7e6692767b70?auto=format&fit=crop&w=500&q=80')"><span class="tag">خودرو</span></div><h3>طرح خرید خودرو</h3><p>مسیر ساده‌تر برای خرید خودرو</p><div class="price"><span>مبلغ طرح</span><b>تا ۵۰۰ میلیون تومان</b></div><a href="/login.html">مشاهده جزئیات ←</a></article>
+<article class="product"><div class="product-img" style="background-image:url('https://images.unsplash.com/photo-1558981806-ec527fa84c39?auto=format&fit=crop&w=500&q=80')"><span class="tag">موتورسیکلت</span></div><h3>طرح موتورسیکلت</h3><p>خرید موتور با پرداخت مرحله‌ای</p><div class="price"><span>مبلغ طرح</span><b>تا ۱۲۰ میلیون تومان</b></div><a href="/login.html">مشاهده جزئیات ←</a></article>
+</div></div></section>
+<section class="promo"><div class="wrap promo-inner"><div class="promo-title"><span style="font-size:30px;color:#62b9ff">♧</span><div><h2>چرا دیجی‌بایل؟</h2><p>با ما، خرید اقساطی آسان‌تر، سریع‌تر و مطمئن‌تر است.</p></div></div><div class="promo-points"><div class="promo-point"><i>⬡</i>امنیت اطلاعات</div><div class="promo-point"><i>♙</i>شبکه گسترده پذیرندگان</div><div class="promo-point"><i>◷</i>پشتیبانی ۲۴ ساعته</div></div><div class="app-card"><div class="phone"></div><div><b>اپلیکیشن دیجی‌بایل</b><small>دسترسی سریع‌تر به خدمات</small><a href="/login.html">ورود به اپلیکیشن</a></div></div></div></section>
+<section class="steps" id="steps"><div class="wrap steps-row"><div class="step"><span class="step-num">۱</span><span><b>ثبت درخواست</b><small>فرم درخواست خود را تکمیل کنید</small></span></div><div class="step"><span class="step-num">۲</span><span><b>بررسی و تأیید</b><small>بررسی شرایط و مدارک</small></span></div><div class="step"><span class="step-num">۳</span><span><b>انتخاب طرح و خرید</b><small>انتخاب طرح متناسب با نیاز</small></span></div><div class="step"><span class="step-num">۴</span><span><b>دریافت وام</b><small>تکمیل فرایند و دریافت خدمت</small></span></div></div></section>
 </main>
-<footer class="db-footer"><div class="db-container db-footer-main"><a class="db-brand db-brand-footer" href="/"><span class="db-brand-mark">د</span><span><b>دیجی‌بایل</b><small>راهی روشن برای انتخاب مالی</small></span></a><p>تجربه‌ای منسجم برای دسترسی به خدمات مالی، اعتباری و خرید اقساطی.</p><div class="db-footer-links"><a href="#services">خدمات</a><a href="#how">راهنمای استفاده</a><a href="/login.html">ورود کاربران</a></div></div><div class="db-container db-footer-bottom"><span>© دیجی‌بایل · تمامی حقوق محفوظ است.</span><span>طراحی‌شده برای دسترسی ساده و شفاف</span></div></footer>
+<footer class="footer" id="footer"><div class="wrap footer-inner"><a class="brand" href="/"><span class="brand-symbol" style="color:#80c3ff">db</span><span><b>دیجی‌بایل</b><small>بانک دیجیتال اقساطی</small></span></a><div class="footer-links"><a href="#plans">طرح‌های وام</a><a href="#features">درباره ما</a><a href="/login.html">ورود کاربران</a><a href="#steps">راهنمای استفاده</a><a href="/login.html">تماس با ما</a></div><div class="social">● ◎ in ◉</div></div></footer>
 <script>
 (function(){
- const toggle=document.getElementById('menuToggle'),menu=document.getElementById('mobileMenu');
- if(toggle&&menu){toggle.addEventListener('click',function(){const open=menu.classList.toggle('is-open');toggle.setAttribute('aria-expanded',String(open));});menu.querySelectorAll('a').forEach(a=>a.addEventListener('click',()=>{menu.classList.remove('is-open');toggle.setAttribute('aria-expanded','false');}));}
+ const money=n=>Math.round(n).toLocaleString('fa-IR');
+ const purchase=document.getElementById('purchase'),down=document.getElementById('down'),months=document.getElementById('months');
+ function calc(){const p=Number(purchase.value),d=Number(down.value),remain=p*(1-d/100),m=Number(months.value);document.getElementById('purchaseText').textContent=money(p);document.getElementById('downText').textContent=money(p*d/100)+' تومان';document.getElementById('remaining').textContent=money(remain)+' تومان';document.getElementById('monthly').textContent=money(remain/m)+' تومان';}
+ [purchase,down,months].forEach(el=>el.addEventListener('input',calc));calc();
+ const toggle=document.getElementById('hamb'),nav=document.getElementById('navlinks');toggle.addEventListener('click',()=>{nav.style.display=nav.style.display==='flex'?'none':'flex';nav.style.position='absolute';nav.style.top='64px';nav.style.right='14px';nav.style.left='14px';nav.style.padding='14px';nav.style.background='#fff';nav.style.boxShadow='0 12px 30px #173e6322';nav.style.borderRadius='12px';nav.style.flexDirection='column';nav.style.alignItems='stretch';});
  const login=document.getElementById('accountLink'),admin=document.getElementById('adminPanelLink');
- if(!login||!admin)return;
- fetch('/api/v1/security/me',{credentials:'same-origin',headers:{'Accept':'application/json','Cache-Control':'no-cache'}}).then(r=>r.ok?r.json():null).then(payload=>{
-  if(!payload)return;const user=payload.data||payload;const roles=Array.isArray(user.roles)?user.roles:[];
-  const name=String(user.fullName||user.username||user.phone||'کاربر');
-  const role=roles.some(x=>['admin','superadmin'].includes(String(x).toLowerCase()))?'مدیر سامانه':'حساب کاربری';
-  login.textContent=name+' · '+role;login.classList.add('db-login-user');
-  if(roles.some(x=>['admin','superadmin'].includes(String(x).toLowerCase())))admin.hidden=false;
- }).catch(()=>{});
+ fetch('/api/v1/security/me',{credentials:'same-origin',headers:{'Accept':'application/json','Cache-Control':'no-cache'}}).then(r=>r.ok?r.json():null).then(payload=>{if(!payload)return;const user=payload.data||payload;const roles=Array.isArray(user.roles)?user.roles:[];login.textContent=String(user.fullName||user.username||user.phone||'حساب کاربری');if(roles.some(x=>['admin','superadmin'].includes(String(x).toLowerCase())))admin.hidden=false;}).catch(()=>{});
 })();
 </script>
 </body></html>
