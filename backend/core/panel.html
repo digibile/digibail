@@ -369,24 +369,23 @@ V.audit=()=>head('گزارش فعالیت‌ها','هر تغییر مهم با �
 
 V.updates=async()=>{
  const r=await api('GET','/api/v1/admin/releases/status');
- const d=r.data||r;
- const status=d.deployment||{};
- const db=d.databases||{};
- const databaseCard=(name,x)=>'<div class="panel"><h3>'+name+'</h3><p>'+(x?.connected?'<span class="pill a">متصل</span>':'<span class="pill r">اتصال ناموفق</span>')+'</p><p class="sub">نام پایگاه: '+esc(x?.database||'نامشخص')+'</p><p class="sub">تعداد جدول‌ها: '+(Number.isFinite(Number(x?.tables))?fa(x.tables):'نامشخص')+'</p></div>';
+ const d=r.data||r,status=d.deployment||{},db=d.databases||{};
  const date=v=>v?new Date(v).toLocaleString('fa-IR'):'—';
- const badge=d.updateAvailable?'<span class="pill p">نسخه جدید موجود است</span>':'<span class="pill a">نسخه فعلی آخرین نسخه است</span>';
+ const pill=(ok,yes,no)=>'<span class="pill '+(ok?'a':'r')+'">'+(ok?yes:no)+'</span>';
  const deployStatus=({completed:status.conclusion==='success'?'موفق':status.conclusion==='failure'?'ناموفق':status.conclusion||'پایان‌یافته',in_progress:'در حال اجرا',queued:'در صف',waiting:'در انتظار'})[status.status]||'نامشخص';
- return head('مرکز نسخه‌ها و بروزرسانی','بررسی نسخه منتشرشده، مشاهده نتیجه استقرار و نصب کنترل‌شده نسخه اصلی')+
- '<div class="cols"><div class="panel"><h3>نسخه نصب‌شده روی سرور</h3><div class="score">'+esc(d.appVersion)+'</div><p class="sub">شناسه انتشار: <code>'+esc(d.deployedShort)+'</code></p><p>'+badge+'</p></div>'+
- '<div class="panel"><h3>آخرین نسخه مخزن اصلی</h3><div class="score" style="font-size:1.5rem"><code>'+esc(d.latestShort)+'</code></div><p>'+esc(d.latestMessage||'پیام انتشار ثبت نشده')+'</p><p class="sub">تاریخ ثبت: '+esc(date(d.latestAt))+'</p></div></div>'+
- '<div class="panel"><h3>وضعیت استقرار</h3><div class="kv"><span>آخرین اجرا</span><b>'+esc(deployStatus)+'</b><span>شناسه اجرا</span><b class="n">'+esc(status.id||'—')+'</b><span>نسخه مستقرشده</span><b class="n">'+esc(d.deployedShort)+'</b></div><p><a class="btn" href="'+esc(status.url||'https://github.com/digibile/digibail/actions')+'" target="_blank" rel="noopener noreferrer">مشاهده گزارش کامل استقرار ↗</a></p></div>'+
- '<div class="panel"><h3>عملیات بروزرسانی</h3><p class="sub">بروزرسانی فقط از شاخه اصلی مخزن انجام می‌شود. گردش استقرار قبل از جایگزینی برنامه، تنظیمات، سلامت پایگاه داده و پاسخ سایت را بررسی می‌کند. داده‌های مشتریان نباید با نصب نسخه حذف یا بازنویسی شوند.</p>'+
- (!d.deployConfigured?'<div class="notice">اتصال یک‌باره امن برای اجرای بروزرسانی از داخل پنل هنوز روی سرور تنظیم نشده است. متغیر محرمانه GITHUB_DEPLOY_TOKEN با دسترسی Actions: write باید در محیط برنامه ثبت شود.</div>':'')+
+ const dbPanel=(name,x)=>'<div class="panel"><h3>'+name+'</h3><div class="kv"><span>اتصال</span><b>'+pill(x.connected,'متصل','قطع / تنظیم نشده')+'</b><span>نام پایگاه داده</span><b><code>'+esc(x.database||'—')+'</code></b><span>تعداد جدول‌ها</span><b class="n">'+esc(x.tables??'—')+'</b>'+(x.users!==undefined?'<span>کاربران قدیمی</span><b class="n">'+esc(x.users)+'</b>':'')+'</div></div>';
+ const badge=d.updateAvailable?'<span class="pill p">نسخه جدید موجود است</span>':'<span class="pill a">نسخه مخزن با نسخه نصب‌شده یکسان است</span>';
+ return head('مرکز نسخه‌ها و بروزرسانی','کنترل نسخه، بررسی اتصال پایگاه‌های داده و انتشار نسخه اصلی از داخل پنل')+
+ '<div class="cols"><div class="panel"><h3>نسخه نصب‌شده</h3><div class="score">'+esc(d.appVersion||'نامشخص')+'</div><p class="sub">شناسه انتشار: <code>'+esc(d.deployedShort||'نامشخص')+'</code></p><p>'+badge+'</p></div>'+
+ '<div class="panel"><h3>آخرین نسخه مخزن</h3><div class="score" style="font-size:1.5rem"><code>'+esc(d.latestShort||'—')+'</code></div><p>'+esc(d.latestMessage||'پیام انتشار ثبت نشده')+'</p><p class="sub">تاریخ ثبت: '+esc(date(d.latestAt))+'</p></div></div>'+
+ '<div class="cols">'+dbPanel('پایگاه داده اصلی برنامه',db.postgres||{})+dbPanel('پایگاه داده قدیمی مشتریان و پرونده‌ها',db.mariadb||{})+'</div>'+
+ '<div class="panel"><h3>وضعیت آخرین استقرار</h3><div class="kv"><span>وضعیت</span><b>'+esc(deployStatus)+'</b><span>شناسه اجرا</span><b class="n">'+esc(status.id||'—')+'</b><span>نسخه نصب‌شده</span><b class="n">'+esc(d.deployedShort||'—')+'</b></div><p><a class="btn" href="'+esc(status.url||'https://github.com/digibile/digibail/actions')+'" target="_blank" rel="noopener noreferrer">مشاهده گزارش کامل استقرار ↗</a></p></div>'+
+ '<div class="panel"><h3>عملیات بروزرسانی</h3><p class="sub">نسخه فقط از شاخه اصلی دریافت می‌شود. استقرار موجود، فایل‌های محیطی و داده‌های کاربران را حفظ می‌کند و قبل از اعلام موفقیت، سلامت برنامه و اتصال داده‌ها را بررسی می‌کند.</p>'+
+ (!d.deployConfigured?'<div class="notice">اتصال یک‌باره هنوز تنظیم نشده است. متغیر محرمانه GITHUB_DEPLOY_TOKEN باید با دسترسی Actions: write برای مخزن digibile/digibail در محیط امن برنامه ثبت شود.</div>':'')+
  (!SUPER?'<p class="sub">شروع استقرار فقط برای مدیر ارشد فعال است.</p>':'')+
- '<div class="bar"><button class="btn" data-release-action="check">بررسی دوباره نسخه‌ها</button><button class="btn solid" data-release-action="deploy" '+(d.canDeploy?'':'disabled')+'>شروع بروزرسانی خودکار</button></div>'+
- '<p class="sub">نسخه جدید: <code>'+esc(d.latestShort)+'</code> · نسخه نصب‌شده: <code>'+esc(d.deployedShort)+'</code></p></div>'+
- '<div class="cols">'+databaseCard('پایگاه عملیاتی PostgreSQL',db.postgres)+databaseCard('پایگاه اطلاعات قدیمی MariaDB',db.mariadb)+'</div>'+
- '<div class="panel"><h3>ثبت و کنترل</h3><p class="sub">هر درخواست انتشار با شناسه مدیر در گزارش فعالیت‌ها ثبت می‌شود. برنامه هنگام شروع، migrationهای نسخه را اجرا می‌کند؛ سلامت سرویس و اتصال هر دو پایگاه داده نیز کنترل می‌شوند. اگر بررسی سلامت یا اتصال پایگاه داده شکست بخورد، استقرار موفق اعلام نمی‌شود.</p></div>';
+ '<div class="bar"><button class="btn" data-release-action="check">تازه‌سازی وضعیت</button><button class="btn solid" data-release-action="deploy" '+(d.canDeploy?'':'disabled')+'>شروع بروزرسانی خودکار</button></div>'+
+ '<p class="sub">نسخه مخزن: <code>'+esc(d.latestShort||'—')+'</code> · نسخه نصب‌شده: <code>'+esc(d.deployedShort||'—')+'</code></p></div>'+
+ '<div class="panel"><h3>حفاظت از اطلاعات</h3><p class="sub">این بخش جدول‌های عملیاتی و اطلاعات مشتریان را پاک یا بازسازی نمی‌کند. تغییرات ساختاری دیتابیس باید در مهاجرت نسخه‌ای جداگانه، با پشتیبان‌گیری و کنترل تکرارپذیری اجرا شوند. هر درخواست انتشار نیز در گزارش حسابرسی ثبت می‌شود.</p></div>';
 };
 V.settings=()=>{const t=[['tpl','قالب و محتوا'],['status','وضعیت‌ها'],['slider','اسلایدر صفحه اصلی'],['ctpl','قالب قرارداد'],['foot','تماس و فوتر'],['params','پارامترهای وام'],['gw','درگاه‌ها']];
  return head('تنظیمات')+`<div class="tabs">${t.map(x=>`<button class="tab" data-st="${x[0]}" aria-selected="${state.sTab===x[0]}">${x[1]}</button>`).join('')}</div>`+({tpl:tplPane,status:statusPane,slider:sliderPane,ctpl:ctplPane,foot:footPane,params:paramPane,gw:gwPane}[state.sTab])()};
