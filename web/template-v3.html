@@ -758,7 +758,6 @@ function openApply(p){const t=p.tiers[S.ti],c=calc(p,S.amt,t);modal(`<button cla
  <p class="note">مدارک لازم: ${p.docs.filter(d=>d[1]).map(d=>d[0]).join('، ')}. بعد از ثبت، عکس مدارک را در حساب من بارگذاری می‌کنید. با تأیید وام، کارت مجازی شما صادر می‌شود.</p>
  <div id="apMsg" class="note" role="status" style="margin-top:10px"></div><button class="btn solid lg" style="width:100%;margin-top:10px" id="ap2">ثبت واقعی درخواست</button>`);$('#ap2').onclick=async()=>{const btn=$('#ap2'),msg=$('#apMsg');btn.disabled=true;btn.textContent='در حال ثبت…';msg.textContent='';try{const token=(()=>{try{return localStorage.getItem('token')||localStorage.getItem('accessToken')||''}catch(_){return ''}})();const res=await fetch('/api/v1/me/loan-applications',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json',...(token?{Authorization:'Bearer '+token}:{})},body:JSON.stringify({loanProductId:p.id,amount:S.amt,installmentMonths:t.m,interestMethod:p.method,interestPercent:p.rate})});const j=await res.json().catch(()=>({}));if(!res.ok)throw new Error(j.message||'ثبت درخواست انجام نشد');const d=j.data||j;msg.textContent='درخواست واقعاً ثبت شد. کد پیگیری: '+(d.reference||'ثبت‌شده')+' · وضعیت: '+(d.status||'Submitted');btn.textContent='درخواست ثبت شد';btn.disabled=true;const link=document.createElement('a');link.href='/profile.html';link.className='btn';link.style.display='inline-flex';link.style.marginTop='8px';link.textContent='رفتن به پیگیری درخواست‌ها';msg.appendChild(document.createElement('br'));msg.appendChild(link)}catch(e){msg.textContent=e.message||'خطا در ثبت درخواست';btn.disabled=false;btn.textContent='تلاش دوباره'}}}
 /* ---------- boot ---------- */
-async 
 /* ---------- homepage CMS: server-owned content, admin-only editing ---------- */
 const CMS_API={public:'/api/v1/site-content/homepage',admin:'/api/v1/admin/site-content/homepage',newsletter:'/api/v1/newsletter/subscribe',posts:'/api/v1/blog/posts'};
 let homepageCms={};
@@ -810,7 +809,7 @@ function bindNewsletter(){
  };
 }
 
-function detectRole(){try{const r=await fetch('/api/v1/security/me',{credentials:'same-origin',cache:'no-store'});if(!r.ok)return;const j=await r.json(),d=j.data||j;const rs=[].concat(d.roles||d.role||[]).map(x=>String(x).toLowerCase());user=d.fullName||null;role=rs.some(x=>/admin|manager/.test(x))?'admin':'customer'}catch(e){}}
+async function detectRole(){try{const r=await fetch('/api/v1/security/me',{credentials:'same-origin',cache:'no-store'});if(!r.ok)return;const j=await r.json(),d=j.data||j;const rs=[].concat(d.roles||d.role||[]).map(x=>String(x).toLowerCase());user=d.fullName||null;role=rs.some(x=>/admin|manager/.test(x))?'admin':'customer'}catch(e){}}
 
 
 
