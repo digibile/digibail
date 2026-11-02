@@ -123,7 +123,7 @@ jobs:
           # index.php is handled separately after preserving its current version.
           rsync -az --no-owner --no-group --ignore-existing \
             -e "ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes" \
-            --exclude='index.php' --exclude='expert.php' \
+            --exclude='index.php' --exclude='expert.php' --exclude='admin.php' \
             php/public/ "$DEPLOY_USER@$DEPLOY_HOST:$PUBLIC_ROOT/"
 
           ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes "$DEPLOY_USER@$DEPLOY_HOST" \
@@ -143,6 +143,9 @@ jobs:
              if [ -e '$PUBLIC_ROOT/expert.php' ] || [ -L '$PUBLIC_ROOT/expert.php' ]; then
                cp -a '$PUBLIC_ROOT/expert.php' '$BACKUP_ROOT/public_html/expert.php'
              fi
+             if [ -e '$PUBLIC_ROOT/admin.php' ] || [ -L '$PUBLIC_ROOT/admin.php' ]; then
+               cp -a '$PUBLIC_ROOT/admin.php' '$BACKUP_ROOT/public_html/admin.php'
+             fi
              # Keep the prior static landing page recoverable, but let PHP-FPM own the root route.
              if [ -e '$PUBLIC_ROOT/index.html' ] || [ -L '$PUBLIC_ROOT/index.html' ]; then
                cp -a '$PUBLIC_ROOT/index.html' '$BACKUP_ROOT/public_html/index.html'
@@ -155,6 +158,12 @@ jobs:
           require dirname(__DIR__) . '/php_app/public/expert.php';
           PHP_EXPERT
              chmod 644 '$PUBLIC_ROOT/expert.php'
+             cat > '$PUBLIC_ROOT/admin.php' <<'PHP_ADMIN'
+          <?php
+          declare(strict_types=1);
+          require dirname(__DIR__) . '/php_app/public/admin.php';
+          PHP_ADMIN
+             chmod 644 '$PUBLIC_ROOT/admin.php'
              cat > '$PUBLIC_ROOT/index.php' <<'PHP_ENTRY'
           <?php
           declare(strict_types=1);
@@ -164,10 +173,14 @@ jobs:
              test -s '$PRIVATE_APP/vendor/autoload.php'
              test -s '$PRIVATE_APP/public/home.html'
              test -s '$PRIVATE_APP/public/expert.php'
+             test -s '$PRIVATE_APP/public/admin.php'
              test -s '$PRIVATE_APP/views/expert-dashboard.html'
+             test -s '$PRIVATE_APP/views/admin-dashboard.html'
              test -s '$PUBLIC_ROOT/expert.php'
+             test -s '$PUBLIC_ROOT/admin.php'
              php -l '$PUBLIC_ROOT/index.php'
              php -l '$PUBLIC_ROOT/expert.php'
+             php -l '$PUBLIC_ROOT/admin.php'
              php -l '$PRIVATE_APP/public/index.php'
              php -l '$PRIVATE_APP/public/expert.php'
              if [ -f '$DOMAIN_ROOT/database/migration/config.php' ]; then
@@ -189,11 +202,13 @@ jobs:
              echo 'ROLLBACK_BACKUP=$BACKUP_ROOT'
              curl -k -sS -o /tmp/digebail-home-check.html -w 'LIVE_HOME_HTTP=%{http_code}\n' https://digebail.ir/ || true
              EXPERT_HTTP="$(curl -k -sS -o /dev/null -w '%{http_code}' https://digebail.ir/expert.php)"
+             ADMIN_HTTP="$(curl -k -sS -o /dev/null -w '%{http_code}' https://digebail.ir/admin.php)"
              LEGACY_EXPERT_HTTP="$(curl -k -sS -o /dev/null -w '%{http_code}' https://digebail.ir/expert.html)"
              echo "LIVE_EXPERT_UNAUTH_HTTP=\$EXPERT_HTTP"
+             echo "LIVE_ADMIN_UNAUTH_HTTP=\$ADMIN_HTTP"
              echo "LIVE_LEGACY_EXPERT_HTTP=\$LEGACY_EXPERT_HTTP"
-             if [ "\$EXPERT_HTTP" != "302" ] || [ "\$LEGACY_EXPERT_HTTP" != "404" ]; then
-               echo 'ERROR: Expert workspace route protection verification failed.'
+             if [ "\$EXPERT_HTTP" != "302" ] || [ "\$ADMIN_HTTP" != "302" ] || [ "\$LEGACY_EXPERT_HTTP" != "404" ]; then
+               echo 'ERROR: Admin/expert route protection verification failed.'
                exit 1
              fi
              head -c 160 /tmp/digebail-home-check.html 2>/dev/null || true"
