@@ -126,12 +126,15 @@ jobs:
             --exclude='index.php' --exclude='expert.php' --exclude='admin.php' \
             php/public/ "$DEPLOY_USER@$DEPLOY_HOST:$PUBLIC_ROOT/"
 
-          # Refresh the homepage stylesheet without replacing unrelated public assets.
+          # Refresh every homepage stylesheet and local illustration, while backing up replaced files.
           ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes "$DEPLOY_USER@$DEPLOY_HOST" \
-            "mkdir -p '$PUBLIC_ROOT/assets' '$BACKUP_ROOT/public_html/assets'"
+            "mkdir -p '$PUBLIC_ROOT/assets/images' '$BACKUP_ROOT/public_html/assets/images'"
           rsync -az --no-owner --no-group --backup --backup-dir="$BACKUP_ROOT/public_html/assets" \
             -e "ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes" \
-            php/public/assets/home-reference.css "$DEPLOY_USER@$DEPLOY_HOST:$PUBLIC_ROOT/assets/"
+            php/public/assets/home-*.css "$DEPLOY_USER@$DEPLOY_HOST:$PUBLIC_ROOT/assets/"
+          rsync -az --no-owner --no-group --backup --backup-dir="$BACKUP_ROOT/public_html/assets/images" \
+            -e "ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes" \
+            php/public/assets/images/ "$DEPLOY_USER@$DEPLOY_HOST:$PUBLIC_ROOT/assets/images/"
 
           ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes "$DEPLOY_USER@$DEPLOY_HOST" \
             "set -eu
