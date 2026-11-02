@@ -1,0 +1,50 @@
+name: Read-only DigiBail legacy loan-plan inventory
+
+on:
+  push:
+    branches:
+      - feature/php83-public-seo-ssr-20261102
+    paths:
+      - '.github/workflows/inspect-php-loan-plan-inventory.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Inspect MariaDB plan sources without changing data
+        uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          command_timeout: 5m
+          script: |
+            set -eu
+            cd /home/digibail/domains/digebail.ir/php_app
+            test -s vendor/autoload.php
+            /usr/local/php83/bin/php -r '
+            require "vendor/autoload.php";
+            App\Core\Environment::load(__DIR__ . "/.env");
+            $db = App\Core\Database\ConnectionFactory::create();
+            $schema = (string) $db->query("SELECT DATABASE()")->fetchColumn();
+            echo "TARGET_SCHEMA=" . preg_replace("/[^A-Za-z0-9_]/", "", $schema) . PHP_EOL;
+            $tables = $db->prepare("SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA = :schema AND (TABLE_NAME LIKE :loan OR TABLE_NAME LIKE :plan) ORDER BY TABLE_NAME");
+            $tables->execute(["schema" => $schema, "loan" => "%Loan%", "plan" => "%Plan%"]);
+            foreach ($tables->fetchAll(PDO::FETCH_COLUMN) as $table) {
+                $quoted = "`" . str_replace("`", "``", (string) $table) . "`";
+                $columns = $db->prepare("SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = :schema AND TABLE_NAME = :table");
+                $columns->execute(["schema" => $schema, "table" => $table]);
+                $names = array_flip($columns->fetchAll(PDO::FETCH_COLUMN));
+                $sql = "SELECT COUNT(*) AS total";
+                if (isset($names["IncludePlan"])) $sql .= ", SUM(IncludePlan = 1) AS included_plans, SUM(IncludePlan = 1 AND Disable = 0) AS enabled_plans";
+                if (isset($names["IsActive"])) $sql .= ", SUM(IsActive = 1) AS active_rows";
+                if (isset($names["ShowInList"])) $sql .= ", SUM(ShowInList = 1) AS listed_rows";
+                $row = $db->query($sql . " FROM " . $quoted)->fetch(PDO::FETCH_ASSOC);
+                echo "PLAN_SOURCE=" . $table . " " . json_encode($row, JSON_UNESCAPED_UNICODE) . PHP_EOL;
+            }
+            ';
+            echo "READ_ONLY_PLAN_INVENTORY=COMPLETE"
