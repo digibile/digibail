@@ -81,6 +81,36 @@ Required before merge/deploy:
 - production row counts and critical business totals are compared before/after;
 - deployment has a tested rollback path that does not discard or overwrite MariaDB data.
 
+## Second-pass API dependency measurements
+
+A second-pass inspection of the checked-out branch's `backend/api.js` (1,430 lines; 157,115 bytes at inspection time) counted the following PostgreSQL-specific patterns:
+
+| Pattern | Occurrences |
+|---|---:|
+| Positional parameters (`$1`, `$2`, ...) | 272 |
+| `RETURNING` | 19 |
+| `JSONB` | 34 |
+| `TIMESTAMPTZ` | 8 |
+| `ILIKE` | 8 |
+| PostgreSQL casts (`::date`, `::int`) | 20 |
+| Aggregate `FILTER (WHERE ...)` | 33 |
+| `ON CONFLICT` | 6 |
+| JSON text extraction operator (`->>`) | 131 |
+| `INTERVAL` | 36 |
+| `pool.query` call sites | 105 |
+
+These are source-pattern counts, not counts of distinct queries or tables. They are evidence that a mechanical placeholder replacement or removal of the `pg` package would leave substantial incompatible SQL.
+
+## MariaDB schema evidence and unresolved runtime mapping
+
+The repository contains SQL Server-to-MariaDB schema exports and a workflow that can inspect the live `digibail_vamcitydigibilepay` schema (tables, columns, indexes, foreign keys, and schema-only dump). However, that workflow is guarded to run only on `main`, and this session has no direct SSH/database execution channel. The repository schema exports are not proof of the current live schema or its row counts.
+
+The PostgreSQL bootstrap file `backend/db/001_init.sql` defines application-owned tables such as `users`, `otp_challenges`, `audit_logs`, `customer_documents`, `customer_contracts`, `beta_inquiries`, and `loan_products`. These definitions are PostgreSQL DDL, not a MariaDB migration. Before the runtime can be switched, each entity needs an approved mapping to an existing live MariaDB table or an additive MariaDB DDL migration, plus verified data reconciliation.
+
+## Cutover blocker
+
+**Do not remove `pg`, `DATABASE_URL`, the Compose PostgreSQL service, or the PostgreSQL bootstrap while any runtime route still uses the PostgreSQL pool.** The API currently queries that pool for account directory data and multiple business/security modules. No safe full-runtime cutover can be claimed until live MariaDB schema inspection and route-by-route query conversion are complete.
+
 ## Current status
 
 - Isolated branch created: `migration/mariadb-only-cutover`.
