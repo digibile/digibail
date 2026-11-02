@@ -30,21 +30,42 @@ jobs:
             hostname
             command -v mysql
             command -v mysqldump
-            if sudo -n mysql --protocol=socket -NBe "SELECT 1" >/dev/null 2>&1; then
+
+            MYSQL=''
+            DUMP=''
+            for cnf in /usr/local/directadmin/conf/mysql.conf /root/.my.cnf /etc/mysql/debian.cnf; do
+              if [ -r "$cnf" ] && mysql --defaults-extra-file="$cnf" --protocol=socket -NBe "SELECT 1" >/dev/null 2>&1; then
+                MYSQL="mysql --defaults-extra-file=$cnf --protocol=socket"
+                DUMP="mysqldump --defaults-extra-file=$cnf --protocol=socket"
+                echo "MYSQL_AUTH_SOURCE=$cnf"
+                break
+              fi
+            done
+
+            if [ -z "$MYSQL" ] && command -v sudo >/dev/null 2>&1 && sudo -n mysql --protocol=socket -NBe "SELECT 1" >/dev/null 2>&1; then
               MYSQL='sudo -n mysql --protocol=socket'
               DUMP='sudo -n mysqldump --protocol=socket'
-            elif mysql --protocol=socket -NBe "SELECT 1" >/dev/null 2>&1; then
-              MYSQL='mysql --protocol=socket'
-              DUMP='mysqldump --protocol=socket'
-            else
-              echo "MYSQL_SOCKET_AUTH_UNAVAILABLE"
+              echo "MYSQL_AUTH_SOURCE=sudo_socket"
+            fi
+
+            if [ -z "$MYSQL" ]; then
+              echo "MYSQL_PRIVILEGED_AUTH_NOT_FOUND"
               exit 31
             fi
+
             echo "=== DATABASE EXISTS ==="
-            $MYSQL -NBe "SELECT SCHEMA_NAME FROM information_schema.SCHEMATA WHERE SCHEMA_NAME='$DB'"
+            EXISTS="$($MYSQL -NBe "SELECT SCHEMA_NAME FROM information_schema.SCHEMATA WHERE SCHEMA_NAME='$DB'")"
+            if [ "$EXISTS" != "$DB" ]; then
+              echo "DATABASE_NOT_FOUND=$DB"
+              echo "VISIBLE_DATABASES:"
+              $MYSQL -NBe "SELECT SCHEMA_NAME FROM information_schema.SCHEMATA ORDER BY SCHEMA_NAME"
+              exit 32
+            fi
+            echo "DATABASE_FOUND=$DB"
+
             echo "=== TABLE INVENTORY ==="
             $MYSQL -NBe "SELECT TABLE_NAME, TABLE_TYPE, COALESCE(ENGINE,''), COALESCE(TABLE_ROWS,0) FROM information_schema.TABLES WHERE TABLE_SCHEMA='$DB' ORDER BY TABLE_NAME"
-            echo "=== COLUMN AND KEY INVENTORY ==="
+            echo "=== COLUMN INVENTORY ==="
             $MYSQL -NBe "SELECT TABLE_NAME, ORDINAL_POSITION, COLUMN_NAME, COLUMN_TYPE, IS_NULLABLE, COALESCE(COLUMN_DEFAULT,''), EXTRA FROM information_schema.COLUMNS WHERE TABLE_SCHEMA='$DB' ORDER BY TABLE_NAME, ORDINAL_POSITION"
             echo "=== INDEX INVENTORY ==="
             $MYSQL -NBe "SELECT TABLE_NAME, INDEX_NAME, NON_UNIQUE, SEQ_IN_INDEX, COLUMN_NAME, INDEX_TYPE FROM information_schema.STATISTICS WHERE TABLE_SCHEMA='$DB' ORDER BY TABLE_NAME, INDEX_NAME, SEQ_IN_INDEX"
