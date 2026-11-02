@@ -101,3 +101,18 @@ The migration must therefore be performed by domain slice, with MariaDB integrat
 - PostgreSQL removal: NOT PERFORMED.
 
 This document is an engineering migration record, not a claim that the site has already been transferred.
+
+
+## Additional startup and provisioning blockers verified
+
+- `start.js` calls `migrate()` before spawning `server.js`; a failed database migration prevents the API listener from binding. This explains why the outer Next.js proxy can report connection refusal on port 1632.
+- `next-server.js` proxies non-Next routes to the legacy API on port 1632. Both listeners must be included in the MariaDB cutover smoke test.
+- `server.js` health endpoint calls `dbHealth()`; today this checks the PostgreSQL pool, not MariaDB.
+- `migrate.js` invokes the PostgreSQL migration function directly.
+- `scripts/create-admin.js` and `scripts/provision-recovery-admin.js` both instantiate `pg.Pool` and write to PostgreSQL `users`. Recovery-admin provisioning must be redesigned against `AspNetUsers` and the canonical role join tables before PostgreSQL can be removed.
+- `.github/workflows/ci.yml` provisions PostgreSQL 16, sets `DATABASE_URL`, starts the app and expects PostgreSQL-backed health. MariaDB integration tests are currently absent.
+- `.github/workflows/deploy-digebail-server.yml` still creates/retrieves PostgreSQL credentials, validates `DATABASE_URL`, starts the PostgreSQL service and uses `psql` for diagnostics. It also currently asserts that the unified user directory total matches PostgreSQL users. This must be replaced, not merely supplemented, for a single-database deployment.
+
+## Explicitly unsafe operations avoided
+
+No production SQL was executed. No data was copied, rewritten, or deleted. No existing table was altered. No deployment was triggered. This branch currently contains migration documentation only.
