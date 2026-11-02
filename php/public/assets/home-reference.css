@@ -63,3 +63,186 @@
 :focus-visible{outline:3px solid #69b7ff;outline-offset:3px}
 @media(max-width:720px){.faq-section{padding:25px 0 30px}.faq-grid{grid-template-columns:1fr;gap:8px}.faq-item summary{font-size:10px;padding-top:12px;padding-bottom:12px}}
 @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*,*:before,*:after{transition:none!important;animation:none!important}}
+
+
+/* DigiBail homepage: production visual refinement */
+:root{--blue:#1677ed;--navy:#082b50;--ink:#173451;--muted:#71859a;--line:#e6edf4;--bg:#f5f8fc}
+body{font-size:14px;background:#f7f9fc}
+.wrap{width:min(1280px,calc(100% - 48px))}
+.topbar{height:82px;box-shadow:0 5px 22px #0a31520a}
+.nav{gap:30px}
+.navlinks{gap:25px;font-size:12px}
+.navlinks a{padding:27px 0}
+.brand b{font-size:21px}
+.brand small{font-size:10px}
+.login{font-size:12px;padding:11px 20px;border-radius:24px}
+.hero,.hero-inner{min-height:455px}
+.hero-inner{grid-template-columns:minmax(0,1fr) 390px;gap:48px;padding:38px 0}
+.hero h1{font-size:40px;line-height:1.55}
+.eyebrow{font-size:13px}
+.hero p{font-size:14px;line-height:2;max-width:510px}
+.primary{font-size:13px;padding:13px 28px;border-radius:26px}
+.calc{padding:22px;border-radius:18px}
+.calc label{font-size:11px}
+.calc .amount{font-size:18px}
+.calc-cell{padding:11px}
+.calc-cell b{font-size:13px}
+.calc-result small{font-size:10px}
+.calc-result b{font-size:14px}
+.calc-submit{font-size:12px;padding:12px}
+.features{box-shadow:0 8px 28px #173e6308}
+.feature-row{padding:22px 0}
+.feature{gap:13px}
+.feature-icon{width:44px;height:44px;font-size:21px}
+.feature b{font-size:12px}
+.feature small{font-size:10px}
+.section{padding:42px 0 46px}
+.section-head{margin-bottom:22px}
+.section-head h2{font-size:23px}
+.section-head p{font-size:12px}
+.more{font-size:11px;padding:9px 14px}
+.products{gap:15px}
+.product{padding:12px;border-radius:13px;box-shadow:0 7px 24px #173e630b}
+.product-img{height:132px;border-radius:9px}
+.tag{font-size:10px;padding:4px 9px}
+.product h3{font-size:14px;margin:11px 0 5px}
+.product p{font-size:11px;margin-bottom:11px}
+.price{font-size:10px;padding-top:9px}
+.price b{font-size:11px}
+.product a{font-size:10px;margin-top:10px}
+.promo-inner{min-height:145px}
+.promo-title h2{font-size:20px}
+.promo-title p{font-size:11px}
+.promo-point{font-size:11px}
+.promo-point i{font-size:25px}
+.app-card{padding:11px 16px;min-width:270px}
+.app-card b{font-size:13px}
+.app-card small{font-size:10px}
+.app-card a{font-size:10px;padding:5px 12px}
+.steps-row{padding:25px 0;gap:22px}
+.step{gap:13px}
+.step-num{width:38px;height:38px;font-size:14px}
+.step b{font-size:11px}
+.step small{font-size:10px}
+.faq-section{padding:45px 0 52px}
+.faq-item{padding:0 18px;border-radius:13px}
+.faq-item summary{font-size:13px;padding:17px 30px 17px 0}
+.faq-item summary:before{width:25px;height:25px;top:13px}
+.faq-item p{font-size:12px;line-height:2.2}
+.site-footer{font-size:13px}
+.footer-visual,.footer-visual-inner{min-height:320px}
+.footer-visual-inner{padding-top:42px;padding-bottom:42px}
+.footer-kicker{font-size:13px}
+.footer-visual-copy h2{font-size:36px;line-height:1.55}
+.footer-visual-copy p{font-size:13px;line-height:2;max-width:500px}
+.footer-cta{font-size:12px;padding:13px 22px;border-radius:9px}
+.footer-visual-mark{width:215px;height:215px}
+.footer-orbit{font-size:72px}
+.footer-visual-mark small{font-size:10px}
+.footer-main{padding:52px 0 46px}
+.footer-grid{grid-template-columns:1.35fr .9fr .95fr 1.25fr;gap:40px}
+.footer-brand-symbol{font-size:46px}
+.footer-brand b{font-size:23px}
+.footer-brand small{font-size:10px}
+.footer-about p{font-size:12px;line-height:2.25}
+.footer-social a{width:36px;height:36px;font-size:14px}
+.footer-column h3,.footer-contact h3,.footer-trust h3{font-size:14px;margin-bottom:20px;padding-bottom:12px}
+.footer-column>a{font-size:12px;margin-bottom:13px}
+.contact-line{gap:12px;margin-bottom:16px}
+.contact-line>span{width:34px;height:34px;font-size:16px}
+.contact-line b{font-size:11px}
+.contact-line small{font-size:11px;line-height:1.9}
+.footer-trust{padding-top:30px}
+.trust-heading{margin-bottom:20px}
+.trust-heading h3{font-size:16px}
+.trust-heading>div>p{font-size:11px}
+.trust-heading-note{font-size:10px;padding:8px 13px}
+.trust-slots{gap:14px}
+.trust-slot{min-height:172px;padding:15px 10px;border-radius:13px;gap:8px}
+.trust-logo-placeholder{width:94px;height:82px;border-radius:11px}
+.trust-logo-placeholder span{font-size:9px}
+.trust-slot b{font-size:11px}
+.trust-slot small{font-size:9px}
+.footer-legal-inner{min-height:64px;font-size:10px}
+.footer-legal-inner>div{gap:22px}
+@media(max-width:1100px){
+ .navlinks{gap:14px;font-size:11px}
+ .hero h1{font-size:34px}
+ .footer-grid{grid-template-columns:1fr 1fr;gap:32px}
+ .footer-about{max-width:none}
+ .footer-trust{grid-column:1/-1}
+ .trust-slots{grid-template-columns:repeat(3,minmax(0,1fr))}
+}
+@media(max-width:720px){
+ .wrap{width:calc(100% - 30px)}
+ .topbar{height:68px}
+ .brand b{font-size:18px}
+ .login{font-size:10px;padding:9px 13px}
+ .hero,.hero-inner{min-height:0}
+ .hero-inner{grid-template-columns:1fr;gap:20px;padding:30px 0 48px}
+ .hero h1{font-size:29px;line-height:1.65}
+ .eyebrow{font-size:11px}
+ .hero p{font-size:12px;line-height:2}
+ .calc{padding:17px}
+ .calc label{font-size:10px}
+ .calc .amount{font-size:16px}
+ .feature-row{grid-template-columns:repeat(2,1fr);gap:9px;padding:16px 0}
+ .feature{gap:9px}
+ .feature-icon{width:35px;height:35px;font-size:17px}
+ .feature b{font-size:10px}
+ .feature small{font-size:8px}
+ .section{padding:29px 0 32px}
+ .section-head h2{font-size:18px}
+ .section-head p{font-size:10px}
+ .products{gap:9px}
+ .product{padding:8px}
+ .product-img{height:104px}
+ .product h3{font-size:11px}
+ .product p{font-size:9px}
+ .price{font-size:8px}
+ .price b{font-size:9px}
+ .product a{font-size:9px}
+ .promo-inner{padding:20px 0;grid-template-columns:1fr}
+ .promo-title{grid-column:auto}
+ .promo-title h2{font-size:17px}
+ .promo-points{gap:9px}
+ .promo-point{font-size:9px}
+ .app-card{min-width:0;width:100%;max-width:330px}
+ .steps-row{gap:14px;padding:20px 0}
+ .step-num{width:32px;height:32px}
+ .step b{font-size:10px}
+ .step small{font-size:8px}
+ .faq-section{padding:30px 0 34px}
+ .faq-item summary{font-size:11px}
+ .faq-item p{font-size:10px}
+ .footer-visual,.footer-visual-inner{min-height:255px}
+ .footer-visual-inner{padding:30px 0}
+ .footer-visual-copy h2{font-size:26px}
+ .footer-visual-copy p{font-size:11px}
+ .footer-cta{font-size:10px;padding:11px 16px}
+ .footer-main{padding:32px 0 28px}
+ .footer-grid{grid-template-columns:1fr 1fr;gap:25px 17px}
+ .footer-about{grid-column:1/-1}
+ .footer-contact,.footer-trust{grid-column:1/-1}
+ .footer-column h3,.footer-contact h3{font-size:12px}
+ .footer-column>a{font-size:10px}
+ .contact-line b{font-size:10px}
+ .contact-line small{font-size:10px}
+ .trust-heading{align-items:flex-start;flex-direction:column;gap:10px}
+ .trust-heading h3{font-size:14px}
+ .trust-heading>div>p{font-size:9px;line-height:1.9}
+ .trust-slots{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
+ .trust-slot{min-height:140px;padding:11px 7px}
+ .trust-logo-placeholder{width:76px;height:66px}
+ .trust-slot b{font-size:10px}
+ .trust-slot small{font-size:8px}
+ .footer-legal-inner{padding:14px 0;gap:9px;font-size:9px}
+ .footer-legal-inner>div{gap:12px}
+}
+@media(max-width:380px){
+ .hero h1{font-size:25px}
+ .products{gap:7px}
+ .product-img{height:88px}
+ .trust-slots{gap:7px}
+ .trust-slot{min-height:132px}
+}
