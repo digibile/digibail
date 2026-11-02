@@ -10,6 +10,7 @@ const PORT = Number.parseInt(process.env.PORT || "1631", 10);
 const HOST = process.env.HOST || "0.0.0.0";
 const ROUTES = new Map([
   ["/", "web/template-v3.html"], ["/index.html", "web/template-v3.html"],
+  ["/blog.html", "web/blog.html"],
   ["/login.html", "backend/security/login-v2.html"], ["/register.html", "backend/security/register-v2.html"],
   ["/documents.html", "web/documents.html"], ["/contracts.html", "web/contracts.html"],
   ["/loan-definition.html", "web/loan-definition.html"],
