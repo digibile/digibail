@@ -1,83 +1,175 @@
 <!doctype html>
 <html lang="fa" dir="rtl">
 <head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="theme-color" content="#082b50">
-<meta name="description" content="دیجی‌بایل؛ طرح‌های وام و خرید اقساطی، محاسبه اقساط و ثبت درخواست">
-<title>دیجی‌بایل | طرح‌های وام و خرید اقساطی</title>
-<link rel="stylesheet" href="/assets/home-reference.css?v=20261102-polish1">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#071d36">
+<meta name="description" content="دیجی‌بایل؛ انتخاب هوشمندانه کالا و طرح‌های خرید اقساطی">
+<title>دیجی‌بایل | خرید هوشمند، پرداخت آسان</title>
+<link rel="preconnect" href="https://images.unsplash.com">
+<link rel="stylesheet" href="/assets/home-reference.css?v=20261102-home-redesign2">
 </head>
 <body>
-<header class="topbar"><div class="wrap nav">
-<button class="hamb" id="hamb" aria-label="باز کردن منو">☰</button>
-<a class="brand" href="/" aria-label="دیجی‌بایل"><span class="brand-symbol">db</span><span><b>دیجی‌بایل</b><small>بانک دیجیتال اقساطی</small></span></a>
-<nav class="navlinks" id="navlinks"><a class="active" href="/">صفحه اصلی</a><a href="#plans">طرح‌های وام</a><a href="#plans">درخواست وام</a><a href="#features">مشارکت</a><a href="#plans">پذیرندگان</a><a href="#faq">سوالات متداول</a><a href="#footer">درباره ما</a></nav>
-<div class="navtools"><a class="login" href="/login.html" id="accountLink">ورود / ثبت‌نام</a><button class="search" aria-label="جستجو">⌕</button><a href="/admin.php" id="adminPanelLink" hidden>مدیریت</a></div>
-</div></header>
+<header class="site-header">
+ <div class="wrap header-inner">
+  <button class="menu-toggle" id="hamb" aria-label="باز کردن فهرست">☰</button>
+  <a class="brand" href="/" aria-label="دیجی‌بایل">
+   <span class="brand-mark">d<span>b</span></span>
+   <span class="brand-copy"><b>دیجی‌بایل</b><small>خرید هوشمند، پرداخت آسان</small></span>
+  </a>
+  <nav class="main-nav" id="navlinks">
+   <a class="active" href="/">خانه</a><a href="#categories">دسته‌بندی کالاها</a><a href="#plans">طرح‌های اقساطی</a><a href="#steps">راهنمای خرید</a><a href="#faq">سؤالات متداول</a>
+  </nav>
+  <div class="header-actions">
+   <a class="header-login" href="/login.html" id="accountLink">ورود / ثبت‌نام</a>
+   <a class="header-admin" href="/admin.php" id="adminPanelLink" hidden>مدیریت</a>
+  </div>
+ </div>
+</header>
+
 <main>
-<section class="hero"><div class="wrap hero-inner">
-<div class="hero-copy"><div class="eyebrow">با دیجی‌بایل، رویای خود را به واقعیت تبدیل کنید</div><h1>خرید آسان، <strong>اقساطی مطمئن</strong><br>با بهترین طرح‌های خرید اقساطی</h1><p>از موبایل و لوازم خانگی تا خودرو و تجهیزات دیجیتال؛ همه چیز برای یک خرید هوشمندانه در دیجی‌بایل فراهم است.</p><a class="primary" href="#plans">مشاهده طرح‌ها ←</a></div>
-<div class="calc" aria-label="ماشین حساب اقساط"><div class="calc-tabs"><span>محاسبه اقساط</span><span>درخواست وام</span></div>
-<label for="purchase">مبلغ خرید</label><div class="amount"><span id="purchaseText">۳۰,۰۰۰,۰۰۰</span><small>تومان</small></div><input id="purchase" type="range" min="5000000" max="200000000" step="1000000" value="30000000">
-<div class="calc-row"><div class="calc-cell"><label for="down">پیش‌پرداخت</label><b id="downText">۶,۰۰۰,۰۰۰ تومان</b><input id="down" type="range" min="0" max="80" step="5" value="20"></div><div class="calc-cell"><label for="months">تعداد اقساط</label><select id="months" style="width:100%;border:0;background:transparent;color:#1a4c7b;font-size:11px;font-weight:bold"><option value="6">۶ ماه</option><option value="12" selected>۱۲ ماه</option><option value="18">۱۸ ماه</option><option value="24">۲۴ ماه</option></select></div></div>
-<div class="calc-result"><div><small>مبلغ هر قسط (برآورد ساده)</small><b id="monthly">۲,۰۰۰,۰۰۰ تومان</b></div><div><small>مانده پس از پیش‌پرداخت</small><b id="remaining">۲۴,۰۰۰,۰۰۰ تومان</b></div></div>
-<a class="calc-submit" href="/login.html">▣ ثبت درخواست وام</a><div style="font-size:8px;color:#91a0ae;text-align:center;margin-top:6px">محاسبه نمونه بدون احتساب کارمزد و شرایط اختصاصی هر طرح</div>
-</div><div class="hero-dots"><i></i><i></i><i></i></div>
-</div></section>
-<section class="features" id="features"><div class="wrap feature-row">
-<div class="feature"><span class="feature-icon">◉</span><span><b>پرداخت آسان</b><small>اقساط متناسب با توان شما</small></span></div>
-<div class="feature"><span class="feature-icon">⚡</span><span><b>سریع و مطمئن</b><small>بررسی و پیگیری درخواست</small></span></div>
-<div class="feature"><span class="feature-icon">♙</span><span><b>بدون ضامن</b><small>در طرح‌های منتخب</small></span></div>
-<div class="feature"><span class="feature-icon">▦</span><span><b>پوشش گسترده</b><small>انواع کالا و خدمات</small></span></div>
-<div class="feature"><span class="feature-icon">☏</span><span><b>پشتیبانی حرفه‌ای</b><small>در تمام مراحل</small></span></div>
-</div></section>
-<section class="section" id="plans"><div class="wrap"><div class="section-head"><div><h2>طرح‌های وام و خرید اقساطی</h2><p>با توجه به نیاز خود، بهترین طرح را انتخاب کنید.</p></div><a class="more" href="/login.html">مشاهده همه طرح‌ها ←</a></div>
-<div class="products">
-<article class="product"><div class="product-img" style="background-image:url('https://images.unsplash.com/photo-1600210492486-724fe5c67fb0?auto=format&fit=crop&w=500&q=80')"><span class="tag">کالای خانگی</span></div><h3>طرح لوازم خانگی</h3><p>خرید لوازم منزل با شرایط مناسب</p><div class="price"><span>مبلغ طرح</span><b>بر اساس طرح فعال</b></div><a href="/login.html">مشاهده جزئیات ←</a></article>
-<article class="product"><div class="product-img" style="background-image:url('https://images.unsplash.com/photo-1511706235224-4c6b1e7a7c2e?auto=format&fit=crop&w=500&q=80')"><span class="tag">موبایل</span></div><h3>طرح موبایل و تبلت</h3><p>خرید محصولات دیجیتال</p><div class="price"><span>مبلغ طرح</span><b>بر اساس طرح فعال</b></div><a href="/login.html">مشاهده جزئیات ←</a></article>
-<article class="product"><div class="product-img" style="background-image:url('https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=500&q=80')"><span class="tag">ساعت هوشمند</span></div><h3>طرح ساعت هوشمند</h3><p>دنیای فناوری روی مچ دست شما</p><div class="price"><span>مبلغ طرح</span><b>بر اساس طرح فعال</b></div><a href="/login.html">مشاهده جزئیات ←</a></article>
-<article class="product"><div class="product-img" style="background-image:url('https://images.unsplash.com/photo-1503376780353-7e6692767b70?auto=format&fit=crop&w=500&q=80')"><span class="tag">خودرو</span></div><h3>طرح خرید خودرو</h3><p>مسیر ساده‌تر برای خرید خودرو</p><div class="price"><span>مبلغ طرح</span><b>بر اساس طرح فعال</b></div><a href="/login.html">مشاهده جزئیات ←</a></article>
-<article class="product"><div class="product-img" style="background-image:url('https://images.unsplash.com/photo-1558981806-ec527fa84c39?auto=format&fit=crop&w=500&q=80')"><span class="tag">موتورسیکلت</span></div><h3>طرح موتورسیکلت</h3><p>خرید موتور با پرداخت مرحله‌ای</p><div class="price"><span>مبلغ طرح</span><b>بر اساس طرح فعال</b></div><a href="/login.html">مشاهده جزئیات ←</a></article>
-</div></div></section>
-<section class="promo"><div class="wrap promo-inner"><div class="promo-title"><span style="font-size:30px;color:#62b9ff">♧</span><div><h2>چرا دیجی‌بایل؟</h2><p>با ما، خرید اقساطی آسان‌تر، سریع‌تر و مطمئن‌تر است.</p></div></div><div class="promo-points"><div class="promo-point"><i>⬡</i>امنیت اطلاعات</div><div class="promo-point"><i>♙</i>شبکه گسترده پذیرندگان</div><div class="promo-point"><i>◷</i>پشتیبانی ۲۴ ساعته</div></div><div class="app-card"><div class="phone"></div><div><b>اپلیکیشن دیجی‌بایل</b><small>دسترسی سریع‌تر به خدمات</small><a href="/login.html">ورود به اپلیکیشن</a></div></div></div></section>
-<section class="steps" id="steps"><div class="wrap steps-row"><div class="step"><span class="step-num">۱</span><span><b>ثبت درخواست</b><small>فرم درخواست خود را تکمیل کنید</small></span></div><div class="step"><span class="step-num">۲</span><span><b>بررسی و تأیید</b><small>بررسی شرایط و مدارک</small></span></div><div class="step"><span class="step-num">۳</span><span><b>انتخاب طرح و خرید</b><small>انتخاب طرح متناسب با نیاز</small></span></div><div class="step"><span class="step-num">۴</span><span><b>دریافت وام</b><small>تکمیل فرایند و دریافت خدمت</small></span></div></div></section>
-</main>
-<section class="faq-section" id="faq"><div class="wrap"><div class="section-head"><div><h2>پرسش‌های پرتکرار</h2><p>پاسخ کوتاه به سوال‌های رایج درباره فرایند خرید اقساطی</p></div></div><div class="faq-grid">
-<details class="faq-item"><summary>چطور طرح مناسب خودم را پیدا کنم؟</summary><p>طرح‌های فعال را بررسی کنید و شرایط، مبلغ پیش‌پرداخت، تعداد اقساط و هزینه‌های اعلام‌شده هر طرح را با هم مقایسه کنید.</p></details>
-<details class="faq-item"><summary>مبلغ نمایش‌داده‌شده در ماشین‌حساب قطعی است؟</summary><p>خیر. این محاسبه صرفاً برآورد ساده مبلغ تقسیم‌شده بر تعداد اقساط است و کارمزد، هزینه خدمات و شرایط اختصاصی طرح را شامل نمی‌شود.</p></details>
-<details class="faq-item"><summary>برای ثبت درخواست چه کاری باید انجام دهم؟</summary><p>از بخش ورود کاربران وارد حساب خود شوید و مراحل ثبت درخواست و بارگذاری مدارک را طبق راهنمای همان طرح دنبال کنید.</p></details>
-<details class="faq-item"><summary>وضعیت درخواست را از کجا پیگیری کنم؟</summary><p>پس از ورود به حساب کاربری، بخش درخواست‌ها و پیگیری را بررسی کنید. وضعیت نهایی مطابق بررسی و اعلام مرجع ارائه‌دهنده طرح است.</p></details>
-</div></div></section>
-<footer class="site-footer" id="footer">
- <div class="footer-visual"><div class="wrap footer-visual-inner"><div class="footer-visual-copy"><span class="footer-kicker">همراه مطمئن خرید هوشمند</span><h2>تجربه‌ای ساده‌تر برای<br><strong>خرید و پرداخت اقساطی</strong></h2><p>از انتخاب طرح تا پیگیری درخواست، مسیر خدمات خود را در دیجی‌بایل یکپارچه دنبال کنید.</p><a href="/login.html" class="footer-cta">ورود به حساب کاربری <span>←</span></a></div><div class="footer-visual-mark"><span class="footer-orbit">db</span><small>راهکارهای نوین خرید اعتباری</small></div></div></div>
- <div class="footer-main"><div class="wrap footer-grid">
-  <section class="footer-about"><a class="footer-brand" href="/"><span class="footer-brand-symbol">db</span><span><b>دیجی‌بایل</b><small>بانک دیجیتال اقساطی</small></span></a><p>دیجی‌بایل بستری برای معرفی طرح‌های خرید اقساطی و پیگیری خدمات اعتباری است. جزئیات هر طرح مطابق شرایط اعلام‌شده همان طرح ارائه می‌شود.</p><div class="footer-social"><a href="#" aria-label="اینستاگرام">◎</a><a href="#" aria-label="تلگرام">➤</a><a href="#" aria-label="لینکدین">in</a><a href="#" aria-label="آپارات">▶</a></div></section>
-  <section class="footer-column"><h3>دسترسی سریع</h3><a href="/">صفحه اصلی</a><a href="#plans">طرح‌های خرید اقساطی</a><a href="#steps">مراحل دریافت خدمات</a><a href="/login.html">ثبت درخواست وام</a><a href="/login.html">ورود کاربران</a></section>
-  <section class="footer-column"><h3>خدمات و پشتیبانی</h3><a href="#plans">راهنمای انتخاب طرح</a><a href="#features">مزایای دیجی‌بایل</a><a href="/login.html">پیگیری درخواست</a><a href="/login.html">پشتیبانی کاربران</a><a href="#footer-contact">سوالات متداول</a></section>
-  <section class="footer-contact" id="footer-contact"><h3>ارتباط با ما</h3><div class="contact-line"><span>⌖</span><div><b>نشانی دفتر مرکزی</b><small>نشانی رسمی شرکت پس از تأیید درج می‌شود</small></div></div><div class="contact-line"><span>☎</span><div><b>تلفن تماس</b><small>شماره رسمی پشتیبانی درج نشده است</small></div></div><div class="contact-line"><span>✉</span><div><b>رایانامه</b><small>ایمیل رسمی شرکت درج نشده است</small></div></div><div class="contact-line"><span>◷</span><div><b>ساعات پاسخگویی</b><small>روزهای کاری، مطابق اطلاعیه پشتیبانی</small></div></div></section>
-  <section class="footer-trust" aria-label="مجوزها و گواهی‌ها">
-   <div class="trust-heading"><div><h3>مجوزها، گواهی‌ها و نمادهای اعتماد</h3><p>جایگاه‌های آماده برای بارگذاری تصویر اصل مجوزها و نشان‌های رسمی دیجی‌بایل</p></div><span class="trust-heading-note">جایگاه آماده بارگذاری تصویر رسمی</span></div>
-   <div class="trust-slots">
-    <div class="trust-slot"><div class="trust-logo-placeholder" data-image-slot="e-namad"><span>محل درج تصویر رسمی</span></div><b>نماد اعتماد الکترونیکی</b><small>تصویر نماد و لینک استعلام</small></div>
-    <div class="trust-slot"><div class="trust-logo-placeholder" data-image-slot="business-license"><span>محل درج تصویر رسمی</span></div><b>مجوز کسب‌وکار</b><small>تصویر مجوز و لینک اعتبارسنجی</small></div>
-    <div class="trust-slot"><div class="trust-logo-placeholder" data-image-slot="samandehi"><span>محل درج تصویر رسمی</span></div><b>ساماندهی</b><small>تصویر نشان و لینک رسمی</small></div>
-    <div class="trust-slot"><div class="trust-logo-placeholder" data-image-slot="company-registration"><span>محل درج تصویر رسمی</span></div><b>گواهی ثبت شرکت</b><small>تصویر گواهی یا آگهی رسمی</small></div>
-    <div class="trust-slot"><div class="trust-logo-placeholder" data-image-slot="special-permits"><span>محل درج تصویر رسمی</span></div><b>مجوزهای تخصصی</b><small>تصویر مجوزهای مرتبط</small></div>
-    <div class="trust-slot"><div class="trust-logo-placeholder" data-image-slot="partners"><span>محل درج تصویر رسمی</span></div><b>شرکای مالی و تجاری</b><small>لوگوی همکاران دارای قرارداد</small></div>
+<section class="hero" aria-label="دسته‌بندی‌های ویژه">
+ <div class="hero-slides" id="heroSlides">
+  <article class="hero-slide active" data-slide="0" style="--slide-image:url('https://images.unsplash.com/photo-1511706235224-4c6b1e7a7c2e?auto=format&fit=crop&w=2000&q=88')">
+   <div class="hero-shade"></div><div class="wrap hero-content">
+    <div class="hero-copy"><span class="hero-kicker"><i></i> انتخاب اول دنیای دیجیتال</span><h1>دنیای فناوری،<br><strong>نزدیک‌تر از همیشه</strong></h1><p>موبایل، تبلت، لپ‌تاپ و لوازم جانبی را با بررسی طرح‌های خرید اقساطی انتخاب کنید.</p><a class="hero-button" href="#categories">دیدن کالاهای دیجیتال <b>←</b></a></div>
+    <div class="hero-product-label"><span>۰۱</span><b>کالای دیجیتال</b><small>موبایل و تجهیزات هوشمند</small></div>
    </div>
-  </section>
+  </article>
+  <article class="hero-slide" data-slide="1" style="--slide-image:url('https://images.unsplash.com/photo-1600210492486-724fe5c67fb0?auto=format&fit=crop&w=2000&q=88')">
+   <div class="hero-shade"></div><div class="wrap hero-content">
+    <div class="hero-copy"><span class="hero-kicker"><i></i> خانه‌ای به سلیقه شما</span><h1>برای خانه‌ای زیباتر،<br><strong>انتخاب‌های بیشتر</strong></h1><p>لوازم خانه و آشپزخانه را متناسب با نیاز و بودجه خود بررسی و انتخاب کنید.</p><a class="hero-button" href="#categories">دیدن لوازم خانه <b>←</b></a></div>
+    <div class="hero-product-label"><span>۰۲</span><b>خانه و آشپزخانه</b><small>لوازم کاربردی و دکوراسیون</small></div>
+   </div>
+  </article>
+  <article class="hero-slide" data-slide="2" style="--slide-image:url('https://images.unsplash.com/photo-1503376780353-7e6692767b70?auto=format&fit=crop&w=2000&q=88')">
+   <div class="hero-shade"></div><div class="wrap hero-content">
+    <div class="hero-copy"><span class="hero-kicker"><i></i> مسیر تازه برای انتخاب خودرو</span><h1>حرکت به سوی انتخاب بهتر،<br><strong>با شرایط منعطف</strong></h1><p>طرح‌های مرتبط با خرید خودرو را ببینید و جزئیات هر طرح را با دقت مقایسه کنید.</p><a class="hero-button" href="#categories">بررسی گروه خودرو <b>←</b></a></div>
+    <div class="hero-product-label"><span>۰۳</span><b>خودرو</b><small>طرح‌های خرید و خدمات خودرو</small></div>
+   </div>
+  </article>
+  <article class="hero-slide" data-slide="3" style="--slide-image:url('https://images.unsplash.com/photo-1558981806-ec527fa84c39?auto=format&fit=crop&w=2000&q=88')">
+   <div class="hero-shade"></div><div class="wrap hero-content">
+    <div class="hero-copy"><span class="hero-kicker"><i></i> آزادی در انتخاب و حرکت</span><h1>شروع یک مسیر تازه،<br><strong>با موتورسیکلت دلخواه</strong></h1><p>مدل‌های مختلف موتورسیکلت و شرایط طرح‌های خرید را در یک مسیر ساده بررسی کنید.</p><a class="hero-button" href="#categories">دیدن موتورسیکلت‌ها <b>←</b></a></div>
+    <div class="hero-product-label"><span>۰۴</span><b>موتورسیکلت</b><small>انتخاب مدل متناسب با شما</small></div>
+   </div>
+  </article>
+ </div>
+ <div class="wrap hero-bottom">
+  <div class="hero-dots" id="heroDots" aria-label="انتخاب اسلاید">
+   <button class="active" data-go="0" aria-label="اسلاید کالای دیجیتال"></button><button data-go="1" aria-label="اسلاید لوازم خانه"></button><button data-go="2" aria-label="اسلاید خودرو"></button><button data-go="3" aria-label="اسلاید موتورسیکلت"></button>
+  </div>
+  <div class="hero-arrows"><button id="heroPrev" aria-label="اسلاید قبلی">→</button><button id="heroNext" aria-label="اسلاید بعدی">←</button></div>
+  <span class="hero-counter" id="heroCounter">۰۱ <i>/</i> ۰۴</span>
+ </div>
+</section>
+
+<section class="trust-strip">
+ <div class="wrap trust-strip-inner">
+  <div><span class="strip-icon">✓</span><span><b>انتخاب آگاهانه</b><small>مقایسه شرایط پیش از خرید</small></span></div>
+  <div><span class="strip-icon">⌁</span><span><b>فرایند شفاف</b><small>مشاهده جزئیات هر طرح</small></span></div>
+  <div><span class="strip-icon">◷</span><span><b>پیگیری درخواست</b><small>از حساب کاربری</small></span></div>
+  <div><span class="strip-icon">◇</span><span><b>تنوع کالا و خدمات</b><small>از دیجیتال تا خانه و خودرو</small></span></div>
+ </div>
+</section>
+
+<section class="section categories-section" id="categories">
+ <div class="wrap">
+  <div class="section-heading"><div><span class="section-eyebrow">انتخاب از میان گروه‌ها</span><h2>دسته‌بندی کالاها</h2><p>برای شروع، گروه کالایی موردنظرتان را انتخاب کنید.</p></div><a class="text-link" href="#plans">مشاهده طرح‌های خرید <b>←</b></a></div>
+  <div class="category-grid">
+   <a class="category-card category-large" href="#plans"><img src="https://images.unsplash.com/photo-1511706235224-4c6b1e7a7c2e?auto=format&fit=crop&w=1000&q=85" alt="گوشی هوشمند و کالای دیجیتال" loading="lazy"><span class="category-overlay"></span><span class="category-content"><small>فناوری و ارتباطات</small><b>کالای دیجیتال</b><em>موبایل، تبلت و لپ‌تاپ <i>←</i></em></span></a>
+   <a class="category-card" href="#plans"><img src="https://images.unsplash.com/photo-1600210492486-724fe5c67fb0?auto=format&fit=crop&w=900&q=85" alt="چیدمان و لوازم خانه" loading="lazy"><span class="category-overlay"></span><span class="category-content"><small>خانه و زندگی</small><b>لوازم خانه</b><em>لوازم منزل و آشپزخانه <i>←</i></em></span></a>
+   <a class="category-card" href="#plans"><img src="https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=900&q=85" alt="ساعت هوشمند" loading="lazy"><span class="category-overlay"></span><span class="category-content"><small>سبک زندگی هوشمند</small><b>ساعت و پوشیدنی</b><em>ساعت هوشمند و گجت <i>←</i></em></span></a>
+   <a class="category-card" href="#plans"><img src="https://images.unsplash.com/photo-1503376780353-7e6692767b70?auto=format&fit=crop&w=900&q=85" alt="خودرو" loading="lazy"><span class="category-overlay"></span><span class="category-content"><small>رانندگی و سفر</small><b>خودرو</b><em>طرح‌های مرتبط با خودرو <i>←</i></em></span></a>
+   <a class="category-card" href="#plans"><img src="https://images.unsplash.com/photo-1558981806-ec527fa84c39?auto=format&fit=crop&w=900&q=85" alt="موتورسیکلت" loading="lazy"><span class="category-overlay"></span><span class="category-content"><small>حرکت و ماجراجویی</small><b>موتورسیکلت</b><em>مدل‌های متنوع موتور <i>←</i></em></span></a>
+  </div>
+ </div>
+</section>
+
+<section class="plans-section" id="plans">
+ <div class="wrap plans-layout">
+  <div class="plans-intro"><span class="section-eyebrow">مسیر خرید متناسب با شما</span><h2>طرح‌های خرید<br><strong>اقساطی دیجی‌بایل</strong></h2><p>شرایط هر طرح را جداگانه ببینید، جزئیات هزینه‌ها را بررسی کنید و بعد تصمیم بگیرید.</p><a class="outline-link" href="/login.html">ورود و مشاهده طرح‌ها <b>←</b></a></div>
+  <div class="plan-cards">
+   <article class="plan-card"><div class="plan-image"><img src="https://images.unsplash.com/photo-1511706235224-4c6b1e7a7c2e?auto=format&fit=crop&w=700&q=82" alt="گوشی و کالای دیجیتال" loading="lazy"><span>فناوری</span></div><div class="plan-body"><h3>موبایل و کالای دیجیتال</h3><p>گوشی، تبلت، لپ‌تاپ و تجهیزات جانبی</p><a href="/login.html">مشاهده شرایط <b>←</b></a></div></article>
+   <article class="plan-card"><div class="plan-image"><img src="https://images.unsplash.com/photo-1600210492486-724fe5c67fb0?auto=format&fit=crop&w=700&q=82" alt="لوازم خانگی" loading="lazy"><span>خانه</span></div><div class="plan-body"><h3>لوازم خانه و آشپزخانه</h3><p>انتخاب لوازم موردنیاز برای خانه</p><a href="/login.html">مشاهده شرایط <b>←</b></a></div></article>
+   <article class="plan-card"><div class="plan-image"><img src="https://images.unsplash.com/photo-1503376780353-7e6692767b70?auto=format&fit=crop&w=700&q=82" alt="خودرو" loading="lazy"><span>خودرو</span></div><div class="plan-body"><h3>خودرو و موتورسیکلت</h3><p>بررسی طرح‌های مرتبط با وسایل نقلیه</p><a href="/login.html">مشاهده شرایط <b>←</b></a></div></article>
+  </div>
+ </div>
+</section>
+
+<section class="calculator-section" id="calculator">
+ <div class="wrap calculator-layout">
+  <div class="calculator-copy"><span class="section-eyebrow">برآورد پیش از تصمیم</span><h2>قسط ماهانه را<br><strong>محاسبه کنید</strong></h2><p>مبلغ خرید، پیش‌پرداخت و تعداد اقساط را تغییر دهید تا یک برآورد اولیه از مبلغ هر قسط ببینید.</p><small>این محاسبه نمونه است و جایگزین شرایط و محاسبات رسمی طرح‌ها نیست.</small></div>
+  <div class="calc-card" aria-label="ماشین حساب اقساط">
+   <div class="calc-title"><span>ماشین‌حساب اقساط</span><small>محاسبه تقریبی</small></div>
+   <label for="purchase">مبلغ خرید</label><div class="calc-amount"><b id="purchaseText">۳۰٬۰۰۰٬۰۰۰</b><span>تومان</span></div>
+   <input id="purchase" type="range" min="5000000" max="200000000" step="1000000" value="30000000">
+   <div class="calc-fields">
+    <div class="calc-field"><label for="down">پیش‌پرداخت</label><b id="downText">۶٬۰۰۰٬۰۰۰ تومان</b><input id="down" type="range" min="0" max="80" step="5" value="20"></div>
+    <div class="calc-field"><label for="months">مدت بازپرداخت</label><select id="months"><option value="۶">۶ ماه</option><option value="۱۲" selected>۱۲ ماه</option><option value="۱۸">۱۸ ماه</option><option value="۲۴">۲۴ ماه</option></select></div>
+   </div>
+   <div class="calc-summary"><div><small>مبلغ تقریبی هر قسط</small><b id="monthly">۲٬۰۰۰٬۰۰۰ تومان</b></div><div><small>مانده پس از پیش‌پرداخت</small><b id="remaining">۲۴٬۰۰۰٬۰۰۰ تومان</b></div></div>
+   <a class="calc-action" href="/login.html">شروع ثبت درخواست <b>←</b></a>
+  </div>
+ </div>
+</section>
+
+<section class="steps-section" id="steps">
+ <div class="wrap"><div class="section-heading centered"><div><span class="section-eyebrow">شروع تا پایان، در چند گام</span><h2>فرایند استفاده از دیجی‌بایل</h2><p>مسیر درخواست و بررسی را مرحله‌به‌مرحله دنبال کنید.</p></div></div>
+ <div class="steps-grid"><div class="step-item"><span>۰۱</span><b>انتخاب گروه کالا</b><small>دسته‌بندی و طرح موردنظر را انتخاب کنید.</small></div><div class="step-item"><span>۰۲</span><b>بررسی شرایط</b><small>مبلغ، پیش‌پرداخت و جزئیات را بخوانید.</small></div><div class="step-item"><span>۰۳</span><b>ثبت درخواست</b><small>از حساب کاربری درخواست خود را ثبت کنید.</small></div><div class="step-item"><span>۰۴</span><b>پیگیری نتیجه</b><small>وضعیت درخواست را در پنل دنبال کنید.</small></div></div>
+ </div>
+</section>
+
+<section class="faq-section" id="faq">
+ <div class="wrap faq-layout"><div class="faq-intro"><span class="section-eyebrow">پاسخ پرسش‌های شما</span><h2>سؤالات<br><strong>متداول</strong></h2><p>پاسخ پرسش‌های رایج درباره انتخاب طرح و ثبت درخواست.</p></div><div class="faq-list">
+  <details><summary>چطور طرح مناسب خودم را پیدا کنم؟</summary><p>گروه کالایی موردنظر را انتخاب کنید و شرایط، مبلغ پیش‌پرداخت، تعداد اقساط و هزینه‌های اعلام‌شده هر طرح را مقایسه کنید.</p></details>
+  <details><summary>مبلغ ماشین‌حساب قطعی است؟</summary><p>خیر. این مبلغ یک برآورد ساده است و کارمزد، هزینه خدمات و شرایط اختصاصی هر طرح را شامل نمی‌شود.</p></details>
+  <details><summary>چطور درخواست خرید اقساطی ثبت کنم؟</summary><p>از طریق ورود به حساب کاربری، طرح موردنظر را انتخاب و مراحل ثبت درخواست و مدارک را تکمیل کنید.</p></details>
+  <details><summary>وضعیت درخواست را از کجا پیگیری کنم؟</summary><p>پس از ورود به حساب کاربری، بخش درخواست‌ها و پیگیری را مشاهده کنید.</p></details>
  </div></div>
- <div class="footer-legal"><div class="wrap footer-legal-inner"><span>© کلیه حقوق این وب‌سایت برای دیجی‌بایل محفوظ است.</span><div><a href="#">حریم خصوصی</a><a href="#">شرایط استفاده</a><a href="#">قوانین و مقررات</a></div><span class="footer-credit">طراحی و توسعه دیجی‌بایل</span></div></div>
+</section>
+</main>
+
+<footer class="footer" id="footer">
+ <div class="footer-top"><div class="wrap footer-top-inner"><div><span class="footer-overline">دیجی‌بایل، همراه انتخاب‌های هوشمند</span><h2>برای خرید بعدی‌تان،<br><strong>با آگاهی بیشتر انتخاب کنید.</strong></h2><p>دسته‌بندی‌ها و شرایط طرح‌ها را ببینید و با اطلاعات روشن تصمیم بگیرید.</p></div><a href="/login.html" class="footer-top-button">ورود به حساب کاربری <b>←</b></a></div></div>
+ <div class="wrap footer-main">
+  <div class="footer-about"><a class="footer-logo" href="/"><span class="brand-mark">d<span>b</span></span><span><b>دیجی‌بایل</b><small>خرید هوشمند، پرداخت آسان</small></span></a><p>دیجی‌بایل بستری برای معرفی گروه‌های کالایی، مشاهده طرح‌های خرید اقساطی و پیگیری درخواست کاربران است. شرایط و جزئیات هر طرح در صفحه اختصاصی آن اعلام می‌شود.</p></div>
+  <div class="footer-column"><h3>دسترسی سریع</h3><a href="/">صفحه اصلی</a><a href="#categories">دسته‌بندی کالاها</a><a href="#plans">طرح‌های خرید اقساطی</a><a href="#steps">راهنمای خرید</a></div>
+  <div class="footer-column"><h3>راهنما و پشتیبانی</h3><a href="#faq">سؤالات متداول</a><a href="/login.html">ورود کاربران</a><a href="/login.html">پیگیری درخواست</a><a href="/login.html">ثبت درخواست</a></div>
+  <div class="footer-contact"><h3>ارتباط و پیگیری</h3><p>برای مشاهده مسیرهای ارتباطی و پیگیری درخواست، وارد حساب کاربری خود شوید.</p><a href="/login.html" class="footer-contact-link">ورود به بخش پشتیبانی <b>←</b></a></div>
+  <div class="footer-bottom"><span>© تمامی حقوق این وب‌سایت متعلق به دیجی‌بایل است.</span><div><a href="#faq">پرسش‌های متداول</a><a href="#footer">حریم خصوصی</a><a href="#footer">شرایط استفاده</a></div><span class="footer-made">طراحی‌شده برای تجربه‌ای ساده‌تر</span></div>
+ </div>
 </footer>
+
 <script>
 (function(){
- const money=n=>Math.round(n).toLocaleString('fa-IR');
+ const faDigits='۰۱۲۳۴۵۶۷۸۹';
+ const faNumber=n=>Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g,'٬').replace(/\d/g,d=>faDigits[Number(d)]);
  const purchase=document.getElementById('purchase'),down=document.getElementById('down'),months=document.getElementById('months');
- function calc(){const p=Number(purchase.value),d=Number(down.value),remain=p*(1-d/100),m=Number(months.value);document.getElementById('purchaseText').textContent=money(p);document.getElementById('downText').textContent=money(p*d/100)+' تومان';document.getElementById('remaining').textContent=money(remain)+' تومان';document.getElementById('monthly').textContent=money(remain/m)+' تومان';}
+ function calc(){
+  const p=Number(purchase.value),d=Number(down.value),remain=p*(1-d/100);
+  const m=Number(months.value.replace(/[۰-۹]/g,x=>String(faDigits.indexOf(x))));
+  document.getElementById('purchaseText').textContent=faNumber(p);
+  document.getElementById('downText').textContent=faNumber(p*d/100)+' تومان';
+  document.getElementById('remaining').textContent=faNumber(remain)+' تومان';
+  document.getElementById('monthly').textContent=faNumber(remain/m)+' تومان';
+ }
  [purchase,down,months].forEach(el=>el.addEventListener('input',calc));calc();
- const toggle=document.getElementById('hamb'),nav=document.getElementById('navlinks');toggle.addEventListener('click',()=>{nav.style.display=nav.style.display==='flex'?'none':'flex';nav.style.position='absolute';nav.style.top='64px';nav.style.right='14px';nav.style.left='14px';nav.style.padding='14px';nav.style.background='#fff';nav.style.boxShadow='0 12px 30px #173e6322';nav.style.borderRadius='12px';nav.style.flexDirection='column';nav.style.alignItems='stretch';});
+ const slides=[...document.querySelectorAll('.hero-slide')],dots=[...document.querySelectorAll('.hero-dots button')],counter=document.getElementById('heroCounter');
+ let active=0,timer;
+ function showSlide(index){active=(index+slides.length)%slides.length;slides.forEach((s,i)=>s.classList.toggle('active',i===active));dots.forEach((d,i)=>d.classList.toggle('active',i===active));counter.textContent=faNumber(active+1)+' / '+faNumber(slides.length); }
+ function restart(){clearInterval(timer);timer=setInterval(()=>showSlide(active+1),6500);}
+ dots.forEach(d=>d.addEventListener('click',()=>{showSlide(Number(d.dataset.go));restart();}));
+ document.getElementById('heroNext').addEventListener('click',()=>{showSlide(active+1);restart();});
+ document.getElementById('heroPrev').addEventListener('click',()=>{showSlide(active-1);restart();});
+ showSlide(0);restart();
+ const toggle=document.getElementById('hamb'),nav=document.getElementById('navlinks');
+ toggle.addEventListener('click',()=>nav.classList.toggle('open'));
+ nav.querySelectorAll('a').forEach(a=>a.addEventListener('click',()=>nav.classList.remove('open')));
  const login=document.getElementById('accountLink'),admin=document.getElementById('adminPanelLink');
- fetch('/api/v1/security/me',{credentials:'same-origin',headers:{'Accept':'application/json','Cache-Control':'no-cache'}}).then(r=>r.ok?r.json():null).then(payload=>{if(!payload)return;const user=payload.data||payload;const roles=Array.isArray(user.roles)?user.roles:[];login.textContent=String(user.fullName||user.username||user.phone||'حساب کاربری');if(roles.some(x=>['admin','superadmin'].includes(String(x).toLowerCase())))admin.hidden=false;}).catch(()=>{});
+ fetch('/api/v1/security/me',{credentials:'same-origin',headers:{'Accept':'application/json','Cache-Control':'no-cache'}})
+ .then(r=>r.ok?r.json():null).then(payload=>{if(!payload)return;const user=payload.data||payload;const roles=Array.isArray(user.roles)?user.roles:[];login.textContent=String(user.fullName||user.username||user.phone||'حساب کاربری');if(roles.some(x=>['admin','superadmin'].includes(String(x).toLowerCase())))admin.hidden=false;}).catch(()=>{});
 })();
 </script>
-</body></html>
+</body>
+</html>
