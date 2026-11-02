@@ -42,6 +42,14 @@ jobs:
               $D exec "$CID" sh -lc 'for role in postgres platform naf_user digibail_app digibail naf_admin root admin; do if psql -U "$role" -d postgres -Atc "SELECT current_user" >/dev/null 2>&1; then echo "ROLE_FOUND=$role"; psql -U "$role" -d postgres -Atc "SELECT rolname,rolsuper,rolcanlogin FROM pg_roles ORDER BY rolname;"; psql -U "$role" -d postgres -Atc "SELECT datname FROM pg_database WHERE datallowconn ORDER BY datname;"; exit 0; fi; done; echo NO_KNOWN_LOCAL_ROLE_AUTHENTICATED; exit 0'
               echo "=== LIVE DATABASE CONTENT CHECK (READ ONLY) ==="
               $D exec "$CID" sh -lc 'psql -U digibail_app -d digibail_prod -Atc "SELECT current_database(); SELECT COUNT(*) FROM pg_tables; SELECT COUNT(*) FROM users;"' || echo "LIVE_DATABASE_CONTENT_CHECK_FAILED"
+              echo "=== CHECK WHETHER CURRENT ENV PASSWORD MATCHES EXISTING APP ROLE (READ ONLY) ==="
+              CURRENT_PASS="$(sed -n 's/^POSTGRES_PASSWORD=//p' .env | head -n 1)"
+              if [ -n "$CURRENT_PASS" ] && $D exec -e PGPASSWORD="$CURRENT_PASS" "$CID" sh -lc 'psql -h 127.0.0.1 -U digibail_app -d digibail_prod -Atc "SELECT 1"' >/dev/null 2>&1; then
+                echo "CURRENT_ENV_PASSWORD_MATCHES_EXISTING_ROLE=1"
+              else
+                echo "CURRENT_ENV_PASSWORD_MATCHES_EXISTING_ROLE=0"
+              fi
+              unset CURRENT_PASS
               echo "=== CONFIGURED ROLE READ ONLY ==="
               $D exec "$CID" sh -lc 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Atc "SELECT current_user,current_database();"' || echo "CONFIGURED_ROLE_LOGIN_FAILED"
               echo "=== APPLICATION URL ROLE READ ONLY ==="
