@@ -126,6 +126,13 @@ jobs:
             --exclude='index.php' --exclude='expert.php' --exclude='admin.php' \
             php/public/ "$DEPLOY_USER@$DEPLOY_HOST:$PUBLIC_ROOT/"
 
+          # Refresh the homepage stylesheet without replacing unrelated public assets.
+          ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes "$DEPLOY_USER@$DEPLOY_HOST" \
+            "mkdir -p '$PUBLIC_ROOT/assets' '$BACKUP_ROOT/public_html/assets'"
+          rsync -az --no-owner --no-group --backup --backup-dir="$BACKUP_ROOT/public_html/assets" \
+            -e "ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes" \
+            php/public/assets/home-reference.css "$DEPLOY_USER@$DEPLOY_HOST:$PUBLIC_ROOT/assets/"
+
           ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes "$DEPLOY_USER@$DEPLOY_HOST" \
             "set -eu
              if [ -e '$PUBLIC_ROOT/index.php' ] || [ -L '$PUBLIC_ROOT/index.php' ]; then
