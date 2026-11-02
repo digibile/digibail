@@ -57,4 +57,68 @@ jobs:
             else
               echo "HOST_MYSQL_SOCKET_UNAVAILABLE=1"
             fi
+
+            echo "=== READ-ONLY LOAN PLAN RECONCILIATION INVENTORY ==="
+            cat > /tmp/digibail-plan-readonly-inspect.php <<'PHP'
+            <?php
+            declare(strict_types=1);
+            $env = [];
+            foreach (file('/home/digibail/domains/digebail.ir/php_app/.env', FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [] as $line) {
+                $line = trim($line);
+                if ($line === '' || $line[0] === '#' || !str_contains($line, '=')) continue;
+                [$key, $value] = explode('=', $line, 2);
+                $env[trim($key)] = trim(trim($value), "'\" ");
+            }
+            $password = '';
+            if (!empty($env['DB_PASSWORD_B64'])) {
+                $decoded = base64_decode($env['DB_PASSWORD_B64'], true);
+                if (is_string($decoded)) $password = $decoded;
+            }
+            if ($password === '') $password = (string)($env['DB_PASSWORD'] ?? '');
+            $database = (string)($env['DB_NAME'] ?? '');
+            $user = (string)($env['DB_USER'] ?? '');
+            if ($database === '' || $user === '') throw new RuntimeException('PHP database settings incomplete.');
+            $socket = (string)($env['DB_SOCKET'] ?? '');
+            $dsn = ($socket !== '' && file_exists($socket))
+                ? "mysql:unix_socket={$socket};dbname={$database};charset=utf8mb4"
+                : sprintf('mysql:host=%s;port=%d;dbname=%s;charset=utf8mb4', (string)($env['DB_HOST'] ?? 'localhost'), (int)($env['DB_PORT'] ?? 3306), $database);
+            $pdo = new PDO($dsn, $user, $password, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC, PDO::ATTR_EMULATE_PREPARES => false, PDO::ATTR_TIMEOUT => 10]);
+            $pdo->exec('SET SESSION TRANSACTION READ ONLY');
+            $pdo->beginTransaction();
+            echo "PLAN_AUDIT_DATABASE={$database}\n";
+            $tables = $pdo->query("SELECT TABLE_NAME FROM information_schema.tables WHERE table_schema=DATABASE() AND table_type='BASE TABLE'")->fetchAll(PDO::FETCH_COLUMN);
+            $map = [];
+            foreach ($tables as $table) $map[strtolower((string)$table)] = (string)$table;
+            foreach (['Loans', 'LoanProducts', 'Tenants'] as $wanted) {
+                $actual = $map[strtolower($wanted)] ?? null;
+                if ($actual === null) { echo "PLAN_TABLE_{$wanted}=MISSING\n"; continue; }
+                if (preg_match('/^[A-Za-z0-9_]+$/D', $actual) !== 1) throw new RuntimeException('Unexpected table identifier.');
+                $count = (int)$pdo->query("SELECT COUNT(*) FROM {$actual}")->fetchColumn();
+                echo "PLAN_TABLE_{$wanted}={$actual}\nPLAN_ROWS_{$wanted}={$count}\n";
+                $columns = $pdo->prepare('SELECT COLUMN_NAME FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name=? ORDER BY ORDINAL_POSITION');
+                $columns->execute([$actual]);
+                $names = array_map('strval', $columns->fetchAll(PDO::FETCH_COLUMN));
+                echo "PLAN_COLUMNS_{$wanted}=" . implode(',', $names) . "\n";
+                if ($wanted !== 'Tenants') {
+                    $safe = ['Id','Title','Name','LoanName','PlanName','Slug','Description','MinAmount','MaxAmount','Amount','InterestPercent','ProfitPercent','InterestMethod','LateDailyCoef','EarlyDailyCoef','IntervalDays','InstallmentCount','AllowedInstallments','MaxMonthGap','IsActive','Disable','IncludePlan','ShowInList','SendReminders','SortOrder','CreatedOn'];
+                    $selected = array_values(array_filter($safe, static fn(string $c): bool => in_array($c, $names, true)));
+                    if ($selected !== []) {
+                        $fields = implode(', ', $selected);
+                        $order = in_array('Id', $selected, true) ? ' ORDER BY Id' : '';
+                        $rows = $pdo->query("SELECT {$fields} FROM {$actual}{$order} LIMIT 15")->fetchAll();
+                        echo "PLAN_SAMPLE_{$wanted}=" . json_encode($rows, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR) . "\n";
+                    }
+                } else {
+                    $safe = array_values(array_filter(['Name','Slug','IsDefault','IsActive'], static fn(string $c): bool => in_array($c, $names, true)));
+                    if ($safe !== []) {
+                        $fields = implode(', ', $safe);
+                        echo "PLAN_TENANT_SUMMARY=" . json_encode($pdo->query("SELECT {$fields} FROM {$actual}")->fetchAll(), JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR) . "\n";
+                    }
+                }
+            }
+            $pdo->commit();
+            echo "PLAN_AUDIT_READ_ONLY=1\nPLAN_AUDIT_NO_DATA_CHANGES=1\n";
+            PHP
+            /usr/local/php83/bin/php /tmp/digibail-plan-readonly-inspect.php
+            rm -f /tmp/digibail-plan-readonly-inspect.php
             echo "PHP_TARGET_INSPECTION_COMPLETE=1"
