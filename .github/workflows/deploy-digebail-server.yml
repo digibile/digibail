@@ -65,7 +65,7 @@ jobs:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
-          envs: MYSQL_PASS
+          envs: MYSQL_PASS,GITHUB_DEPLOY_TOKEN
           script: |
             set -eu
             ROOT="/home/digibail/domains/digebail.ir"
