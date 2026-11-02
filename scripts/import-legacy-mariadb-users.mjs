@@ -46,7 +46,7 @@ const sets=[
     users:"OnlineMoneyTransfer__AspNetUsers",
     roles:"OnlineMoneyTransfer__AspNetRoles",
     links:"OnlineMoneyTransfer__AspNetUserRoles",
-    phone:"CASE WHEN u.PhoneNumber REGEXP '^9[0-9]{9}
+    phone:"CASE WHEN u.PhoneNumber REGEXP '^9[0-9]{9}$' THEN CONCAT('0',u.PhoneNumber) ELSE u.PhoneNumber END",
     customerId:"NULL",
     agentId:"NULL",
     created:"NULL",
