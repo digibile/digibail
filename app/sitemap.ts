@@ -2,6 +2,8 @@ import type { MetadataRoute } from "next";
 
 type PublicPlan = { id?: string };
 const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || "https://digebail.ir").replace(/\/$/, "");
+const apiBase = (process.env.LEGACY_API_BASE_URL || `http://127.0.0.1:${process.env.LEGACY_PORT || "1632"}`).replace(/\/$/, "");
+export const dynamic = "force-dynamic";
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const now = new Date();
@@ -13,7 +15,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   ];
 
   try {
-    const response = await fetch(`${siteUrl}/api/v1/loan-products`, { next: { revalidate: 300 } });
+    const response = await fetch(`${apiBase}/api/v1/loan-products`, { cache: "no-store" });
     if (response.ok) {
       const payload = await response.json();
       const plans: PublicPlan[] = Array.isArray(payload) ? payload : Array.isArray(payload?.data) ? payload.data : [];
