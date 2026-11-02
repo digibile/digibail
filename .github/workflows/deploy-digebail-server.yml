@@ -61,11 +61,12 @@ jobs:
         env:
           MYSQL_PASS: ${{ secrets.VAMCITY_MYSQL_PASSWORD }}
           GITHUB_DEPLOY_TOKEN: ${{ secrets.GITHUB_DEPLOY_TOKEN }}
+          SOURCE_COMMIT: ${{ github.sha }}
         with:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
-          envs: MYSQL_PASS,GITHUB_DEPLOY_TOKEN
+          envs: MYSQL_PASS,GITHUB_DEPLOY_TOKEN,SOURCE_COMMIT
           script: |
             set -eu
             ROOT="/home/digibail/domains/digebail.ir"
@@ -176,8 +177,8 @@ jobs:
             # existing deployment workflow. Never print or expose the token to the browser.
             grep -vE '^(DEPLOY_COMMIT_SHA|APP_VERSION|GITHUB_DEPLOY_TOKEN)=' .env > .env.release.tmp || true
             {
-              printf 'DEPLOY_COMMIT_SHA=%s\n' "$GITHUB_SHA"
-              printf 'APP_VERSION=1.1.0\n'
+              printf 'DEPLOY_COMMIT_SHA=%s\n' "$SOURCE_COMMIT"
+              printf 'APP_VERSION=1.2.0\n'
               if [ -n "${GITHUB_DEPLOY_TOKEN:-}" ]; then
                 printf 'GITHUB_DEPLOY_TOKEN=%s\n' "$GITHUB_DEPLOY_TOKEN"
               fi
