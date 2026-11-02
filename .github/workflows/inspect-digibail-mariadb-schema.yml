@@ -16,7 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
-      - name: Locate authorized MySQL credentials without printing secrets
+      - name: Read app DB credentials privately and export schema only
         uses: appleboy/ssh-action@v1.2.2
         with:
           host: ${{ secrets.DEPLOY_HOST }}
@@ -28,51 +28,84 @@ jobs:
             DB='digibail_vamcitydigibilepay'
             echo "=== SSH ACCOUNT ==="
             id
-            echo "HOME=$HOME"
-            echo "=== DIRECTADMIN MYSQL CONFIG FILES (PATHS AND PERMISSIONS ONLY) ==="
-            for f in /usr/local/directadmin/conf/mysql.conf /usr/local/directadmin/data/users/digibail/mysql.conf /home/digibail/.my.cnf /root/.my.cnf /etc/mysql/debian.cnf; do
-              if [ -e "$f" ]; then ls -l "$f"; else echo "MISSING=$f"; fi
+            echo "=== CONFIG FILES ==="
+            for f in "$HOME/domains/digebail.ir/php_app/.env" "$HOME/domains/digebail.ir/.env" "$HOME/domains/digebail.ir/database/migration/config.php"; do
+              if [ -r "$f" ]; then echo "READABLE=$f"; else echo "NOT_READABLE=$f"; fi
             done
-            echo "=== POSSIBLE DATABASE CONFIG FILE PATHS (NO CONTENTS) ==="
-            find /home/digibail -maxdepth 6 -type f \( -name '.my.cnf' -o -name '.env' -o -name 'database.php' -o -name 'config.php' -o -name 'wp-config.php' -o -name 'settings.php' \) -printf '%m %u %p\n' 2>/dev/null | head -100
-            echo "=== DIRECTADMIN USER FILES (NAMES ONLY) ==="
-            find /usr/local/directadmin/data/users/digibail -maxdepth 2 -type f -printf '%m %u %p\n' 2>/dev/null | grep -Ei 'mysql|database|user' | head -100 || true
 
-            MYSQL=''
-            DUMP=''
-            for cnf in /usr/local/directadmin/conf/mysql.conf /usr/local/directadmin/data/users/digibail/mysql.conf /home/digibail/.my.cnf /root/.my.cnf /etc/mysql/debian.cnf; do
-              if [ -r "$cnf" ] && mysql --defaults-extra-file="$cnf" --protocol=socket -NBe "SELECT 1" >/dev/null 2>&1; then
-                MYSQL="mysql --defaults-extra-file=$cnf --protocol=socket"
-                DUMP="mysqldump --defaults-extra-file=$cnf --protocol=socket"
-                echo "MYSQL_AUTH_SOURCE=$cnf"
-                break
-              fi
-            done
-            if [ -z "$MYSQL" ] && command -v sudo >/dev/null 2>&1 && sudo -n mysql --protocol=socket -NBe "SELECT 1" >/dev/null 2>&1; then
-              MYSQL='sudo -n mysql --protocol=socket'
-              DUMP='sudo -n mysqldump --protocol=socket'
-              echo "MYSQL_AUTH_SOURCE=sudo_socket"
-            fi
-            if [ -z "$MYSQL" ]; then
-              echo "MYSQL_PRIVILEGED_AUTH_NOT_FOUND"
-              exit 31
-            fi
-            echo "=== DATABASE EXISTS ==="
-            EXISTS="$($MYSQL -NBe "SELECT SCHEMA_NAME FROM information_schema.SCHEMATA WHERE SCHEMA_NAME='$DB'")"
+            python3 - <<'PY'
+            from pathlib import Path
+            from urllib.parse import urlparse, unquote
+            import os, re
+            home = Path.home()
+            files = [
+                home / "domains/digebail.ir/php_app/.env",
+                home / "domains/digebail.ir/.env",
+            ]
+            data = {}
+            for path in files:
+                if not path.is_file() or not os.access(path, os.R_OK):
+                    continue
+                for raw in path.read_text(errors="ignore").splitlines():
+                    line = raw.strip()
+                    if not line or line.startswith("#") or "=" not in line:
+                        continue
+                    k, v = line.split("=", 1)
+                    k = k.strip()
+                    v = v.strip().strip('"').strip("'")
+                    if k and v:
+                        data[k] = v
+            url = data.get("DATABASE_URL") or data.get("MYSQL_URL")
+            if url:
+                u = urlparse(url)
+                data.setdefault("DB_HOST", u.hostname or "localhost")
+                data.setdefault("DB_PORT", str(u.port or 3306))
+                data.setdefault("DB_DATABASE", u.path.lstrip("/"))
+                data.setdefault("DB_USERNAME", unquote(u.username or ""))
+                data.setdefault("DB_PASSWORD", unquote(u.password or ""))
+            def pick(*keys):
+                for key in keys:
+                    if data.get(key):
+                        return data[key]
+                return ""
+            user = pick("DB_USERNAME", "DB_USER", "MYSQL_USER", "DATABASE_USER")
+            password = pick("DB_PASSWORD", "DB_PASS", "MYSQL_PASSWORD", "DATABASE_PASSWORD")
+            host = pick("DB_HOST", "MYSQL_HOST", "DATABASE_HOST") or "localhost"
+            port = pick("DB_PORT", "MYSQL_PORT", "DATABASE_PORT") or "3306"
+            db = pick("DB_DATABASE", "DB_NAME", "MYSQL_DATABASE", "DATABASE_NAME")
+            print("ENV_KEYS_FOUND=" + ",".join(sorted(k for k in data if any(t in k for t in ("DB_", "MYSQL_", "DATABASE_")))))
+            print("DB_USER_FOUND=" + str(bool(user)))
+            print("DB_PASSWORD_FOUND=" + str(bool(password)))
+            print("DB_HOST=" + host)
+            print("DB_NAME_FROM_CONFIG=" + db)
+            if not user or not password:
+                raise SystemExit("APP_MYSQL_CREDENTIALS_NOT_FOUND")
+            cnf = Path("/tmp/digibail-mysql-inspect.cnf")
+            cnf.write_text("[client]\nuser=" + user.replace("\n","") + "\npassword=" + password.replace("\n","") + "\nhost=" + host + "\nport=" + port + "\n")
+            cnf.chmod(0o600)
+            PY
+
+            MYSQL_CNF='/tmp/digibail-mysql-inspect.cnf'
+            echo "=== MYSQL AUTH TEST ==="
+            mysql --defaults-extra-file="$MYSQL_CNF" -NBe "SELECT USER(), CURRENT_USER(), VERSION()"
+            echo "=== TARGET DATABASE EXISTS ==="
+            EXISTS="$(mysql --defaults-extra-file="$MYSQL_CNF" -NBe "SELECT SCHEMA_NAME FROM information_schema.SCHEMATA WHERE SCHEMA_NAME='$DB'")"
             if [ "$EXISTS" != "$DB" ]; then
               echo "DATABASE_NOT_FOUND=$DB"
-              $MYSQL -NBe "SELECT SCHEMA_NAME FROM information_schema.SCHEMATA ORDER BY SCHEMA_NAME"
+              echo "DATABASES_VISIBLE_TO_APP_USER:"
+              mysql --defaults-extra-file="$MYSQL_CNF" -NBe "SELECT SCHEMA_NAME FROM information_schema.SCHEMATA ORDER BY SCHEMA_NAME"
               exit 32
             fi
             echo "DATABASE_FOUND=$DB"
             echo "=== TABLE INVENTORY ==="
-            $MYSQL -NBe "SELECT TABLE_NAME, TABLE_TYPE, COALESCE(ENGINE,''), COALESCE(TABLE_ROWS,0) FROM information_schema.TABLES WHERE TABLE_SCHEMA='$DB' ORDER BY TABLE_NAME"
+            mysql --defaults-extra-file="$MYSQL_CNF" -NBe "SELECT TABLE_NAME, TABLE_TYPE, COALESCE(ENGINE,''), COALESCE(TABLE_ROWS,0) FROM information_schema.TABLES WHERE TABLE_SCHEMA='$DB' ORDER BY TABLE_NAME"
             echo "=== COLUMN INVENTORY ==="
-            $MYSQL -NBe "SELECT TABLE_NAME, ORDINAL_POSITION, COLUMN_NAME, COLUMN_TYPE, IS_NULLABLE, COALESCE(COLUMN_DEFAULT,''), EXTRA FROM information_schema.COLUMNS WHERE TABLE_SCHEMA='$DB' ORDER BY TABLE_NAME, ORDINAL_POSITION"
+            mysql --defaults-extra-file="$MYSQL_CNF" -NBe "SELECT TABLE_NAME, ORDINAL_POSITION, COLUMN_NAME, COLUMN_TYPE, IS_NULLABLE, COALESCE(COLUMN_DEFAULT,''), EXTRA FROM information_schema.COLUMNS WHERE TABLE_SCHEMA='$DB' ORDER BY TABLE_NAME, ORDINAL_POSITION"
             echo "=== INDEX INVENTORY ==="
-            $MYSQL -NBe "SELECT TABLE_NAME, INDEX_NAME, NON_UNIQUE, SEQ_IN_INDEX, COLUMN_NAME, INDEX_TYPE FROM information_schema.STATISTICS WHERE TABLE_SCHEMA='$DB' ORDER BY TABLE_NAME, INDEX_NAME, SEQ_IN_INDEX"
+            mysql --defaults-extra-file="$MYSQL_CNF" -NBe "SELECT TABLE_NAME, INDEX_NAME, NON_UNIQUE, SEQ_IN_INDEX, COLUMN_NAME, INDEX_TYPE FROM information_schema.STATISTICS WHERE TABLE_SCHEMA='$DB' ORDER BY TABLE_NAME, INDEX_NAME, SEQ_IN_INDEX"
             echo "=== FOREIGN KEY INVENTORY ==="
-            $MYSQL -NBe "SELECT TABLE_NAME, COLUMN_NAME, CONSTRAINT_NAME, REFERENCED_TABLE_NAME, REFERENCED_COLUMN_NAME FROM information_schema.KEY_COLUMN_USAGE WHERE TABLE_SCHEMA='$DB' AND REFERENCED_TABLE_NAME IS NOT NULL ORDER BY TABLE_NAME, CONSTRAINT_NAME, ORDINAL_POSITION"
+            mysql --defaults-extra-file="$MYSQL_CNF" -NBe "SELECT TABLE_NAME, COLUMN_NAME, CONSTRAINT_NAME, REFERENCED_TABLE_NAME, REFERENCED_COLUMN_NAME FROM information_schema.KEY_COLUMN_USAGE WHERE TABLE_SCHEMA='$DB' AND REFERENCED_TABLE_NAME IS NOT NULL ORDER BY TABLE_NAME, CONSTRAINT_NAME, ORDINAL_POSITION"
             echo "=== SCHEMA SQL DUMP (NO DATA) ==="
-            $DUMP --no-data --skip-comments --compact --no-tablespaces --routines --triggers --events "$DB"
+            mysqldump --defaults-extra-file="$MYSQL_CNF" --no-data --skip-comments --compact --no-tablespaces --routines --triggers --events "$DB"
+            rm -f "$MYSQL_CNF"
             echo "SCHEMA_ONLY_EXPORT_COMPLETE=1"
