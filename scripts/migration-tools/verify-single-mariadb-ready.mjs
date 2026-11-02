@@ -101,6 +101,37 @@ async function main(){
     );
     if(stored!==Number(row.imported_rows))throw new Error("Relational data mismatch for "+row.source_table+": manifest="+row.imported_rows+" stored="+stored);
   }
+  const [planSourceRows]=await db.query(
+    "SELECT source_table,COUNT(*) AS n FROM legacy_source_data WHERE source_table REGEXP '^vamcityc_vamcity_import_[0-9]{8}[.]dbo[.]Loans
+  console.log("DIGIBAIL_SINGLE_DATABASE_READY=PASS");
+  console.log("APPLICATION_TABLES_COPIED="+Number(transferDetails?.public_tables||0));
+  console.log("LEGACY_TABLE_MANIFESTS="+manifest);
+  console.log("IDENTITY_SOURCE_TABLES="+sources.length);
+  console.log("CUTOVER_COMPLETED_AT="+String(marker[0].completed_at||""));
+  console.log("CUTOVER_DETAILS="+JSON.stringify(details||{}));
+}
+main().catch(error=>{
+  console.error("DIGIBAIL_SINGLE_DATABASE_READY=FAIL "+String(error.message||error).slice(0,500));
+  process.exitCode=1;
+}).finally(()=>db.end().catch(()=>{}));
+ GROUP BY source_table ORDER BY source_table DESC LIMIT 1"
+  );
+  if(!planSourceRows.length)throw new Error("The original VamCity loan-plan source table is missing from MariaDB legacy_source_data.");
+  const planSource=String(planSourceRows[0].source_table);
+  const planSourceCount=Number(planSourceRows[0].n||0);
+  const planMapped=await count("SELECT COUNT(*) AS n FROM loan_products WHERE legacy_source_table=?",[planSource]);
+  const planState=await db.query(
+    "SELECT COUNT(*) AS total,SUM(is_active=1) AS active,SUM(show_in_list=1) AS listed,SUM(needs_review=1) AS needs_review FROM loan_products WHERE legacy_source_table=?",
+    [planSource]
+  );
+  const planCounts=planState[0][0]||{};
+  if(planSourceCount!==112||planMapped!==112||Number(planCounts.total)!==112) {
+    throw new Error("Loan-plan reconciliation failed: source="+planSourceCount+" mapped="+planMapped+" target="+Number(planCounts.total||0)+"; expected exactly 112 preserved plans.");
+  }
+  console.log("LOAN_PLANS_RECONCILED=PASS source="+planSource+" total="+planCounts.total+" active="+Number(planCounts.active||0)+" listed="+Number(planCounts.listed||0)+" needs_review="+Number(planCounts.needs_review||0));
+  if(Number(planCounts.active||0)!==112||Number(planCounts.listed||0)!==112) {
+    throw new Error("The 112 original loan plans are not all active and listed: active="+Number(planCounts.active||0)+" listed="+Number(planCounts.listed||0));
+  }
   const details=typeof marker[0].details==="string"?JSON.parse(marker[0].details):marker[0].details;
   console.log("DIGIBAIL_SINGLE_DATABASE_READY=PASS");
   console.log("APPLICATION_TABLES_COPIED="+Number(transferDetails?.public_tables||0));
