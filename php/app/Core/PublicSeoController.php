@@ -26,6 +26,7 @@ final class PublicSeoController
             if ($path === '/plans') return self::plans();
             if ($path === '/faq.html') return self::faq();
             if ($path === '/contact.html') return self::contact();
+            if ($path === '/privacy.html') return self::privacy();
             if (preg_match('#^/plans/([a-z0-9-]{2,40})$#D', $path, $match) === 1) {
                 return self::planDetail($match[1]);
             }
@@ -166,6 +167,17 @@ final class PublicSeoController
         return self::page('ارتباط با دیجی‌بایل | راهنمای پیگیری', 'راهنمای ورود امن و پیگیری درخواست‌های ثبت‌شده در حساب کاربری دیجی‌بایل.', '/contact.html', $body);
     }
 
+    private static function privacy(): Response
+    {
+        $body = '<main class="public-wrap"><section class="seo-hero"><span>اطلاع‌رسانی شفاف</span><h1>حریم خصوصی کاربران</h1><p>حفاظت از اطلاعات حساب و درخواست‌های کاربران، بخشی از فرایند استفاده از دیجی‌بایل است.</p></section>'
+            . '<section class="info-grid"><article class="info-card"><h2>چه اطلاعاتی پردازش می‌شود؟</h2><p>اطلاعاتی که برای ایجاد حساب، احراز هویت، ثبت و پیگیری درخواست یا ارائه خدمات لازم است، در سامانه پردازش می‌شود. فقط اطلاعات ضروری برای هر فرایند باید ثبت شود.</p></article>'
+            . '<article class="info-card"><h2>دسترسی به اطلاعات</h2><p>اطلاعات پرونده، مدارک و سوابق حساب در صفحات عمومی نمایش داده نمی‌شود. مشاهده بخش‌های اختصاصی مستلزم ورود و احراز هویت است و دسترسی مدیریتی تابع نقش کاربر است.</p></article>'
+            . '<article class="info-card"><h2>امنیت حساب</h2><p>برای حفاظت از حساب، سامانه از کنترل دسترسی، رمزنگاری اطلاعات احراز هویت و محدودسازی تلاش‌های ورود استفاده می‌کند. کاربران نیز باید رمز عبور و کدهای یک‌بارمصرف خود را محرمانه نگه دارند.</p></article>'
+            . '<article class="info-card"><h2>پیامک و خدمات بیرونی</h2><p>در صورت فعال بودن سرویس پیامکی، اطلاعات لازم برای ارسال پیام‌های احراز هویت یا اطلاع‌رسانی به ارائه‌دهنده همان سرویس منتقل می‌شود. اطلاعات محرمانه ورود را در اختیار اشخاص دیگر قرار ندهید.</p></article>'
+            . '<article class="info-card"><h2>درخواست اصلاح اطلاعات</h2><p>برای بررسی اطلاعات حساب یا درخواست‌های خود، پس از ورود به حساب کاربری از مسیرهای در دسترس همان حساب استفاده کنید. اطلاعات شخصی را در فرم‌ها یا پیام‌های عمومی ارسال نکنید.</p></article></section></main>';
+        return self::page('حریم خصوصی کاربران | دیجی‌بایل', 'اطلاع از نحوه پردازش اطلاعات حساب، احراز هویت و درخواست‌های کاربران در دیجی‌بایل.', '/privacy.html', $body);
+    }
+
     private static function robots(): Response
     {
         $body = "User-agent: *\nAllow: /\nAllow: /plans\nAllow: /plans/\nAllow: /faq.html\nAllow: /contact.html\nDisallow: /api/\nDisallow: /admin\nDisallow: /admin.php\nDisallow: /expert.php\nDisallow: /login.html\nDisallow: /register.html\nDisallow: /profile.html\nDisallow: /my/\nDisallow: /documents.html\nDisallow: /contracts.html\nSitemap: " . self::SITE . "/sitemap.xml\n";
@@ -174,7 +186,7 @@ final class PublicSeoController
 
     private static function sitemap(): Response
     {
-        $urls = [self::SITE . '/', self::SITE . '/plans', self::SITE . '/faq.html', self::SITE . '/contact.html'];
+        $urls = [self::SITE . '/', self::SITE . '/plans', self::SITE . '/faq.html', self::SITE . '/contact.html', self::SITE . '/privacy.html'];
         foreach (self::products() as $plan) $urls[] = self::SITE . '/plans/' . rawurlencode((string) $plan['id']);
         $xml = '<?xml version="1.0" encoding="UTF-8"?>' . "\n" . '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">';
         foreach (array_unique($urls) as $url) $xml .= '<url><loc>' . htmlspecialchars($url, ENT_XML1 | ENT_QUOTES, 'UTF-8') . '</loc></url>';
