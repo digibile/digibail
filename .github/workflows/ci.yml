@@ -13,6 +13,20 @@ jobs:
   test-and-build:
     runs-on: ubuntu-latest
     services:
+      mariadb:
+        image: mariadb:10.11
+        env:
+          MARIADB_DATABASE: digibail_test
+          MARIADB_USER: digibail_test
+          MARIADB_PASSWORD: ci-only-password
+          MARIADB_ROOT_PASSWORD: ci-only-root-password
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd "healthcheck.sh --connect --innodb_initialized"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 15
       postgres:
         image: postgres:16-alpine
         env:
@@ -28,6 +42,11 @@ jobs:
           --health-retries 10
     env:
       DATABASE_URL: postgresql://digibail_test:ci-only-password@localhost:5432/digibail_test
+      MARIADB_DATABASE: digibail_test
+      MARIADB_USER: digibail_test
+      MARIADB_PASSWORD: ci-only-password
+      MARIADB_HOST: 127.0.0.1
+      MARIADB_PORT: 3306
       JWT_SECRET: ci-only-jwt-secret-at-least-32-characters-long
       OTP_PEPPER: ci-only-otp-pepper-at-least-32-characters
       CAPTCHA_PEPPER: ci-only-captcha-pepper-at-least-32-characters
@@ -65,6 +84,7 @@ jobs:
           node --check scripts/migrate-legacy-digibail.js
           node --check scripts/run-legacy-digibail-migration.mjs
           node --check scripts/sync-postgres-users-to-mariadb.mjs
+          node --check backend/db/mariadb.js
           node --check backend/api.js
           node --check backend/mariadb-user-sync.js
           node --check scripts/audit-mariadb-schema.mjs
@@ -75,6 +95,8 @@ jobs:
           set -euo pipefail
           while IFS= read -r -d '' file; do bash -n "$file"; done < <(find . -type f -name '*.sh' -print0)
           node -e "JSON.parse(require('node:fs').readFileSync('config/appsettings.sample.json','utf8')); console.log('Sample JSON is valid')"
+      - name: Run MariaDB connection and SQL dialect smoke tests
+        run: node --test tests/mariadb-pool.test.js
       - name: Run route and API tests
         run: npm test
       - name: Build Next.js production UI
