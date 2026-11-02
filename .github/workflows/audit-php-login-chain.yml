@@ -36,7 +36,7 @@ jobs:
               echo "ADMIN_ROW_FOUND=1".PHP_EOL;
               echo "ACCOUNT_ACTIVE=".(int)$u["IsActive"].PHP_EOL;
               echo "USERNAME_PRESENT=".(($u["UserName"]??"")!==""?1:0).PHP_EOL;
-              echo "NORMALIZED_USERNAME_MATCH="=((string)$u["NormalizedUserName"]===mb_strtoupper((string)$u["UserName"],"UTF-8")?1:0).PHP_EOL;
+              echo "NORMALIZED_USERNAME_MATCH=" . (((string)$u["NormalizedUserName"]===mb_strtoupper((string)$u["UserName"],"UTF-8"))?1:0) . PHP_EOL;
               $hash=(string)($u["PasswordHash"]??"");
               $info=password_get_info($hash);
               echo "PASSWORD_HASH_LENGTH=".strlen($hash).PHP_EOL;
