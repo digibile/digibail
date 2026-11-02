@@ -16,7 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
-      - name: Export database structure only through server SSH
+      - name: Locate authorized MySQL credentials without printing secrets
         uses: appleboy/ssh-action@v1.2.2
         with:
           host: ${{ secrets.DEPLOY_HOST }}
@@ -26,14 +26,21 @@ jobs:
           script: |
             set -eu
             DB='digibail_vamcitydigibilepay'
-            echo "=== SERVER AND MYSQL CLIENT ==="
-            hostname
-            command -v mysql
-            command -v mysqldump
+            echo "=== SSH ACCOUNT ==="
+            id
+            echo "HOME=$HOME"
+            echo "=== DIRECTADMIN MYSQL CONFIG FILES (PATHS AND PERMISSIONS ONLY) ==="
+            for f in /usr/local/directadmin/conf/mysql.conf /usr/local/directadmin/data/users/digibail/mysql.conf /home/digibail/.my.cnf /root/.my.cnf /etc/mysql/debian.cnf; do
+              if [ -e "$f" ]; then ls -l "$f"; else echo "MISSING=$f"; fi
+            done
+            echo "=== POSSIBLE DATABASE CONFIG FILE PATHS (NO CONTENTS) ==="
+            find /home/digibail -maxdepth 6 -type f \( -name '.my.cnf' -o -name '.env' -o -name 'database.php' -o -name 'config.php' -o -name 'wp-config.php' -o -name 'settings.php' \) -printf '%m %u %p\n' 2>/dev/null | head -100
+            echo "=== DIRECTADMIN USER FILES (NAMES ONLY) ==="
+            find /usr/local/directadmin/data/users/digibail -maxdepth 2 -type f -printf '%m %u %p\n' 2>/dev/null | grep -Ei 'mysql|database|user' | head -100 || true
 
             MYSQL=''
             DUMP=''
-            for cnf in /usr/local/directadmin/conf/mysql.conf /root/.my.cnf /etc/mysql/debian.cnf; do
+            for cnf in /usr/local/directadmin/conf/mysql.conf /usr/local/directadmin/data/users/digibail/mysql.conf /home/digibail/.my.cnf /root/.my.cnf /etc/mysql/debian.cnf; do
               if [ -r "$cnf" ] && mysql --defaults-extra-file="$cnf" --protocol=socket -NBe "SELECT 1" >/dev/null 2>&1; then
                 MYSQL="mysql --defaults-extra-file=$cnf --protocol=socket"
                 DUMP="mysqldump --defaults-extra-file=$cnf --protocol=socket"
@@ -41,28 +48,23 @@ jobs:
                 break
               fi
             done
-
             if [ -z "$MYSQL" ] && command -v sudo >/dev/null 2>&1 && sudo -n mysql --protocol=socket -NBe "SELECT 1" >/dev/null 2>&1; then
               MYSQL='sudo -n mysql --protocol=socket'
               DUMP='sudo -n mysqldump --protocol=socket'
               echo "MYSQL_AUTH_SOURCE=sudo_socket"
             fi
-
             if [ -z "$MYSQL" ]; then
               echo "MYSQL_PRIVILEGED_AUTH_NOT_FOUND"
               exit 31
             fi
-
             echo "=== DATABASE EXISTS ==="
             EXISTS="$($MYSQL -NBe "SELECT SCHEMA_NAME FROM information_schema.SCHEMATA WHERE SCHEMA_NAME='$DB'")"
             if [ "$EXISTS" != "$DB" ]; then
               echo "DATABASE_NOT_FOUND=$DB"
-              echo "VISIBLE_DATABASES:"
               $MYSQL -NBe "SELECT SCHEMA_NAME FROM information_schema.SCHEMATA ORDER BY SCHEMA_NAME"
               exit 32
             fi
             echo "DATABASE_FOUND=$DB"
-
             echo "=== TABLE INVENTORY ==="
             $MYSQL -NBe "SELECT TABLE_NAME, TABLE_TYPE, COALESCE(ENGINE,''), COALESCE(TABLE_ROWS,0) FROM information_schema.TABLES WHERE TABLE_SCHEMA='$DB' ORDER BY TABLE_NAME"
             echo "=== COLUMN INVENTORY ==="
