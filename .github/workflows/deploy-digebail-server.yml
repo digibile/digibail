@@ -118,6 +118,14 @@ jobs:
                     if [ -n "$VALUE_LINE" ]; then printf '%s\n' "$VALUE_LINE" >> .env; fi
                   fi
                 done
+                # These three application peppers were absent from every existing container.
+                # Generate only missing values; database credentials are never changed here.
+                for key in JWT_SECRET OTP_PEPPER CAPTCHA_PEPPER; do
+                  if ! grep -qE "^${key}=.+" .env; then
+                    printf '%s=%s\n' "$key" "$(openssl rand -hex 48)" >> .env
+                    echo "SECURITY_KEY_INITIALIZED=$key (value hidden)"
+                  fi
+                done
                 chmod 600 .env
                 MISSING=""
                 for key in POSTGRES_DB POSTGRES_USER POSTGRES_PASSWORD DATABASE_URL JWT_SECRET OTP_PEPPER CAPTCHA_PEPPER; do
